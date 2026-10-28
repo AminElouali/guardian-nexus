@@ -1,6 +1,6 @@
-# [Project name]
+# EU Security Platform
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Plataforma SaaS multi-tenant para inventario de activos y operaciones de seguridad de organizaciones europeas.
 
 ## Run & Operate
 
@@ -22,23 +22,32 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/eu-security-platform` — web app, Clerk sign-in, workspace onboarding and security console.
+- `artifacts/api-server` — shared API, authentication middleware and tenant-scoped endpoints.
+- `lib/api-spec/openapi.yaml` — API contract; regenerate clients after changes.
+- `lib/db/src/schema/` — PostgreSQL schema for workspaces, memberships, assets and monthly usage.
+- `docs/phase-1-and-enterprise-roadmap.md` — shipped scope, plan limits, deferred capabilities and recommended order.
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Workspace membership and application roles are stored in PostgreSQL, not in user-editable browser state.
+- Every tenant-scoped API operation verifies the Clerk user against the requested workspace and scopes the records to that workspace.
+- Monthly AI/API/scan consumption is reserved atomically before trusted server-side work; provider calls must not be made directly from the browser.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- Phase 1 supports self-service account creation, owner-led workspace setup, basic roles, manual asset inventory and plan usage visibility.
+- Connected cloud/security sources, actual findings, analysis jobs and enterprise identity features are intentionally deferred. See the roadmap document.
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- Work in phases and stop for confirmation after each phase.
+- The first phase implements tenant isolation and basic roles; enterprise capabilities should be documented before implementation.
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Clerk browser auth uses same-origin session cookies. Keep the Clerk proxy before Express body parsers; do not add bearer-token transport to this web client.
+- Do not expose an endpoint that lets a browser directly claim token or provider-API usage; reserve usage in trusted server-side connector/scan code.
 
 ## Pointers
 

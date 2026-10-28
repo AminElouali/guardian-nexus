@@ -10,6 +10,10 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: workspaces
+    description: Tenant workspaces and their members
+  - name: assets
+    description: Organization-owned assets
 paths:
   /healthz:
     get:
@@ -24,6 +28,198 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /plans:
+    get:
+      operationId: listPlans
+      tags: [workspaces]
+      summary: List subscription plans
+      responses:
+        "200":
+          description: Available plans and usage limits
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Plan"
+  /workspaces:
+    get:
+      operationId: listWorkspaces
+      tags: [workspaces]
+      summary: List workspaces accessible to the signed-in user
+      responses:
+        "200":
+          description: User workspaces
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Workspace"
+    post:
+      operationId: createWorkspace
+      tags: [workspaces]
+      summary: Create a workspace and make the creator its owner
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkspaceInput"
+      responses:
+        "201":
+          description: Created workspace
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Workspace"
+        "400":
+          description: Invalid input or plan limit
+  /workspaces/{workspaceId}/dashboard:
+    get:
+      operationId: getWorkspaceDashboard
+      tags: [workspaces]
+      summary: Get workspace security overview and usage
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Security overview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dashboard"
+        "403":
+          description: User is not a workspace member
+  /workspaces/{workspaceId}/members:
+    get:
+      operationId: listWorkspaceMembers
+      tags: [workspaces]
+      summary: List members of a workspace
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Workspace members
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Member"
+        "403":
+          description: User is not a workspace member
+  /workspaces/{workspaceId}/members/{membershipId}:
+    patch:
+      operationId: updateWorkspaceMember
+      tags: [workspaces]
+      summary: Change a member role
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: membershipId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MemberRoleInput"
+      responses:
+        "200":
+          description: Updated member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Member"
+        "403":
+          description: Owner role required
+  /workspaces/{workspaceId}/assets:
+    get:
+      operationId: listWorkspaceAssets
+      tags: [assets]
+      summary: List assets in a workspace
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Workspace assets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Asset"
+        "403":
+          description: User is not a workspace member
+    post:
+      operationId: createWorkspaceAsset
+      tags: [assets]
+      summary: Add an asset to a workspace
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssetInput"
+      responses:
+        "201":
+          description: Created asset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Asset"
+        "403":
+          description: User is not allowed to add assets
+        "409":
+          description: Plan asset limit reached
+  /workspaces/{workspaceId}/assets/{assetId}:
+    delete:
+      operationId: deleteWorkspaceAsset
+      tags: [assets]
+      summary: Remove an asset from a workspace
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: assetId
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Asset removed
+        "403":
+          description: User is not allowed to remove assets
+        "404":
+          description: Asset not found
 components:
   schemas:
     HealthStatus:
@@ -33,4 +229,77 @@ components:
           type: string
       required:
         - status
+    Plan:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        maxAssets: { type: integer }
+        maxUsers: { type: integer }
+        scansPerMonth: { type: integer }
+        tokensPerMonth: { type: integer }
+        apiRequestsPerMonth: { type: integer }
+        support: { type: string }
+      required: [id, name, maxAssets, maxUsers, scansPerMonth, tokensPerMonth, apiRequestsPerMonth, support]
+    Workspace:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        planId: { type: string }
+        role: { type: string }
+        createdAt: { type: string, format: date-time }
+      required: [id, name, planId, role, createdAt]
+    WorkspaceInput:
+      type: object
+      properties:
+        name: { type: string, minLength: 2, maxLength: 100 }
+        planId: { type: string, enum: [small, medium, large] }
+      required: [name, planId]
+    Dashboard:
+      type: object
+      properties:
+        workspace: { $ref: "#/components/schemas/Workspace" }
+        plan: { $ref: "#/components/schemas/Plan" }
+        assetCount: { type: integer }
+        memberCount: { type: integer }
+        findingsCount: { type: integer }
+        scansUsed: { type: integer }
+        tokensUsed: { type: integer }
+        apiRequestsUsed: { type: integer }
+        recentAssets:
+          type: array
+          items: { $ref: "#/components/schemas/Asset" }
+      required: [workspace, plan, assetCount, memberCount, findingsCount, scansUsed, tokensUsed, apiRequestsUsed, recentAssets]
+    Member:
+      type: object
+      properties:
+        id: { type: string }
+        userId: { type: string }
+        role: { type: string, enum: [owner, admin, analyst, viewer] }
+        createdAt: { type: string, format: date-time }
+      required: [id, userId, role, createdAt]
+    MemberRoleInput:
+      type: object
+      properties:
+        role: { type: string, enum: [admin, analyst, viewer] }
+      required: [role]
+    Asset:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        type: { type: string }
+        environment: { type: string }
+        criticality: { type: string }
+        createdAt: { type: string, format: date-time }
+      required: [id, name, type, environment, criticality, createdAt]
+    AssetInput:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 160 }
+        type: { type: string, enum: [cloud, endpoint, application, identity, network, other] }
+        environment: { type: string, enum: [production, staging, development, unknown] }
+        criticality: { type: string, enum: [critical, high, medium, low] }
+      required: [name, type, environment, criticality]
 

@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "EU Security Platform"
+description = "A multi-tenant security operations platform for European organizations, starting with secure workspace access, tenant isolation, basic roles, and a security overview."
+version = "1.0.0"
+id = "artifacts/eu-security-platform"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18753
+
+[services.development]
+run = "pnpm --filter @workspace/eu-security-platform run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/eu-security-platform", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/eu-security-platform/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18753"
+BASE_PATH = "/"
