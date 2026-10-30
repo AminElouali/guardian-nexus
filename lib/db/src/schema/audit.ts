@@ -9,6 +9,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { workspacesTable } from "./workspaces";
+import { appRuntimeRole } from "./roles";
 
 export const workspaceAuditEventsTable = pgTable(
   "workspace_audit_events",
@@ -36,7 +37,7 @@ export const workspaceAuditEventsTable = pgTable(
     ),
     pgPolicy("workspace_audit_events_select_scope", {
       for: "select",
-      to: "app_runtime",
+      to: appRuntimeRole,
       using: sql`
         ${table.workspaceId}::text = NULLIF(current_setting('app.workspace_id', true), '')
         AND EXISTS (
@@ -49,7 +50,7 @@ export const workspaceAuditEventsTable = pgTable(
     }),
     pgPolicy("workspace_audit_events_insert_scope", {
       for: "insert",
-      to: "app_runtime",
+      to: appRuntimeRole,
       withCheck: sql`
         ${table.workspaceId}::text = NULLIF(current_setting('app.workspace_id', true), '')
         AND ${table.actorUserId} = NULLIF(current_setting('app.user_id', true), '')

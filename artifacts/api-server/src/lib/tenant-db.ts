@@ -64,22 +64,3 @@ export async function withWorkspaceUserTransaction<T>(
     };
   });
 }
-
-export function hasWorkspaceMembership(
-  userId: string,
-  workspaceId: string,
-) {
-  return withUserTransaction(userId, async (tx) => {
-    const [membership] = await tx
-      .select({ id: membershipsTable.id })
-      .from(membershipsTable)
-      .where(
-        and(
-          eq(membershipsTable.workspaceId, workspaceId),
-          eq(membershipsTable.userId, userId),
-        ),
-      )
-      .limit(1);
-    return Boolean(membership);
-  });
-}

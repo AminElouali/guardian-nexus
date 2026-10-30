@@ -10,7 +10,10 @@
   "scripts": {
     "push": "drizzle-kit push --config ./drizzle.config.ts",
     "push-force": "drizzle-kit push --force --config ./drizzle.config.ts",
-    "bootstrap-runtime-role:dev": "node ./scripts/bootstrap-runtime-role.mjs"
+    "apply-rls-policies:dev": "node ./scripts/apply-rls-policies.mjs",
+    "harden-runtime-role:dev": "node ./scripts/bootstrap-runtime-role.mjs harden",
+    "verify-runtime-role:dev": "node ./scripts/bootstrap-runtime-role.mjs verify",
+    "grant-runtime-role:dev": "node ./scripts/bootstrap-runtime-role.mjs grant"
   },
   "dependencies": {
     "drizzle-orm": "catalog:",

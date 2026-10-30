@@ -189,8 +189,8 @@ router.get("/workspaces/:workspaceId/dashboard", async (req, res): Promise<void>
     GetWorkspaceDashboardResponse.parse({
       workspace: { ...workspace, role: membership.role },
       plan,
-      assetCount: assetCount.value,
-      memberCount: memberCount.value,
+      assetCount,
+      memberCount,
       findingsCount: 0,
       scansUsed: usage?.scansUsed ?? 0,
       tokensUsed: usage?.tokensUsed ?? 0,

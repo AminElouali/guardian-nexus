@@ -1,20 +1,20 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { after, before, test } from "node:test";
-import { and, eq, inArray } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 import {
   assetsTable,
   db,
   membershipsTable,
   pool,
-  workspaceAuditEventsTable,
   workspacesTable,
 } from "@workspace/db";
 import { canManageMemberRoles, canWriteAssets } from "./lib/access-control";
 import { UsageQuotaError, reserveWorkspaceUsage } from "./lib/usage";
 import { withWorkspaceUserTransaction } from "./lib/tenant-db";
 
-const userA = `rls-test-a-${crypto.randomUUID()}`;
-const userB = `rls-test-b-${crypto.randomUUID()}`;
+const userA = `rls-test-a-${randomUUID()}`;
+const userB = `rls-test-b-${randomUUID()}`;
 let workspaceA: string;
 let workspaceB: string;
 let assetA: string;
@@ -103,7 +103,7 @@ test("RLS rejects writes across workspace boundaries", async () => {
         criticality: "low",
       });
     }),
-    (error: { code?: string }) => error.code === "42501",
+    (error: { cause?: { code?: string } }) => error.cause?.code === "42501",
   );
 });
 

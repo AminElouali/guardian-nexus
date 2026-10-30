@@ -9,6 +9,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
+import { appRuntimeRole } from "./roles";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -29,7 +30,7 @@ export const workspacesTable = pgTable(
   (table) => [
     pgPolicy("workspaces_select_member", {
       for: "select",
-      to: "app_runtime",
+      to: appRuntimeRole,
       using: sql`
         ${table.createdByUserId} = ${currentUserId}
         OR EXISTS (
@@ -42,7 +43,7 @@ export const workspacesTable = pgTable(
     }),
     pgPolicy("workspaces_insert_creator", {
       for: "insert",
-      to: "app_runtime",
+      to: appRuntimeRole,
       withCheck: sql`${table.createdByUserId} = ${currentUserId}`,
     }),
   ],
@@ -73,7 +74,7 @@ export const membershipsTable = pgTable(
     ),
     pgPolicy("workspace_memberships_select_scoped", {
       for: "select",
-      to: "app_runtime",
+      to: appRuntimeRole,
       using: sql`
         ${table.userId} = ${currentUserId}
         OR ${table.workspaceId}::text = ${currentWorkspaceId}
@@ -81,7 +82,7 @@ export const membershipsTable = pgTable(
     }),
     pgPolicy("workspace_memberships_insert_self", {
       for: "insert",
-      to: "app_runtime",
+      to: appRuntimeRole,
       withCheck: sql`
         ${table.userId} = ${currentUserId}
         AND ${table.workspaceId}::text = ${currentWorkspaceId}
@@ -89,7 +90,7 @@ export const membershipsTable = pgTable(
     }),
     pgPolicy("workspace_memberships_update_scoped", {
       for: "update",
-      to: "app_runtime",
+      to: appRuntimeRole,
       using: sql`${table.workspaceId}::text = ${currentWorkspaceId}`,
       withCheck: sql`${table.workspaceId}::text = ${currentWorkspaceId}`,
     }),

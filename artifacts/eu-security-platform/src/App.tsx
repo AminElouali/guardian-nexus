@@ -148,7 +148,7 @@ function PublicHome() {
         <div className="available-list">
           <div className="available-row"><span className="available-check"><Check size={15} /></span><div><b>Espacio de trabajo de autoservicio</b><p>Crea y gestiona un espacio para tu organización.</p></div><span className="availability-tag">Disponible</span></div>
           <div className="available-row"><span className="available-check"><Check size={15} /></span><div><b>Inventario manual de activos</b><p>Registra sistemas, entorno y criticidad con contexto.</p></div><span className="availability-tag">Disponible</span></div>
-          <div className="available-row"><span className="available-check"><Check size={15} /></span><div><b>Roles básicos de equipo</b><p>Invita a miembros y gestiona su acceso al espacio.</p></div><span className="availability-tag">Disponible</span></div>
+          <div className="available-row"><span className="available-check"><Check size={15} /></span><div><b>Roles básicos por función</b><p>Permisos distintos para lectura y cambios de activos.</p></div><span className="availability-tag">Disponible</span></div>
           <div className="available-row planned-row"><span className="planned-mark"><Layers3 size={15} /></span><div><b>Integraciones y evaluaciones automatizadas</b><p>Escaneo, monitorización y recomendaciones aún no conectados.</p></div><span className="planned-tag">Planificado</span></div>
         </div>
       </div>

@@ -1,0 +1,2 @@
+- [Guardian Nexus safety](guardian-nexus-safety.md) — Keep security claims consented, evidence-based, non-certifying, and honest about pending capabilities.
+- [PostgreSQL RLS workflow](postgres-rls-workflow.md) — Verify policy predicates in the live database; schema push alone left RLS policies unqualified here.

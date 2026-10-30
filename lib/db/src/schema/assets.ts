@@ -3,6 +3,7 @@ import { index, pgPolicy, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { workspacesTable } from "./workspaces";
+import { appRuntimeRole } from "./roles";
 
 export const assetsTable = pgTable(
   "assets",
@@ -23,7 +24,7 @@ export const assetsTable = pgTable(
     index("assets_workspace_created_idx").on(table.workspaceId, table.createdAt),
     pgPolicy("assets_workspace_scope", {
       for: "all",
-      to: "app_runtime",
+      to: appRuntimeRole,
       using: sql`
         ${table.workspaceId}::text = NULLIF(current_setting('app.workspace_id', true), '')
         AND EXISTS (

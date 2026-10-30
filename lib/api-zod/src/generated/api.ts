@@ -23,11 +23,11 @@ export const HealthCheckResponse = zod.object({
 export const ListPlansResponseItem = zod.object({
   "id": zod.string(),
   "name": zod.string(),
-  "maxAssets": zod.number().int(),
-  "maxUsers": zod.number().int(),
-  "scansPerMonth": zod.number().int(),
-  "tokensPerMonth": zod.number().int(),
-  "apiRequestsPerMonth": zod.number().int(),
+  "maxAssets": zod.int(),
+  "maxUsers": zod.int(),
+  "scansPerMonth": zod.int(),
+  "tokensPerMonth": zod.int(),
+  "apiRequestsPerMonth": zod.int(),
   "support": zod.string()
 })
 export const ListPlansResponse = zod.array(ListPlansResponseItem)
@@ -86,19 +86,19 @@ export const GetWorkspaceDashboardResponse = zod.object({
   "plan": zod.object({
   "id": zod.string(),
   "name": zod.string(),
-  "maxAssets": zod.number().int(),
-  "maxUsers": zod.number().int(),
-  "scansPerMonth": zod.number().int(),
-  "tokensPerMonth": zod.number().int(),
-  "apiRequestsPerMonth": zod.number().int(),
+  "maxAssets": zod.int(),
+  "maxUsers": zod.int(),
+  "scansPerMonth": zod.int(),
+  "tokensPerMonth": zod.int(),
+  "apiRequestsPerMonth": zod.int(),
   "support": zod.string()
 }),
-  "assetCount": zod.number().int(),
-  "memberCount": zod.number().int(),
-  "findingsCount": zod.number().int(),
-  "scansUsed": zod.number().int(),
-  "tokensUsed": zod.number().int(),
-  "apiRequestsUsed": zod.number().int(),
+  "assetCount": zod.int(),
+  "memberCount": zod.int(),
+  "findingsCount": zod.int(),
+  "scansUsed": zod.int(),
+  "tokensUsed": zod.int(),
+  "apiRequestsUsed": zod.int(),
   "recentAssets": zod.array(zod.object({
   "id": zod.string(),
   "name": zod.string(),
