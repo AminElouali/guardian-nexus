@@ -10,6 +10,8 @@ ALTER TABLE public.workspace_monthly_usage ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.workspace_monthly_usage FORCE ROW LEVEL SECURITY;
 ALTER TABLE public.workspace_audit_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.workspace_audit_events FORCE ROW LEVEL SECURITY;
+ALTER TABLE public.workspace_integrations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.workspace_integrations FORCE ROW LEVEL SECURITY;
 
 ALTER POLICY workspaces_select_member ON public.workspaces
   USING (
@@ -107,6 +109,52 @@ ALTER POLICY workspace_audit_events_insert_scope ON public.workspace_audit_event
       FROM public.workspace_memberships AS membership
       WHERE membership.workspace_id = workspace_audit_events.workspace_id
         AND membership.user_id = NULLIF(current_setting('app.user_id', true), '')
+    )
+  );
+
+ALTER POLICY workspace_integrations_select_member ON public.workspace_integrations
+  USING (
+    workspace_id::text = NULLIF(current_setting('app.workspace_id', true), '')
+    AND EXISTS (
+      SELECT 1
+      FROM public.workspace_memberships AS membership
+      WHERE membership.workspace_id = workspace_integrations.workspace_id
+        AND membership.user_id = NULLIF(current_setting('app.user_id', true), '')
+    )
+  );
+
+ALTER POLICY workspace_integrations_insert_owner ON public.workspace_integrations
+  WITH CHECK (
+    workspace_id::text = NULLIF(current_setting('app.workspace_id', true), '')
+    AND created_by_user_id = NULLIF(current_setting('app.user_id', true), '')
+    AND EXISTS (
+      SELECT 1
+      FROM public.workspace_memberships AS membership
+      WHERE membership.workspace_id = workspace_integrations.workspace_id
+        AND membership.user_id = NULLIF(current_setting('app.user_id', true), '')
+        AND membership.role = 'owner'
+    )
+  );
+
+ALTER POLICY workspace_integrations_update_owner ON public.workspace_integrations
+  USING (
+    workspace_id::text = NULLIF(current_setting('app.workspace_id', true), '')
+    AND EXISTS (
+      SELECT 1
+      FROM public.workspace_memberships AS membership
+      WHERE membership.workspace_id = workspace_integrations.workspace_id
+        AND membership.user_id = NULLIF(current_setting('app.user_id', true), '')
+        AND membership.role = 'owner'
+    )
+  )
+  WITH CHECK (
+    workspace_id::text = NULLIF(current_setting('app.workspace_id', true), '')
+    AND EXISTS (
+      SELECT 1
+      FROM public.workspace_memberships AS membership
+      WHERE membership.workspace_id = workspace_integrations.workspace_id
+        AND membership.user_id = NULLIF(current_setting('app.user_id', true), '')
+        AND membership.role = 'owner'
     )
   );
 

@@ -203,3 +203,99 @@ export const DeleteWorkspaceAssetParams = zod.object({
 export const DeleteWorkspaceAssetResponse = zod.void()
 
 
+/**
+ * @summary List workspace integration setup records
+ */
+export const GetWorkspaceIntegrationsParams = zod.object({
+  "workspaceId": zod.coerce.string()
+})
+
+export const GetWorkspaceIntegrationsResponse = zod.object({
+  "connections": zod.array(zod.object({
+  "id": zod.uuid(),
+  "provider": zod.enum(['microsoft', 'aws']),
+  "externalAccountId": zod.string(),
+  "status": zod.enum(['awaiting_app_registration', 'ready_for_admin_consent', 'awaiting_runtime_identity', 'ready_for_role_trust', 'connected', 'revoked']),
+  "externalId": zod.string().nullable(),
+  "requestedPermissions": zod.array(zod.string()),
+  "createdAt": zod.coerce.date(),
+  "revokedAt": zod.coerce.date().nullable()
+})),
+  "readiness": zod.object({
+  "microsoftAppRegistrationConfigured": zod.boolean(),
+  "microsoftPermissions": zod.array(zod.string()),
+  "awsRuntimePrincipalConfigured": zod.boolean(),
+  "liveConnectionsVerified": zod.boolean()
+})
+})
+
+
+/**
+ * @summary Record a Microsoft tenant for later admin-consent setup
+ */
+export const PrepareMicrosoftIntegrationParams = zod.object({
+  "workspaceId": zod.coerce.string()
+})
+
+export const PrepareMicrosoftIntegrationBody = zod.object({
+  "tenantId": zod.uuid()
+})
+
+export const PrepareMicrosoftIntegrationResponse = zod.object({
+  "id": zod.uuid(),
+  "provider": zod.enum(['microsoft', 'aws']),
+  "externalAccountId": zod.string(),
+  "status": zod.enum(['awaiting_app_registration', 'ready_for_admin_consent', 'awaiting_runtime_identity', 'ready_for_role_trust', 'connected', 'revoked']),
+  "externalId": zod.string().nullable(),
+  "requestedPermissions": zod.array(zod.string()),
+  "createdAt": zod.coerce.date(),
+  "revokedAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary Generate a unique ExternalId for an AWS account setup
+ */
+export const PrepareAwsIntegrationParams = zod.object({
+  "workspaceId": zod.coerce.string()
+})
+
+export const prepareAwsIntegrationBodyAccountIdRegExp = new RegExp('^[0-9]{12}$');
+
+
+export const PrepareAwsIntegrationBody = zod.object({
+  "accountId": zod.string().regex(prepareAwsIntegrationBodyAccountIdRegExp)
+})
+
+export const PrepareAwsIntegrationResponse = zod.object({
+  "id": zod.uuid(),
+  "provider": zod.enum(['microsoft', 'aws']),
+  "externalAccountId": zod.string(),
+  "status": zod.enum(['awaiting_app_registration', 'ready_for_admin_consent', 'awaiting_runtime_identity', 'ready_for_role_trust', 'connected', 'revoked']),
+  "externalId": zod.string().nullable(),
+  "requestedPermissions": zod.array(zod.string()),
+  "createdAt": zod.coerce.date(),
+  "revokedAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary Revoke local use of a workspace integration
+ */
+export const RevokeWorkspaceIntegrationParams = zod.object({
+  "workspaceId": zod.coerce.string(),
+  "integrationId": zod.coerce.string()
+})
+
+export const RevokeWorkspaceIntegrationResponse = zod.object({
+  "id": zod.uuid(),
+  "provider": zod.enum(['microsoft', 'aws']),
+  "externalAccountId": zod.string(),
+  "status": zod.enum(['awaiting_app_registration', 'ready_for_admin_consent', 'awaiting_runtime_identity', 'ready_for_role_trust', 'connected', 'revoked']),
+  "externalId": zod.string().nullable(),
+  "requestedPermissions": zod.array(zod.string()),
+  "createdAt": zod.coerce.date(),
+  "revokedAt": zod.coerce.date().nullable()
+})
+
+

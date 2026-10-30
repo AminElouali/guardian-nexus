@@ -70,6 +70,9 @@ export async function assertRlsRuntimeReady(): Promise<void> {
       c.relforcerowsecurity,
       COUNT(p.policyname)::int AS policy_count,
       COUNT(*) FILTER (
+        WHERE owner.rolname IN ('app_runtime', 'app_runtime_login')
+      )::int AS runtime_owned_tables,
+      COUNT(*) FILTER (
         WHERE p.policyname IS NOT NULL
           AND (
             (p.cmd IN ('SELECT', 'UPDATE', 'DELETE', 'ALL') AND p.qual IS NULL)
@@ -79,6 +82,7 @@ export async function assertRlsRuntimeReady(): Promise<void> {
       )::int AS invalid_policies
     FROM pg_class AS c
     JOIN pg_namespace AS n ON n.oid = c.relnamespace
+    JOIN pg_roles AS owner ON owner.oid = c.relowner
     LEFT JOIN pg_policies AS p
       ON p.schemaname = n.nspname
       AND p.tablename = c.relname
@@ -88,7 +92,8 @@ export async function assertRlsRuntimeReady(): Promise<void> {
         'workspace_memberships',
         'assets',
         'workspace_monthly_usage',
-        'workspace_audit_events'
+        'workspace_audit_events',
+        'workspace_integrations'
       )
     GROUP BY c.relname, c.relrowsecurity, c.relforcerowsecurity
   `);
@@ -98,6 +103,7 @@ export async function assertRlsRuntimeReady(): Promise<void> {
     assets: 1,
     workspace_monthly_usage: 1,
     workspace_audit_events: 2,
+    workspace_integrations: 3,
   };
   if (
     rows.length !== Object.keys(expectedPolicyCounts).length ||
@@ -108,6 +114,7 @@ export async function assertRlsRuntimeReady(): Promise<void> {
         row.relrowsecurity !== true ||
         row.relforcerowsecurity !== true ||
         Number(row.policy_count) !== expectedCount ||
+        Number(row.runtime_owned_tables) !== 0 ||
         Number(row.invalid_policies) !== 0
       );
     })
@@ -139,7 +146,9 @@ export async function assertRlsRuntimeReady(): Promise<void> {
       pg_has_role(session_user, 'app_runtime', 'USAGE') AS inherits_runtime_privileges,
       has_table_privilege(session_user, 'public.workspaces', 'SELECT') AS direct_workspace_read,
       has_table_privilege(session_user, 'public.assets', 'SELECT') AS direct_asset_read,
-      has_table_privilege(session_user, 'public.assets', 'INSERT') AS direct_asset_write
+      has_table_privilege(session_user, 'public.assets', 'INSERT') AS direct_asset_write,
+      has_table_privilege(session_user, 'public.workspace_integrations', 'SELECT') AS direct_integrations_read,
+      has_table_privilege(session_user, 'public.workspace_integrations', 'INSERT') AS direct_integrations_write
     FROM pg_roles AS role
     CROSS JOIN pg_roles AS runtime
     WHERE role.rolname = session_user
@@ -169,7 +178,9 @@ export async function assertRlsRuntimeReady(): Promise<void> {
     login.inherits_runtime_privileges !== false ||
     login.direct_workspace_read !== false ||
     login.direct_asset_read !== false ||
-    login.direct_asset_write !== false
+    login.direct_asset_write !== false ||
+    login.direct_integrations_read !== false ||
+    login.direct_integrations_write !== false
   ) {
     throw new Error(
       "The API must connect as a non-privileged login with no direct tenant-data access.",

@@ -21,6 +21,7 @@ import { Route, Switch, Link, useLocation, Router as WouterRouter } from 'wouter
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import IntegrationsPage from '@/components/IntegrationsPage';
 import NotFound from '@/pages/not-found';
 
 const queryClient = new QueryClient({
@@ -170,6 +171,7 @@ const navItems = [
   { href: '/dashboard', label: 'Resumen', icon: Activity },
   { href: '/assets', label: 'Activos', icon: Box },
   { href: '/team', label: 'Equipo', icon: Users },
+  { href: '/integrations', label: 'Integraciones', icon: Globe2 },
   { href: '/plans', label: 'Planes y uso', icon: Gauge },
   { href: '/roadmap', label: 'Hoja de ruta empresarial', icon: Layers3 },
 ];
@@ -489,6 +491,7 @@ function DashboardRoute() { return <AuthGuard><WorkspaceFrame page={DashboardPag
 function AssetsRoute() { return <AuthGuard><WorkspaceFrame page={AssetsPage} /></AuthGuard>; }
 function TeamRoute() { return <AuthGuard><WorkspaceFrame page={TeamPage} /></AuthGuard>; }
 function PlansRoute() { return <AuthGuard><WorkspaceFrame page={PlansPage} /></AuthGuard>; }
+function IntegrationsRoute() { return <AuthGuard><WorkspaceFrame page={({ workspace }) => <IntegrationsPage workspace={workspace} />} /></AuthGuard>; }
 function RoadmapRoute() { return <AuthGuard><WorkspaceFrame page={() => <RoadmapPage />} /></AuthGuard>; }
 
 function Router() {
@@ -499,6 +502,7 @@ function Router() {
     <Route path="/dashboard" component={DashboardRoute} />
     <Route path="/assets" component={AssetsRoute} />
     <Route path="/team" component={TeamRoute} />
+    <Route path="/integrations" component={IntegrationsRoute} />
     <Route path="/plans" component={PlansRoute} />
     <Route path="/roadmap" component={RoadmapRoute} />
     <Route component={NotFound} />

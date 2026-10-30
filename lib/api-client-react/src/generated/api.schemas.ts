@@ -140,3 +140,57 @@ export interface AssetInput {
   criticality: AssetInputCriticality;
 }
 
+export interface MicrosoftIntegrationSetupInput {
+  tenantId: string;
+}
+
+export interface AwsIntegrationSetupInput {
+  /** @pattern ^[0-9]{12}$ */
+  accountId: string;
+}
+
+export type WorkspaceIntegrationProvider = typeof WorkspaceIntegrationProvider[keyof typeof WorkspaceIntegrationProvider];
+
+
+export const WorkspaceIntegrationProvider = {
+  microsoft: 'microsoft',
+  aws: 'aws',
+} as const;
+
+export type WorkspaceIntegrationStatus = typeof WorkspaceIntegrationStatus[keyof typeof WorkspaceIntegrationStatus];
+
+
+export const WorkspaceIntegrationStatus = {
+  awaiting_app_registration: 'awaiting_app_registration',
+  ready_for_admin_consent: 'ready_for_admin_consent',
+  awaiting_runtime_identity: 'awaiting_runtime_identity',
+  ready_for_role_trust: 'ready_for_role_trust',
+  connected: 'connected',
+  revoked: 'revoked',
+} as const;
+
+export interface WorkspaceIntegration {
+  id: string;
+  provider: WorkspaceIntegrationProvider;
+  externalAccountId: string;
+  status: WorkspaceIntegrationStatus;
+  /** @nullable */
+  externalId: string | null;
+  requestedPermissions: string[];
+  createdAt: string;
+  /** @nullable */
+  revokedAt: string | null;
+}
+
+export interface IntegrationProviderReadiness {
+  microsoftAppRegistrationConfigured: boolean;
+  microsoftPermissions: string[];
+  awsRuntimePrincipalConfigured: boolean;
+  liveConnectionsVerified: boolean;
+}
+
+export interface WorkspaceIntegrationsResponse {
+  connections: WorkspaceIntegration[];
+  readiness: IntegrationProviderReadiness;
+}
+

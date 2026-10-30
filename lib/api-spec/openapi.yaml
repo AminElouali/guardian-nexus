@@ -14,6 +14,8 @@ tags:
     description: Tenant workspaces and their members
   - name: assets
     description: Organization-owned assets
+  - name: integrations
+    description: Tenant-authorized Microsoft and AWS connection setup
 paths:
   /healthz:
     get:
@@ -220,6 +222,117 @@ paths:
           description: User is not allowed to remove assets
         "404":
           description: Asset not found
+  /workspaces/{workspaceId}/integrations:
+    get:
+      operationId: getWorkspaceIntegrations
+      tags: [integrations]
+      summary: List workspace integration setup records
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Current setup state and provider prerequisites
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceIntegrationsResponse"
+        "403":
+          description: User is not a workspace member
+  /workspaces/{workspaceId}/integrations/microsoft/setup:
+    post:
+      operationId: prepareMicrosoftIntegration
+      tags: [integrations]
+      summary: Record a Microsoft tenant for later admin-consent setup
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MicrosoftIntegrationSetupInput"
+      responses:
+        "200":
+          description: Existing setup returned idempotently
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceIntegration"
+        "201":
+          description: Tenant setup recorded; no external consent was initiated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceIntegration"
+        "403":
+          description: Workspace owner role required
+  /workspaces/{workspaceId}/integrations/aws/setup:
+    post:
+      operationId: prepareAwsIntegration
+      tags: [integrations]
+      summary: Generate a unique ExternalId for an AWS account setup
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AwsIntegrationSetupInput"
+      responses:
+        "200":
+          description: Existing setup returned idempotently
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceIntegration"
+        "201":
+          description: ExternalId generated; no AWS role was assumed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceIntegration"
+        "403":
+          description: Workspace owner role required
+  /workspaces/{workspaceId}/integrations/{integrationId}/revoke:
+    post:
+      operationId: revokeWorkspaceIntegration
+      tags: [integrations]
+      summary: Revoke local use of a workspace integration
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: integrationId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Local integration setup revoked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceIntegration"
+        "403":
+          description: Workspace owner role required
+        "404":
+          description: Integration setup not found
 components:
   schemas:
     HealthStatus:
@@ -302,4 +415,54 @@ components:
         environment: { type: string, enum: [production, staging, development, unknown] }
         criticality: { type: string, enum: [critical, high, medium, low] }
       required: [name, type, environment, criticality]
+    MicrosoftIntegrationSetupInput:
+      type: object
+      properties:
+        tenantId: { type: string, format: uuid }
+      required: [tenantId]
+    AwsIntegrationSetupInput:
+      type: object
+      properties:
+        accountId: { type: string, pattern: "^[0-9]{12}$" }
+      required: [accountId]
+    WorkspaceIntegration:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        provider: { type: string, enum: [microsoft, aws] }
+        externalAccountId: { type: string }
+        status:
+          type: string
+          enum:
+            - awaiting_app_registration
+            - ready_for_admin_consent
+            - awaiting_runtime_identity
+            - ready_for_role_trust
+            - connected
+            - revoked
+        externalId: { type: ["string", "null"] }
+        requestedPermissions:
+          type: array
+          items: { type: string }
+        createdAt: { type: string, format: date-time }
+        revokedAt: { type: ["string", "null"], format: date-time }
+      required: [id, provider, externalAccountId, status, externalId, requestedPermissions, createdAt, revokedAt]
+    IntegrationProviderReadiness:
+      type: object
+      properties:
+        microsoftAppRegistrationConfigured: { type: boolean }
+        microsoftPermissions:
+          type: array
+          items: { type: string }
+        awsRuntimePrincipalConfigured: { type: boolean }
+        liveConnectionsVerified: { type: boolean }
+      required: [microsoftAppRegistrationConfigured, microsoftPermissions, awsRuntimePrincipalConfigured, liveConnectionsVerified]
+    WorkspaceIntegrationsResponse:
+      type: object
+      properties:
+        connections:
+          type: array
+          items: { $ref: "#/components/schemas/WorkspaceIntegration" }
+        readiness: { $ref: "#/components/schemas/IntegrationProviderReadiness" }
+      required: [connections, readiness]
 

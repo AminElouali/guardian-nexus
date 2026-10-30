@@ -2,14 +2,20 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { after, before, test } from "node:test";
 import pg from "pg";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import {
   assertRlsRuntimeReady,
   assetsTable,
   db,
   pool,
+  workspaceIntegrationsTable,
 } from "@workspace/db";
 import { canManageMemberRoles, canWriteAssets } from "./lib/access-control";
+import { prepareIntegration } from "./routes/integrations";
+import {
+  microsoftGraphGetWithRetry,
+  parseRetryAfterMs,
+} from "./lib/microsoft-graph-throttle";
 import { UsageQuotaError, reserveWorkspaceUsage } from "./lib/usage";
 import { withWorkspaceUserTransaction } from "./lib/tenant-db";
 
@@ -20,10 +26,13 @@ const fixturePool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 
 const userA = `rls-test-a-${randomUUID()}`;
 const userB = `rls-test-b-${randomUUID()}`;
+const viewerA = `rls-test-viewer-${randomUUID()}`;
 let workspaceA: string;
 let workspaceB: string;
 let assetA: string;
 let assetB: string;
+let integrationA: string;
+let integrationB: string;
 
 before(async () => {
   await assertRlsRuntimeReady();
@@ -45,8 +54,8 @@ before(async () => {
 
   await fixturePool.query(
     `INSERT INTO public.workspace_memberships (workspace_id, user_id, role)
-     VALUES ($1, $2, 'owner'), ($3, $4, 'owner')`,
-    [workspaceA, userA, workspaceB, userB],
+     VALUES ($1, $2, 'owner'), ($3, $4, 'owner'), ($1, $5, 'viewer')`,
+    [workspaceA, userA, workspaceB, userB, viewerA],
   );
   const [createdAssetA, createdAssetB] = await Promise.all([
     fixturePool.query<{ id: string }>(
@@ -66,6 +75,24 @@ before(async () => {
   ]);
   assetA = createdAssetA.rows[0].id;
   assetB = createdAssetB.rows[0].id;
+  const [createdIntegrationA, createdIntegrationB] = await Promise.all([
+    fixturePool.query<{ id: string }>(
+      `INSERT INTO public.workspace_integrations
+         (workspace_id, provider, external_account_id, setup_key, status, created_by_user_id)
+       VALUES ($1, 'microsoft', 'tenant-a', 'tenant-a', 'awaiting_app_registration', $2)
+       RETURNING id`,
+      [workspaceA, userA],
+    ),
+    fixturePool.query<{ id: string }>(
+      `INSERT INTO public.workspace_integrations
+         (workspace_id, provider, external_account_id, setup_key, status, created_by_user_id)
+       VALUES ($1, 'microsoft', 'tenant-b', 'tenant-b', 'awaiting_app_registration', $2)
+       RETURNING id`,
+      [workspaceB, userB],
+    ),
+  ]);
+  integrationA = createdIntegrationA.rows[0].id;
+  integrationB = createdIntegrationB.rows[0].id;
 });
 
 after(async () => {
@@ -92,7 +119,25 @@ test("API runtime login has no direct table access or elevated privileges", asyn
       rolreplication,
       rolinherit,
       has_table_privilege(session_user, 'public.assets', 'SELECT') AS direct_read,
-      has_table_privilege(session_user, 'public.assets', 'INSERT') AS direct_write
+      has_table_privilege(session_user, 'public.assets', 'INSERT') AS direct_write,
+      has_table_privilege(session_user, 'public.workspace_integrations', 'SELECT') AS direct_integrations_read,
+      has_table_privilege(session_user, 'public.workspace_integrations', 'INSERT') AS direct_integrations_write,
+      EXISTS (
+        SELECT 1
+        FROM pg_class AS table_class
+        JOIN pg_namespace AS namespace ON namespace.oid = table_class.relnamespace
+        JOIN pg_roles AS table_owner ON table_owner.oid = table_class.relowner
+        WHERE namespace.nspname = 'public'
+          AND table_class.relname IN (
+            'workspaces',
+            'workspace_memberships',
+            'assets',
+            'workspace_monthly_usage',
+            'workspace_audit_events',
+            'workspace_integrations'
+          )
+          AND table_owner.rolname IN ('app_runtime', 'app_runtime_login')
+      ) AS owns_tenant_tables
     FROM pg_roles
     WHERE rolname = session_user
   `);
@@ -108,6 +153,9 @@ test("API runtime login has no direct table access or elevated privileges", asyn
   assert.equal(role?.rolinherit, false);
   assert.equal(role?.direct_read, false);
   assert.equal(role?.direct_write, false);
+  assert.equal(role?.direct_integrations_read, false);
+  assert.equal(role?.direct_integrations_write, false);
+  assert.equal(role?.owns_tenant_tables, false);
 });
 
 test("RLS scopes unfiltered asset reads to the verified tenant", async () => {
@@ -124,6 +172,48 @@ test("RLS scopes unfiltered asset reads to the verified tenant", async () => {
     [assetA],
   );
   assert.equal(result.value.some((asset) => asset.id === assetB), false);
+});
+
+test("RLS scopes unfiltered integration reads to the verified tenant", async () => {
+  const result = await withWorkspaceUserTransaction(
+    userA,
+    workspaceA,
+    (tx) => tx.select().from(workspaceIntegrationsTable),
+  );
+
+  assert.equal(result.authorized, true);
+  if (!result.authorized) return;
+  assert.deepEqual(
+    result.value.map((integration) => integration.id),
+    [integrationA],
+  );
+  assert.equal(result.value.some((integration) => integration.id === integrationB), false);
+});
+
+test("RLS rejects cross-tenant integration inserts and hides cross-tenant updates", async () => {
+  await assert.rejects(
+    withWorkspaceUserTransaction(userA, workspaceA, async (tx) => {
+      await tx.insert(workspaceIntegrationsTable).values({
+        workspaceId: workspaceB,
+        provider: "aws",
+        externalAccountId: "123456789012",
+        setupKey: "123456789012",
+        status: "awaiting_runtime_identity",
+        createdByUserId: userA,
+      });
+    }),
+    (error: { cause?: { code?: string } }) => error.cause?.code === "42501",
+  );
+
+  const result = await withWorkspaceUserTransaction(userA, workspaceA, (tx) =>
+    tx
+      .update(workspaceIntegrationsTable)
+      .set({ status: "revoked" })
+      .where(eq(workspaceIntegrationsTable.id, integrationB))
+      .returning(),
+  );
+  assert.equal(result.authorized, true);
+  if (result.authorized) assert.deepEqual(result.value, []);
 });
 
 test("a member cannot enter another workspace context", async () => {
@@ -157,6 +247,45 @@ test("workspace usage limits are enforced atomically", async () => {
   );
 });
 
+test("AWS setup preparation is idempotent and does not replace its ExternalId", async () => {
+  const first = await prepareIntegration(
+    userA,
+    workspaceA,
+    "aws",
+    "123456789012",
+    [],
+    "first-test-external-id",
+  );
+  const repeated = await prepareIntegration(
+    userA,
+    workspaceA,
+    "aws",
+    "123456789012",
+    [],
+    "second-test-external-id",
+  );
+
+  assert.equal(first.kind, "prepared");
+  assert.equal(repeated.kind, "existing");
+  if (first.kind === "prepared" && repeated.kind === "existing") {
+    assert.equal(first.integration.id, repeated.integration.id);
+    assert.equal(first.integration.externalId, "first-test-external-id");
+    assert.equal(repeated.integration.externalId, "first-test-external-id");
+  }
+});
+
+test("only workspace owners can prepare provider integrations", async () => {
+  const result = await prepareIntegration(
+    viewerA,
+    workspaceA,
+    "microsoft",
+    randomUUID(),
+    ["Organization.Read.All"],
+    null,
+  );
+  assert.deepEqual(result, { kind: "forbidden" });
+});
+
 test("basic workspace role permissions are explicit", () => {
   assert.equal(canWriteAssets("owner"), true);
   assert.equal(canWriteAssets("admin"), true);
@@ -164,4 +293,74 @@ test("basic workspace role permissions are explicit", () => {
   assert.equal(canWriteAssets("viewer"), false);
   assert.equal(canManageMemberRoles("owner"), true);
   assert.equal(canManageMemberRoles("admin"), false);
+});
+
+test("Microsoft Graph Retry-After values are parsed and respected", async () => {
+  assert.equal(parseRetryAfterMs("2", 1_000), 2_000);
+  assert.equal(
+    parseRetryAfterMs("Thu, 01 Jan 1970 00:00:03 GMT", 1_000),
+    2_000,
+  );
+  assert.equal(parseRetryAfterMs("not-a-date", 1_000), null);
+
+  const delays: number[] = [];
+  let calls = 0;
+  const response = await microsoftGraphGetWithRetry(
+    "https://graph.microsoft.com/v1.0/organization",
+    "test-only-token",
+    {
+      now: () => 1_000,
+      sleep: async (milliseconds) => {
+        delays.push(milliseconds);
+      },
+      fetchImpl: async () => {
+        calls += 1;
+        return calls === 1
+          ? new Response(null, {
+              status: 429,
+              headers: { "Retry-After": "2" },
+            })
+          : new Response("{}", { status: 200 });
+      },
+    },
+  );
+  assert.equal(response.status, 200);
+  assert.equal(calls, 2);
+  assert.deepEqual(delays, [2_000]);
+});
+
+test("Microsoft Graph reader rejects non-Graph or non-read-only targets", async () => {
+  await assert.rejects(
+    microsoftGraphGetWithRetry("https://example.com/v1.0/organization", "token"),
+    /only permits HTTPS v1\.0 Graph URLs/,
+  );
+  await assert.rejects(
+    microsoftGraphGetWithRetry("http://graph.microsoft.com/v1.0/organization", "token"),
+    /only permits HTTPS v1\.0 Graph URLs/,
+  );
+});
+
+test("Microsoft Graph long Retry-After is returned for queue rescheduling", async () => {
+  let calls = 0;
+  const delays: number[] = [];
+  const response = await microsoftGraphGetWithRetry(
+    "https://graph.microsoft.com/v1.0/organization",
+    "test-only-token",
+    {
+      maxInlineWaitMs: 1_000,
+      sleep: async (milliseconds) => {
+        delays.push(milliseconds);
+      },
+      fetchImpl: async () => {
+        calls += 1;
+        return new Response(null, {
+          status: 429,
+          headers: { "Retry-After": "120" },
+        });
+      },
+    },
+  );
+  assert.equal(response.status, 429);
+  assert.equal(calls, 1);
+  assert.deepEqual(delays, []);
 });
