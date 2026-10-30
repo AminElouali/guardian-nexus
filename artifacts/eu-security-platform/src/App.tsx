@@ -133,9 +133,9 @@ function PublicHome() {
     </section>
     <section id="alcance" className="principles-section">
       <div className="wrap">
-        <div className="section-intro"><div className="eyebrow">Ámbito previsto de la plataforma</div><h2>Una visión conectada de tus riesgos.</h2><p>Guardian Nexus está concebido para ayudar a los equipos a entender y documentar la seguridad de sus sistemas. Estas capacidades están planificadas; no están conectadas todavía.</p></div>
+        <div className="section-intro"><div className="eyebrow">Capacidades y estado actual</div><h2>Una visión conectada de tus riesgos.</h2><p>Guardian Nexus ayuda a preparar y documentar controles. La evaluación de IA se ejecuta hoy solo en un laboratorio interno; las demás capacidades aún están planificadas.</p></div>
         <div className="capability-grid">
-          <article className="capability-card capability-featured"><span className="capability-number">01 / SISTEMAS</span><div className="capability-icon"><Sparkles size={20} /></div><h3>Seguridad de sistemas y agentes de IA</h3><p>Inventario contextual y evaluación de riesgos propios de sistemas que incorporan inteligencia artificial.</p><span className="capability-state">Previsto · no disponible aún</span></article>
+          <article className="capability-card capability-featured"><span className="capability-number">01 / SISTEMAS</span><div className="capability-icon"><Sparkles size={20} /></div><h3>Evaluación de seguridad de IA</h3><p>Prueba real y acotada sobre un agente propio de laboratorio. No analiza agentes ni datos de clientes.</p><span className="capability-state">Activo en laboratorio interno · servicio a clientes no disponible</span></article>
           <article className="capability-card"><span className="capability-number">02 / EXPOSICIÓN</span><div className="capability-icon"><Layers3 size={20} /></div><h3>Configuración, identidades y datos</h3><p>Señales sobre configuraciones incorrectas, permisos, identidades y posibles exposiciones de datos.</p><span className="capability-state">Previsto · no disponible aún</span></article>
           <article className="capability-card"><span className="capability-number">03 / AMENAZAS</span><div className="capability-icon"><ShieldEllipsis size={20} /></div><h3>Vulnerabilidades e inyección de prompts</h3><p>Consideración de vulnerabilidades y riesgos de prompt injection en los contextos relevantes.</p><span className="capability-state">Previsto · no disponible aún</span></article>
           <article className="capability-card"><span className="capability-number">04 / OPERACIÓN</span><div className="capability-icon"><Activity size={20} /></div><h3>Correlación y monitorización</h3><p>Correlación de amenazas y señales a lo largo del tiempo para dar contexto a la revisión del equipo.</p><span className="capability-state">Previsto · no disponible aún</span></article>
@@ -151,7 +151,8 @@ function PublicHome() {
           <div className="available-row"><span className="available-check"><Check size={15} /></span><div><b>Espacio de trabajo de autoservicio</b><p>Crea y gestiona un espacio para tu organización.</p></div><span className="availability-tag">Disponible</span></div>
           <div className="available-row"><span className="available-check"><Check size={15} /></span><div><b>Inventario manual de activos</b><p>Registra sistemas, entorno y criticidad con contexto.</p></div><span className="availability-tag">Disponible</span></div>
           <div className="available-row"><span className="available-check"><Check size={15} /></span><div><b>Roles básicos por función</b><p>Permisos distintos para lectura y cambios de activos.</p></div><span className="availability-tag">Disponible</span></div>
-          <div className="available-row planned-row"><span className="planned-mark"><Layers3 size={15} /></span><div><b>Integraciones y evaluaciones automatizadas</b><p>Escaneo, monitorización y recomendaciones aún no conectados.</p></div><span className="planned-tag">Planificado</span></div>
+          <div className="available-row"><span className="available-check"><FlaskConical size={15} /></span><div><b>Evaluación de Seguridad de IA</b><p>Solo laboratorio interno con agente local fijo; no está disponible para sistemas de clientes.</p></div><span className="availability-tag">Laboratorio</span></div>
+          <div className="available-row planned-row"><span className="planned-mark"><Layers3 size={15} /></span><div><b>Conectores cloud, escaneos y monitorización</b><p>No están conectados; no se ejecutan análisis en cuentas de clientes.</p></div><span className="planned-tag">Planificado</span></div>
         </div>
       </div>
     </section>
@@ -462,6 +463,11 @@ function DashboardPage({ workspace }: { workspace: Workspace }) {
       <MetricCard label="Análisis utilizados" value={d.scansUsed} detail={`de ${d.plan.scansPerMonth} al mes`} icon={Radio} href="/plans" />
       <MetricCard label="Hallazgos registrados" value={d.findingsCount} detail="Solo datos del backend" icon={ShieldEllipsis} href="/roadmap" />
     </section>
+    <section className="panel ai-lab-dashboard-card">
+      <div><span className="panel-kicker">SEGURIDAD DE IA · LABORATORIO INTERNO</span><h2>Evaluación de Seguridad de IA</h2><p>Hay una evaluación real acotada para un agente local propio. No evalúa sistemas, agentes ni datos de este espacio.</p></div>
+      <span className="availability-tag">No disponible para clientes</span>
+      <Link href="/ai-evaluations" className="button button-secondary">Ver laboratorio <ArrowRight size={15} /></Link>
+    </section>
     <div className="dashboard-lower">
       <section className="panel recent-panel">
         <div className="panel-heading"><div><div className="panel-kicker">INVENTARIO</div><h2>Últimos activos añadidos</h2></div><Link href="/assets" className="text-link" data-testid="link-view-assets">Ver inventario <ArrowRight size={14} /></Link></div>
@@ -478,7 +484,7 @@ function DashboardPage({ workspace }: { workspace: Workspace }) {
         <p className="usage-disclaimer">Uso comunicado por el backend del espacio.</p>
       </section>
     </div>
-    <div className="phase-note"><div className="phase-note-icon"><LockKeyhole size={14} /></div><p><b>Espacio en fase 1.</b> Las integraciones, los análisis y la automatización aún no están activos. Este resumen muestra únicamente los datos que devuelve tu servicio.</p><Link href="/roadmap" className="text-link">Hoja de ruta <ArrowRight size={13} /></Link></div>
+    <div className="phase-note"><div className="phase-note-icon"><LockKeyhole size={14} /></div><p><b>Servicio en preparación.</b> La evaluación de IA solo está activa en el laboratorio local; no hay escaneos ni conectores de clientes. Este resumen muestra únicamente datos devueltos por el servicio.</p><Link href="/roadmap" className="text-link">Hoja de ruta <ArrowRight size={13} /></Link></div>
   </div>;
 }
 

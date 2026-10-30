@@ -326,6 +326,159 @@ export interface AiEvaluationRun {
   createdAt: string;
 }
 
+export type AiAssessmentLabAvailabilityStatus = typeof AiAssessmentLabAvailabilityStatus[keyof typeof AiAssessmentLabAvailabilityStatus];
+
+
+export const AiAssessmentLabAvailabilityStatus = {
+  ready: 'ready',
+  unavailable: 'unavailable',
+  disabled: 'disabled',
+} as const;
+
+export interface AiAssessmentLabAvailability {
+  status: AiAssessmentLabAvailabilityStatus;
+  workerVersion: string;
+  /** @nullable */
+  reasonCode: string | null;
+}
+
+export interface AiAssessmentLabJobRequest {
+  /**
+     * @minLength 16
+     * @maxLength 128
+     */
+  idempotencyKey: string;
+}
+
+export type AiAssessmentLabJobStatus = typeof AiAssessmentLabJobStatus[keyof typeof AiAssessmentLabJobStatus];
+
+
+export const AiAssessmentLabJobStatus = {
+  queued: 'queued',
+  running: 'running',
+  succeeded: 'succeeded',
+  failed: 'failed',
+} as const;
+
+export type AiAssessmentLabJobProfileId = typeof AiAssessmentLabJobProfileId[keyof typeof AiAssessmentLabJobProfileId];
+
+
+export const AiAssessmentLabJobProfileId = {
+  'guardian-local-agent-v1': 'guardian-local-agent-v1',
+} as const;
+
+export type AiAssessmentEvidenceSource = typeof AiAssessmentEvidenceSource[keyof typeof AiAssessmentEvidenceSource];
+
+
+export const AiAssessmentEvidenceSource = {
+  isolated_local_lab: 'isolated_local_lab',
+} as const;
+
+export type AiAssessmentEvidenceEngine = typeof AiAssessmentEvidenceEngine[keyof typeof AiAssessmentEvidenceEngine];
+
+
+export const AiAssessmentEvidenceEngine = {
+  garak: 'garak',
+} as const;
+
+export type AiAssessmentEvidenceProfileId = typeof AiAssessmentEvidenceProfileId[keyof typeof AiAssessmentEvidenceProfileId];
+
+
+export const AiAssessmentEvidenceProfileId = {
+  'guardian-local-agent-v1': 'guardian-local-agent-v1',
+} as const;
+
+export type AiAssessmentEvidenceNetworkNetworkMode = typeof AiAssessmentEvidenceNetworkNetworkMode[keyof typeof AiAssessmentEvidenceNetworkNetworkMode];
+
+
+export const AiAssessmentEvidenceNetworkNetworkMode = {
+  'docker-network-none': 'docker-network-none',
+} as const;
+
+export type AiAssessmentEvidenceNetworkPublicIpv4 = typeof AiAssessmentEvidenceNetworkPublicIpv4[keyof typeof AiAssessmentEvidenceNetworkPublicIpv4];
+
+
+export const AiAssessmentEvidenceNetworkPublicIpv4 = {
+  blocked: 'blocked',
+} as const;
+
+export type AiAssessmentEvidenceNetworkPublicIpv6 = typeof AiAssessmentEvidenceNetworkPublicIpv6[keyof typeof AiAssessmentEvidenceNetworkPublicIpv6];
+
+
+export const AiAssessmentEvidenceNetworkPublicIpv6 = {
+  blocked: 'blocked',
+} as const;
+
+export type AiAssessmentEvidenceNetworkPublicDns = typeof AiAssessmentEvidenceNetworkPublicDns[keyof typeof AiAssessmentEvidenceNetworkPublicDns];
+
+
+export const AiAssessmentEvidenceNetworkPublicDns = {
+  blocked: 'blocked',
+} as const;
+
+export type AiAssessmentEvidenceReportRecordTypes = {[key: string]: number};
+
+export type AiAssessmentEvidenceFindingsItem = {
+  probeClass: string;
+  detector: string;
+  positiveScores: number;
+};
+
+export type AiAssessmentEvidenceNetwork = {
+  networkMode: AiAssessmentEvidenceNetworkNetworkMode;
+  interfaces: string[];
+  activeNonLoopbackInterfaces: string[];
+  publicIpv4: AiAssessmentEvidenceNetworkPublicIpv4;
+  publicIpv6: AiAssessmentEvidenceNetworkPublicIpv6;
+  publicDns: AiAssessmentEvidenceNetworkPublicDns;
+  loopbackOnly: true;
+};
+
+export interface AiAssessmentEvidence {
+  evidenceVersion: 1;
+  source: AiAssessmentEvidenceSource;
+  engine: AiAssessmentEvidenceEngine;
+  engineVersion: string;
+  profileId: AiAssessmentEvidenceProfileId;
+  probeClasses: string[];
+  generationsPerProbe: 1;
+  probeRequests: 1;
+  reportRecordCount: number;
+  reportRecordTypes: AiAssessmentEvidenceReportRecordTypes;
+  positiveDetectorScores: number;
+  findings: AiAssessmentEvidenceFindingsItem[];
+  /** @pattern ^[a-f0-9]{64}$ */
+  reportSha256: string;
+  reportBytes: number;
+  network: AiAssessmentEvidenceNetwork;
+  startedAt: string;
+  completedAt: string;
+  durationSeconds: number;
+  promptsStored: false;
+  responsesStored: false;
+  externalCalls: 0;
+  customerDataUsed: false;
+  findingSummary: string;
+}
+
+export interface AiAssessmentLabJob {
+  id: string;
+  status: AiAssessmentLabJobStatus;
+  profileId: AiAssessmentLabJobProfileId;
+  workerVersion: string;
+  attempts: number;
+  /** @nullable */
+  engineVersion: string | null;
+  result: AiAssessmentEvidence | null;
+  /** @nullable */
+  errorCode: string | null;
+  createdAt: string;
+  /** @nullable */
+  startedAt: string | null;
+  /** @nullable */
+  completedAt: string | null;
+}
+
 export type MicrosoftOAuthCallbackParams = {
 code?: string;
 state: string;

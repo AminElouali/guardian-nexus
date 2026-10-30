@@ -20,3 +20,9 @@ description: Product boundaries for security integrations, claims, and productio
 **Why:** garak's REST generator accepts configurable targets, so process-level assumptions or a localhost-looking UI do not prevent network access or bound tenant cost.
 
 **How to apply:** If an isolated worker and verified egress boundary are unavailable, expose only a clearly labeled mock simulation and keep real garak execution disabled.
+
+**Rule:** In this Replit host, `unshare --net` is denied but Docker `--network=none` is available; an inactive `sit0` tunnel interface may still appear.
+
+**Why:** Interface names alone are not proof of egress, and an unavailable namespace tool should not be bypassed with weaker isolation.
+
+**How to apply:** Test the actual Docker runtime, reject default routes and active non-loopback links, and verify IPv4, IPv6, DNS, and loopback behavior before claiming an offline worker.

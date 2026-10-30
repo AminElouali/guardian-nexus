@@ -3,6 +3,8 @@
   "moduleLabelEs": "Evaluación de Seguridad de IA",
   "workerVersion": "guardian-ai-assessment-lab-0.1.0",
   "imagePlatform": "linux/amd64",
+  "baseImage": "python:3.13-slim-bookworm",
+  "baseImageDigest": "sha256:281d39ff02e3b389401586134ff9e6572954687822a58055ec07a60ded4e0b7f",
   "python": "3.13",
   "engine": {
     "name": "garak",
@@ -25,6 +27,7 @@
     "pids": 64,
     "concurrency": 1,
     "probeClasses": 1,
+    "probeRequests": 1,
     "generationsPerProbe": 1,
     "tmpfsMiB": 64
   },

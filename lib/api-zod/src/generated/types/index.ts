@@ -6,6 +6,23 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './aiAssessmentEvidence';
+export * from './aiAssessmentEvidenceEngine';
+export * from './aiAssessmentEvidenceFindingsItem';
+export * from './aiAssessmentEvidenceNetwork';
+export * from './aiAssessmentEvidenceNetworkNetworkMode';
+export * from './aiAssessmentEvidenceNetworkPublicDns';
+export * from './aiAssessmentEvidenceNetworkPublicIpv4';
+export * from './aiAssessmentEvidenceNetworkPublicIpv6';
+export * from './aiAssessmentEvidenceProfileId';
+export * from './aiAssessmentEvidenceReportRecordTypes';
+export * from './aiAssessmentEvidenceSource';
+export * from './aiAssessmentLabAvailability';
+export * from './aiAssessmentLabAvailabilityStatus';
+export * from './aiAssessmentLabJob';
+export * from './aiAssessmentLabJobProfileId';
+export * from './aiAssessmentLabJobRequest';
+export * from './aiAssessmentLabJobStatus';
 export * from './aiEvaluationCheck';
 export * from './aiEvaluationCheckStatus';
 export * from './aiEvaluationRun';

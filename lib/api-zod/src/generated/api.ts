@@ -458,3 +458,212 @@ export const RunWorkspaceMockAiEvaluationResponse = zod.object({
 })
 
 
+/**
+ * @summary Check whether the isolated local laboratory worker is ready
+ */
+export const GetWorkspaceAiAssessmentLabAvailabilityParams = zod.object({
+  "workspaceId": zod.uuid()
+})
+
+export const GetWorkspaceAiAssessmentLabAvailabilityResponse = zod.object({
+  "status": zod.enum(['ready', 'unavailable', 'disabled']),
+  "workerVersion": zod.string(),
+  "reasonCode": zod.string().nullable()
+})
+
+
+/**
+ * @summary List tenant-scoped laboratory assessments and evidence summaries
+ */
+export const ListWorkspaceAiAssessmentLabJobsParams = zod.object({
+  "workspaceId": zod.uuid()
+})
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultOneReportSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+
+
+export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
+  "id": zod.uuid(),
+  "status": zod.enum(['queued', 'running', 'succeeded', 'failed']),
+  "profileId": zod.enum(['guardian-local-agent-v1']),
+  "workerVersion": zod.string(),
+  "attempts": zod.int(),
+  "engineVersion": zod.string().nullable(),
+  "result": zod.union([zod.object({
+  "evidenceVersion": zod.literal(1),
+  "source": zod.enum(['isolated_local_lab']),
+  "engine": zod.enum(['garak']),
+  "engineVersion": zod.string(),
+  "profileId": zod.enum(['guardian-local-agent-v1']),
+  "probeClasses": zod.array(zod.string()),
+  "generationsPerProbe": zod.literal(1),
+  "probeRequests": zod.literal(1),
+  "reportRecordCount": zod.int(),
+  "reportRecordTypes": zod.record(zod.string(), zod.int()),
+  "positiveDetectorScores": zod.int(),
+  "findings": zod.array(zod.object({
+  "probeClass": zod.string(),
+  "detector": zod.string(),
+  "positiveScores": zod.int()
+})),
+  "reportSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultOneReportSha256RegExp),
+  "reportBytes": zod.int(),
+  "network": zod.object({
+  "networkMode": zod.enum(['docker-network-none']),
+  "interfaces": zod.array(zod.string()),
+  "activeNonLoopbackInterfaces": zod.array(zod.string()),
+  "publicIpv4": zod.enum(['blocked']),
+  "publicIpv6": zod.enum(['blocked']),
+  "publicDns": zod.enum(['blocked']),
+  "loopbackOnly": zod.literal(true)
+}),
+  "startedAt": zod.coerce.date(),
+  "completedAt": zod.coerce.date(),
+  "durationSeconds": zod.int(),
+  "promptsStored": zod.literal(false),
+  "responsesStored": zod.literal(false),
+  "externalCalls": zod.literal(0),
+  "customerDataUsed": zod.literal(false),
+  "findingSummary": zod.string()
+}),zod.null()]),
+  "errorCode": zod.string().nullable(),
+  "createdAt": zod.coerce.date(),
+  "startedAt": zod.coerce.date().nullable(),
+  "completedAt": zod.coerce.date().nullable()
+})
+export const ListWorkspaceAiAssessmentLabJobsResponse = zod.array(ListWorkspaceAiAssessmentLabJobsResponseItem)
+
+
+/**
+ * Runs only the fixed, owned loopback laboratory profile; arbitrary targets, customer data, credentials, and paid models are not accepted.
+ * @summary Request a bounded evaluation of Guardian Nexus's local lab agent
+ */
+export const CreateWorkspaceAiAssessmentLabJobParams = zod.object({
+  "workspaceId": zod.uuid()
+})
+
+export const createWorkspaceAiAssessmentLabJobBodyIdempotencyKeyMin = 16;
+export const createWorkspaceAiAssessmentLabJobBodyIdempotencyKeyMax = 128;
+
+
+
+export const CreateWorkspaceAiAssessmentLabJobBody = zod.object({
+  "idempotencyKey": zod.string().min(createWorkspaceAiAssessmentLabJobBodyIdempotencyKeyMin).max(createWorkspaceAiAssessmentLabJobBodyIdempotencyKeyMax)
+})
+
+export const createWorkspaceAiAssessmentLabJobResponseResultOneReportSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+
+
+export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
+  "id": zod.uuid(),
+  "status": zod.enum(['queued', 'running', 'succeeded', 'failed']),
+  "profileId": zod.enum(['guardian-local-agent-v1']),
+  "workerVersion": zod.string(),
+  "attempts": zod.int(),
+  "engineVersion": zod.string().nullable(),
+  "result": zod.union([zod.object({
+  "evidenceVersion": zod.literal(1),
+  "source": zod.enum(['isolated_local_lab']),
+  "engine": zod.enum(['garak']),
+  "engineVersion": zod.string(),
+  "profileId": zod.enum(['guardian-local-agent-v1']),
+  "probeClasses": zod.array(zod.string()),
+  "generationsPerProbe": zod.literal(1),
+  "probeRequests": zod.literal(1),
+  "reportRecordCount": zod.int(),
+  "reportRecordTypes": zod.record(zod.string(), zod.int()),
+  "positiveDetectorScores": zod.int(),
+  "findings": zod.array(zod.object({
+  "probeClass": zod.string(),
+  "detector": zod.string(),
+  "positiveScores": zod.int()
+})),
+  "reportSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultOneReportSha256RegExp),
+  "reportBytes": zod.int(),
+  "network": zod.object({
+  "networkMode": zod.enum(['docker-network-none']),
+  "interfaces": zod.array(zod.string()),
+  "activeNonLoopbackInterfaces": zod.array(zod.string()),
+  "publicIpv4": zod.enum(['blocked']),
+  "publicIpv6": zod.enum(['blocked']),
+  "publicDns": zod.enum(['blocked']),
+  "loopbackOnly": zod.literal(true)
+}),
+  "startedAt": zod.coerce.date(),
+  "completedAt": zod.coerce.date(),
+  "durationSeconds": zod.int(),
+  "promptsStored": zod.literal(false),
+  "responsesStored": zod.literal(false),
+  "externalCalls": zod.literal(0),
+  "customerDataUsed": zod.literal(false),
+  "findingSummary": zod.string()
+}),zod.null()]),
+  "errorCode": zod.string().nullable(),
+  "createdAt": zod.coerce.date(),
+  "startedAt": zod.coerce.date().nullable(),
+  "completedAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary Retry a failed tenant-scoped laboratory job within its attempt limit
+ */
+export const RetryWorkspaceAiAssessmentLabJobParams = zod.object({
+  "workspaceId": zod.uuid(),
+  "jobId": zod.uuid()
+})
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultOneReportSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+
+
+export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
+  "id": zod.uuid(),
+  "status": zod.enum(['queued', 'running', 'succeeded', 'failed']),
+  "profileId": zod.enum(['guardian-local-agent-v1']),
+  "workerVersion": zod.string(),
+  "attempts": zod.int(),
+  "engineVersion": zod.string().nullable(),
+  "result": zod.union([zod.object({
+  "evidenceVersion": zod.literal(1),
+  "source": zod.enum(['isolated_local_lab']),
+  "engine": zod.enum(['garak']),
+  "engineVersion": zod.string(),
+  "profileId": zod.enum(['guardian-local-agent-v1']),
+  "probeClasses": zod.array(zod.string()),
+  "generationsPerProbe": zod.literal(1),
+  "probeRequests": zod.literal(1),
+  "reportRecordCount": zod.int(),
+  "reportRecordTypes": zod.record(zod.string(), zod.int()),
+  "positiveDetectorScores": zod.int(),
+  "findings": zod.array(zod.object({
+  "probeClass": zod.string(),
+  "detector": zod.string(),
+  "positiveScores": zod.int()
+})),
+  "reportSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultOneReportSha256RegExp),
+  "reportBytes": zod.int(),
+  "network": zod.object({
+  "networkMode": zod.enum(['docker-network-none']),
+  "interfaces": zod.array(zod.string()),
+  "activeNonLoopbackInterfaces": zod.array(zod.string()),
+  "publicIpv4": zod.enum(['blocked']),
+  "publicIpv6": zod.enum(['blocked']),
+  "publicDns": zod.enum(['blocked']),
+  "loopbackOnly": zod.literal(true)
+}),
+  "startedAt": zod.coerce.date(),
+  "completedAt": zod.coerce.date(),
+  "durationSeconds": zod.int(),
+  "promptsStored": zod.literal(false),
+  "responsesStored": zod.literal(false),
+  "externalCalls": zod.literal(0),
+  "customerDataUsed": zod.literal(false),
+  "findingSummary": zod.string()
+}),zod.null()]),
+  "errorCode": zod.string().nullable(),
+  "createdAt": zod.coerce.date(),
+  "startedAt": zod.coerce.date().nullable(),
+  "completedAt": zod.coerce.date().nullable()
+})
+
+

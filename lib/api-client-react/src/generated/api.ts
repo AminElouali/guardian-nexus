@@ -25,6 +25,9 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AiAssessmentLabAvailability,
+  AiAssessmentLabJob,
+  AiAssessmentLabJobRequest,
   AiEvaluationRun,
   Asset,
   AssetInput,
@@ -2076,5 +2079,373 @@ export const useRunWorkspaceMockAiEvaluation = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getRunWorkspaceMockAiEvaluationMutationOptions(options), queryClient);
+    }
+
+export const getGetWorkspaceAiAssessmentLabAvailabilityUrl = (workspaceId: string,) => {
+
+
+
+
+  return `/api/workspaces/${workspaceId}/ai-security-assessments/lab/availability`
+}
+
+/**
+ * @summary Check whether the isolated local laboratory worker is ready
+ */
+export const getWorkspaceAiAssessmentLabAvailability = async (workspaceId: string, options?: Parameters<typeof customFetch>[1]): Promise<AiAssessmentLabAvailability> => {
+
+  return customFetch<AiAssessmentLabAvailability>(getGetWorkspaceAiAssessmentLabAvailabilityUrl(workspaceId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetWorkspaceAiAssessmentLabAvailabilityQueryKey = (workspaceId: string,) => {
+    return [
+    `/api/workspaces/${workspaceId}/ai-security-assessments/lab/availability`
+    ] as const;
+    }
+
+
+export const getGetWorkspaceAiAssessmentLabAvailabilityQueryOptions = <TData = Awaited<ReturnType<typeof getWorkspaceAiAssessmentLabAvailability>>, TError = ErrorType<void>>(workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWorkspaceAiAssessmentLabAvailability>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetWorkspaceAiAssessmentLabAvailabilityQueryKey(workspaceId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getWorkspaceAiAssessmentLabAvailability>>> = ({ signal }) => getWorkspaceAiAssessmentLabAvailability(workspaceId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: workspaceId !== null && workspaceId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getWorkspaceAiAssessmentLabAvailability>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetWorkspaceAiAssessmentLabAvailabilityQueryResult = NonNullable<Awaited<ReturnType<typeof getWorkspaceAiAssessmentLabAvailability>>>
+export type GetWorkspaceAiAssessmentLabAvailabilityQueryError = ErrorType<void>
+
+
+export function useGetWorkspaceAiAssessmentLabAvailability<TData = Awaited<ReturnType<typeof getWorkspaceAiAssessmentLabAvailability>>, TError = ErrorType<void>>(
+ workspaceId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWorkspaceAiAssessmentLabAvailability>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getWorkspaceAiAssessmentLabAvailability>>,
+          TError,
+          Awaited<ReturnType<typeof getWorkspaceAiAssessmentLabAvailability>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetWorkspaceAiAssessmentLabAvailability<TData = Awaited<ReturnType<typeof getWorkspaceAiAssessmentLabAvailability>>, TError = ErrorType<void>>(
+ workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWorkspaceAiAssessmentLabAvailability>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getWorkspaceAiAssessmentLabAvailability>>,
+          TError,
+          Awaited<ReturnType<typeof getWorkspaceAiAssessmentLabAvailability>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetWorkspaceAiAssessmentLabAvailability<TData = Awaited<ReturnType<typeof getWorkspaceAiAssessmentLabAvailability>>, TError = ErrorType<void>>(
+ workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWorkspaceAiAssessmentLabAvailability>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Check whether the isolated local laboratory worker is ready
+ */
+
+export function useGetWorkspaceAiAssessmentLabAvailability<TData = Awaited<ReturnType<typeof getWorkspaceAiAssessmentLabAvailability>>, TError = ErrorType<void>>(
+ workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWorkspaceAiAssessmentLabAvailability>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetWorkspaceAiAssessmentLabAvailabilityQueryOptions(workspaceId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListWorkspaceAiAssessmentLabJobsUrl = (workspaceId: string,) => {
+
+
+
+
+  return `/api/workspaces/${workspaceId}/ai-security-assessments/lab/jobs`
+}
+
+/**
+ * @summary List tenant-scoped laboratory assessments and evidence summaries
+ */
+export const listWorkspaceAiAssessmentLabJobs = async (workspaceId: string, options?: Parameters<typeof customFetch>[1]): Promise<AiAssessmentLabJob[]> => {
+
+  return customFetch<AiAssessmentLabJob[]>(getListWorkspaceAiAssessmentLabJobsUrl(workspaceId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListWorkspaceAiAssessmentLabJobsQueryKey = (workspaceId: string,) => {
+    return [
+    `/api/workspaces/${workspaceId}/ai-security-assessments/lab/jobs`
+    ] as const;
+    }
+
+
+export const getListWorkspaceAiAssessmentLabJobsQueryOptions = <TData = Awaited<ReturnType<typeof listWorkspaceAiAssessmentLabJobs>>, TError = ErrorType<void>>(workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listWorkspaceAiAssessmentLabJobs>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListWorkspaceAiAssessmentLabJobsQueryKey(workspaceId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listWorkspaceAiAssessmentLabJobs>>> = ({ signal }) => listWorkspaceAiAssessmentLabJobs(workspaceId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: workspaceId !== null && workspaceId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listWorkspaceAiAssessmentLabJobs>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListWorkspaceAiAssessmentLabJobsQueryResult = NonNullable<Awaited<ReturnType<typeof listWorkspaceAiAssessmentLabJobs>>>
+export type ListWorkspaceAiAssessmentLabJobsQueryError = ErrorType<void>
+
+
+export function useListWorkspaceAiAssessmentLabJobs<TData = Awaited<ReturnType<typeof listWorkspaceAiAssessmentLabJobs>>, TError = ErrorType<void>>(
+ workspaceId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listWorkspaceAiAssessmentLabJobs>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listWorkspaceAiAssessmentLabJobs>>,
+          TError,
+          Awaited<ReturnType<typeof listWorkspaceAiAssessmentLabJobs>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListWorkspaceAiAssessmentLabJobs<TData = Awaited<ReturnType<typeof listWorkspaceAiAssessmentLabJobs>>, TError = ErrorType<void>>(
+ workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listWorkspaceAiAssessmentLabJobs>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listWorkspaceAiAssessmentLabJobs>>,
+          TError,
+          Awaited<ReturnType<typeof listWorkspaceAiAssessmentLabJobs>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListWorkspaceAiAssessmentLabJobs<TData = Awaited<ReturnType<typeof listWorkspaceAiAssessmentLabJobs>>, TError = ErrorType<void>>(
+ workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listWorkspaceAiAssessmentLabJobs>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List tenant-scoped laboratory assessments and evidence summaries
+ */
+
+export function useListWorkspaceAiAssessmentLabJobs<TData = Awaited<ReturnType<typeof listWorkspaceAiAssessmentLabJobs>>, TError = ErrorType<void>>(
+ workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listWorkspaceAiAssessmentLabJobs>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListWorkspaceAiAssessmentLabJobsQueryOptions(workspaceId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateWorkspaceAiAssessmentLabJobUrl = (workspaceId: string,) => {
+
+
+
+
+  return `/api/workspaces/${workspaceId}/ai-security-assessments/lab/jobs`
+}
+
+/**
+ * Runs only the fixed, owned loopback laboratory profile; arbitrary targets, customer data, credentials, and paid models are not accepted.
+ * @summary Request a bounded evaluation of Guardian Nexus's local lab agent
+ */
+export const createWorkspaceAiAssessmentLabJob = async (workspaceId: string,
+    aiAssessmentLabJobRequest: AiAssessmentLabJobRequest, options?: Parameters<typeof customFetch>[1]): Promise<AiAssessmentLabJob> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<AiAssessmentLabJob>(getCreateWorkspaceAiAssessmentLabJobUrl(workspaceId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(aiAssessmentLabJobRequest)
+  }
+);}
+
+
+
+
+
+export const getCreateWorkspaceAiAssessmentLabJobMutationKey = () => ['createWorkspaceAiAssessmentLabJob'] as const;
+
+export const getCreateWorkspaceAiAssessmentLabJobMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createWorkspaceAiAssessmentLabJob>>, TError,CreateWorkspaceAiAssessmentLabJobMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createWorkspaceAiAssessmentLabJob>>, TError,CreateWorkspaceAiAssessmentLabJobMutationVariables, TContext> => {
+
+const mutationKey = getCreateWorkspaceAiAssessmentLabJobMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createWorkspaceAiAssessmentLabJob>>, CreateWorkspaceAiAssessmentLabJobMutationVariables> = (props) => {
+          const {workspaceId,data} = props ?? {};
+
+          return  createWorkspaceAiAssessmentLabJob(workspaceId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateWorkspaceAiAssessmentLabJobMutationResult = NonNullable<Awaited<ReturnType<typeof createWorkspaceAiAssessmentLabJob>>>
+    export type CreateWorkspaceAiAssessmentLabJobMutationBody = BodyType<AiAssessmentLabJobRequest>
+    export type CreateWorkspaceAiAssessmentLabJobMutationError = ErrorType<void>
+    export type CreateWorkspaceAiAssessmentLabJobMutationVariables = {workspaceId: string;data: BodyType<AiAssessmentLabJobRequest>}
+
+    /**
+ * @summary Request a bounded evaluation of Guardian Nexus's local lab agent
+ */
+export const useCreateWorkspaceAiAssessmentLabJob = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createWorkspaceAiAssessmentLabJob>>, TError,CreateWorkspaceAiAssessmentLabJobMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createWorkspaceAiAssessmentLabJob>>,
+        TError,
+        CreateWorkspaceAiAssessmentLabJobMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateWorkspaceAiAssessmentLabJobMutationOptions(options), queryClient);
+    }
+
+export const getRetryWorkspaceAiAssessmentLabJobUrl = (workspaceId: string,
+    jobId: string,) => {
+
+
+
+
+  return `/api/workspaces/${workspaceId}/ai-security-assessments/lab/jobs/${jobId}/retry`
+}
+
+/**
+ * @summary Retry a failed tenant-scoped laboratory job within its attempt limit
+ */
+export const retryWorkspaceAiAssessmentLabJob = async (workspaceId: string,
+    jobId: string, options?: Parameters<typeof customFetch>[1]): Promise<AiAssessmentLabJob> => {
+
+  return customFetch<AiAssessmentLabJob>(getRetryWorkspaceAiAssessmentLabJobUrl(workspaceId,jobId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRetryWorkspaceAiAssessmentLabJobMutationKey = () => ['retryWorkspaceAiAssessmentLabJob'] as const;
+
+export const getRetryWorkspaceAiAssessmentLabJobMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryWorkspaceAiAssessmentLabJob>>, TError,RetryWorkspaceAiAssessmentLabJobMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof retryWorkspaceAiAssessmentLabJob>>, TError,RetryWorkspaceAiAssessmentLabJobMutationVariables, TContext> => {
+
+const mutationKey = getRetryWorkspaceAiAssessmentLabJobMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof retryWorkspaceAiAssessmentLabJob>>, RetryWorkspaceAiAssessmentLabJobMutationVariables> = (props) => {
+          const {workspaceId,jobId} = props ?? {};
+
+          return  retryWorkspaceAiAssessmentLabJob(workspaceId,jobId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RetryWorkspaceAiAssessmentLabJobMutationResult = NonNullable<Awaited<ReturnType<typeof retryWorkspaceAiAssessmentLabJob>>>
+
+    export type RetryWorkspaceAiAssessmentLabJobMutationError = ErrorType<void>
+    export type RetryWorkspaceAiAssessmentLabJobMutationVariables = {workspaceId: string;jobId: string}
+
+    /**
+ * @summary Retry a failed tenant-scoped laboratory job within its attempt limit
+ */
+export const useRetryWorkspaceAiAssessmentLabJob = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryWorkspaceAiAssessmentLabJob>>, TError,RetryWorkspaceAiAssessmentLabJobMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof retryWorkspaceAiAssessmentLabJob>>,
+        TError,
+        RetryWorkspaceAiAssessmentLabJobMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRetryWorkspaceAiAssessmentLabJobMutationOptions(options), queryClient);
     }
 

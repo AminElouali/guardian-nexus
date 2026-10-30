@@ -516,6 +516,105 @@ paths:
           description: Workspace monthly scan quota reached
         "429":
           description: Evaluation slot is occupied; retry shortly
+  /workspaces/{workspaceId}/ai-security-assessments/lab/availability:
+    get:
+      operationId: getWorkspaceAiAssessmentLabAvailability
+      tags: [ai-evaluations]
+      summary: Check whether the isolated local laboratory worker is ready
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Development-only worker readiness; no assessment is started
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AiAssessmentLabAvailability" }
+        "403":
+          description: User is not a workspace member
+  /workspaces/{workspaceId}/ai-security-assessments/lab/jobs:
+    get:
+      operationId: listWorkspaceAiAssessmentLabJobs
+      tags: [ai-evaluations]
+      summary: List tenant-scoped laboratory assessments and evidence summaries
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Latest safe results and durable job states for this workspace
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AiAssessmentLabJob" }
+        "403":
+          description: User is not a workspace member
+    post:
+      operationId: createWorkspaceAiAssessmentLabJob
+      tags: [ai-evaluations]
+      summary: Request a bounded evaluation of Guardian Nexus's local lab agent
+      description: Runs only the fixed, owned loopback laboratory profile; arbitrary targets, customer data, credentials, and paid models are not accepted.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AiAssessmentLabJobRequest" }
+      responses:
+        "202":
+          description: Durable tenant-scoped job accepted or existing idempotent job returned
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AiAssessmentLabJob" }
+        "403":
+          description: Workspace owner or admin role required
+        "409":
+          description: Workspace quota or pending job limit reached
+        "429":
+          description: Local worker concurrency limit reached
+        "503":
+          description: Local isolated Docker worker is unavailable or disabled outside development
+  /workspaces/{workspaceId}/ai-security-assessments/lab/jobs/{jobId}/retry:
+    post:
+      operationId: retryWorkspaceAiAssessmentLabJob
+      tags: [ai-evaluations]
+      summary: Retry a failed tenant-scoped laboratory job within its attempt limit
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: jobId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "202":
+          description: The existing durable job was queued for one bounded retry
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AiAssessmentLabJob" }
+        "403":
+          description: Workspace owner or admin role required
+        "404":
+          description: Job not found in this workspace
+        "409":
+          description: Job is not retryable or has exhausted its attempt limit
+        "503":
+          description: Local isolated Docker worker is unavailable or disabled outside development
 components:
   schemas:
     HealthStatus:
@@ -721,6 +820,86 @@ components:
         failedChecks: { type: integer }
         createdAt: { type: string, format: date-time }
       required: [id, engine, execution, version, checks, passedChecks, failedChecks, createdAt]
+    AiAssessmentLabAvailability:
+      type: object
+      properties:
+        status: { type: string, enum: [ready, unavailable, disabled] }
+        workerVersion: { type: string }
+        reasonCode: { type: ["string", "null"] }
+      required: [status, workerVersion, reasonCode]
+    AiAssessmentLabJobRequest:
+      type: object
+      properties:
+        idempotencyKey: { type: string, minLength: 16, maxLength: 128 }
+      required: [idempotencyKey]
+    AiAssessmentLabJob:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [queued, running, succeeded, failed] }
+        profileId: { type: string, enum: [guardian-local-agent-v1] }
+        workerVersion: { type: string }
+        attempts: { type: integer }
+        engineVersion: { type: ["string", "null"] }
+        result: { oneOf: [{ $ref: "#/components/schemas/AiAssessmentEvidence" }, { type: "null" }] }
+        errorCode: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+        startedAt: { type: ["string", "null"], format: date-time }
+        completedAt: { type: ["string", "null"], format: date-time }
+      required: [id, status, profileId, workerVersion, attempts, engineVersion, result, errorCode, createdAt, startedAt, completedAt]
+    AiAssessmentEvidence:
+      type: object
+      properties:
+        evidenceVersion: { type: integer, const: 1 }
+        source: { type: string, enum: [isolated_local_lab] }
+        engine: { type: string, enum: [garak] }
+        engineVersion: { type: string }
+        profileId: { type: string, enum: [guardian-local-agent-v1] }
+        probeClasses:
+          type: array
+          items: { type: string }
+        generationsPerProbe: { type: integer, const: 1 }
+        probeRequests: { type: integer, const: 1 }
+        reportRecordCount: { type: integer }
+        reportRecordTypes:
+          type: object
+          additionalProperties: { type: integer }
+        positiveDetectorScores: { type: integer }
+        findings:
+          type: array
+          items:
+            type: object
+            properties:
+              probeClass: { type: string }
+              detector: { type: string }
+              positiveScores: { type: integer }
+            required: [probeClass, detector, positiveScores]
+        reportSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        reportBytes: { type: integer }
+        network:
+          type: object
+          properties:
+            networkMode: { type: string, enum: [docker-network-none] }
+            interfaces:
+              type: array
+              items: { type: string }
+            activeNonLoopbackInterfaces:
+              type: array
+              items: { type: string }
+            publicIpv4: { type: string, enum: [blocked] }
+            publicIpv6: { type: string, enum: [blocked] }
+            publicDns: { type: string, enum: [blocked] }
+            loopbackOnly: { type: boolean, const: true }
+          required: [networkMode, interfaces, activeNonLoopbackInterfaces, publicIpv4, publicIpv6, publicDns, loopbackOnly]
+        startedAt: { type: string, format: date-time }
+        completedAt: { type: string, format: date-time }
+        durationSeconds: { type: integer }
+        promptsStored: { type: boolean, const: false }
+        responsesStored: { type: boolean, const: false }
+        externalCalls: { type: integer, const: 0 }
+        customerDataUsed: { type: boolean, const: false }
+        findingSummary: { type: string }
+      required: [evidenceVersion, source, engine, engineVersion, profileId, probeClasses, generationsPerProbe, probeRequests, reportRecordCount, reportRecordTypes, positiveDetectorScores, findings, reportSha256, reportBytes, network, startedAt, completedAt, durationSeconds, promptsStored, responsesStored, externalCalls, customerDataUsed, findingSummary]
   securitySchemes:
     bearerAuth:
       type: http

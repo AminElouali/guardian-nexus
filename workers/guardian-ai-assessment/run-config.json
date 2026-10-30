@@ -1,0 +1,6 @@
+{
+  "run": {
+    "soft_probe_prompt_cap": 1,
+    "generations": 1
+  }
+}

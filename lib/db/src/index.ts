@@ -92,7 +92,8 @@ export async function assertRlsRuntimeReady(): Promise<void> {
         'workspace_integrations',
         'provider_connections',
         'connector_oauth_states',
-        'connector_jobs'
+        'connector_jobs',
+        'ai_assessment_jobs'
       )
     GROUP BY c.relname, c.relrowsecurity, c.relforcerowsecurity
   `);
@@ -106,6 +107,7 @@ export async function assertRlsRuntimeReady(): Promise<void> {
     provider_connections: 4,
     connector_oauth_states: 3,
     connector_jobs: 4,
+    ai_assessment_jobs: 3,
   };
   if (
     rows.length !== Object.keys(expectedPolicyCounts).length ||
@@ -160,7 +162,8 @@ export async function assertRlsRuntimeReady(): Promise<void> {
             'workspace_integrations',
             'provider_connections',
             'connector_oauth_states',
-            'connector_jobs'
+            'connector_jobs',
+            'ai_assessment_jobs'
           ])
           AND protected.relowner = runtime.oid
       ) AS runtime_owns_protected_table,
@@ -175,7 +178,8 @@ export async function assertRlsRuntimeReady(): Promise<void> {
           'workspace_integrations',
           'provider_connections',
           'connector_oauth_states',
-          'connector_jobs'
+          'connector_jobs',
+          'ai_assessment_jobs'
         ]) AS protected(table_name)
         WHERE NOT (
           has_table_privilege(
@@ -196,7 +200,8 @@ export async function assertRlsRuntimeReady(): Promise<void> {
           'workspace_integrations',
           'provider_connections',
           'connector_oauth_states',
-          'connector_jobs'
+          'connector_jobs',
+          'ai_assessment_jobs'
         ]) AS protected(table_name)
         WHERE
           has_table_privilege(role.oid, format('public.%I', protected.table_name), 'SELECT')

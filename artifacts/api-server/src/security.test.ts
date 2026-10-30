@@ -5,6 +5,7 @@ import pg from "pg";
 import { eq, sql } from "drizzle-orm";
 import {
   assertRlsRuntimeReady,
+  aiAssessmentJobsTable,
   assetsTable,
   connectorJobsTable,
   monthlyUsageTable,
@@ -26,6 +27,7 @@ import {
   enqueueConnectorJob,
   rescheduleConnectorJob,
 } from "./lib/connector-jobs";
+import { isAiAssessmentJobRetryable } from "./lib/ai-assessment-worker";
 
 if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL is required for isolated security-test fixtures.");
@@ -240,6 +242,124 @@ test("RLS rejects cross-tenant AI evaluation evidence writes", async () => {
     }),
     (error: { cause?: { code?: string } }) => error.cause?.code === "42501",
   );
+});
+
+test("AI assessment jobs enforce tenant, role, and idempotency boundaries", async () => {
+  const idempotencyKey = `lab-${randomUUID()}`;
+  const inserted = await withWorkspaceUserTransaction(
+    userA,
+    workspaceA,
+    (tx) =>
+      tx
+        .insert(aiAssessmentJobsTable)
+        .values({
+          workspaceId: workspaceA,
+          requestedByUserId: userA,
+          idempotencyKey,
+        })
+        .onConflictDoNothing()
+        .returning(),
+  );
+  assert.equal(inserted.authorized, true);
+  if (!inserted.authorized) return;
+  assert.equal(inserted.value.length, 1);
+
+  const duplicate = await withWorkspaceUserTransaction(
+    userA,
+    workspaceA,
+    (tx) =>
+      tx
+        .insert(aiAssessmentJobsTable)
+        .values({
+          workspaceId: workspaceA,
+          requestedByUserId: userA,
+          idempotencyKey,
+        })
+        .onConflictDoNothing()
+        .returning(),
+  );
+  assert.equal(duplicate.authorized, true);
+  if (!duplicate.authorized) return;
+  assert.equal(duplicate.value.length, 0);
+
+  const [visibleToOwner, visibleToViewer, visibleToOtherTenant] =
+    await Promise.all([
+      withWorkspaceUserTransaction(userA, workspaceA, (tx) =>
+        tx.select().from(aiAssessmentJobsTable),
+      ),
+      withWorkspaceUserTransaction(viewerA, workspaceA, (tx) =>
+        tx.select().from(aiAssessmentJobsTable),
+      ),
+      withWorkspaceUserTransaction(userB, workspaceB, (tx) =>
+        tx.select().from(aiAssessmentJobsTable),
+      ),
+    ]);
+  assert.equal(visibleToOwner.authorized, true);
+  assert.equal(visibleToViewer.authorized, true);
+  assert.equal(visibleToOtherTenant.authorized, true);
+  if (
+    !visibleToOwner.authorized ||
+    !visibleToViewer.authorized ||
+    !visibleToOtherTenant.authorized
+  ) return;
+  assert.equal(visibleToOwner.value.length, 1);
+  assert.equal(visibleToViewer.value.length, 1);
+  assert.equal(visibleToOtherTenant.value.length, 0);
+  assert.equal(visibleToOwner.value[0]?.workspaceId, workspaceA);
+
+  await assert.rejects(
+    withWorkspaceUserTransaction(userA, workspaceA, (tx) =>
+      tx.insert(aiAssessmentJobsTable).values({
+        workspaceId: workspaceB,
+        requestedByUserId: userA,
+        idempotencyKey: `cross-tenant-${randomUUID()}`,
+      }),
+    ),
+    (error: { cause?: { code?: string } }) => error.cause?.code === "42501",
+  );
+  await assert.rejects(
+    withWorkspaceUserTransaction(viewerA, workspaceA, (tx) =>
+      tx.insert(aiAssessmentJobsTable).values({
+        workspaceId: workspaceA,
+        requestedByUserId: viewerA,
+        idempotencyKey: `viewer-${randomUUID()}`,
+      }),
+    ),
+    (error: { cause?: { code?: string } }) => error.cause?.code === "42501",
+  );
+  const viewerUpdate = await withWorkspaceUserTransaction(
+    viewerA,
+    workspaceA,
+    (tx) =>
+      tx
+        .update(aiAssessmentJobsTable)
+        .set({ status: "failed" })
+        .where(eq(aiAssessmentJobsTable.id, inserted.value[0]!.id))
+        .returning({ id: aiAssessmentJobsTable.id }),
+  );
+  assert.equal(viewerUpdate.authorized, true);
+  if (!viewerUpdate.authorized) return;
+  assert.equal(viewerUpdate.value.length, 0);
+  const unchanged = await withWorkspaceUserTransaction(
+    userA,
+    workspaceA,
+    (tx) =>
+      tx
+        .select({ status: aiAssessmentJobsTable.status })
+        .from(aiAssessmentJobsTable)
+        .where(eq(aiAssessmentJobsTable.id, inserted.value[0]!.id))
+        .limit(1),
+  );
+  assert.equal(unchanged.authorized, true);
+  if (!unchanged.authorized) return;
+  assert.equal(unchanged.value[0]?.status, "queued");
+});
+
+test("AI assessment retry policy stops at two attempts and only retries failures", () => {
+  assert.equal(isAiAssessmentJobRetryable("failed", 1), true);
+  assert.equal(isAiAssessmentJobRetryable("failed", 2), false);
+  assert.equal(isAiAssessmentJobRetryable("queued", 1), false);
+  assert.equal(isAiAssessmentJobRetryable("running", 1), false);
 });
 
 test("RLS scopes unfiltered asset reads to the verified tenant", async () => {

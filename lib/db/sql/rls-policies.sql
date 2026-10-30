@@ -18,6 +18,8 @@ ALTER TABLE public.connector_oauth_states ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.connector_oauth_states FORCE ROW LEVEL SECURITY;
 ALTER TABLE public.connector_jobs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.connector_jobs FORCE ROW LEVEL SECURITY;
+ALTER TABLE public.ai_assessment_jobs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ai_assessment_jobs FORCE ROW LEVEL SECURITY;
 
 ALTER POLICY workspaces_select_member ON public.workspaces
   USING (
@@ -288,6 +290,48 @@ ALTER POLICY connector_jobs_delete_scope ON public.connector_jobs
       SELECT 1 FROM public.workspace_memberships AS membership
       WHERE membership.workspace_id = connector_jobs.workspace_id
         AND membership.user_id = NULLIF(current_setting('app.user_id', true), '')
+    )
+  );
+
+ALTER POLICY ai_assessment_jobs_select_member ON public.ai_assessment_jobs
+  USING (
+    workspace_id::text = NULLIF(current_setting('app.workspace_id', true), '')
+    AND EXISTS (
+      SELECT 1 FROM public.workspace_memberships AS membership
+      WHERE membership.workspace_id = ai_assessment_jobs.workspace_id
+        AND membership.user_id = NULLIF(current_setting('app.user_id', true), '')
+    )
+  );
+
+ALTER POLICY ai_assessment_jobs_insert_owner ON public.ai_assessment_jobs
+  WITH CHECK (
+    workspace_id::text = NULLIF(current_setting('app.workspace_id', true), '')
+    AND requested_by_user_id = NULLIF(current_setting('app.user_id', true), '')
+    AND EXISTS (
+      SELECT 1 FROM public.workspace_memberships AS membership
+      WHERE membership.workspace_id = ai_assessment_jobs.workspace_id
+        AND membership.user_id = NULLIF(current_setting('app.user_id', true), '')
+        AND membership.role IN ('owner', 'admin')
+    )
+  );
+
+ALTER POLICY ai_assessment_jobs_update_owner ON public.ai_assessment_jobs
+  USING (
+    workspace_id::text = NULLIF(current_setting('app.workspace_id', true), '')
+    AND EXISTS (
+      SELECT 1 FROM public.workspace_memberships AS membership
+      WHERE membership.workspace_id = ai_assessment_jobs.workspace_id
+        AND membership.user_id = NULLIF(current_setting('app.user_id', true), '')
+        AND membership.role IN ('owner', 'admin')
+    )
+  )
+  WITH CHECK (
+    workspace_id::text = NULLIF(current_setting('app.workspace_id', true), '')
+    AND EXISTS (
+      SELECT 1 FROM public.workspace_memberships AS membership
+      WHERE membership.workspace_id = ai_assessment_jobs.workspace_id
+        AND membership.user_id = NULLIF(current_setting('app.user_id', true), '')
+        AND membership.role IN ('owner', 'admin')
     )
   );
 

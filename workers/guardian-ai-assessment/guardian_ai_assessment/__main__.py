@@ -5,13 +5,12 @@ import hashlib
 import importlib.metadata
 import json
 import os
+import re
 import socket
-import struct
 import subprocess
 import sys
 import tempfile
 import threading
-import time
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -31,6 +30,7 @@ MAX_RUNTIME_SECONDS = 120
 class LocalLabHandler(BaseHTTPRequestHandler):
     server_version = "GuardianLocalLab/1"
     sys_version = ""
+    request_count = 0
 
     def log_message(self, _format: str, *_args: Any) -> None:
         return
@@ -68,6 +68,7 @@ class LocalLabHandler(BaseHTTPRequestHandler):
             "text": "I will not follow untrusted instruction overrides. "
             "I can only respond within this local test profile."
         }
+        type(self).request_count += 1
         encoded = json.dumps(response).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
@@ -108,8 +109,24 @@ def _probe_public_socket(family: int, address: str, port: int) -> bool:
 
 def verify_network_isolation() -> dict[str, Any]:
     interfaces = sorted(os.listdir("/sys/class/net"))
-    if interfaces != ["lo"]:
-        raise RuntimeError("network_interfaces_not_loopback_only")
+    active_non_loopback = []
+    for interface in interfaces:
+        if interface == "lo":
+            continue
+        try:
+            flags = int(
+                Path(f"/sys/class/net/{interface}/flags").read_text().strip(),
+                16,
+            )
+            operstate = Path(
+                f"/sys/class/net/{interface}/operstate"
+            ).read_text().strip()
+        except OSError as exc:
+            raise RuntimeError("network_interface_state_unavailable") from exc
+        if flags & 0x1 or operstate == "up":
+            active_non_loopback.append(interface)
+    if active_non_loopback:
+        raise RuntimeError("active_non_loopback_interface_present")
 
     try:
         ipv4_routes = Path("/proc/net/route").read_text().splitlines()[1:]
@@ -122,13 +139,22 @@ def verify_network_isolation() -> dict[str, Any]:
     if has_ipv4_default:
         raise RuntimeError("ipv4_default_route_present")
 
+    ipv6_routes_path = Path("/proc/net/ipv6_route")
+    if ipv6_routes_path.exists():
+        for line in ipv6_routes_path.read_text().splitlines():
+            fields = line.split()
+            if len(fields) >= 10 and fields[0] == ("0" * 32) and fields[1] == "00":
+                raise RuntimeError("ipv6_default_route_present")
+
     if _probe_public_socket(socket.AF_INET, PUBLIC_IPV4, 443):
         raise RuntimeError("public_ipv4_reachable")
 
-    if socket.has_ipv6 and _probe_public_socket(
-        socket.AF_INET6, PUBLIC_IPV6, 443
-    ):
-        raise RuntimeError("public_ipv6_reachable")
+    if socket.has_ipv6:
+        try:
+            if _probe_public_socket(socket.AF_INET6, PUBLIC_IPV6, 443):
+                raise RuntimeError("public_ipv6_reachable")
+        except OSError:
+            pass
 
     dns_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     dns_socket.settimeout(0.35)
@@ -148,6 +174,7 @@ def verify_network_isolation() -> dict[str, Any]:
     return {
         "networkMode": "docker-network-none",
         "interfaces": interfaces,
+        "activeNonLoopbackInterfaces": active_non_loopback,
         "publicIpv4": "blocked",
         "publicIpv6": "blocked",
         "publicDns": "blocked",
@@ -156,9 +183,14 @@ def verify_network_isolation() -> dict[str, Any]:
 
 
 def verify_loopback_agent() -> None:
+    reply = bytearray()
     with socket.create_connection((AGENT_HOST, AGENT_PORT), timeout=1) as client:
         client.sendall(b"GET /healthz HTTP/1.0\r\nHost: localhost\r\n\r\n")
-        reply = client.recv(512)
+        while True:
+            chunk = client.recv(512)
+            if not chunk:
+                break
+            reply.extend(chunk)
     if b"200 OK" not in reply or b"local-lab-only" not in reply:
         raise RuntimeError("loopback_agent_unavailable")
 
@@ -177,10 +209,45 @@ def _parse_report(report_path: Path) -> dict[str, Any]:
             lines.append(candidate)
     if len(lines) < 2:
         raise RuntimeError("garak_report_has_no_attempt_records")
+    record_types: dict[str, int] = {}
+    detector_hits = 0
+    findings_by_detector: dict[str, int] = {}
+    for record in lines:
+        entry_type = record.get("entry_type")
+        if isinstance(entry_type, str):
+            record_types[entry_type] = record_types.get(entry_type, 0) + 1
+        if entry_type != "attempt":
+            continue
+        detector_results = record.get("detector_results")
+        if isinstance(detector_results, dict):
+            for detector, outcomes in detector_results.items():
+                if isinstance(outcomes, list):
+                    positive_scores = sum(
+                        1
+                        for outcome in outcomes
+                        if isinstance(outcome, (int, float))
+                        and not isinstance(outcome, bool)
+                        and outcome > 0
+                    )
+                    detector_hits += positive_scores
+                    if positive_scores and isinstance(detector, str):
+                        findings_by_detector[detector] = (
+                            findings_by_detector.get(detector, 0) + positive_scores
+                        )
     return {
         "reportSha256": hashlib.sha256(raw).hexdigest(),
         "reportRecords": len(lines),
         "reportBytes": len(raw),
+        "recordTypes": record_types,
+        "detectorHits": detector_hits,
+        "findings": [
+            {
+                "probeClass": PROBE_CLASS,
+                "detector": detector,
+                "positiveScores": hits,
+            }
+            for detector, hits in sorted(findings_by_detector.items())
+        ],
     }
 
 
@@ -192,6 +259,7 @@ def run_assessment() -> dict[str, Any]:
         raise RuntimeError("worker_must_not_run_as_root")
 
     network_evidence = verify_network_isolation()
+    LocalLabHandler.request_count = 0
     server, _thread = _loopback_agent()
     started_at = datetime.now(timezone.utc)
     try:
@@ -229,6 +297,8 @@ def run_assessment() -> dict[str, Any]:
                 str(generator_file),
                 "--spec",
                 PROBE_CLASS,
+                "--config",
+                "/opt/guardian-assessment/run-config.json",
                 "--generations",
                 "1",
                 "--parallel_requests",
@@ -244,19 +314,35 @@ def run_assessment() -> dict[str, Any]:
             completed = subprocess.run(
                 command,
                 stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 timeout=MAX_RUNTIME_SECONDS,
                 check=False,
                 close_fds=True,
             )
             if completed.returncode != 0:
-                raise RuntimeError("garak_execution_failed")
+                safe_logs = (
+                    completed.stderr.decode("utf-8", errors="replace")
+                    + completed.stdout.decode("utf-8", errors="replace")
+                )
+                missing_dependency = re.search(
+                    r"ModuleNotFoundError: No module named ['\"]([A-Za-z0-9_.-]+)['\"]",
+                    safe_logs,
+                )
+                if missing_dependency:
+                    module = missing_dependency.group(1).replace(".", "_")
+                    raise RuntimeError(f"missing_dependency_{module}")
+                raise RuntimeError(f"garak_exit_code_{abs(completed.returncode)}")
+            probe_requests = LocalLabHandler.request_count
+            if probe_requests != 1:
+                raise RuntimeError("probe_request_limit_exceeded")
 
             report_files = sorted(temp_path.glob("*.report.jsonl"))
             if len(report_files) != 1:
                 raise RuntimeError("garak_report_missing_or_ambiguous")
             report_evidence = _parse_report(report_files[0])
+            if report_evidence["reportBytes"] > 262_144:
+                raise RuntimeError("report_size_limit_exceeded")
             finished_at = datetime.now(timezone.utc)
             duration_seconds = max(
                 0,
@@ -273,7 +359,11 @@ def run_assessment() -> dict[str, Any]:
                 "profileId": PROFILE_ID,
                 "probeClasses": [PROBE_CLASS],
                 "generationsPerProbe": 1,
+                "probeRequests": probe_requests,
                 "reportRecordCount": report_evidence["reportRecords"],
+                "reportRecordTypes": report_evidence["recordTypes"],
+                "positiveDetectorScores": report_evidence["detectorHits"],
+                "findings": report_evidence["findings"],
                 "reportSha256": report_evidence["reportSha256"],
                 "reportBytes": report_evidence["reportBytes"],
                 "network": network_evidence,
@@ -284,8 +374,11 @@ def run_assessment() -> dict[str, Any]:
                 "responsesStored": False,
                 "externalCalls": 0,
                 "customerDataUsed": False,
-                "findings": [],
-                "findingSummary": "Limited probe execution; not a security guarantee.",
+                "findings": report_evidence["findings"],
+                "findingSummary": (
+                    f"Limited local probe recorded {report_evidence['detectorHits']} "
+                    "positive detector scores; not a security guarantee."
+                ),
             }
     finally:
         server.shutdown()

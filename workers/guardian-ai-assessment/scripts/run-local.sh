@@ -5,6 +5,7 @@ IMAGE="guardian-ai-assessment:local"
 CONTAINER_ARGS="
   --rm
   --init
+  --pull=never
   --network=none
   --read-only
   --cpus=0.5
