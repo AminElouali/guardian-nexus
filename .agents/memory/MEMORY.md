@@ -1,2 +1,2 @@
-- [Guardian Nexus safety](guardian-nexus-safety.md) — Keep claims evidence-based; distinguish unavailable network checks from proven egress blocks.
+- [Guardian Nexus safety](guardian-nexus-safety.md) — Separate execution from propagation; distinguish unavailable egress checks from proven blocks.
 - [PostgreSQL RLS workflow](postgres-rls-workflow.md) — Verify live predicates and ensure queue SELECT policies expose permitted terminal transitions without exposing results.

@@ -8,7 +8,7 @@
 
 Se ejecutó NVIDIA Garak 0.17.1 en la imagen `guardian-ai-assessment:local` contra cuatro perfiles sintéticos del agente local autorizado. Se usaron dos probes fijos (`HijackLongPrompt` y `HijackHateHumans`), una solicitud por probe y perfil, semilla `20261030` y ocho muestras totales. Cada muestra conserva solo metadatos, tamaño y SHA-256 del informe; no se guardaron prompts ni respuestas brutas.
 
-**Límites observados:** contenedor Docker `--network=none`, 0,5 CPU, 768 MiB, 64 procesos, concurrencia 1, máximo 240 segundos para la suite y almacenamiento temporal efímero. La suite tardó 25,27 segundos. No hubo llamadas externas ni datos de clientes.
+**Límites observados:** contenedor Docker `--network=none`, 0,5 CPU, 768 MiB, 64 procesos, concurrencia 1, máximo 240 segundos para la suite y almacenamiento temporal efímero. La primera ejecución tardó 25,27 segundos; la repetición tras endurecer el parser tardó 21 segundos. No hubo llamadas externas ni datos de clientes.
 
 **Aislamiento observado:** `publicIpv4=blocked`, `publicDns=blocked`, `loopbackOnly=true`, sin interfaces no-loopback activas. `publicIpv6=unavailable` porque el kernel del host no ofrece el protocolo IPv6. Por tanto, IPv6 no está probado como bloqueado; tampoco se acredita aislamiento remoto.
 
@@ -26,18 +26,19 @@ Se ejecutó NVIDIA Garak 0.17.1 en la imagen `guardian-ai-assessment:local` cont
 | Tasa de falsos positivos | 2/4 = 50 % |
 | Tasa de falsos negativos | 2/4 = 50 % |
 
-Por perfil: `vulnerable_echo` detectó 2/2 positivas; `safe_refusal` clasificó 2/2 negativas correctamente; `safe_quoted_refusal` produjo 2/2 falsos positivos; `vulnerable_base64` produjo 2/2 falsos negativos. La ejecución de Garak fue real, pero el resultado del detector es débil en este conjunto deliberadamente pequeño. Estas métricas no estiman el rendimiento frente a agentes generales ni constituyen garantía o certificación.
+Por perfil, el informe histórico registró `vulnerable_echo` 2/2, `safe_refusal` 2/2, `safe_quoted_refusal` como 2/2 falsos positivos y `vulnerable_base64` como 2/2 falsos negativos. Una revisión posterior encontró que se mezclaron dos objetivos incompatibles —ejecución de instrucciones y propagación de texto— en una sola etiqueta. No deben usarse esos 50 % como medida de seguridad general; la causa y la reevaluación separada se documentan en [Investigación del detector y corpus balanceado](guardian-ai-assessment-detector-investigation.md).
 
 Las huellas SHA-256 y tamaños por muestra están en `generated-artifacts/guardian-ai-assessment-validation-2026-10-30.json`. El artefacto no incluye contenido bruto.
 
 ## Dependencias, imagen, SBOM y licencias
 
-- Imagen final evaluada: `sha256:fd765c4022e48f9d07ed2a93c750c075cc29095acc837581797da3eef8d15f25`.
+- Imagen final evaluada: `sha256:89db4ddede11fc8443ce6a734744d01681bcb671c4cde12ad7e4d942e1f1dec8`.
 - Base fijada en el manifiesto: `python:3.13-slim-trixie`, digest `sha256:2d44738ebf4ce5f63b9d9ea871e9c7cfdc0426f7b0c97cac915fd88ded1d86bb`.
 - Garak 0.17.1; `aiohttp`, `nltk` y `requests` se actualizaron a versiones fijadas. Auditoría de dependencias de Replit: 0 hallazgos; SAST: 0; HoundDog: 0.
-- OSV-Scanner 2.7.0, escaneo de imagen con todos los paquetes y avisos: 126 entradas SPDX (incluye el componente raíz); 37 versiones de paquetes PyPI y 0 avisos PyPI. En Debian 13: 164 coincidencias paquete-aviso, 69 IDs de aviso únicos y 18 paquetes afectados; 46 coincidencias etiquetadas `unimportant` y 118 `not yet assigned`. No se ha completado la triage de aplicabilidad ni la remediación de todos los avisos del sistema base; la imagen no se declara limpia.
-- El SBOM SPDX emitido contiene `NOASSERTION` para los 126 paquetes. En metadatos de 37 distribuciones Python se encontraron expresiones/licencias/clasificadores y archivos de licencia, pero eso no equivale a una revisión legal de cada licencia. Garak declara Apache-2.0 y conserva atribución y enlace a la licencia en `workers/guardian-ai-assessment/THIRD_PARTY_NOTICES.md`.
-- SBOM: `generated-artifacts/guardian-ai-assessment-image.spdx.json`. Inventario de metadatos de licencia Python: `generated-artifacts/guardian-ai-assessment-python-license-metadata.json`. Las limitaciones de cobertura y las coincidencias de OSV requieren triage antes de admitir cargas de clientes.
+- OSV-Scanner 2.7.0 sobre la imagen final: 164 coincidencias paquete-aviso Debian, 69 CVE únicos, 18 paquetes afectados y 0 avisos PyPI en las 37 distribuciones Python. La verificación contra Debian Security Tracker agrupa los CVE como 65 `open`, 2 `not-listed|open`, 1 `undetermined` y 1 `resolved`; urgencia Debian: 26 `unimportant`, 41 `not yet assigned` y 2 con campos de asignación discrepantes. 68/69 no tienen versión corregida versionada en Trixie; el único resuelto es `CVE-2026-39113` con `fixed_version=0` (sentinela, no una versión de parche). La etiqueta oficial de la imagen continúa en el mismo digest fijado, por lo que no se encontró una actualización de base disponible para aplicar. OSV termina con código distinto de cero porque encontró esos avisos; el informe JSON se generó completo.
+- Los avisos Debian permanecen abiertos como deuda de riesgo; no se declara la imagen limpia. La urgencia Debian es específica de la distribución, no una clasificación CVSS universal. La ejecución del worker no root, sin red, con filesystem de solo lectura y sin capabilities reduce exposición, pero no elimina los defectos del sistema base.
+- SBOM final generado con Syft 1.55.0: 132 paquetes; 127 tienen `licenseConcluded=NOASSERTION` y los otros cinco usan `LicenseRef` cuyos textos extraídos también son `NOASSERTION`. Hay 118 registros con `licenseDeclared` en metadatos y 14 sin declaración; esto no sustituye una revisión legal. El inventario Python cubre 37 metadatos de paquetes (12 expresiones, 24 campos, 20 clasificadores y 35 archivos de licencia presentes), no es revisión legal. Para los 18 paquetes afectados, se extrajeron etiquetas `License:` parciales de 17 avisos Debian; `gcc-14` sigue sin licencia identificada en ese inventario. Garak declara Apache-2.0 y conserva atribución en `workers/guardian-ai-assessment/THIRD_PARTY_NOTICES.md`.
+- SBOM final: `generated-artifacts/guardian-ai-assessment-image-final-2026-10-30.spdx.json`. Informe OSV: `generated-artifacts/guardian-ai-assessment-osv-final-2026-10-30.json`. Triages: `generated-artifacts/guardian-ai-assessment-debian-triage-2026-10-30.json` y `generated-artifacts/guardian-ai-assessment-debian-license-metadata-2026-10-30.json`. Inventario Python: `generated-artifacts/guardian-ai-assessment-python-license-metadata.json`. La cobertura de licencias sigue incompleta y requiere revisión antes de admitir cargas de clientes.
 
 ## Cola durable y límites de tenant
 
@@ -76,8 +77,8 @@ Antes de habilitar un worker remoto, el proceso de despliegue debe abortar si cu
 
 ## Comprobaciones ejecutadas y bloqueos
 
-- Worker: 8/8 pruebas unitarias; `--self-test` pasó. Suite real de Garak ejecutada en Docker con `--network=none`; resultados detallados arriba.
-- API: 33/33 pruebas; typecheck y build completados. El workflow de desarrollo se reinició para confirmar el arranque.
+- Worker: **12/12 pruebas unitarias**; `--self-test` pasó. Suite Garak CLI real: 8/8 ejecuciones locales en 21 s; corpus sintético de detector: 128/128 casos, con calibración y holdout separados. Evidencia y límites en `docs/guardian-ai-assessment-detector-investigation.md`.
+- API: **33/33** pruebas; typecheck y build del monorepo completados con `PORT=3000` y `BASE_PATH=/__mockup`, requeridos por la configuración del build. Vite muestra una advertencia no bloqueante de bundle superior a 500 kB en la plataforma.
 - Seguridad: auditoría de dependencias de Replit, SAST y HoundDog sin hallazgos; OSV mantiene avisos del sistema base pendientes de triage.
 - No se publicó, no se modificó producción, no se creó infraestructura cloud y no se conectaron sistemas de clientes.
-- Bloqueos antes de piloto: IPv6 remoto no verificado; avisos Debian pendientes de triage; revisión completa de licencias pendiente; worker remoto y monitor externo no desplegados; suite de detección obtiene 50 % de exactitud en este set de ocho casos y requiere mejorar evaluación/detector.
+- Bloqueos antes de piloto: IPv6 remoto no verificado; avisos Debian sin parche versionado y 41 CVE con urgencia aún no asignada; revisión completa de licencias pendiente; worker remoto y monitor externo no desplegados; corpus actual usa respuestas sintéticas y no valida modelos reales.

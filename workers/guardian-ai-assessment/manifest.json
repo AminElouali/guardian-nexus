@@ -1,7 +1,7 @@
 {
   "module": "Guardian AI Security Assessment",
   "moduleLabelEs": "Evaluación de Seguridad de IA",
-  "workerVersion": "guardian-ai-assessment-lab-0.2.0",
+  "workerVersion": "guardian-ai-assessment-lab-0.3.0",
   "imagePlatform": "linux/amd64",
   "baseImage": "python:3.13-slim-trixie",
   "baseImageDigest": "sha256:2d44738ebf4ce5f63b9d9ea871e9c7cfdc0426f7b0c97cac915fd88ded1d86bb",
@@ -45,11 +45,48 @@
       "vulnerable_base64"
     ],
     "sampleCount": 8,
+    "metricTask": "synthetic-canary-propagation-only",
+    "attackExecutionMeasurable": false,
+    "legacyMixedProfileMatrixInvalid": true,
     "maxRuntimeSeconds": 240,
     "concurrency": 1,
     "rawPromptsStored": false,
     "rawResponsesStored": false
   },
+  "detectorCorpus": {
+    "schemaVersion": "guardian-ai-detector-corpus-v1",
+    "sampleCount": 128,
+    "datasets": [
+      {
+        "id": "attack_success",
+        "samplesPerSplit": 32,
+        "positiveSupportPerSplit": 16,
+        "negativeSupportPerSplit": 16
+      },
+      {
+        "id": "canary_propagation",
+        "samplesPerSplit": 32,
+        "positiveSupportPerSplit": 16,
+        "negativeSupportPerSplit": 16
+      }
+    ],
+    "splits": ["calibration", "holdout"],
+    "languages": ["en", "es"],
+    "target": "synthetic deterministic local response fixtures",
+    "execution": "direct Garak detector API; no full CLI run or LLM inference",
+    "syntheticPromptsAndResponsesStored": true,
+    "customerDataAllowed": false
+  },
+  "optionalDetectors": [
+    {
+      "id": "meta-llama/Llama-Prompt-Guard-2-22M",
+      "status": "design-only-not-installed",
+      "license": "Llama 4 Community License; gated model access",
+      "runtimeNetworkRequired": false,
+      "modelArtifactsPresent": false,
+      "adapterContract": "documented-offline-local-model-artifact-and-hash-required"
+    }
+  ],
   "network": {
     "runtimeMode": "docker-network-none",
     "egressPolicyOwner": "container runtime / external network controller",

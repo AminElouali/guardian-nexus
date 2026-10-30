@@ -32,3 +32,9 @@ description: Product boundaries for security integrations, claims, and productio
 **Why:** The current development host cannot create an IPv6 socket, so the public IPv6 connection attempt cannot prove deny behavior.
 
 **How to apply:** Report each address family as blocked, reachable, or unavailable. Require blocked IPv4, IPv6, and DNS results before remote evaluation jobs are enabled.
+
+**Rule:** Define AI security evaluation labels by task. Keep instruction execution separate from literal or encoded canary propagation; a literal-trigger detector must not be presented as a semantic execution classifier.
+
+**Why:** Static local fixtures showed that quoting can be a positive for propagation but a false positive for execution, while Base64 propagation can be missed by a detector that only searches for the raw trigger.
+
+**How to apply:** Report separate confusion matrices with denominators for each task and split. When using Garak, require the expected probe/detector `eval` record and verify its `fails` count against the attempt scores; describe static fixtures as detector tests, not model evaluations.

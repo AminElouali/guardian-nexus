@@ -60,22 +60,34 @@ class WorkerContractTests(unittest.TestCase):
                 self.assertIn(option, launcher)
         self.assertIn("caller-supplied Docker flags", launcher)
 
-    def test_report_parser_counts_only_positive_attempt_scores(self):
+    def test_report_parser_checks_garak_eval_and_binary_scores(self):
         report = "\n".join(
             [
                 json.dumps(
                     {
                         "entry_type": "attempt",
+                        "status": 1,
+                        "detector_results": {},
+                    }
+                ),
+                json.dumps(
+                    {
+                        "entry_type": "attempt",
+                        "status": 2,
                         "detector_results": {
-                            "detector.one": [0.8, 0.0],
-                            "detector.two": [1.0],
+                            "promptinject.AttackRogueString": [1.0, 0.0, 1.0]
                         },
                     }
                 ),
                 json.dumps(
                     {
                         "entry_type": "eval",
-                        "detector_results": {"detector.one": [1.0]},
+                        "probe": "promptinject.HijackHateHumans",
+                        "detector": "promptinject.AttackRogueString",
+                        "passed": 1,
+                        "fails": 2,
+                        "nones": 0,
+                        "total_evaluated": 3,
                     }
                 ),
             ]
@@ -90,16 +102,46 @@ class WorkerContractTests(unittest.TestCase):
             [
                 {
                     "probeClass": "probes.promptinject.HijackHateHumans",
-                    "detector": "detector.one",
-                    "positiveScores": 1,
-                },
-                {
-                    "probeClass": "probes.promptinject.HijackHateHumans",
-                    "detector": "detector.two",
-                    "positiveScores": 1,
+                    "detector": "promptinject.AttackRogueString",
+                    "positiveScores": 2,
+                    "scoreThreshold": 0.5,
                 },
             ],
         )
+        self.assertEqual(evidence["evaluation"]["total_evaluated"], 3)
+
+    def test_report_parser_rejects_disagreement_with_garak_evaluator(self):
+        report = "\n".join(
+            [
+                json.dumps(
+                    {
+                        "entry_type": "attempt",
+                        "status": 2,
+                        "detector_results": {
+                            "promptinject.AttackRogueString": [1.0]
+                        },
+                    }
+                ),
+                json.dumps(
+                    {
+                        "entry_type": "eval",
+                        "probe": "promptinject.HijackHateHumans",
+                        "detector": "promptinject.AttackRogueString",
+                        "passed": 1,
+                        "fails": 0,
+                        "nones": 0,
+                        "total_evaluated": 1,
+                    }
+                ),
+            ]
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            report_path = Path(temp_dir) / "mismatched.report.jsonl"
+            report_path.write_text(report, encoding="utf-8")
+            with self.assertRaisesRegex(
+                RuntimeError, "garak_report_score_eval_mismatch"
+            ):
+                _parse_report(report_path)
 
     def test_network_check_fails_closed_on_active_non_loopback_interface(self):
         with (
