@@ -4,24 +4,24 @@ import { ClerkProvider, SignIn, SignUp, useAuth, useClerk, useUser } from '@cler
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import { esES } from '@clerk/localizations';
 import {
-  Activity, ArrowRight, ArrowUpRight, Box, Check, CircleHelp,
+  Activity, ArrowRight, ArrowUpRight, Box, Check, CircleHelp, Cloud, Copy,
   Command, Database, ExternalLink, Fingerprint, Gauge, Globe2, HardDrive, Layers3, LockKeyhole,
   LogOut, Menu, Plus, Radio, RefreshCw, Shield, ShieldCheck, ShieldEllipsis, SlidersHorizontal,
   Sparkles, Trash2, Users, X,
 } from 'lucide-react';
 import {
   getGetWorkspaceDashboardQueryKey, getListPlansQueryKey, getListWorkspacesQueryKey,
-  getListWorkspaceAssetsQueryKey, getListWorkspaceMembersQueryKey, useCreateWorkspace,
+  getListWorkspaceAssetsQueryKey, getListWorkspaceIntegrationsQueryKey, getListWorkspaceMembersQueryKey, useBeginMicrosoftAuthorization, useConfigureAwsIntegration, useCreateWorkspace,
   useCreateWorkspaceAsset, useDeleteWorkspaceAsset, useGetWorkspaceDashboard, useHealthCheck,
-  useListPlans, useListWorkspaceAssets, useListWorkspaceMembers, useListWorkspaces,
-  useUpdateWorkspaceMember,
+  useListPlans, useListWorkspaceAssets, useListWorkspaceIntegrations, useListWorkspaceMembers, useListWorkspaces,
+  useRevokeWorkspaceIntegration, useUpdateWorkspaceMember, useVerifyAwsIntegration,
 } from '@workspace/api-client-react';
-import type { Asset, AssetInput, Member, Plan, Workspace } from '@workspace/api-client-react';
+import type { Asset, AssetInput, AwsIntegrationSetup, IntegrationConnection, Member, Plan, Workspace } from '@workspace/api-client-react';
 import { Route, Switch, Link, useLocation, Router as WouterRouter } from 'wouter';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import IntegrationsPage from '@/components/IntegrationsPage';
+import IntegrationReadinessPage from '@/components/IntegrationsPage';
 import NotFound from '@/pages/not-found';
 
 const queryClient = new QueryClient({
@@ -171,7 +171,8 @@ const navItems = [
   { href: '/dashboard', label: 'Resumen', icon: Activity },
   { href: '/assets', label: 'Activos', icon: Box },
   { href: '/team', label: 'Equipo', icon: Users },
-  { href: '/integrations', label: 'Integraciones', icon: Globe2 },
+  { href: '/integrations', label: 'Conexiones', icon: Globe2 },
+  { href: '/integration-readiness', label: 'Preparación', icon: Cloud },
   { href: '/plans', label: 'Planes y uso', icon: Gauge },
   { href: '/roadmap', label: 'Hoja de ruta empresarial', icon: Layers3 },
 ];
@@ -268,6 +269,169 @@ function Meter({ label, used, max, unit = '' }: { label: string; used: number; m
   return <div className="quota-row" data-testid={`quota-${label.toLowerCase().replaceAll(' ', '-')}`}>
     <div className="quota-line"><span>{label}</span><b className="font-mono-data">{used.toLocaleString()}{unit} <small>/ {max.toLocaleString()}{unit}</small></b></div>
     <div className="quota-track"><span className={isFull ? 'quota-full' : ''} style={{ width: `${percent}%` }} /></div>
+  </div>;
+}
+
+function IntegrationsPage({ workspace }: { workspace: Workspace }) {
+  const queryClient = useQueryClient();
+  const integrationsQueryKey = getListWorkspaceIntegrationsQueryKey(workspace.id);
+  const integrationsQuery = useListWorkspaceIntegrations(workspace.id, {
+    query: { queryKey: integrationsQueryKey, refetchOnMount: 'always' },
+  });
+  const integrations = integrationsQuery.data ?? [];
+  const beginMicrosoftAuthorization = useBeginMicrosoftAuthorization();
+  const configureAwsIntegration = useConfigureAwsIntegration();
+  const verifyAwsIntegration = useVerifyAwsIntegration();
+  const revokeWorkspaceIntegration = useRevokeWorkspaceIntegration();
+  const [actionError, setActionError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [busy, setBusy] = useState('');
+  const [roleArn, setRoleArn] = useState('');
+  const [awsSetup, setAwsSetup] = useState<AwsIntegrationSetup | null>(null);
+  const canManage = workspace.role === 'owner' || workspace.role === 'admin';
+  const refreshIntegrations = async () => {
+    await queryClient.invalidateQueries({ queryKey: integrationsQueryKey, refetchType: 'none' });
+    await integrationsQuery.refetch();
+  };
+  const errorMessage = (error: unknown, fallback: string) => error instanceof Error ? error.message : fallback;
+  const connectMicrosoft = async () => {
+    setActionError(''); setNotice(''); setBusy('microsoft');
+    try {
+      const result = await beginMicrosoftAuthorization.mutateAsync({ workspaceId: workspace.id });
+      if (!result?.authorizationUrl) throw new Error('El servicio no ha devuelto una dirección de autorización.');
+      await refreshIntegrations();
+      window.location.assign(result.authorizationUrl);
+    } catch (error) {
+      setActionError(errorMessage(error, 'No se ha podido iniciar la autorización de Microsoft.'));
+      setBusy('');
+    }
+  };
+  const connectAws = async (event: FormEvent) => {
+    event.preventDefault(); setActionError(''); setNotice('');
+    if (!roleArn.trim()) return;
+    setBusy('aws');
+    try {
+      const result = await configureAwsIntegration.mutateAsync({ workspaceId: workspace.id, data: { roleArn: roleArn.trim() } });
+      await refreshIntegrations();
+      setAwsSetup(result);
+      setNotice('Conexión AWS preparada. Añade la relación de confianza indicada y verifica el rol.');
+    } catch (error) {
+      setActionError(errorMessage(error, 'No se ha podido preparar la conexión AWS.'));
+    } finally { setBusy(''); }
+  };
+  const verifyAws = async () => {
+    if (!awsSetup) return;
+    setActionError(''); setBusy('verify');
+    try {
+      await verifyAwsIntegration.mutateAsync({ workspaceId: workspace.id });
+      await refreshIntegrations();
+      setNotice('El rol de AWS se ha verificado correctamente.');
+      setAwsSetup(null);
+    } catch (error) {
+      setActionError(errorMessage(error, 'No se ha podido verificar el rol de AWS.'));
+    } finally { setBusy(''); }
+  };
+  const revoke = async (provider: IntegrationConnection['provider']) => {
+    const aws = provider === 'aws';
+    const warning = aws
+      ? '¿Desactivar el acceso local a AWS? Las sesiones de rol ya emitidas pueden seguir activas hasta 15 minutos. Para cortar el acceso de inmediato, elimina también la relación de confianza en tu cuenta de AWS.'
+      : '¿Revocar el acceso de Microsoft 365 para este espacio?';
+    if (!window.confirm(warning)) return;
+    setActionError(''); setNotice(''); setBusy(`revoke-${provider}`);
+    try {
+      await revokeWorkspaceIntegration.mutateAsync({ workspaceId: workspace.id, provider });
+      await refreshIntegrations();
+      setNotice(aws
+        ? 'Acceso local a AWS desactivado. Las sesiones ya emitidas pueden durar hasta 15 minutos; elimina la relación de confianza para un corte inmediato.'
+        : 'Acceso local a Microsoft 365 revocado. Para retirar también el consentimiento concedido a la aplicación, elimina su acceso desde el centro de administración de Microsoft 365.');
+    } catch (error) {
+      setActionError(errorMessage(error, 'No se ha podido revocar el acceso.'));
+    } finally { setBusy(''); }
+  };
+  const copyExternalId = async () => {
+    if (!awsSetup) return;
+    try { await navigator.clipboard.writeText(awsSetup.externalId); setNotice('ExternalId copiado.'); }
+    catch { setNotice('Selecciona y copia el ExternalId manualmente.'); }
+  };
+
+  const integrationFor = (provider: IntegrationConnection['provider']) => integrations.find(item => item.provider === provider);
+  const statusLabel = (status?: IntegrationConnection['status']) => {
+    if (status === 'active') return 'Conectada';
+    if (status === 'pending') return 'Pendiente de verificación';
+    if (status === 'revoked') return 'Revocada';
+    return 'Sin conectar';
+  };
+  const renderState = (provider: IntegrationConnection['provider'], item?: IntegrationConnection) => <span className={`integration-status integration-status-${item?.status ?? 'none'}`} data-testid={`status-integration-${provider}`}>
+    <i />{statusLabel(item?.status)}
+  </span>;
+
+  return <div className="integrations-page">
+    <PageHeading eyebrow="Conexiones del espacio" title="Integraciones" detail={`Conecta fuentes de identidad y nube para documentar la postura de ${workspace.name}. El acceso es explícito, de solo lectura y limitado a este espacio.`} />
+    <div className="integration-scan-note" role="note" data-testid="notice-no-scan">
+      <span className="scan-note-mark"><ShieldCheck size={19} /></span>
+      <div><b>Conectar no inicia un análisis</b><p>Estas conexiones preparan el acceso de solo lectura. Guardian Nexus todavía no ejecuta análisis ni genera hallazgos automáticos.</p></div>
+      <span className="note-index">ESTADO ACTUAL / 01</span>
+    </div>
+    {!canManage && <div className="integration-permission" role="status" data-testid="status-read-only-role">
+      <LockKeyhole size={16} /> Tu rol ({roleLabel(workspace.role)}) puede consultar el estado, pero solo propietarios y administradores pueden gestionar conexiones.
+    </div>}
+    {actionError && <div className="integration-alert integration-alert-error" role="alert" data-testid="status-integration-error"><b>No se ha completado la acción</b><span>{actionError}</span><button type="button" onClick={() => setActionError('')} aria-label="Cerrar aviso" data-testid="button-dismiss-integration-error"><X size={15} /></button></div>}
+    {notice && <div className="integration-alert integration-alert-success" role="status" data-testid="status-integration-success"><Check size={16} /><span>{notice}</span><button type="button" onClick={() => setNotice('')} aria-label="Cerrar aviso" data-testid="button-dismiss-integration-success"><X size={15} /></button></div>}
+
+    {integrationsQuery.isLoading ? <div className="integration-loading" role="status" data-testid="status-integrations-loading" aria-label="Cargando integraciones"><div /><div /><div /></div>
+      : integrationsQuery.isError ? <div className="notice notice-error integration-load-error" role="alert" data-testid="status-integrations-error"><div className="notice-icon"><RefreshCw size={17} /></div><div><strong>No se han podido cargar las integraciones</strong><p>{errorMessage(integrationsQuery.error, 'No se han podido recuperar las integraciones. Inténtalo de nuevo.')}</p></div><Button variant="secondary" onClick={() => void integrationsQuery.refetch()} data-testid="button-retry-integrations">Reintentar</Button></div>
+      : <div className="integration-grid" data-testid="list-integrations">
+        <article className="integration-card" data-testid="card-integration-microsoft">
+          <div className="integration-card-top"><div className="integration-logo microsoft-logo" aria-hidden="true"><span /><span /><span /><span /></div><span className="integration-index">01 / IDENTIDAD</span></div>
+          <div className="integration-title-row"><div><h2>Microsoft 365</h2><p>Microsoft Graph · organización e identidad</p></div>{renderState('microsoft_graph', integrationFor('microsoft_graph'))}</div>
+          <p className="integration-description">Autoriza una conexión de solo lectura para asociar la organización y sus datos básicos de directorio a este espacio.</p>
+          <div className="integration-permissions"><span>PERMISOS SOLICITADOS</span><code>openid</code><code>profile</code><code>offline_access</code><code>Organization.Read.All</code></div>
+          <p className="integration-admin-note">La aprobación de <code>Organization.Read.All</code> puede requerir a una persona administradora de Microsoft 365.</p>
+          <div className="integration-facts">
+            <div><span>Ámbito</span><b>Solo lectura</b></div>
+            <div><span>Almacenamiento</span><b>Token cifrado en servidor</b></div>
+            {integrationFor('microsoft_graph')?.externalTenantId && <div><span>Id. de organización</span><b className="font-mono-data">{integrationFor('microsoft_graph')?.externalTenantId}</b></div>}
+            {integrationFor('microsoft_graph')?.status === 'revoked' && <p className="revoked-copy" data-testid="state-microsoft-revoked">Acceso local revocado{integrationFor('microsoft_graph')?.revokedAt ? ` · ${new Date(integrationFor('microsoft_graph')!.revokedAt!).toLocaleDateString('es-ES')}` : ''}.</p>}
+          </div>
+          <div className="integration-card-actions">
+            {canManage && integrationFor('microsoft_graph')?.status !== 'active' && <Button onClick={() => void connectMicrosoft()} disabled={!!busy} data-testid="button-connect-microsoft">{busy === 'microsoft' ? 'Preparando autorización…' : 'Conectar Microsoft 365'} <ExternalLink size={14} /></Button>}
+            {canManage && integrationFor('microsoft_graph')?.status === 'active' && <Button variant="danger" onClick={() => void revoke('microsoft_graph')} disabled={!!busy} data-testid="button-revoke-microsoft">{busy === 'revoke-microsoft_graph' ? 'Revocando…' : 'Revocar acceso'}</Button>}
+            {!integrationFor('microsoft_graph') && <span className="integration-empty-caption" data-testid="state-microsoft-empty">Aún no hay una conexión registrada.</span>}
+          </div>
+        </article>
+
+        <article className="integration-card" data-testid="card-integration-aws">
+          <div className="integration-card-top"><div className="integration-logo aws-logo" aria-hidden="true"><Cloud size={22} /></div><span className="integration-index">02 / INFRAESTRUCTURA</span></div>
+          <div className="integration-title-row"><div><h2>Amazon Web Services</h2><p>AWS IAM Role · cuenta del cliente</p></div>{renderState('aws', integrationFor('aws'))}</div>
+          <p className="integration-description">Vincula un rol que tú controlas. La sesión temporal se limita a 900 segundos y utiliza la política administrada SecurityAudit.</p>
+          {canManage && integrationFor('aws')?.status !== 'active' && <form className="aws-connect-form" onSubmit={connectAws}>
+            <label htmlFor="aws-role-arn">ARN del rol de IAM</label>
+            <input id="aws-role-arn" value={roleArn} onChange={event => setRoleArn(event.target.value)} placeholder="arn:aws:iam::123456789012:role/GuardianAudit" required pattern="arn:aws:iam::[0-9]{12}:role/.+" data-testid="input-aws-role-arn" />
+            <span>Usaremos el ExternalId generado para esta conexión. Nunca introduzcas contraseñas ni claves permanentes.</span>
+            <Button type="submit" disabled={!roleArn.trim() || !!busy} data-testid="button-prepare-aws">{busy === 'aws' ? 'Preparando rol…' : integrationFor('aws')?.status === 'revoked' ? 'Volver a conectar' : 'Preparar conexión AWS'} <ArrowRight size={15} /></Button>
+          </form>}
+          <div className="integration-facts">
+            <div><span>Permiso</span><b>SecurityAudit · solo lectura</b></div>
+            <div><span>Duración STS</span><b>900 segundos</b></div>
+            {integrationFor('aws')?.awsAccountId && <div><span>Cuenta AWS</span><b className="font-mono-data">{integrationFor('aws')?.awsAccountId}</b></div>}
+            {integrationFor('aws')?.awsRoleArn && <div><span>Rol conectado</span><b className="font-mono-data">{integrationFor('aws')?.awsRoleArn}</b></div>}
+            {integrationFor('aws')?.status === 'revoked' && <p className="revoked-copy" data-testid="state-aws-revoked">Acceso local desactivado. Las sesiones ya emitidas pueden durar hasta 15 minutos; elimina la relación de confianza en AWS para un corte inmediato.</p>}
+          </div>
+          {awsSetup && <section className="aws-setup-panel" aria-labelledby="aws-setup-title" data-testid="panel-aws-setup">
+            <div className="aws-setup-heading"><ShieldCheck size={17} /><div><b id="aws-setup-title">Completa la relación de confianza</b><span>El acceso aún no está verificado.</span></div></div>
+            <div className="external-id-row"><div><span>EXTERNAL ID</span><code data-testid="text-aws-external-id">{awsSetup.externalId}</code></div><button type="button" onClick={() => void copyExternalId()} aria-label="Copiar ExternalId" data-testid="button-copy-external-id"><Copy size={15} /></button></div>
+            <div className="aws-instruction"><span>Rol solicitado</span><code>{awsSetup.roleArn}</code></div>
+            {awsSetup.trustedPrincipalArn && <div className="aws-instruction"><span>Principal de confianza</span><code>{awsSetup.trustedPrincipalArn}</code></div>}
+            <div className="aws-instruction"><span>Política de confianza</span><pre data-testid="text-aws-trust-policy">{awsSetup.trustPolicyJson}</pre></div>
+            <div className="aws-instruction"><span>Política requerida</span><pre>{typeof awsSetup.requiredPolicy === 'string' ? awsSetup.requiredPolicy : JSON.stringify(awsSetup.requiredPolicy, null, 2)}</pre></div>
+            <div className="aws-instruction"><span>Pasos para el cliente</span><pre>{typeof awsSetup.instructions === 'string' ? awsSetup.instructions : JSON.stringify(awsSetup.instructions, null, 2)}</pre></div>
+            <Button onClick={() => void verifyAws()} disabled={!!busy} data-testid="button-verify-aws">{busy === 'verify' ? 'Verificando…' : 'Verificar rol AWS'} <Check size={15} /></Button>
+          </section>}
+          {canManage && integrationFor('aws')?.status === 'active' && <div className="integration-card-actions"><Button variant="danger" onClick={() => void revoke('aws')} disabled={!!busy} data-testid="button-revoke-aws">{busy === 'revoke-aws' ? 'Revocando…' : 'Revocar acceso AWS'}</Button></div>}
+          {!integrationFor('aws') && <span className="integration-empty-caption" data-testid="state-aws-empty">Aún no hay un rol AWS conectado.</span>}
+        </article>
+      </div>}
+    <div className="integration-footnote" data-testid="text-integration-scope"><LockKeyhole size={14} /><span>Cada conexión pertenece únicamente a <b>{workspace.name}</b>. Se requiere consentimiento explícito y no se realizan cambios en tus sistemas.</span></div>
   </div>;
 }
 
@@ -491,8 +655,9 @@ function DashboardRoute() { return <AuthGuard><WorkspaceFrame page={DashboardPag
 function AssetsRoute() { return <AuthGuard><WorkspaceFrame page={AssetsPage} /></AuthGuard>; }
 function TeamRoute() { return <AuthGuard><WorkspaceFrame page={TeamPage} /></AuthGuard>; }
 function PlansRoute() { return <AuthGuard><WorkspaceFrame page={PlansPage} /></AuthGuard>; }
-function IntegrationsRoute() { return <AuthGuard><WorkspaceFrame page={({ workspace }) => <IntegrationsPage workspace={workspace} />} /></AuthGuard>; }
 function RoadmapRoute() { return <AuthGuard><WorkspaceFrame page={() => <RoadmapPage />} /></AuthGuard>; }
+function IntegrationsRoute() { return <AuthGuard><WorkspaceFrame page={IntegrationsPage} /></AuthGuard>; }
+function IntegrationReadinessRoute() { return <AuthGuard><WorkspaceFrame page={({ workspace }) => <IntegrationReadinessPage workspace={workspace} />} /></AuthGuard>; }
 
 function Router() {
   return <RoutedErrorBoundary><Switch>
@@ -503,6 +668,7 @@ function Router() {
     <Route path="/assets" component={AssetsRoute} />
     <Route path="/team" component={TeamRoute} />
     <Route path="/integrations" component={IntegrationsRoute} />
+    <Route path="/integration-readiness" component={IntegrationReadinessRoute} />
     <Route path="/plans" component={PlansRoute} />
     <Route path="/roadmap" component={RoadmapRoute} />
     <Route component={NotFound} />

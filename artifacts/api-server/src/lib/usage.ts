@@ -5,6 +5,7 @@ import {
 } from "@workspace/db";
 import { withWorkspaceUserTransaction } from "./tenant-db";
 import { getPlan } from "./plans";
+import type { TenantTransaction } from "./tenant-db";
 
 export type UsageDelta = {
   scans?: number;
@@ -31,6 +32,63 @@ function currentMonthStart(): string {
   return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}-01`;
 }
 
+export async function reserveWorkspaceUsageInTransaction(
+  tx: TenantTransaction,
+  workspaceId: string,
+  delta: UsageDelta,
+) {
+  const scans = delta.scans ?? 0;
+  const tokens = delta.tokens ?? 0;
+  const apiRequests = delta.apiRequests ?? 0;
+  if (
+    [scans, tokens, apiRequests].some(
+      (value) => !Number.isSafeInteger(value) || value < 0,
+    )
+  ) {
+    throw new Error("Usage must be a non-negative safe integer");
+  }
+
+  const monthStart = currentMonthStart();
+  const [workspace] = await tx
+    .select({ planId: workspacesTable.planId })
+    .from(workspacesTable)
+    .where(eq(workspacesTable.id, workspaceId))
+    .limit(1);
+  const plan = workspace ? getPlan(workspace.planId) : undefined;
+  if (!plan) throw new Error("Workspace has an invalid plan");
+
+  await tx
+    .insert(monthlyUsageTable)
+    .values({ workspaceId, monthStart })
+    .onConflictDoNothing({
+      target: [monthlyUsageTable.workspaceId, monthlyUsageTable.monthStart],
+    });
+
+  const [usage] = await tx
+    .update(monthlyUsageTable)
+    .set({
+      scansUsed: sql`${monthlyUsageTable.scansUsed} + ${scans}`,
+      tokensUsed: sql`${monthlyUsageTable.tokensUsed} + ${tokens}`,
+      apiRequestsUsed: sql`${monthlyUsageTable.apiRequestsUsed} + ${apiRequests}`,
+    })
+    .where(
+      and(
+        eq(monthlyUsageTable.workspaceId, workspaceId),
+        eq(monthlyUsageTable.monthStart, monthStart),
+        lte(sql`${monthlyUsageTable.scansUsed} + ${scans}`, plan.scansPerMonth),
+        lte(sql`${monthlyUsageTable.tokensUsed} + ${tokens}`, plan.tokensPerMonth),
+        lte(
+          sql`${monthlyUsageTable.apiRequestsUsed} + ${apiRequests}`,
+          plan.apiRequestsPerMonth,
+        ),
+      ),
+    )
+    .returning();
+
+  if (!usage) throw new UsageQuotaError();
+  return usage;
+}
+
 /**
  * Atomically reserve usage before a trusted server-side scan, AI, or provider
  * request. Keep calls to this helper on the server; never accept usage claims
@@ -52,52 +110,10 @@ export async function reserveWorkspaceUsage(
     throw new Error("Usage must be a non-negative safe integer");
   }
 
-  const monthStart = currentMonthStart();
   const result = await withWorkspaceUserTransaction(
     userId,
     workspaceId,
-    async (tx) => {
-      const [workspace] = await tx
-        .select({ planId: workspacesTable.planId })
-        .from(workspacesTable)
-        .where(eq(workspacesTable.id, workspaceId))
-        .limit(1);
-      const plan = workspace ? getPlan(workspace.planId) : undefined;
-      if (!plan) throw new Error("Workspace has an invalid plan");
-
-      await tx
-        .insert(monthlyUsageTable)
-        .values({ workspaceId, monthStart })
-        .onConflictDoNothing({
-          target: [monthlyUsageTable.workspaceId, monthlyUsageTable.monthStart],
-        });
-
-      const [usage] = await tx
-        .update(monthlyUsageTable)
-        .set({
-          scansUsed: sql`${monthlyUsageTable.scansUsed} + ${scans}`,
-          tokensUsed: sql`${monthlyUsageTable.tokensUsed} + ${tokens}`,
-          apiRequestsUsed: sql`${monthlyUsageTable.apiRequestsUsed} + ${apiRequests}`,
-        })
-        .where(
-          and(
-            eq(monthlyUsageTable.workspaceId, workspaceId),
-            eq(monthlyUsageTable.monthStart, monthStart),
-            lte(sql`${monthlyUsageTable.scansUsed} + ${scans}`, plan.scansPerMonth),
-            lte(sql`${monthlyUsageTable.tokensUsed} + ${tokens}`, plan.tokensPerMonth),
-            lte(
-              sql`${monthlyUsageTable.apiRequestsUsed} + ${apiRequests}`,
-              plan.apiRequestsPerMonth,
-            ),
-          ),
-        )
-        .returning();
-
-      if (!usage) {
-        throw new UsageQuotaError();
-      }
-      return usage;
-    },
+    (tx) => reserveWorkspaceUsageInTransaction(tx, workspaceId, delta),
   );
 
   if (!result.authorized) throw new WorkspaceAccessDeniedError();

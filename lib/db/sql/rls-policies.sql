@@ -12,6 +12,12 @@ ALTER TABLE public.workspace_audit_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.workspace_audit_events FORCE ROW LEVEL SECURITY;
 ALTER TABLE public.workspace_integrations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.workspace_integrations FORCE ROW LEVEL SECURITY;
+ALTER TABLE public.provider_connections ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.provider_connections FORCE ROW LEVEL SECURITY;
+ALTER TABLE public.connector_oauth_states ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.connector_oauth_states FORCE ROW LEVEL SECURITY;
+ALTER TABLE public.connector_jobs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.connector_jobs FORCE ROW LEVEL SECURITY;
 
 ALTER POLICY workspaces_select_member ON public.workspaces
   USING (
@@ -155,6 +161,133 @@ ALTER POLICY workspace_integrations_update_owner ON public.workspace_integration
       WHERE membership.workspace_id = workspace_integrations.workspace_id
         AND membership.user_id = NULLIF(current_setting('app.user_id', true), '')
         AND membership.role = 'owner'
+    )
+  );
+
+ALTER POLICY provider_connections_select_scope ON public.provider_connections
+  USING (
+    workspace_id::text = NULLIF(current_setting('app.workspace_id', true), '')
+    AND EXISTS (
+      SELECT 1 FROM public.workspace_memberships AS membership
+      WHERE membership.workspace_id = provider_connections.workspace_id
+        AND membership.user_id = NULLIF(current_setting('app.user_id', true), '')
+    )
+  );
+
+ALTER POLICY provider_connections_insert_scope ON public.provider_connections
+  WITH CHECK (
+    workspace_id::text = NULLIF(current_setting('app.workspace_id', true), '')
+    AND EXISTS (
+      SELECT 1 FROM public.workspace_memberships AS membership
+      WHERE membership.workspace_id = provider_connections.workspace_id
+        AND membership.user_id = NULLIF(current_setting('app.user_id', true), '')
+    )
+  );
+
+ALTER POLICY provider_connections_update_scope ON public.provider_connections
+  USING (
+    workspace_id::text = NULLIF(current_setting('app.workspace_id', true), '')
+    AND EXISTS (
+      SELECT 1 FROM public.workspace_memberships AS membership
+      WHERE membership.workspace_id = provider_connections.workspace_id
+        AND membership.user_id = NULLIF(current_setting('app.user_id', true), '')
+    )
+  )
+  WITH CHECK (
+    workspace_id::text = NULLIF(current_setting('app.workspace_id', true), '')
+    AND EXISTS (
+      SELECT 1 FROM public.workspace_memberships AS membership
+      WHERE membership.workspace_id = provider_connections.workspace_id
+        AND membership.user_id = NULLIF(current_setting('app.user_id', true), '')
+    )
+  );
+
+ALTER POLICY provider_connections_delete_scope ON public.provider_connections
+  USING (
+    workspace_id::text = NULLIF(current_setting('app.workspace_id', true), '')
+    AND EXISTS (
+      SELECT 1 FROM public.workspace_memberships AS membership
+      WHERE membership.workspace_id = provider_connections.workspace_id
+        AND membership.user_id = NULLIF(current_setting('app.user_id', true), '')
+    )
+  );
+
+ALTER POLICY connector_oauth_states_select_scope ON public.connector_oauth_states
+  USING (
+    workspace_id::text = NULLIF(current_setting('app.workspace_id', true), '')
+    AND EXISTS (
+      SELECT 1 FROM public.workspace_memberships AS membership
+      WHERE membership.workspace_id = connector_oauth_states.workspace_id
+        AND membership.user_id = NULLIF(current_setting('app.user_id', true), '')
+    )
+  );
+
+ALTER POLICY connector_oauth_states_insert_scope ON public.connector_oauth_states
+  WITH CHECK (
+    workspace_id::text = NULLIF(current_setting('app.workspace_id', true), '')
+    AND user_id = NULLIF(current_setting('app.user_id', true), '')
+    AND EXISTS (
+      SELECT 1 FROM public.workspace_memberships AS membership
+      WHERE membership.workspace_id = connector_oauth_states.workspace_id
+        AND membership.user_id = NULLIF(current_setting('app.user_id', true), '')
+    )
+  );
+
+ALTER POLICY connector_oauth_states_delete_scope ON public.connector_oauth_states
+  USING (
+    workspace_id::text = NULLIF(current_setting('app.workspace_id', true), '')
+    AND EXISTS (
+      SELECT 1 FROM public.workspace_memberships AS membership
+      WHERE membership.workspace_id = connector_oauth_states.workspace_id
+        AND membership.user_id = NULLIF(current_setting('app.user_id', true), '')
+    )
+  );
+
+ALTER POLICY connector_jobs_select_scope ON public.connector_jobs
+  USING (
+    workspace_id::text = NULLIF(current_setting('app.workspace_id', true), '')
+    AND EXISTS (
+      SELECT 1 FROM public.workspace_memberships AS membership
+      WHERE membership.workspace_id = connector_jobs.workspace_id
+        AND membership.user_id = NULLIF(current_setting('app.user_id', true), '')
+    )
+  );
+
+ALTER POLICY connector_jobs_insert_scope ON public.connector_jobs
+  WITH CHECK (
+    workspace_id::text = NULLIF(current_setting('app.workspace_id', true), '')
+    AND EXISTS (
+      SELECT 1 FROM public.workspace_memberships AS membership
+      WHERE membership.workspace_id = connector_jobs.workspace_id
+        AND membership.user_id = NULLIF(current_setting('app.user_id', true), '')
+    )
+  );
+
+ALTER POLICY connector_jobs_update_scope ON public.connector_jobs
+  USING (
+    workspace_id::text = NULLIF(current_setting('app.workspace_id', true), '')
+    AND EXISTS (
+      SELECT 1 FROM public.workspace_memberships AS membership
+      WHERE membership.workspace_id = connector_jobs.workspace_id
+        AND membership.user_id = NULLIF(current_setting('app.user_id', true), '')
+    )
+  )
+  WITH CHECK (
+    workspace_id::text = NULLIF(current_setting('app.workspace_id', true), '')
+    AND EXISTS (
+      SELECT 1 FROM public.workspace_memberships AS membership
+      WHERE membership.workspace_id = connector_jobs.workspace_id
+        AND membership.user_id = NULLIF(current_setting('app.user_id', true), '')
+    )
+  );
+
+ALTER POLICY connector_jobs_delete_scope ON public.connector_jobs
+  USING (
+    workspace_id::text = NULLIF(current_setting('app.workspace_id', true), '')
+    AND EXISTS (
+      SELECT 1 FROM public.workspace_memberships AS membership
+      WHERE membership.workspace_id = connector_jobs.workspace_id
+        AND membership.user_id = NULLIF(current_setting('app.user_id', true), '')
     )
   );
 

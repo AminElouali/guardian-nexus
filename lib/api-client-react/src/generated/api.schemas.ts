@@ -140,6 +140,98 @@ export interface AssetInput {
   criticality: AssetInputCriticality;
 }
 
+export type IntegrationConnectionProvider = typeof IntegrationConnectionProvider[keyof typeof IntegrationConnectionProvider];
+
+
+export const IntegrationConnectionProvider = {
+  microsoft_graph: 'microsoft_graph',
+  aws: 'aws',
+} as const;
+
+export type IntegrationConnectionStatus = typeof IntegrationConnectionStatus[keyof typeof IntegrationConnectionStatus];
+
+
+export const IntegrationConnectionStatus = {
+  pending: 'pending',
+  active: 'active',
+  revoked: 'revoked',
+} as const;
+
+export interface IntegrationConnection {
+  id: string;
+  provider: IntegrationConnectionProvider;
+  status: IntegrationConnectionStatus;
+  /** @nullable */
+  externalTenantId: string | null;
+  /** @nullable */
+  awsAccountId: string | null;
+  /** @nullable */
+  awsRoleArn: string | null;
+  grantedScopes: string[];
+  /** @nullable */
+  consentedAt: string | null;
+  /** @nullable */
+  revokedAt: string | null;
+  updatedAt: string;
+}
+
+export interface MicrosoftAuthorizationResult {
+  authorizationUrl: string;
+  scopes: string[];
+}
+
+export interface AwsIntegrationInput {
+  /**
+     * @minLength 20
+     * @maxLength 600
+     */
+  roleArn: string;
+}
+
+export type AwsIntegrationSetupSessionDurationSeconds = typeof AwsIntegrationSetupSessionDurationSeconds[keyof typeof AwsIntegrationSetupSessionDurationSeconds];
+
+
+export const AwsIntegrationSetupSessionDurationSeconds = {
+  NUMBER_900: 900,
+} as const;
+
+export interface AwsIntegrationSetup {
+  connectionId: string;
+  /** @pattern ^[0-9]{12}$ */
+  accountId: string;
+  roleArn: string;
+  externalId: string;
+  /** @nullable */
+  trustedPrincipalArn: string | null;
+  trustPolicyJson: string;
+  sessionDurationSeconds: AwsIntegrationSetupSessionDurationSeconds;
+  requiredPolicy: string;
+  instructions: string;
+}
+
+export type AwsIntegrationVerificationStatus = typeof AwsIntegrationVerificationStatus[keyof typeof AwsIntegrationVerificationStatus];
+
+
+export const AwsIntegrationVerificationStatus = {
+  active: 'active',
+} as const;
+
+export type AwsIntegrationVerificationSessionDurationSeconds = typeof AwsIntegrationVerificationSessionDurationSeconds[keyof typeof AwsIntegrationVerificationSessionDurationSeconds];
+
+
+export const AwsIntegrationVerificationSessionDurationSeconds = {
+  NUMBER_900: 900,
+} as const;
+
+export interface AwsIntegrationVerification {
+  status: AwsIntegrationVerificationStatus;
+  /** @pattern ^[0-9]{12}$ */
+  accountId: string;
+  roleArn: string;
+  sessionDurationSeconds: AwsIntegrationVerificationSessionDurationSeconds;
+  message: string;
+}
+
 export interface MicrosoftIntegrationSetupInput {
   tenantId: string;
 }
@@ -193,4 +285,10 @@ export interface WorkspaceIntegrationsResponse {
   connections: WorkspaceIntegration[];
   readiness: IntegrationProviderReadiness;
 }
+
+export type MicrosoftOAuthCallbackParams = {
+code?: string;
+state: string;
+error?: string;
+};
 

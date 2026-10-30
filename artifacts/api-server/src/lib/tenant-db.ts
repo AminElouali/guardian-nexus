@@ -1,7 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
 import { db, membershipsTable, type Membership } from "@workspace/db";
 
-type TenantTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+export type TenantTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 async function setUserContext(tx: TenantTransaction, userId: string) {
   await tx.execute(sql`SET LOCAL ROLE app_runtime`);

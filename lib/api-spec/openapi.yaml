@@ -15,7 +15,7 @@ tags:
   - name: assets
     description: Organization-owned assets
   - name: integrations
-    description: Tenant-authorized Microsoft and AWS connection setup
+    description: Tenant-consented cloud and identity providers
 paths:
   /healthz:
     get:
@@ -222,117 +222,253 @@ paths:
           description: User is not allowed to remove assets
         "404":
           description: Asset not found
+  /oauth/microsoft/callback:
+    get:
+      operationId: microsoftOAuthCallback
+      tags: [integrations]
+      summary: Complete Microsoft OAuth consent
+      parameters:
+        - in: query
+          name: code
+          required: false
+          schema: { type: string }
+        - in: query
+          name: state
+          required: true
+          schema: { type: string }
+        - in: query
+          name: error
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Consent recorded
+          content:
+            text/plain:
+              schema: { type: string }
+        "400":
+          description: Invalid, expired, or declined consent
+        "403":
+          description: Workspace access denied
   /workspaces/{workspaceId}/integrations:
     get:
-      operationId: getWorkspaceIntegrations
+      operationId: listWorkspaceIntegrations
       tags: [integrations]
-      summary: List workspace integration setup records
+      summary: List provider connections for a workspace
+      security: [{ bearerAuth: [] }]
       parameters:
         - in: path
           name: workspaceId
           required: true
-          schema:
-            type: string
+          schema: { type: string, format: uuid }
       responses:
         "200":
-          description: Current setup state and provider prerequisites
+          description: Tenant-scoped provider connection status
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkspaceIntegrationsResponse"
+                type: array
+                items: { $ref: "#/components/schemas/IntegrationConnection" }
+        "403":
+          description: User is not a workspace member
+  /workspaces/{workspaceId}/integration-readiness:
+    get:
+      operationId: getWorkspaceIntegrations
+      tags: [integrations]
+      summary: List locally prepared integration setup records
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Setup records and provider prerequisites
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkspaceIntegrationsResponse" }
         "403":
           description: User is not a workspace member
   /workspaces/{workspaceId}/integrations/microsoft/setup:
     post:
       operationId: prepareMicrosoftIntegration
       tags: [integrations]
-      summary: Record a Microsoft tenant for later admin-consent setup
+      summary: Record Microsoft tenant setup before OAuth consent
+      security: [{ bearerAuth: [] }]
       parameters:
         - in: path
           name: workspaceId
           required: true
-          schema:
-            type: string
+          schema: { type: string, format: uuid }
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              $ref: "#/components/schemas/MicrosoftIntegrationSetupInput"
+            schema: { $ref: "#/components/schemas/MicrosoftIntegrationSetupInput" }
       responses:
         "200":
           description: Existing setup returned idempotently
           content:
             application/json:
-              schema:
-                $ref: "#/components/schemas/WorkspaceIntegration"
+              schema: { $ref: "#/components/schemas/WorkspaceIntegration" }
         "201":
-          description: Tenant setup recorded; no external consent was initiated
+          description: Setup recorded; OAuth consent was not initiated
           content:
             application/json:
-              schema:
-                $ref: "#/components/schemas/WorkspaceIntegration"
+              schema: { $ref: "#/components/schemas/WorkspaceIntegration" }
         "403":
           description: Workspace owner role required
   /workspaces/{workspaceId}/integrations/aws/setup:
     post:
       operationId: prepareAwsIntegration
       tags: [integrations]
-      summary: Generate a unique ExternalId for an AWS account setup
+      summary: Generate an ExternalId for AWS role setup
+      security: [{ bearerAuth: [] }]
       parameters:
         - in: path
           name: workspaceId
           required: true
-          schema:
-            type: string
+          schema: { type: string, format: uuid }
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              $ref: "#/components/schemas/AwsIntegrationSetupInput"
+            schema: { $ref: "#/components/schemas/AwsIntegrationSetupInput" }
       responses:
         "200":
           description: Existing setup returned idempotently
           content:
             application/json:
-              schema:
-                $ref: "#/components/schemas/WorkspaceIntegration"
+              schema: { $ref: "#/components/schemas/WorkspaceIntegration" }
         "201":
-          description: ExternalId generated; no AWS role was assumed
+          description: ExternalId generated; STS was not called
           content:
             application/json:
-              schema:
-                $ref: "#/components/schemas/WorkspaceIntegration"
+              schema: { $ref: "#/components/schemas/WorkspaceIntegration" }
         "403":
           description: Workspace owner role required
   /workspaces/{workspaceId}/integrations/{integrationId}/revoke:
     post:
-      operationId: revokeWorkspaceIntegration
+      operationId: revokeWorkspaceIntegrationPreparation
       tags: [integrations]
-      summary: Revoke local use of a workspace integration
+      summary: Revoke a local integration preparation record
+      security: [{ bearerAuth: [] }]
       parameters:
         - in: path
           name: workspaceId
           required: true
-          schema:
-            type: string
+          schema: { type: string, format: uuid }
         - in: path
           name: integrationId
           required: true
-          schema:
-            type: string
+          schema: { type: string, format: uuid }
       responses:
         "200":
-          description: Local integration setup revoked
+          description: Local preparation record revoked
           content:
             application/json:
-              schema:
-                $ref: "#/components/schemas/WorkspaceIntegration"
+              schema: { $ref: "#/components/schemas/WorkspaceIntegration" }
         "403":
           description: Workspace owner role required
         "404":
-          description: Integration setup not found
+          description: Integration preparation not found
+  /workspaces/{workspaceId}/integrations/microsoft/authorize:
+    post:
+      operationId: beginMicrosoftAuthorization
+      tags: [integrations]
+      summary: Start Microsoft OAuth after explicit user action
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Microsoft authorization URL and minimum read scopes
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MicrosoftAuthorizationResult" }
+        "403":
+          description: Workspace owner or admin role required
+        "503":
+          description: Microsoft OAuth is not configured
+  /workspaces/{workspaceId}/integrations/aws:
+    post:
+      operationId: configureAwsIntegration
+      tags: [integrations]
+      summary: Prepare an AWS cross-account role with a generated ExternalId
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AwsIntegrationInput" }
+      responses:
+        "201":
+          description: Role trust setup instructions
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AwsIntegrationSetup" }
+        "400":
+          description: Invalid AWS role ARN
+        "403":
+          description: Workspace owner or admin role required
+        "503":
+          description: AWS workload identity or trust principal is not configured
+  /workspaces/{workspaceId}/integrations/aws/verify:
+    post:
+      operationId: verifyAwsIntegration
+      tags: [integrations]
+      summary: Verify the read-only role with a 900-second STS session
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Cross-account role verified; no scan was started
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AwsIntegrationVerification" }
+        "403":
+          description: Workspace owner or admin role required
+        "404":
+          description: Pending AWS role configuration not found
+        "429":
+          description: Provider rate limit reached; retry after the Retry-After header
+        "503":
+          description: AWS workload identity is not configured
+  /workspaces/{workspaceId}/integrations/{provider}:
+    delete:
+      operationId: revokeWorkspaceIntegration
+      tags: [integrations]
+      summary: Disable a provider connection for this workspace
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: provider
+          required: true
+          schema: { type: string, enum: [microsoft_graph, aws] }
+      responses:
+        "204":
+          description: Local provider access disabled
+        "403":
+          description: Workspace owner or admin role required
+        "404":
+          description: Provider connection not found
 components:
   schemas:
     HealthStatus:
@@ -415,6 +551,57 @@ components:
         environment: { type: string, enum: [production, staging, development, unknown] }
         criticality: { type: string, enum: [critical, high, medium, low] }
       required: [name, type, environment, criticality]
+    IntegrationConnection:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        provider: { type: string, enum: [microsoft_graph, aws] }
+        status: { type: string, enum: [pending, active, revoked] }
+        externalTenantId: { type: ["string", "null"] }
+        awsAccountId: { type: ["string", "null"] }
+        awsRoleArn: { type: ["string", "null"] }
+        grantedScopes:
+          type: array
+          items: { type: string }
+        consentedAt: { type: ["string", "null"], format: date-time }
+        revokedAt: { type: ["string", "null"], format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required: [id, provider, status, externalTenantId, awsAccountId, awsRoleArn, grantedScopes, consentedAt, revokedAt, updatedAt]
+    MicrosoftAuthorizationResult:
+      type: object
+      properties:
+        authorizationUrl: { type: string, format: uri }
+        scopes:
+          type: array
+          items: { type: string }
+      required: [authorizationUrl, scopes]
+    AwsIntegrationInput:
+      type: object
+      properties:
+        roleArn: { type: string, minLength: 20, maxLength: 600 }
+      required: [roleArn]
+    AwsIntegrationSetup:
+      type: object
+      properties:
+        connectionId: { type: string, format: uuid }
+        accountId: { type: string, pattern: "^[0-9]{12}$" }
+        roleArn: { type: string }
+        externalId: { type: string }
+        trustedPrincipalArn: { type: ["string", "null"] }
+        trustPolicyJson: { type: string }
+        sessionDurationSeconds: { type: integer, enum: [900] }
+        requiredPolicy: { type: string }
+        instructions: { type: string }
+      required: [connectionId, accountId, roleArn, externalId, trustedPrincipalArn, trustPolicyJson, sessionDurationSeconds, requiredPolicy, instructions]
+    AwsIntegrationVerification:
+      type: object
+      properties:
+        status: { type: string, enum: [active] }
+        accountId: { type: string, pattern: "^[0-9]{12}$" }
+        roleArn: { type: string }
+        sessionDurationSeconds: { type: integer, enum: [900] }
+        message: { type: string }
+      required: [status, accountId, roleArn, sessionDurationSeconds, message]
     MicrosoftIntegrationSetupInput:
       type: object
       properties:
@@ -465,4 +652,8 @@ components:
           items: { $ref: "#/components/schemas/WorkspaceIntegration" }
         readiness: { $ref: "#/components/schemas/IntegrationProviderReadiness" }
       required: [connections, readiness]
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
 

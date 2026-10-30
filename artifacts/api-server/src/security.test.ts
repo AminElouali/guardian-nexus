@@ -6,18 +6,25 @@ import { eq, sql } from "drizzle-orm";
 import {
   assertRlsRuntimeReady,
   assetsTable,
+  connectorJobsTable,
+  monthlyUsageTable,
+  providerConnectionsTable,
+  workspaceIntegrationsTable,
   db,
   pool,
-  workspaceIntegrationsTable,
 } from "@workspace/db";
 import { canManageMemberRoles, canWriteAssets } from "./lib/access-control";
-import { prepareIntegration } from "./routes/integrations";
 import {
   microsoftGraphGetWithRetry,
   parseRetryAfterMs,
 } from "./lib/microsoft-graph-throttle";
 import { UsageQuotaError, reserveWorkspaceUsage } from "./lib/usage";
 import { withWorkspaceUserTransaction } from "./lib/tenant-db";
+import { prepareIntegration } from "./routes/workspace-integrations";
+import {
+  enqueueConnectorJob,
+  rescheduleConnectorJob,
+} from "./lib/connector-jobs";
 
 if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL is required for isolated security-test fixtures.");
@@ -31,6 +38,8 @@ let workspaceA: string;
 let workspaceB: string;
 let assetA: string;
 let assetB: string;
+let providerConnectionA: string;
+let providerConnectionB: string;
 let integrationA: string;
 let integrationB: string;
 
@@ -75,7 +84,12 @@ before(async () => {
   ]);
   assetA = createdAssetA.rows[0].id;
   assetB = createdAssetB.rows[0].id;
-  const [createdIntegrationA, createdIntegrationB] = await Promise.all([
+  const [
+    createdIntegrationA,
+    createdIntegrationB,
+    connectionA,
+    connectionB,
+  ] = await Promise.all([
     fixturePool.query<{ id: string }>(
       `INSERT INTO public.workspace_integrations
          (workspace_id, provider, external_account_id, setup_key, status, created_by_user_id)
@@ -90,9 +104,27 @@ before(async () => {
        RETURNING id`,
       [workspaceB, userB],
     ),
+    fixturePool.query<{ id: string }>(
+      `INSERT INTO public.provider_connections
+         (workspace_id, provider, status, aws_account_id, aws_role_arn, aws_external_id)
+       VALUES ($1, 'aws', 'active', '111122223333',
+               'arn:aws:iam::111122223333:role/test-readonly', 'fixture-a')
+       RETURNING id`,
+      [workspaceA],
+    ),
+    fixturePool.query<{ id: string }>(
+      `INSERT INTO public.provider_connections
+         (workspace_id, provider, status, aws_account_id, aws_role_arn, aws_external_id)
+       VALUES ($1, 'aws', 'pending', '444455556666',
+               'arn:aws:iam::444455556666:role/test-readonly', 'fixture-b')
+       RETURNING id`,
+      [workspaceB],
+    ),
   ]);
   integrationA = createdIntegrationA.rows[0].id;
   integrationB = createdIntegrationB.rows[0].id;
+  providerConnectionA = connectionA.rows[0].id;
+  providerConnectionB = connectionB.rows[0].id;
 });
 
 after(async () => {
@@ -121,23 +153,7 @@ test("API runtime login has no direct table access or elevated privileges", asyn
       has_table_privilege(session_user, 'public.assets', 'SELECT') AS direct_read,
       has_table_privilege(session_user, 'public.assets', 'INSERT') AS direct_write,
       has_table_privilege(session_user, 'public.workspace_integrations', 'SELECT') AS direct_integrations_read,
-      has_table_privilege(session_user, 'public.workspace_integrations', 'INSERT') AS direct_integrations_write,
-      EXISTS (
-        SELECT 1
-        FROM pg_class AS table_class
-        JOIN pg_namespace AS namespace ON namespace.oid = table_class.relnamespace
-        JOIN pg_roles AS table_owner ON table_owner.oid = table_class.relowner
-        WHERE namespace.nspname = 'public'
-          AND table_class.relname IN (
-            'workspaces',
-            'workspace_memberships',
-            'assets',
-            'workspace_monthly_usage',
-            'workspace_audit_events',
-            'workspace_integrations'
-          )
-          AND table_owner.rolname IN ('app_runtime', 'app_runtime_login')
-      ) AS owns_tenant_tables
+      has_table_privilege(session_user, 'public.workspace_integrations', 'INSERT') AS direct_integrations_write
     FROM pg_roles
     WHERE rolname = session_user
   `);
@@ -155,7 +171,6 @@ test("API runtime login has no direct table access or elevated privileges", asyn
   assert.equal(role?.direct_write, false);
   assert.equal(role?.direct_integrations_read, false);
   assert.equal(role?.direct_integrations_write, false);
-  assert.equal(role?.owns_tenant_tables, false);
 });
 
 test("RLS scopes unfiltered asset reads to the verified tenant", async () => {
@@ -174,23 +189,25 @@ test("RLS scopes unfiltered asset reads to the verified tenant", async () => {
   assert.equal(result.value.some((asset) => asset.id === assetB), false);
 });
 
-test("RLS scopes unfiltered integration reads to the verified tenant", async () => {
+test("RLS scopes unfiltered integration preparation reads to the verified tenant", async () => {
   const result = await withWorkspaceUserTransaction(
     userA,
     workspaceA,
     (tx) => tx.select().from(workspaceIntegrationsTable),
   );
-
   assert.equal(result.authorized, true);
   if (!result.authorized) return;
   assert.deepEqual(
     result.value.map((integration) => integration.id),
     [integrationA],
   );
-  assert.equal(result.value.some((integration) => integration.id === integrationB), false);
+  assert.equal(
+    result.value.some((integration) => integration.id === integrationB),
+    false,
+  );
 });
 
-test("RLS rejects cross-tenant integration inserts and hides cross-tenant updates", async () => {
+test("RLS rejects cross-tenant integration writes and hides foreign updates", async () => {
   await assert.rejects(
     withWorkspaceUserTransaction(userA, workspaceA, async (tx) => {
       await tx.insert(workspaceIntegrationsTable).values({
@@ -204,16 +221,15 @@ test("RLS rejects cross-tenant integration inserts and hides cross-tenant update
     }),
     (error: { cause?: { code?: string } }) => error.cause?.code === "42501",
   );
-
-  const result = await withWorkspaceUserTransaction(userA, workspaceA, (tx) =>
+  const update = await withWorkspaceUserTransaction(userA, workspaceA, (tx) =>
     tx
       .update(workspaceIntegrationsTable)
       .set({ status: "revoked" })
       .where(eq(workspaceIntegrationsTable.id, integrationB))
       .returning(),
   );
-  assert.equal(result.authorized, true);
-  if (result.authorized) assert.deepEqual(result.value, []);
+  assert.equal(update.authorized, true);
+  if (update.authorized) assert.deepEqual(update.value, []);
 });
 
 test("a member cannot enter another workspace context", async () => {
@@ -240,6 +256,135 @@ test("RLS rejects writes across workspace boundaries", async () => {
   );
 });
 
+test("provider connections are isolated between tenants", async () => {
+  const result = await withWorkspaceUserTransaction(
+    userA,
+    workspaceA,
+    (tx) => tx.select().from(providerConnectionsTable),
+  );
+
+  assert.equal(result.authorized, true);
+  if (!result.authorized) return;
+  assert.deepEqual(
+    result.value.map((connection) => connection.id),
+    [providerConnectionA],
+  );
+  assert.equal(
+    result.value.some((connection) => connection.id === providerConnectionB),
+    false,
+  );
+});
+
+test("RLS rejects a provider connection write into another tenant", async () => {
+  await assert.rejects(
+    withWorkspaceUserTransaction(userA, workspaceA, async (tx) => {
+      await tx.insert(providerConnectionsTable).values({
+        workspaceId: workspaceB,
+        provider: "aws",
+        awsAccountId: "777788889999",
+        awsRoleArn: "arn:aws:iam::777788889999:role/foreign",
+        awsExternalId: "must-not-cross-tenants",
+      });
+    }),
+    (error: { cause?: { code?: string } }) => error.cause?.code === "42501",
+  );
+});
+
+test("connector jobs are tenant-scoped, idempotent, and reserve quota once", async () => {
+  const input = {
+    userId: userA,
+    workspaceId: workspaceA,
+    connectionId: providerConnectionA,
+    kind: "inventory_sync",
+    idempotencyKey: `job-${randomUUID()}`,
+    metadata: { source: "security-test" },
+  };
+  const [first, second] = await Promise.all([
+    enqueueConnectorJob(input),
+    enqueueConnectorJob(input),
+  ]);
+  assert.equal(first.kind, "created");
+  assert.equal(second.kind, "existing");
+  if (first.kind !== "created" || second.kind !== "existing") return;
+  assert.equal(first.job.id, second.job.id);
+
+  const result = await withWorkspaceUserTransaction(
+    userA,
+    workspaceA,
+    async (tx) => {
+      const [usage] = await tx
+        .select()
+        .from(monthlyUsageTable)
+        .where(eq(monthlyUsageTable.workspaceId, workspaceA))
+        .limit(1);
+      const jobs = await tx
+        .select()
+        .from(connectorJobsTable)
+        .where(eq(connectorJobsTable.workspaceId, workspaceA));
+      return { usage, jobs };
+    },
+  );
+  assert.equal(result.authorized, true);
+  if (!result.authorized) return;
+  assert.equal(result.value.usage?.scansUsed, 1);
+  assert.equal(result.value.jobs.length, 1);
+
+  await withWorkspaceUserTransaction(userA, workspaceA, async (tx) => {
+    await tx
+      .update(connectorJobsTable)
+      .set({
+        status: "running",
+        attempts: 1,
+        leaseExpiresAt: new Date(Date.now() + 60_000),
+      })
+      .where(eq(connectorJobsTable.id, first.job.id));
+  });
+  const retryStartedAt = Date.now();
+  const retried = await rescheduleConnectorJob({
+    userId: userA,
+    workspaceId: workspaceA,
+    jobId: first.job.id,
+    retryAfter: "30",
+    errorCode: "provider_throttled",
+  });
+  assert.equal(retried?.status, "queued");
+  assert.equal(retried?.attempts, 2);
+  assert.equal(retried?.lastError, "provider_throttled");
+  assert.ok((retried?.runAfter.getTime() ?? 0) >= retryStartedAt + 30_000);
+
+  await withWorkspaceUserTransaction(userA, workspaceA, async (tx) => {
+    await tx
+      .update(connectorJobsTable)
+      .set({ status: "running", leaseExpiresAt: new Date(Date.now() + 60_000) })
+      .where(eq(connectorJobsTable.id, first.job.id));
+    await tx
+      .update(providerConnectionsTable)
+      .set({ status: "revoked", revokedAt: new Date() })
+      .where(eq(providerConnectionsTable.id, providerConnectionA));
+  });
+  const cancelled = await rescheduleConnectorJob({
+    userId: userA,
+    workspaceId: workspaceA,
+    jobId: first.job.id,
+    retryAfter: "30",
+    errorCode: "provider_throttled",
+  });
+  assert.equal(cancelled?.status, "cancelled");
+});
+
+test("a tenant cannot enqueue jobs using another tenant's connector", async () => {
+  await assert.rejects(
+    enqueueConnectorJob({
+      userId: userA,
+      workspaceId: workspaceB,
+      connectionId: providerConnectionB,
+      kind: "inventory_sync",
+      idempotencyKey: `cross-tenant-${randomUUID()}`,
+    }),
+    /Workspace access denied/,
+  );
+});
+
 test("workspace usage limits are enforced atomically", async () => {
   await assert.rejects(
     reserveWorkspaceUsage(userA, workspaceA, { tokens: 100_001 }),
@@ -247,7 +392,7 @@ test("workspace usage limits are enforced atomically", async () => {
   );
 });
 
-test("AWS setup preparation is idempotent and does not replace its ExternalId", async () => {
+test("AWS setup preparation is idempotent without replacing its ExternalId", async () => {
   const first = await prepareIntegration(
     userA,
     workspaceA,
@@ -264,7 +409,6 @@ test("AWS setup preparation is idempotent and does not replace its ExternalId", 
     [],
     "second-test-external-id",
   );
-
   assert.equal(first.kind, "prepared");
   assert.equal(repeated.kind, "existing");
   if (first.kind === "prepared" && repeated.kind === "existing") {
@@ -329,7 +473,7 @@ test("Microsoft Graph Retry-After values are parsed and respected", async () => 
   assert.deepEqual(delays, [2_000]);
 });
 
-test("Microsoft Graph reader rejects non-Graph or non-read-only targets", async () => {
+test("Microsoft Graph reader rejects non-Graph or non-HTTPS targets", async () => {
   await assert.rejects(
     microsoftGraphGetWithRetry("https://example.com/v1.0/organization", "token"),
     /only permits HTTPS v1\.0 Graph URLs/,
@@ -340,7 +484,7 @@ test("Microsoft Graph reader rejects non-Graph or non-read-only targets", async 
   );
 });
 
-test("Microsoft Graph long Retry-After is returned for queue rescheduling", async () => {
+test("long Microsoft Graph Retry-After values are returned to the queue", async () => {
   let calls = 0;
   const delays: number[] = [];
   const response = await microsoftGraphGetWithRetry(

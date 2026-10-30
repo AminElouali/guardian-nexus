@@ -27,12 +27,18 @@ import type {
 import type {
   Asset,
   AssetInput,
+  AwsIntegrationInput,
+  AwsIntegrationSetup,
   AwsIntegrationSetupInput,
+  AwsIntegrationVerification,
   Dashboard,
   HealthStatus,
+  IntegrationConnection,
   Member,
   MemberRoleInput,
+  MicrosoftAuthorizationResult,
   MicrosoftIntegrationSetupInput,
+  MicrosoftOAuthCallbackParams,
   Plan,
   Workspace,
   WorkspaceInput,
@@ -1018,7 +1024,115 @@ export const useDeleteWorkspaceAsset = <TError = ErrorType<void>,
       return useMutation(getDeleteWorkspaceAssetMutationOptions(options), queryClient);
     }
 
-export const getGetWorkspaceIntegrationsUrl = (workspaceId: string,) => {
+export const getMicrosoftOAuthCallbackUrl = (params: MicrosoftOAuthCallbackParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/oauth/microsoft/callback?${stringifiedParams}` : `/api/oauth/microsoft/callback`
+}
+
+/**
+ * @summary Complete Microsoft OAuth consent
+ */
+export const microsoftOAuthCallback = async (params: MicrosoftOAuthCallbackParams, options?: Parameters<typeof customFetch>[1]): Promise<string> => {
+
+  return customFetch<string>(getMicrosoftOAuthCallbackUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getMicrosoftOAuthCallbackQueryKey = (params?: MicrosoftOAuthCallbackParams,) => {
+    return [
+    `/api/oauth/microsoft/callback`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getMicrosoftOAuthCallbackQueryOptions = <TData = Awaited<ReturnType<typeof microsoftOAuthCallback>>, TError = ErrorType<void>>(params: MicrosoftOAuthCallbackParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof microsoftOAuthCallback>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getMicrosoftOAuthCallbackQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof microsoftOAuthCallback>>> = ({ signal }) => microsoftOAuthCallback(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof microsoftOAuthCallback>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type MicrosoftOAuthCallbackQueryResult = NonNullable<Awaited<ReturnType<typeof microsoftOAuthCallback>>>
+export type MicrosoftOAuthCallbackQueryError = ErrorType<void>
+
+
+export function useMicrosoftOAuthCallback<TData = Awaited<ReturnType<typeof microsoftOAuthCallback>>, TError = ErrorType<void>>(
+ params: MicrosoftOAuthCallbackParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof microsoftOAuthCallback>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof microsoftOAuthCallback>>,
+          TError,
+          Awaited<ReturnType<typeof microsoftOAuthCallback>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useMicrosoftOAuthCallback<TData = Awaited<ReturnType<typeof microsoftOAuthCallback>>, TError = ErrorType<void>>(
+ params: MicrosoftOAuthCallbackParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof microsoftOAuthCallback>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof microsoftOAuthCallback>>,
+          TError,
+          Awaited<ReturnType<typeof microsoftOAuthCallback>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useMicrosoftOAuthCallback<TData = Awaited<ReturnType<typeof microsoftOAuthCallback>>, TError = ErrorType<void>>(
+ params: MicrosoftOAuthCallbackParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof microsoftOAuthCallback>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Complete Microsoft OAuth consent
+ */
+
+export function useMicrosoftOAuthCallback<TData = Awaited<ReturnType<typeof microsoftOAuthCallback>>, TError = ErrorType<void>>(
+ params: MicrosoftOAuthCallbackParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof microsoftOAuthCallback>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getMicrosoftOAuthCallbackQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListWorkspaceIntegrationsUrl = (workspaceId: string,) => {
 
 
 
@@ -1027,7 +1141,108 @@ export const getGetWorkspaceIntegrationsUrl = (workspaceId: string,) => {
 }
 
 /**
- * @summary List workspace integration setup records
+ * @summary List provider connections for a workspace
+ */
+export const listWorkspaceIntegrations = async (workspaceId: string, options?: Parameters<typeof customFetch>[1]): Promise<IntegrationConnection[]> => {
+
+  return customFetch<IntegrationConnection[]>(getListWorkspaceIntegrationsUrl(workspaceId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListWorkspaceIntegrationsQueryKey = (workspaceId: string,) => {
+    return [
+    `/api/workspaces/${workspaceId}/integrations`
+    ] as const;
+    }
+
+
+export const getListWorkspaceIntegrationsQueryOptions = <TData = Awaited<ReturnType<typeof listWorkspaceIntegrations>>, TError = ErrorType<void>>(workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listWorkspaceIntegrations>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListWorkspaceIntegrationsQueryKey(workspaceId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listWorkspaceIntegrations>>> = ({ signal }) => listWorkspaceIntegrations(workspaceId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: workspaceId !== null && workspaceId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listWorkspaceIntegrations>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListWorkspaceIntegrationsQueryResult = NonNullable<Awaited<ReturnType<typeof listWorkspaceIntegrations>>>
+export type ListWorkspaceIntegrationsQueryError = ErrorType<void>
+
+
+export function useListWorkspaceIntegrations<TData = Awaited<ReturnType<typeof listWorkspaceIntegrations>>, TError = ErrorType<void>>(
+ workspaceId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listWorkspaceIntegrations>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listWorkspaceIntegrations>>,
+          TError,
+          Awaited<ReturnType<typeof listWorkspaceIntegrations>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListWorkspaceIntegrations<TData = Awaited<ReturnType<typeof listWorkspaceIntegrations>>, TError = ErrorType<void>>(
+ workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listWorkspaceIntegrations>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listWorkspaceIntegrations>>,
+          TError,
+          Awaited<ReturnType<typeof listWorkspaceIntegrations>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListWorkspaceIntegrations<TData = Awaited<ReturnType<typeof listWorkspaceIntegrations>>, TError = ErrorType<void>>(
+ workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listWorkspaceIntegrations>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List provider connections for a workspace
+ */
+
+export function useListWorkspaceIntegrations<TData = Awaited<ReturnType<typeof listWorkspaceIntegrations>>, TError = ErrorType<void>>(
+ workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listWorkspaceIntegrations>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListWorkspaceIntegrationsQueryOptions(workspaceId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetWorkspaceIntegrationsUrl = (workspaceId: string,) => {
+
+
+
+
+  return `/api/workspaces/${workspaceId}/integration-readiness`
+}
+
+/**
+ * @summary List locally prepared integration setup records
  */
 export const getWorkspaceIntegrations = async (workspaceId: string, options?: Parameters<typeof customFetch>[1]): Promise<WorkspaceIntegrationsResponse> => {
 
@@ -1046,7 +1261,7 @@ export const getWorkspaceIntegrations = async (workspaceId: string, options?: Pa
 
 export const getGetWorkspaceIntegrationsQueryKey = (workspaceId: string,) => {
     return [
-    `/api/workspaces/${workspaceId}/integrations`
+    `/api/workspaces/${workspaceId}/integration-readiness`
     ] as const;
     }
 
@@ -1098,7 +1313,7 @@ export function useGetWorkspaceIntegrations<TData = Awaited<ReturnType<typeof ge
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
- * @summary List workspace integration setup records
+ * @summary List locally prepared integration setup records
  */
 
 export function useGetWorkspaceIntegrations<TData = Awaited<ReturnType<typeof getWorkspaceIntegrations>>, TError = ErrorType<void>>(
@@ -1128,7 +1343,7 @@ export const getPrepareMicrosoftIntegrationUrl = (workspaceId: string,) => {
 }
 
 /**
- * @summary Record a Microsoft tenant for later admin-consent setup
+ * @summary Record Microsoft tenant setup before OAuth consent
  */
 export const prepareMicrosoftIntegration = async (workspaceId: string,
     microsoftIntegrationSetupInput: MicrosoftIntegrationSetupInput, options?: Parameters<typeof customFetch>[1]): Promise<WorkspaceIntegration> => {
@@ -1195,7 +1410,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type PrepareMicrosoftIntegrationMutationVariables = {workspaceId: string;data: BodyType<MicrosoftIntegrationSetupInput>}
 
     /**
- * @summary Record a Microsoft tenant for later admin-consent setup
+ * @summary Record Microsoft tenant setup before OAuth consent
  */
 export const usePrepareMicrosoftIntegration = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof prepareMicrosoftIntegration>>, TError,PrepareMicrosoftIntegrationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
@@ -1217,7 +1432,7 @@ export const getPrepareAwsIntegrationUrl = (workspaceId: string,) => {
 }
 
 /**
- * @summary Generate a unique ExternalId for an AWS account setup
+ * @summary Generate an ExternalId for AWS role setup
  */
 export const prepareAwsIntegration = async (workspaceId: string,
     awsIntegrationSetupInput: AwsIntegrationSetupInput, options?: Parameters<typeof customFetch>[1]): Promise<WorkspaceIntegration> => {
@@ -1284,7 +1499,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type PrepareAwsIntegrationMutationVariables = {workspaceId: string;data: BodyType<AwsIntegrationSetupInput>}
 
     /**
- * @summary Generate a unique ExternalId for an AWS account setup
+ * @summary Generate an ExternalId for AWS role setup
  */
 export const usePrepareAwsIntegration = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof prepareAwsIntegration>>, TError,PrepareAwsIntegrationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
@@ -1297,7 +1512,7 @@ export const usePrepareAwsIntegration = <TError = ErrorType<void>,
       return useMutation(getPrepareAwsIntegrationMutationOptions(options), queryClient);
     }
 
-export const getRevokeWorkspaceIntegrationUrl = (workspaceId: string,
+export const getRevokeWorkspaceIntegrationPreparationUrl = (workspaceId: string,
     integrationId: string,) => {
 
 
@@ -1307,15 +1522,328 @@ export const getRevokeWorkspaceIntegrationUrl = (workspaceId: string,
 }
 
 /**
- * @summary Revoke local use of a workspace integration
+ * @summary Revoke a local integration preparation record
  */
-export const revokeWorkspaceIntegration = async (workspaceId: string,
+export const revokeWorkspaceIntegrationPreparation = async (workspaceId: string,
     integrationId: string, options?: Parameters<typeof customFetch>[1]): Promise<WorkspaceIntegration> => {
 
-  return customFetch<WorkspaceIntegration>(getRevokeWorkspaceIntegrationUrl(workspaceId,integrationId),
+  return customFetch<WorkspaceIntegration>(getRevokeWorkspaceIntegrationPreparationUrl(workspaceId,integrationId),
   {
     ...options,
     method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRevokeWorkspaceIntegrationPreparationMutationKey = () => ['revokeWorkspaceIntegrationPreparation'] as const;
+
+export const getRevokeWorkspaceIntegrationPreparationMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeWorkspaceIntegrationPreparation>>, TError,RevokeWorkspaceIntegrationPreparationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof revokeWorkspaceIntegrationPreparation>>, TError,RevokeWorkspaceIntegrationPreparationMutationVariables, TContext> => {
+
+const mutationKey = getRevokeWorkspaceIntegrationPreparationMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof revokeWorkspaceIntegrationPreparation>>, RevokeWorkspaceIntegrationPreparationMutationVariables> = (props) => {
+          const {workspaceId,integrationId} = props ?? {};
+
+          return  revokeWorkspaceIntegrationPreparation(workspaceId,integrationId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RevokeWorkspaceIntegrationPreparationMutationResult = NonNullable<Awaited<ReturnType<typeof revokeWorkspaceIntegrationPreparation>>>
+
+    export type RevokeWorkspaceIntegrationPreparationMutationError = ErrorType<void>
+    export type RevokeWorkspaceIntegrationPreparationMutationVariables = {workspaceId: string;integrationId: string}
+
+    /**
+ * @summary Revoke a local integration preparation record
+ */
+export const useRevokeWorkspaceIntegrationPreparation = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeWorkspaceIntegrationPreparation>>, TError,RevokeWorkspaceIntegrationPreparationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof revokeWorkspaceIntegrationPreparation>>,
+        TError,
+        RevokeWorkspaceIntegrationPreparationMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRevokeWorkspaceIntegrationPreparationMutationOptions(options), queryClient);
+    }
+
+export const getBeginMicrosoftAuthorizationUrl = (workspaceId: string,) => {
+
+
+
+
+  return `/api/workspaces/${workspaceId}/integrations/microsoft/authorize`
+}
+
+/**
+ * @summary Start Microsoft OAuth after explicit user action
+ */
+export const beginMicrosoftAuthorization = async (workspaceId: string, options?: Parameters<typeof customFetch>[1]): Promise<MicrosoftAuthorizationResult> => {
+
+  return customFetch<MicrosoftAuthorizationResult>(getBeginMicrosoftAuthorizationUrl(workspaceId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getBeginMicrosoftAuthorizationMutationKey = () => ['beginMicrosoftAuthorization'] as const;
+
+export const getBeginMicrosoftAuthorizationMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof beginMicrosoftAuthorization>>, TError,BeginMicrosoftAuthorizationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof beginMicrosoftAuthorization>>, TError,BeginMicrosoftAuthorizationMutationVariables, TContext> => {
+
+const mutationKey = getBeginMicrosoftAuthorizationMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof beginMicrosoftAuthorization>>, BeginMicrosoftAuthorizationMutationVariables> = (props) => {
+          const {workspaceId} = props ?? {};
+
+          return  beginMicrosoftAuthorization(workspaceId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type BeginMicrosoftAuthorizationMutationResult = NonNullable<Awaited<ReturnType<typeof beginMicrosoftAuthorization>>>
+
+    export type BeginMicrosoftAuthorizationMutationError = ErrorType<void>
+    export type BeginMicrosoftAuthorizationMutationVariables = {workspaceId: string}
+
+    /**
+ * @summary Start Microsoft OAuth after explicit user action
+ */
+export const useBeginMicrosoftAuthorization = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof beginMicrosoftAuthorization>>, TError,BeginMicrosoftAuthorizationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof beginMicrosoftAuthorization>>,
+        TError,
+        BeginMicrosoftAuthorizationMutationVariables,
+        TContext
+      > => {
+      return useMutation(getBeginMicrosoftAuthorizationMutationOptions(options), queryClient);
+    }
+
+export const getConfigureAwsIntegrationUrl = (workspaceId: string,) => {
+
+
+
+
+  return `/api/workspaces/${workspaceId}/integrations/aws`
+}
+
+/**
+ * @summary Prepare an AWS cross-account role with a generated ExternalId
+ */
+export const configureAwsIntegration = async (workspaceId: string,
+    awsIntegrationInput: AwsIntegrationInput, options?: Parameters<typeof customFetch>[1]): Promise<AwsIntegrationSetup> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<AwsIntegrationSetup>(getConfigureAwsIntegrationUrl(workspaceId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(awsIntegrationInput)
+  }
+);}
+
+
+
+
+
+export const getConfigureAwsIntegrationMutationKey = () => ['configureAwsIntegration'] as const;
+
+export const getConfigureAwsIntegrationMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof configureAwsIntegration>>, TError,ConfigureAwsIntegrationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof configureAwsIntegration>>, TError,ConfigureAwsIntegrationMutationVariables, TContext> => {
+
+const mutationKey = getConfigureAwsIntegrationMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof configureAwsIntegration>>, ConfigureAwsIntegrationMutationVariables> = (props) => {
+          const {workspaceId,data} = props ?? {};
+
+          return  configureAwsIntegration(workspaceId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ConfigureAwsIntegrationMutationResult = NonNullable<Awaited<ReturnType<typeof configureAwsIntegration>>>
+    export type ConfigureAwsIntegrationMutationBody = BodyType<AwsIntegrationInput>
+    export type ConfigureAwsIntegrationMutationError = ErrorType<void>
+    export type ConfigureAwsIntegrationMutationVariables = {workspaceId: string;data: BodyType<AwsIntegrationInput>}
+
+    /**
+ * @summary Prepare an AWS cross-account role with a generated ExternalId
+ */
+export const useConfigureAwsIntegration = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof configureAwsIntegration>>, TError,ConfigureAwsIntegrationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof configureAwsIntegration>>,
+        TError,
+        ConfigureAwsIntegrationMutationVariables,
+        TContext
+      > => {
+      return useMutation(getConfigureAwsIntegrationMutationOptions(options), queryClient);
+    }
+
+export const getVerifyAwsIntegrationUrl = (workspaceId: string,) => {
+
+
+
+
+  return `/api/workspaces/${workspaceId}/integrations/aws/verify`
+}
+
+/**
+ * @summary Verify the read-only role with a 900-second STS session
+ */
+export const verifyAwsIntegration = async (workspaceId: string, options?: Parameters<typeof customFetch>[1]): Promise<AwsIntegrationVerification> => {
+
+  return customFetch<AwsIntegrationVerification>(getVerifyAwsIntegrationUrl(workspaceId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getVerifyAwsIntegrationMutationKey = () => ['verifyAwsIntegration'] as const;
+
+export const getVerifyAwsIntegrationMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof verifyAwsIntegration>>, TError,VerifyAwsIntegrationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof verifyAwsIntegration>>, TError,VerifyAwsIntegrationMutationVariables, TContext> => {
+
+const mutationKey = getVerifyAwsIntegrationMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof verifyAwsIntegration>>, VerifyAwsIntegrationMutationVariables> = (props) => {
+          const {workspaceId} = props ?? {};
+
+          return  verifyAwsIntegration(workspaceId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type VerifyAwsIntegrationMutationResult = NonNullable<Awaited<ReturnType<typeof verifyAwsIntegration>>>
+
+    export type VerifyAwsIntegrationMutationError = ErrorType<void>
+    export type VerifyAwsIntegrationMutationVariables = {workspaceId: string}
+
+    /**
+ * @summary Verify the read-only role with a 900-second STS session
+ */
+export const useVerifyAwsIntegration = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof verifyAwsIntegration>>, TError,VerifyAwsIntegrationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof verifyAwsIntegration>>,
+        TError,
+        VerifyAwsIntegrationMutationVariables,
+        TContext
+      > => {
+      return useMutation(getVerifyAwsIntegrationMutationOptions(options), queryClient);
+    }
+
+export const getRevokeWorkspaceIntegrationUrl = (workspaceId: string,
+    provider: 'microsoft_graph' | 'aws',) => {
+
+
+
+
+  return `/api/workspaces/${workspaceId}/integrations/${provider}`
+}
+
+/**
+ * @summary Disable a provider connection for this workspace
+ */
+export const revokeWorkspaceIntegration = async (workspaceId: string,
+    provider: 'microsoft_graph' | 'aws', options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getRevokeWorkspaceIntegrationUrl(workspaceId,provider),
+  {
+    ...options,
+    method: 'DELETE'
 
 
   }
@@ -1342,9 +1870,9 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof revokeWorkspaceIntegration>>, RevokeWorkspaceIntegrationMutationVariables> = (props) => {
-          const {workspaceId,integrationId} = props ?? {};
+          const {workspaceId,provider} = props ?? {};
 
-          return  revokeWorkspaceIntegration(workspaceId,integrationId,requestOptions)
+          return  revokeWorkspaceIntegration(workspaceId,provider,requestOptions)
         }
 
 
@@ -1357,10 +1885,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type RevokeWorkspaceIntegrationMutationResult = NonNullable<Awaited<ReturnType<typeof revokeWorkspaceIntegration>>>
 
     export type RevokeWorkspaceIntegrationMutationError = ErrorType<void>
-    export type RevokeWorkspaceIntegrationMutationVariables = {workspaceId: string;integrationId: string}
+    export type RevokeWorkspaceIntegrationMutationVariables = {workspaceId: string;provider: 'microsoft_graph' | 'aws'}
 
     /**
- * @summary Revoke local use of a workspace integration
+ * @summary Disable a provider connection for this workspace
  */
 export const useRevokeWorkspaceIntegration = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeWorkspaceIntegration>>, TError,RevokeWorkspaceIntegrationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}

@@ -21,5 +21,5 @@ export * from "./workspaces";
 export * from "./assets";
 export * from "./usage";
 export * from "./audit";
-export * from "./integrations";
 export * from "./roles";
+export * from "./integrations";

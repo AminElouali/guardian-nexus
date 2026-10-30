@@ -8,9 +8,11 @@
     "build": "node ./build.mjs",
     "start": "node --import ./scripts/sanitize-runtime-db-env.mjs --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test src/security.test.ts"
+    "test": "tsx --test src/security.test.ts src/connector-utils.test.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-sts": "^3.1159.0",
+    "@aws-sdk/credential-providers": "^3.1159.0",
     "@clerk/express": "^2.1.84",
     "@clerk/shared": "^4.42.0",
     "@workspace/api-zod": "workspace:*",

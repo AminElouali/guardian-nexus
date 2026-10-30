@@ -204,10 +204,44 @@ export const DeleteWorkspaceAssetResponse = zod.void()
 
 
 /**
- * @summary List workspace integration setup records
+ * @summary Complete Microsoft OAuth consent
+ */
+export const MicrosoftOAuthCallbackQueryParams = zod.object({
+  "code": zod.coerce.string().optional(),
+  "state": zod.coerce.string(),
+  "error": zod.coerce.string().optional()
+})
+
+export const MicrosoftOAuthCallbackResponse = zod.string()
+
+
+/**
+ * @summary List provider connections for a workspace
+ */
+export const ListWorkspaceIntegrationsParams = zod.object({
+  "workspaceId": zod.uuid()
+})
+
+export const ListWorkspaceIntegrationsResponseItem = zod.object({
+  "id": zod.uuid(),
+  "provider": zod.enum(['microsoft_graph', 'aws']),
+  "status": zod.enum(['pending', 'active', 'revoked']),
+  "externalTenantId": zod.string().nullable(),
+  "awsAccountId": zod.string().nullable(),
+  "awsRoleArn": zod.string().nullable(),
+  "grantedScopes": zod.array(zod.string()),
+  "consentedAt": zod.coerce.date().nullable(),
+  "revokedAt": zod.coerce.date().nullable(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListWorkspaceIntegrationsResponse = zod.array(ListWorkspaceIntegrationsResponseItem)
+
+
+/**
+ * @summary List locally prepared integration setup records
  */
 export const GetWorkspaceIntegrationsParams = zod.object({
-  "workspaceId": zod.coerce.string()
+  "workspaceId": zod.uuid()
 })
 
 export const GetWorkspaceIntegrationsResponse = zod.object({
@@ -231,10 +265,10 @@ export const GetWorkspaceIntegrationsResponse = zod.object({
 
 
 /**
- * @summary Record a Microsoft tenant for later admin-consent setup
+ * @summary Record Microsoft tenant setup before OAuth consent
  */
 export const PrepareMicrosoftIntegrationParams = zod.object({
-  "workspaceId": zod.coerce.string()
+  "workspaceId": zod.uuid()
 })
 
 export const PrepareMicrosoftIntegrationBody = zod.object({
@@ -254,10 +288,10 @@ export const PrepareMicrosoftIntegrationResponse = zod.object({
 
 
 /**
- * @summary Generate a unique ExternalId for an AWS account setup
+ * @summary Generate an ExternalId for AWS role setup
  */
 export const PrepareAwsIntegrationParams = zod.object({
-  "workspaceId": zod.coerce.string()
+  "workspaceId": zod.uuid()
 })
 
 export const prepareAwsIntegrationBodyAccountIdRegExp = new RegExp('^[0-9]{12}$');
@@ -280,14 +314,14 @@ export const PrepareAwsIntegrationResponse = zod.object({
 
 
 /**
- * @summary Revoke local use of a workspace integration
+ * @summary Revoke a local integration preparation record
  */
-export const RevokeWorkspaceIntegrationParams = zod.object({
-  "workspaceId": zod.coerce.string(),
-  "integrationId": zod.coerce.string()
+export const RevokeWorkspaceIntegrationPreparationParams = zod.object({
+  "workspaceId": zod.uuid(),
+  "integrationId": zod.uuid()
 })
 
-export const RevokeWorkspaceIntegrationResponse = zod.object({
+export const RevokeWorkspaceIntegrationPreparationResponse = zod.object({
   "id": zod.uuid(),
   "provider": zod.enum(['microsoft', 'aws']),
   "externalAccountId": zod.string(),
@@ -297,5 +331,80 @@ export const RevokeWorkspaceIntegrationResponse = zod.object({
   "createdAt": zod.coerce.date(),
   "revokedAt": zod.coerce.date().nullable()
 })
+
+
+/**
+ * @summary Start Microsoft OAuth after explicit user action
+ */
+export const BeginMicrosoftAuthorizationParams = zod.object({
+  "workspaceId": zod.uuid()
+})
+
+export const BeginMicrosoftAuthorizationResponse = zod.object({
+  "authorizationUrl": zod.url(),
+  "scopes": zod.array(zod.string())
+})
+
+
+/**
+ * @summary Prepare an AWS cross-account role with a generated ExternalId
+ */
+export const ConfigureAwsIntegrationParams = zod.object({
+  "workspaceId": zod.uuid()
+})
+
+export const configureAwsIntegrationBodyRoleArnMin = 20;
+export const configureAwsIntegrationBodyRoleArnMax = 600;
+
+
+
+export const ConfigureAwsIntegrationBody = zod.object({
+  "roleArn": zod.string().min(configureAwsIntegrationBodyRoleArnMin).max(configureAwsIntegrationBodyRoleArnMax)
+})
+
+export const configureAwsIntegrationResponseAccountIdRegExp = new RegExp('^[0-9]{12}$');
+
+
+export const ConfigureAwsIntegrationResponse = zod.object({
+  "connectionId": zod.uuid(),
+  "accountId": zod.string().regex(configureAwsIntegrationResponseAccountIdRegExp),
+  "roleArn": zod.string(),
+  "externalId": zod.string(),
+  "trustedPrincipalArn": zod.string().nullable(),
+  "trustPolicyJson": zod.string(),
+  "sessionDurationSeconds": zod.literal(900),
+  "requiredPolicy": zod.string(),
+  "instructions": zod.string()
+})
+
+
+/**
+ * @summary Verify the read-only role with a 900-second STS session
+ */
+export const VerifyAwsIntegrationParams = zod.object({
+  "workspaceId": zod.uuid()
+})
+
+export const verifyAwsIntegrationResponseAccountIdRegExp = new RegExp('^[0-9]{12}$');
+
+
+export const VerifyAwsIntegrationResponse = zod.object({
+  "status": zod.enum(['active']),
+  "accountId": zod.string().regex(verifyAwsIntegrationResponseAccountIdRegExp),
+  "roleArn": zod.string(),
+  "sessionDurationSeconds": zod.literal(900),
+  "message": zod.string()
+})
+
+
+/**
+ * @summary Disable a provider connection for this workspace
+ */
+export const RevokeWorkspaceIntegrationParams = zod.object({
+  "workspaceId": zod.uuid(),
+  "provider": zod.enum(['microsoft_graph', 'aws'])
+})
+
+export const RevokeWorkspaceIntegrationResponse = zod.void()
 
 

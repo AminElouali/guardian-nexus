@@ -6,7 +6,7 @@ import {
   useGetWorkspaceIntegrations,
   usePrepareAwsIntegration,
   usePrepareMicrosoftIntegration,
-  useRevokeWorkspaceIntegration,
+  useRevokeWorkspaceIntegrationPreparation,
   type Workspace,
   type WorkspaceIntegration,
 } from '@workspace/api-client-react';
@@ -34,7 +34,7 @@ export default function IntegrationsPage({ workspace }: { workspace: Workspace }
   const integrations = useGetWorkspaceIntegrations(workspace.id);
   const prepareMicrosoft = usePrepareMicrosoftIntegration();
   const prepareAws = usePrepareAwsIntegration();
-  const revokeIntegration = useRevokeWorkspaceIntegration();
+  const revokeIntegration = useRevokeWorkspaceIntegrationPreparation();
   const [tenantId, setTenantId] = useState('');
   const [accountId, setAccountId] = useState('');
   const [feedback, setFeedback] = useState('');
