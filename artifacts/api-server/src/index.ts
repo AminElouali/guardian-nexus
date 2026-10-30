@@ -1,5 +1,6 @@
 import app from "./app";
 import { logger } from "./lib/logger";
+import { startLocalAssessmentQueueWorker } from "./lib/ai-assessment-worker";
 import { assertRlsRuntimeReady } from "@workspace/db";
 
 const rawPort = process.env["PORT"];
@@ -18,6 +19,7 @@ if (Number.isNaN(port) || port <= 0) {
 
 void assertRlsRuntimeReady()
   .then(() => {
+    startLocalAssessmentQueueWorker();
     app.listen(port, (err) => {
       if (err) {
         logger.error({ err }, "Error listening on port");

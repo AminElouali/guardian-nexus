@@ -5,6 +5,9 @@ dist
 tmp
 out-tsc
 *.tsbuildinfo
+__pycache__/
+*.py[cod]
+/generated-artifacts/
 .expo
 .expo-shared
 .next

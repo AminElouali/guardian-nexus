@@ -12,3 +12,9 @@ description: Non-obvious behavior to verify when changing or publishing tenant R
 **Why:** Isolated shell and CodeExecution commands did not receive the Replit secret, while the managed development workflow did.
 
 **How to apply:** After every development schema push, run the guarded development policy/grant steps and the API’s RLS readiness check. Before production publication, provide an equivalent reviewed migration and a non-superuser runtime database connection. If provisioning needs a Replit Secret, use the managed development workflow rather than attempting to extract or print it in an agent shell.
+
+**Additional rule:** For a queue role using `UPDATE ... RETURNING`, its narrow SELECT policy must admit every resulting state that the role is permitted to write, including terminal `failed`; keep result/evidence columns outside its grants.
+
+**Why:** Row-level visibility can hide an allowed state transition when the updated row no longer satisfies the role's SELECT policy, even if the UPDATE check itself permits the new state.
+
+**How to apply:** Test queued-to-running, running-to-failed, expired-lease recovery, and terminal visibility with the actual worker role after applying RLS policies.

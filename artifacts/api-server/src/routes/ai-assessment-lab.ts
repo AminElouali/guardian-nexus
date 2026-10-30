@@ -1,4 +1,4 @@
-import { and, desc, eq, lt, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { Router, type IRouter } from "express";
 import {
   CreateWorkspaceAiAssessmentLabJobBody,
@@ -91,46 +91,6 @@ router.get(
       req.authUserId!,
       workspaceId,
       async (tx, membership) => {
-        if (canRunAiEvaluation(membership.role)) {
-          const now = new Date();
-          const expiredJobs = await tx
-            .select()
-            .from(aiAssessmentJobsTable)
-            .where(
-              and(
-                eq(aiAssessmentJobsTable.workspaceId, workspaceId),
-                eq(aiAssessmentJobsTable.status, "running"),
-                lt(aiAssessmentJobsTable.leaseExpiresAt, now),
-              ),
-            )
-            .limit(MAX_HISTORY);
-          for (const job of expiredJobs) {
-            const retryable = job.attempts < AI_ASSESSMENT_JOB_MAX_ATTEMPTS;
-            await tx
-              .update(aiAssessmentJobsTable)
-              .set({
-                status: retryable ? "queued" : "failed",
-                errorCode: retryable ? null : "worker_lease_expired",
-                completedAt: retryable ? null : now,
-                leaseExpiresAt: null,
-                updatedAt: now,
-              })
-              .where(eq(aiAssessmentJobsTable.id, job.id));
-            await tx.insert(workspaceAuditEventsTable).values({
-              workspaceId,
-              actorUserId: req.authUserId!,
-              action: retryable
-                ? "ai_assessment.lab.recovered"
-                : "ai_assessment.lab.lease_expired",
-              resourceType: "ai_assessment_job",
-              resourceId: job.id,
-              metadata: {
-                attempts: job.attempts,
-                status: retryable ? "queued" : "failed",
-              },
-            });
-          }
-        }
         const jobs = await tx
           .select()
           .from(aiAssessmentJobsTable)
@@ -143,23 +103,6 @@ router.get(
     if (!access.authorized) {
       res.status(403).json({ error: "Workspace membership required" });
       return;
-    }
-    if (
-      access.value.canRun &&
-      getLocalWorkerAvailability().status === "ready"
-    ) {
-      for (const job of access.value.jobs) {
-        if (
-          job.status === "queued" &&
-          job.attempts < AI_ASSESSMENT_JOB_MAX_ATTEMPTS
-        ) {
-          enqueueLocalAssessmentJob({
-            jobId: job.id,
-            workspaceId,
-            actorUserId: req.authUserId!,
-          });
-        }
-      }
     }
     res.json(
       ListWorkspaceAiAssessmentLabJobsResponse.parse(
@@ -370,7 +313,10 @@ router.post(
             errorCode: null,
             startedAt: null,
             completedAt: null,
+            leaseOwnerId: null,
             leaseExpiresAt: null,
+            heartbeatAt: null,
+            workerSlot: null,
             updatedAt: new Date(),
           })
           .where(eq(aiAssessmentJobsTable.id, jobId));

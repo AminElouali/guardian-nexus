@@ -335,4 +335,32 @@ ALTER POLICY ai_assessment_jobs_update_owner ON public.ai_assessment_jobs
     )
   );
 
+ALTER POLICY ai_assessment_jobs_worker_select_queue
+  ON public.ai_assessment_jobs
+  USING (status IN ('queued', 'running', 'failed'));
+
+ALTER POLICY ai_assessment_jobs_worker_update_queue
+  ON public.ai_assessment_jobs
+  USING (
+    status = 'queued'
+    OR (
+      status = 'running'
+      AND (
+        lease_expires_at IS NULL
+        OR lease_expires_at <= now()
+        OR lease_owner_id::text =
+          NULLIF(current_setting('app.ai_assessment_lease_owner', true), '')
+      )
+    )
+  )
+  WITH CHECK (
+    profile_id = 'guardian-local-agent-v1'
+    AND status IN ('running', 'failed')
+    AND (
+      status = 'failed'
+      OR lease_owner_id::text =
+        NULLIF(current_setting('app.ai_assessment_lease_owner', true), '')
+    )
+  );
+
 COMMIT;

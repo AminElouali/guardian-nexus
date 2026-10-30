@@ -887,10 +887,11 @@ components:
               type: array
               items: { type: string }
             publicIpv4: { type: string, enum: [blocked] }
-            publicIpv6: { type: string, enum: [blocked] }
+            publicIpv6: { type: string, enum: [blocked, unavailable] }
+            ipv6Capability: { type: string, enum: [kernel_protocol_unavailable, socket_and_route_tested] }
             publicDns: { type: string, enum: [blocked] }
             loopbackOnly: { type: boolean, const: true }
-          required: [networkMode, interfaces, activeNonLoopbackInterfaces, publicIpv4, publicIpv6, publicDns, loopbackOnly]
+          required: [networkMode, interfaces, activeNonLoopbackInterfaces, publicIpv4, publicIpv6, ipv6Capability, publicDns, loopbackOnly]
         startedAt: { type: string, format: date-time }
         completedAt: { type: string, format: date-time }
         durationSeconds: { type: integer }

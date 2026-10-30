@@ -11,4 +11,5 @@ export type AiAssessmentEvidenceNetworkPublicIpv6 = typeof AiAssessmentEvidenceN
 
 export const AiAssessmentEvidenceNetworkPublicIpv6 = {
   blocked: 'blocked',
+  unavailable: 'unavailable',
 } as const;

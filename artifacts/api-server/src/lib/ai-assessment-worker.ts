@@ -1,29 +1,45 @@
 import { spawn, spawnSync } from "node:child_process";
-import { and, eq } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
+import { sql } from "drizzle-orm";
 import { CreateWorkspaceAiAssessmentLabJobResponse } from "@workspace/api-zod";
 import {
   aiAssessmentJobsTable,
+  withAiAssessmentQueueTransaction,
   workspaceAuditEventsTable,
   type AiAssessmentEvidence,
 } from "@workspace/db";
 import { withWorkspaceUserTransaction } from "./tenant-db";
+import { logger } from "./logger";
 
 const IMAGE = "guardian-ai-assessment:local";
-const WORKER_VERSION = "guardian-ai-assessment-lab-0.1.0";
+const WORKER_VERSION = "guardian-ai-assessment-lab-0.2.0";
 const MAX_RUNTIME_MS = 135_000;
 const MAX_STDOUT_BYTES = 64 * 1024;
-const MAX_QUEUE_SIZE = 32;
 const MAX_ATTEMPTS = 2;
+const LEASE_DURATION_MS = 45_000;
+const HEARTBEAT_INTERVAL_MS = 10_000;
+const QUEUE_POLL_INTERVAL_MS = 2_000;
+const JOB_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-type QueueItem = {
+type JobOwner = {
   jobId: string;
   workspaceId: string;
   actorUserId: string;
 };
 
-const queue: QueueItem[] = [];
-const queuedIds = new Set<string>();
+export type ClaimedJob = JobOwner & {
+  attempts: number;
+  leaseOwnerId: string;
+  startedAt: Date;
+};
+
+export type ExhaustedJob = JobOwner & { attempts: number };
+export type QueueClaim = { job: ClaimedJob | null; exhausted: ExhaustedJob[] };
+
 let draining = false;
+let queuePollTimer: NodeJS.Timeout | null = null;
+let queueWorkerEnabled = false;
 
 export type LocalWorkerAvailability = {
   status: "ready" | "unavailable" | "disabled";
@@ -76,13 +92,32 @@ export function getLocalWorkerAvailability(): LocalWorkerAvailability {
   }
 }
 
-export function enqueueLocalAssessmentJob(item: QueueItem): boolean {
-  if (queuedIds.has(item.jobId)) return true;
-  if (queue.length >= MAX_QUEUE_SIZE) return false;
-  queue.push(item);
-  queuedIds.add(item.jobId);
+export function enqueueLocalAssessmentJob(_item: JobOwner): boolean {
+  if (
+    process.env.GUARDIAN_AI_ASSESSMENT_QUEUE_ENABLED === "false" ||
+    getLocalWorkerAvailability().status !== "ready"
+  ) {
+    return false;
+  }
+  startLocalAssessmentQueueWorker();
   void drainQueue();
   return true;
+}
+
+export function startLocalAssessmentQueueWorker(): void {
+  if (
+    queuePollTimer ||
+    process.env.GUARDIAN_AI_ASSESSMENT_QUEUE_ENABLED === "false" ||
+    getLocalWorkerAvailability().status !== "ready"
+  ) {
+    return;
+  }
+  queueWorkerEnabled = true;
+  queuePollTimer = setInterval(() => {
+    void drainQueue();
+  }, QUEUE_POLL_INTERVAL_MS);
+  queuePollTimer.unref();
+  void drainQueue();
 }
 
 export function isAiAssessmentJobRetryable(
@@ -114,8 +149,51 @@ function dockerRunArgs(containerName: string): string[] {
   ];
 }
 
+function getContainerName(jobId: string): string {
+  if (!JOB_ID_PATTERN.test(jobId)) {
+    throw new Error("invalid_assessment_job_id");
+  }
+  return `guardian-ai-lab-${jobId}`;
+}
+
+function killDockerContainer(jobId: string): void {
+  const killer = spawn(
+    "docker",
+    ["kill", "--signal=KILL", getContainerName(jobId)],
+    {
+      stdio: "ignore",
+      env: {
+        PATH: process.env.PATH ?? "/usr/bin:/bin",
+        HOME: process.env.HOME ?? "/tmp",
+      },
+    },
+  );
+  killer.on("error", () => undefined);
+}
+
 function runDockerAssessment(jobId: string): Promise<AiAssessmentEvidence> {
-  const containerName = `guardian-ai-lab-${jobId}`;
+  const containerName = getContainerName(jobId);
+  const staleContainerCleanup = spawnSync(
+    "docker",
+    ["rm", "--force", containerName],
+    {
+      stdio: "ignore",
+      timeout: 3_000,
+      env: {
+        PATH: process.env.PATH ?? "/usr/bin:/bin",
+        HOME: process.env.HOME ?? "/tmp",
+      },
+    },
+  );
+  if (staleContainerCleanup.error) {
+    return Promise.reject(
+      new Error(
+        staleContainerCleanup.error.message.includes("ENOENT")
+          ? "docker_not_available"
+          : "docker_cleanup_failed",
+      ),
+    );
+  }
   return new Promise((resolve, reject) => {
     let stdout = "";
     let stdoutBytes = 0;
@@ -130,14 +208,7 @@ function runDockerAssessment(jobId: string): Promise<AiAssessmentEvidence> {
 
     const timeout = setTimeout(() => {
       timedOut = true;
-      const killer = spawn("docker", ["kill", "--signal=KILL", containerName], {
-        stdio: "ignore",
-        env: {
-          PATH: process.env.PATH ?? "/usr/bin:/bin",
-          HOME: process.env.HOME ?? "/tmp",
-        },
-      });
-      killer.on("error", () => undefined);
+      killDockerContainer(jobId);
       child.kill("SIGKILL");
     }, MAX_RUNTIME_MS);
 
@@ -203,6 +274,9 @@ function runDockerAssessment(jobId: string): Promise<AiAssessmentEvidence> {
           evidence.engineVersion !== "0.17.1" ||
           evidence.probeRequests !== 1 ||
           evidence.network.networkMode !== "docker-network-none" ||
+          evidence.network.publicIpv4 !== "blocked" ||
+          !["blocked", "unavailable"].includes(evidence.network.publicIpv6) ||
+          evidence.network.publicDns !== "blocked" ||
           !evidence.network.loopbackOnly ||
           evidence.network.activeNonLoopbackInterfaces.length > 0 ||
           evidence.externalCalls !== 0 ||
@@ -220,43 +294,44 @@ function runDockerAssessment(jobId: string): Promise<AiAssessmentEvidence> {
 }
 
 async function updateJob(
-  item: QueueItem,
+  item: ClaimedJob,
   update: {
-    status: "running" | "succeeded" | "failed";
-    attempts?: number;
+    status: "succeeded" | "failed";
     result?: AiAssessmentEvidence | null;
     engineVersion?: string | null;
     errorCode?: string | null;
-    startedAt?: Date | null;
-    completedAt?: Date | null;
-    leaseExpiresAt?: Date | null;
     auditAction?: string;
   },
-): Promise<void> {
+): Promise<boolean> {
   const access = await withWorkspaceUserTransaction(
     item.actorUserId,
     item.workspaceId,
     async (tx, membership) => {
       if (membership.role !== "owner" && membership.role !== "admin") return false;
-      await tx
+      const [updated] = await tx
         .update(aiAssessmentJobsTable)
         .set({
           status: update.status,
-          attempts: update.attempts,
           result: update.result,
           engineVersion: update.engineVersion,
           errorCode: update.errorCode,
-          startedAt: update.startedAt,
-          completedAt: update.completedAt,
-          leaseExpiresAt: update.leaseExpiresAt,
+          leaseOwnerId: null,
+          leaseExpiresAt: null,
+          heartbeatAt: null,
+          workerSlot: null,
+          completedAt: new Date(),
           updatedAt: new Date(),
         })
         .where(
-          and(
-            eq(aiAssessmentJobsTable.id, item.jobId),
-            eq(aiAssessmentJobsTable.workspaceId, item.workspaceId),
-          ),
-        );
+          sql`
+            ${aiAssessmentJobsTable.id} = ${item.jobId}
+            AND ${aiAssessmentJobsTable.workspaceId} = ${item.workspaceId}
+            AND ${aiAssessmentJobsTable.status} = 'running'
+            AND ${aiAssessmentJobsTable.leaseOwnerId} = ${item.leaseOwnerId}
+          `,
+        )
+        .returning({ id: aiAssessmentJobsTable.id });
+      if (!updated) return false;
       if (update.auditAction) {
         await tx.insert(workspaceAuditEventsTable).values({
           workspaceId: item.workspaceId,
@@ -267,7 +342,7 @@ async function updateJob(
           metadata: {
             profileId: "guardian-local-agent-v1",
             status: update.status,
-            attempts: update.attempts ?? 0,
+            attempts: item.attempts,
             errorCode: update.errorCode ?? null,
             engineVersion: update.engineVersion ?? null,
           },
@@ -276,111 +351,278 @@ async function updateJob(
       return true;
     },
   );
-  if (!access.authorized || !access.value) {
-    throw new Error("job_workspace_authorization_lost");
+  return access.authorized && access.value;
+}
+
+type QueueCandidate = {
+  jobId: string;
+  workspaceId: string;
+  actorUserId: string;
+  status: "queued" | "running";
+  attempts: number;
+  startedAt: Date | null;
+};
+
+function getDatabaseErrorCode(error: unknown): string | null {
+  if (typeof error !== "object" || error === null) return null;
+  const record = error as { code?: unknown; cause?: { code?: unknown } };
+  const code = record.code ?? record.cause?.code;
+  return typeof code === "string" ? code : null;
+}
+
+export async function claimNextAssessmentJob(): Promise<QueueClaim> {
+  const leaseOwnerId = randomUUID();
+  try {
+    return await withAiAssessmentQueueTransaction(leaseOwnerId, async (tx) => {
+      const exhausted: ExhaustedJob[] = [];
+      for (let index = 0; index < 16; index += 1) {
+        const active = await tx.execute(sql`
+          SELECT id
+          FROM public.ai_assessment_jobs
+          WHERE status = 'running' AND lease_expires_at > now()
+          LIMIT 1
+        `);
+        if (active.rows.length > 0) return { job: null, exhausted };
+
+        const candidates = await tx.execute(sql`
+          SELECT
+            id::text AS "jobId",
+            workspace_id::text AS "workspaceId",
+            requested_by_user_id AS "actorUserId",
+            status,
+            attempts,
+            started_at AS "startedAt"
+          FROM public.ai_assessment_jobs
+          WHERE status = 'queued'
+             OR (
+               status = 'running'
+               AND (lease_expires_at IS NULL OR lease_expires_at <= now())
+             )
+          ORDER BY created_at ASC
+          LIMIT 1
+          FOR UPDATE SKIP LOCKED
+        `);
+        const candidate = candidates.rows[0] as QueueCandidate | undefined;
+        if (!candidate) return { job: null, exhausted };
+
+        const owner: JobOwner = {
+          jobId: candidate.jobId,
+          workspaceId: candidate.workspaceId,
+          actorUserId: candidate.actorUserId,
+        };
+        if (candidate.attempts >= MAX_ATTEMPTS) {
+          await tx.execute(sql`
+            UPDATE public.ai_assessment_jobs
+            SET status = 'failed',
+                error_code = 'worker_lease_expired',
+                completed_at = now(),
+                lease_owner_id = NULL,
+                lease_expires_at = NULL,
+                heartbeat_at = NULL,
+                worker_slot = NULL,
+                updated_at = now()
+            WHERE id = ${candidate.jobId}::uuid
+          `);
+          exhausted.push({ ...owner, attempts: candidate.attempts });
+          continue;
+        }
+
+        const attempts = candidate.attempts + 1;
+        const startedAt = candidate.startedAt ?? new Date();
+        const claimed = await tx.execute(sql`
+          UPDATE public.ai_assessment_jobs
+          SET status = 'running',
+              attempts = ${attempts},
+              lease_owner_id = ${leaseOwnerId}::uuid,
+              lease_expires_at = now() + (${LEASE_DURATION_MS} * interval '1 millisecond'),
+              heartbeat_at = now(),
+              worker_slot = 1,
+              started_at = COALESCE(started_at, ${startedAt}),
+              completed_at = NULL,
+              error_code = NULL,
+              updated_at = now()
+          WHERE id = ${candidate.jobId}::uuid
+          RETURNING id
+        `);
+        if (claimed.rows.length !== 1) continue;
+        return {
+          job: {
+            ...owner,
+            attempts,
+            leaseOwnerId,
+            startedAt,
+          },
+          exhausted,
+        };
+      }
+      return { job: null, exhausted };
+    });
+  } catch (error) {
+    if (getDatabaseErrorCode(error) === "23505") {
+      return { job: null, exhausted: [] };
+    }
+    throw error;
   }
 }
 
-async function processJob(item: QueueItem): Promise<void> {
+export async function renewAssessmentJobLease(item: ClaimedJob): Promise<boolean> {
+  return withAiAssessmentQueueTransaction(item.leaseOwnerId, async (tx) => {
+    const result = await tx.execute(sql`
+      UPDATE public.ai_assessment_jobs
+      SET lease_expires_at = now() + (${LEASE_DURATION_MS} * interval '1 millisecond'),
+          heartbeat_at = now(),
+          updated_at = now()
+      WHERE id = ${item.jobId}::uuid
+        AND status = 'running'
+        AND lease_owner_id = ${item.leaseOwnerId}::uuid
+      RETURNING id
+    `);
+    return result.rows.length === 1;
+  });
+}
+
+async function failClaimedJob(
+  item: ClaimedJob,
+  errorCode: string,
+): Promise<void> {
+  await withAiAssessmentQueueTransaction(item.leaseOwnerId, async (tx) => {
+    await tx.execute(sql`
+      UPDATE public.ai_assessment_jobs
+      SET status = 'failed',
+          error_code = ${errorCode},
+          completed_at = now(),
+          lease_owner_id = NULL,
+          lease_expires_at = NULL,
+          heartbeat_at = NULL,
+          worker_slot = NULL,
+          updated_at = now()
+      WHERE id = ${item.jobId}::uuid
+        AND status = 'running'
+        AND lease_owner_id = ${item.leaseOwnerId}::uuid
+    `);
+  });
+}
+
+async function recordLeaseExhaustedAudit(item: ExhaustedJob): Promise<void> {
+  await withWorkspaceUserTransaction(
+    item.actorUserId,
+    item.workspaceId,
+    async (tx, membership) => {
+      if (membership.role !== "owner" && membership.role !== "admin") return;
+      await tx.insert(workspaceAuditEventsTable).values({
+        workspaceId: item.workspaceId,
+        actorUserId: item.actorUserId,
+        action: "ai_assessment.lab.lease_expired",
+        resourceType: "ai_assessment_job",
+        resourceId: item.jobId,
+        metadata: {
+          status: "failed",
+          attempts: item.attempts,
+          maxAttempts: MAX_ATTEMPTS,
+        },
+      });
+    },
+  );
+}
+
+async function processJob(item: ClaimedJob): Promise<void> {
   const access = await withWorkspaceUserTransaction(
     item.actorUserId,
     item.workspaceId,
     async (tx, membership) => {
-      if (membership.role !== "owner" && membership.role !== "admin") return null;
-      const [job] = await tx
-        .select()
-        .from(aiAssessmentJobsTable)
-        .where(
-          and(
-            eq(aiAssessmentJobsTable.id, item.jobId),
-            eq(aiAssessmentJobsTable.workspaceId, item.workspaceId),
-            eq(aiAssessmentJobsTable.status, "queued"),
-          ),
-        )
-        .limit(1);
-      if (!job || job.attempts >= MAX_ATTEMPTS) return null;
-      const startedAt = new Date();
-      const attempts = job.attempts + 1;
-      await tx
-        .update(aiAssessmentJobsTable)
-        .set({
-          status: "running",
-          attempts,
-          startedAt,
-          completedAt: null,
-          leaseExpiresAt: new Date(startedAt.getTime() + MAX_RUNTIME_MS + 15_000),
-          errorCode: null,
-          result: null,
-          updatedAt: startedAt,
-        })
-        .where(eq(aiAssessmentJobsTable.id, job.id));
+      if (membership.role !== "owner" && membership.role !== "admin") {
+        return false;
+      }
       await tx.insert(workspaceAuditEventsTable).values({
         workspaceId: item.workspaceId,
         actorUserId: item.actorUserId,
-        action: "ai_assessment.lab.started",
+        action:
+          item.attempts > 1
+            ? "ai_assessment.lab.recovered"
+            : "ai_assessment.lab.started",
         resourceType: "ai_assessment_job",
         resourceId: item.jobId,
         metadata: {
           profileId: "guardian-local-agent-v1",
           workerVersion: WORKER_VERSION,
-          attempt: attempts,
+          attempt: item.attempts,
         },
       });
-      return { attempts, startedAt };
+      return true;
     },
   );
-  if (!access.authorized || !access.value) return;
+  if (!access.authorized || !access.value) {
+    await failClaimedJob(item, "workspace_authorization_lost");
+    return;
+  }
+
+  let leaseLost = false;
+  let heartbeatInFlight = false;
+  const heartbeat = setInterval(() => {
+    if (leaseLost || heartbeatInFlight) return;
+    heartbeatInFlight = true;
+    void renewAssessmentJobLease(item)
+      .then((renewed) => {
+        if (!renewed) {
+          leaseLost = true;
+          killDockerContainer(item.jobId);
+        }
+      })
+      .catch(() => {
+        leaseLost = true;
+        killDockerContainer(item.jobId);
+      })
+      .finally(() => {
+        heartbeatInFlight = false;
+      });
+  }, HEARTBEAT_INTERVAL_MS);
+  heartbeat.unref();
 
   try {
     const evidence = await runDockerAssessment(item.jobId);
-    await updateJob(item, {
+    if (leaseLost) return;
+    const saved = await updateJob(item, {
       status: "succeeded",
-      attempts: access.value.attempts,
       result: evidence,
       engineVersion: evidence.engineVersion,
       errorCode: null,
-      startedAt: access.value.startedAt,
-      completedAt: new Date(),
-      leaseExpiresAt: null,
       auditAction: "ai_assessment.lab.completed",
     });
+    if (!saved) killDockerContainer(item.jobId);
   } catch (error) {
+    if (leaseLost) return;
     const rawCode = error instanceof Error ? error.message : "worker_failed";
     const errorCode = /^[a-z0-9_]{1,64}$/.test(rawCode)
       ? rawCode
       : "worker_failed";
     await updateJob(item, {
       status: "failed",
-      attempts: access.value.attempts,
       result: null,
       engineVersion: null,
       errorCode,
-      startedAt: access.value.startedAt,
-      completedAt: new Date(),
-      leaseExpiresAt: null,
       auditAction: "ai_assessment.lab.failed",
     });
+  } finally {
+    clearInterval(heartbeat);
   }
 }
 
 async function drainQueue(): Promise<void> {
-  if (draining) return;
+  if (draining || !queueWorkerEnabled) return;
   draining = true;
   try {
-    while (queue.length > 0) {
-      const item = queue.shift();
-      if (!item) continue;
-      queuedIds.delete(item.jobId);
-      try {
-        await processJob(item);
-      } catch {
-        // Durable queued/running state is recovered by the tenant-scoped list
-        // endpoint after the lease expires; never crash the API on job failure.
-      }
+    const claim = await claimNextAssessmentJob();
+    for (const exhausted of claim.exhausted) {
+      await recordLeaseExhaustedAudit(exhausted);
     }
+    if (claim.job) await processJob(claim.job);
+  } catch {
+    logger.error(
+      { errorCode: "assessment_queue_tick_failed" },
+      "Durable assessment queue tick failed",
+    );
   } finally {
     draining = false;
-    if (queue.length > 0) void drainQueue();
   }
 }
 

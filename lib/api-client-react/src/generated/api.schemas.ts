@@ -407,6 +407,15 @@ export type AiAssessmentEvidenceNetworkPublicIpv6 = typeof AiAssessmentEvidenceN
 
 export const AiAssessmentEvidenceNetworkPublicIpv6 = {
   blocked: 'blocked',
+  unavailable: 'unavailable',
+} as const;
+
+export type AiAssessmentEvidenceNetworkIpv6Capability = typeof AiAssessmentEvidenceNetworkIpv6Capability[keyof typeof AiAssessmentEvidenceNetworkIpv6Capability];
+
+
+export const AiAssessmentEvidenceNetworkIpv6Capability = {
+  kernel_protocol_unavailable: 'kernel_protocol_unavailable',
+  socket_and_route_tested: 'socket_and_route_tested',
 } as const;
 
 export type AiAssessmentEvidenceNetworkPublicDns = typeof AiAssessmentEvidenceNetworkPublicDns[keyof typeof AiAssessmentEvidenceNetworkPublicDns];
@@ -430,6 +439,7 @@ export type AiAssessmentEvidenceNetwork = {
   activeNonLoopbackInterfaces: string[];
   publicIpv4: AiAssessmentEvidenceNetworkPublicIpv4;
   publicIpv6: AiAssessmentEvidenceNetworkPublicIpv6;
+  ipv6Capability: AiAssessmentEvidenceNetworkIpv6Capability;
   publicDns: AiAssessmentEvidenceNetworkPublicDns;
   loopbackOnly: true;
 };

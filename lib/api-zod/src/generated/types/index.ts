@@ -10,6 +10,7 @@ export * from './aiAssessmentEvidence';
 export * from './aiAssessmentEvidenceEngine';
 export * from './aiAssessmentEvidenceFindingsItem';
 export * from './aiAssessmentEvidenceNetwork';
+export * from './aiAssessmentEvidenceNetworkIpv6Capability';
 export * from './aiAssessmentEvidenceNetworkNetworkMode';
 export * from './aiAssessmentEvidenceNetworkPublicDns';
 export * from './aiAssessmentEvidenceNetworkPublicIpv4';

@@ -33,6 +33,14 @@ class WorkerContractTests(unittest.TestCase):
             [line for line in requirements if line and line.startswith(forbidden)]
         )
 
+    def test_security_sensitive_runtime_packages_are_pinned_to_scanned_fixes(self):
+        requirements = (
+            WORKER_ROOT / "requirements-runtime.txt"
+        ).read_text().splitlines()
+        self.assertIn("aiohttp==3.14.5", requirements)
+        self.assertIn("nltk==3.10.4", requirements)
+        self.assertIn("requests==2.34.2", requirements)
+
     def test_docker_launcher_enforces_isolation_and_resource_caps(self):
         launcher = (WORKER_ROOT / "scripts/run-local.sh").read_text()
         for option in (

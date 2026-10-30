@@ -513,7 +513,8 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "interfaces": zod.array(zod.string()),
   "activeNonLoopbackInterfaces": zod.array(zod.string()),
   "publicIpv4": zod.enum(['blocked']),
-  "publicIpv6": zod.enum(['blocked']),
+  "publicIpv6": zod.enum(['blocked', 'unavailable']),
+  "ipv6Capability": zod.enum(['kernel_protocol_unavailable', 'socket_and_route_tested']),
   "publicDns": zod.enum(['blocked']),
   "loopbackOnly": zod.literal(true)
 }),
@@ -585,7 +586,8 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "interfaces": zod.array(zod.string()),
   "activeNonLoopbackInterfaces": zod.array(zod.string()),
   "publicIpv4": zod.enum(['blocked']),
-  "publicIpv6": zod.enum(['blocked']),
+  "publicIpv6": zod.enum(['blocked', 'unavailable']),
+  "ipv6Capability": zod.enum(['kernel_protocol_unavailable', 'socket_and_route_tested']),
   "publicDns": zod.enum(['blocked']),
   "loopbackOnly": zod.literal(true)
 }),
@@ -647,7 +649,8 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "interfaces": zod.array(zod.string()),
   "activeNonLoopbackInterfaces": zod.array(zod.string()),
   "publicIpv4": zod.enum(['blocked']),
-  "publicIpv6": zod.enum(['blocked']),
+  "publicIpv6": zod.enum(['blocked', 'unavailable']),
+  "ipv6Capability": zod.enum(['kernel_protocol_unavailable', 'socket_and_route_tested']),
   "publicDns": zod.enum(['blocked']),
   "loopbackOnly": zod.literal(true)
 }),

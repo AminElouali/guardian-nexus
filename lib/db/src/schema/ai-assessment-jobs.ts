@@ -11,7 +11,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import { appRuntimeRole } from "./roles";
+import { aiAssessmentWorkerRole, appRuntimeRole } from "./roles";
 import { workspacesTable } from "./workspaces";
 
 export type AiAssessmentEvidence = {
@@ -38,7 +38,8 @@ export type AiAssessmentEvidence = {
     interfaces: string[];
     activeNonLoopbackInterfaces: string[];
     publicIpv4: "blocked";
-    publicIpv6: "blocked";
+    publicIpv6: "blocked" | "unavailable";
+    ipv6Capability: "kernel_protocol_unavailable" | "socket_and_route_tested";
     publicDns: "blocked";
     loopbackOnly: true;
   };
@@ -87,11 +88,14 @@ export const aiAssessmentJobsTable = pgTable(
     attempts: integer("attempts").notNull().default(0),
     workerVersion: text("worker_version")
       .notNull()
-      .default("guardian-ai-assessment-lab-0.1.0"),
+      .default("guardian-ai-assessment-lab-0.2.0"),
     engineVersion: text("engine_version"),
     result: jsonb("result").$type<AiAssessmentEvidence>(),
     errorCode: text("error_code"),
+    leaseOwnerId: uuid("lease_owner_id"),
     leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
+    heartbeatAt: timestamp("heartbeat_at", { withTimezone: true }),
+    workerSlot: integer("worker_slot"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -115,6 +119,9 @@ export const aiAssessmentJobsTable = pgTable(
       table.status,
       table.leaseExpiresAt,
     ),
+    uniqueIndex("ai_assessment_jobs_worker_slot_idx")
+      .on(table.workerSlot)
+      .where(sql`${table.workerSlot} = 1`),
     check(
       "ai_assessment_jobs_status_check",
       sql`${table.status} IN ('queued', 'running', 'succeeded', 'failed')`,
@@ -126,6 +133,10 @@ export const aiAssessmentJobsTable = pgTable(
     check(
       "ai_assessment_jobs_attempts_check",
       sql`${table.attempts} BETWEEN 0 AND 2`,
+    ),
+    check(
+      "ai_assessment_jobs_worker_slot_check",
+      sql`${table.workerSlot} IS NULL OR ${table.workerSlot} = 1`,
     ),
     pgPolicy("ai_assessment_jobs_select_member", {
       for: "select",
@@ -145,6 +156,36 @@ export const aiAssessmentJobsTable = pgTable(
       to: appRuntimeRole,
       using: ownerOrAdminScope(table.workspaceId),
       withCheck: ownerOrAdminScope(table.workspaceId),
+    }),
+    pgPolicy("ai_assessment_jobs_worker_select_queue", {
+      for: "select",
+      to: aiAssessmentWorkerRole,
+      using: sql`${table.status} IN ('queued', 'running', 'failed')`,
+    }),
+    pgPolicy("ai_assessment_jobs_worker_update_queue", {
+      for: "update",
+      to: aiAssessmentWorkerRole,
+      using: sql`
+        ${table.status} = 'queued'
+        OR (
+          ${table.status} = 'running'
+          AND (
+            ${table.leaseExpiresAt} IS NULL
+            OR ${table.leaseExpiresAt} <= now()
+            OR ${table.leaseOwnerId}::text =
+              NULLIF(current_setting('app.ai_assessment_lease_owner', true), '')
+          )
+        )
+      `,
+      withCheck: sql`
+        ${table.profileId} = 'guardian-local-agent-v1'
+        AND ${table.status} IN ('running', 'failed')
+        AND (
+          ${table.status} = 'failed'
+          OR ${table.leaseOwnerId}::text =
+            NULLIF(current_setting('app.ai_assessment_lease_owner', true), '')
+        )
+      `,
     }),
   ],
 ).enableRLS();

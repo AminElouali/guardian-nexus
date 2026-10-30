@@ -26,3 +26,9 @@ description: Product boundaries for security integrations, claims, and productio
 **Why:** Interface names alone are not proof of egress, and an unavailable namespace tool should not be bypassed with weaker isolation.
 
 **How to apply:** Test the actual Docker runtime, reject default routes and active non-loopback links, and verify IPv4, IPv6, DNS, and loopback behavior before claiming an offline worker.
+
+**Rule:** A network probe reported as `unavailable` because the host kernel lacks IPv6 is not evidence that IPv6 egress is blocked; treat it as incomplete and do not activate a remote worker until a dual-stack-capable environment verifies it.
+
+**Why:** The current development host cannot create an IPv6 socket, so the public IPv6 connection attempt cannot prove deny behavior.
+
+**How to apply:** Report each address family as blocked, reachable, or unavailable. Require blocked IPv4, IPv6, and DNS results before remote evaluation jobs are enabled.

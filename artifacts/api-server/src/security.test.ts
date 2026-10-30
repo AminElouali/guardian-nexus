@@ -6,6 +6,7 @@ import { eq, sql } from "drizzle-orm";
 import {
   assertRlsRuntimeReady,
   aiAssessmentJobsTable,
+  withAiAssessmentQueueTransaction,
   assetsTable,
   connectorJobsTable,
   monthlyUsageTable,
@@ -27,7 +28,11 @@ import {
   enqueueConnectorJob,
   rescheduleConnectorJob,
 } from "./lib/connector-jobs";
-import { isAiAssessmentJobRetryable } from "./lib/ai-assessment-worker";
+import {
+  claimNextAssessmentJob,
+  isAiAssessmentJobRetryable,
+  renewAssessmentJobLease,
+} from "./lib/ai-assessment-worker";
 
 if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL is required for isolated security-test fixtures.");
@@ -353,6 +358,12 @@ test("AI assessment jobs enforce tenant, role, and idempotency boundaries", asyn
   assert.equal(unchanged.authorized, true);
   if (!unchanged.authorized) return;
   assert.equal(unchanged.value[0]?.status, "queued");
+  await withWorkspaceUserTransaction(userA, workspaceA, (tx) =>
+    tx
+      .update(aiAssessmentJobsTable)
+      .set({ status: "failed", completedAt: new Date() })
+      .where(eq(aiAssessmentJobsTable.id, inserted.value[0]!.id)),
+  );
 });
 
 test("AI assessment retry policy stops at two attempts and only retries failures", () => {
@@ -360,6 +371,156 @@ test("AI assessment retry policy stops at two attempts and only retries failures
   assert.equal(isAiAssessmentJobRetryable("failed", 2), false);
   assert.equal(isAiAssessmentJobRetryable("queued", 1), false);
   assert.equal(isAiAssessmentJobRetryable("running", 1), false);
+});
+
+test("assessment queue role exposes metadata only and recovers expired leases once", async () => {
+  const [jobA] = await withWorkspaceUserTransaction(userA, workspaceA, (tx) =>
+    tx
+      .insert(aiAssessmentJobsTable)
+      .values({
+        workspaceId: workspaceA,
+        requestedByUserId: userA,
+        idempotencyKey: `queue-recovery-a-${randomUUID()}`,
+      })
+      .returning(),
+  ).then((result) => {
+    assert.equal(result.authorized, true);
+    if (!result.authorized) return [];
+    return result.value;
+  });
+  const [jobB] = await withWorkspaceUserTransaction(userB, workspaceB, (tx) =>
+    tx
+      .insert(aiAssessmentJobsTable)
+      .values({
+        workspaceId: workspaceB,
+        requestedByUserId: userB,
+        idempotencyKey: `queue-recovery-b-${randomUUID()}`,
+      })
+      .returning(),
+  ).then((result) => {
+    assert.equal(result.authorized, true);
+    if (!result.authorized) return [];
+    return result.value;
+  });
+  assert.ok(jobA);
+  assert.ok(jobB);
+
+  const queueMetadata = await withAiAssessmentQueueTransaction(null, (tx) =>
+    tx
+      .select({
+        id: aiAssessmentJobsTable.id,
+        workspaceId: aiAssessmentJobsTable.workspaceId,
+        requestedByUserId: aiAssessmentJobsTable.requestedByUserId,
+        status: aiAssessmentJobsTable.status,
+      })
+      .from(aiAssessmentJobsTable),
+  );
+  assert.ok(queueMetadata.some((job) => job.id === jobA.id));
+  assert.ok(queueMetadata.some((job) => job.id === jobB.id));
+  assert.equal(
+    queueMetadata.find((job) => job.id === jobB.id)?.workspaceId,
+    workspaceB,
+  );
+
+  await assert.rejects(
+    withAiAssessmentQueueTransaction(null, (tx) =>
+      tx
+        .select({ result: aiAssessmentJobsTable.result })
+        .from(aiAssessmentJobsTable)
+        .where(eq(aiAssessmentJobsTable.id, jobA.id)),
+    ),
+    (error: { code?: string; cause?: { code?: string } }) =>
+      error.code === "42501" || error.cause?.code === "42501",
+  );
+  await assert.rejects(
+    withAiAssessmentQueueTransaction(randomUUID(), (tx) =>
+      tx
+        .update(aiAssessmentJobsTable)
+        .set({ workspaceId: workspaceB })
+        .where(eq(aiAssessmentJobsTable.id, jobA.id)),
+    ),
+    (error: { code?: string; cause?: { code?: string } }) =>
+      error.code === "42501" || error.cause?.code === "42501",
+  );
+
+  const markTenantBFailed = await withWorkspaceUserTransaction(
+    userB,
+    workspaceB,
+    (tx) =>
+      tx
+        .update(aiAssessmentJobsTable)
+        .set({ status: "failed", completedAt: new Date() })
+        .where(eq(aiAssessmentJobsTable.id, jobB.id)),
+  );
+  assert.equal(markTenantBFailed.authorized, true);
+
+  const raceClaims = await Promise.all([
+    claimNextAssessmentJob(),
+    claimNextAssessmentJob(),
+  ]);
+  const claimed = raceClaims.flatMap((claim) =>
+    claim.job ? [claim.job] : [],
+  );
+  assert.equal(claimed.length, 1);
+  const firstLease = claimed[0]!;
+  assert.equal(firstLease.jobId, jobA.id);
+  assert.equal(firstLease.attempts, 1);
+  assert.equal(
+    (await claimNextAssessmentJob()).job,
+    null,
+    "an active lease prevents a second claim",
+  );
+  assert.equal(await renewAssessmentJobLease(firstLease), true);
+
+  await withAiAssessmentQueueTransaction(firstLease.leaseOwnerId, (tx) =>
+    tx.execute(sql`
+      UPDATE public.ai_assessment_jobs
+      SET lease_expires_at = now() - interval '1 second'
+      WHERE id = ${firstLease.jobId}::uuid
+        AND lease_owner_id = ${firstLease.leaseOwnerId}::uuid
+    `),
+  );
+  const recovered = await claimNextAssessmentJob();
+  assert.equal(recovered.job?.jobId, firstLease.jobId);
+  assert.equal(recovered.job?.attempts, 2);
+  assert.ok(recovered.job);
+  assert.equal(await renewAssessmentJobLease(firstLease), false);
+
+  await withAiAssessmentQueueTransaction(recovered.job.leaseOwnerId, (tx) =>
+    tx.execute(sql`
+      UPDATE public.ai_assessment_jobs
+      SET lease_expires_at = now() - interval '1 second'
+      WHERE id = ${recovered.job!.jobId}::uuid
+        AND lease_owner_id = ${recovered.job!.leaseOwnerId}::uuid
+    `),
+  );
+  const exhausted = await claimNextAssessmentJob();
+  assert.equal(exhausted.job, null);
+  assert.equal(exhausted.exhausted.length, 1);
+  assert.equal(exhausted.exhausted[0]?.jobId, jobA.id);
+  const finalState = await withWorkspaceUserTransaction(
+    userA,
+    workspaceA,
+    (tx) =>
+      tx
+        .select({
+          status: aiAssessmentJobsTable.status,
+          attempts: aiAssessmentJobsTable.attempts,
+          leaseOwnerId: aiAssessmentJobsTable.leaseOwnerId,
+          workerSlot: aiAssessmentJobsTable.workerSlot,
+        })
+        .from(aiAssessmentJobsTable)
+        .where(eq(aiAssessmentJobsTable.id, jobA.id))
+        .limit(1),
+  );
+  assert.equal(finalState.authorized, true);
+  if (!finalState.authorized) return;
+  assert.deepEqual(finalState.value[0], {
+    status: "failed",
+    attempts: 2,
+    leaseOwnerId: null,
+    workerSlot: null,
+  });
 });
 
 test("RLS scopes unfiltered asset reads to the verified tenant", async () => {
@@ -488,14 +649,16 @@ test("connector jobs are tenant-scoped, idempotent, and reserve quota once", asy
     idempotencyKey: `job-${randomUUID()}`,
     metadata: { source: "security-test" },
   };
-  const [first, second] = await Promise.all([
+  const results = await Promise.all([
     enqueueConnectorJob(input),
     enqueueConnectorJob(input),
   ]);
-  assert.equal(first.kind, "created");
-  assert.equal(second.kind, "existing");
-  if (first.kind !== "created" || second.kind !== "existing") return;
-  assert.equal(first.job.id, second.job.id);
+  const created = results.find((result) => result.kind === "created");
+  const existing = results.find((result) => result.kind === "existing");
+  assert.ok(created);
+  assert.ok(existing);
+  if (!created || !existing) return;
+  assert.equal(created.job.id, existing.job.id);
 
   const result = await withWorkspaceUserTransaction(
     userA,
@@ -526,13 +689,13 @@ test("connector jobs are tenant-scoped, idempotent, and reserve quota once", asy
         attempts: 1,
         leaseExpiresAt: new Date(Date.now() + 60_000),
       })
-      .where(eq(connectorJobsTable.id, first.job.id));
+        .where(eq(connectorJobsTable.id, created.job.id));
   });
   const retryStartedAt = Date.now();
   const retried = await rescheduleConnectorJob({
     userId: userA,
     workspaceId: workspaceA,
-    jobId: first.job.id,
+    jobId: created.job.id,
     retryAfter: "30",
     errorCode: "provider_throttled",
   });
@@ -545,7 +708,7 @@ test("connector jobs are tenant-scoped, idempotent, and reserve quota once", asy
     await tx
       .update(connectorJobsTable)
       .set({ status: "running", leaseExpiresAt: new Date(Date.now() + 60_000) })
-      .where(eq(connectorJobsTable.id, first.job.id));
+      .where(eq(connectorJobsTable.id, created.job.id));
     await tx
       .update(providerConnectionsTable)
       .set({ status: "revoked", revokedAt: new Date() })
@@ -554,7 +717,7 @@ test("connector jobs are tenant-scoped, idempotent, and reserve quota once", asy
   const cancelled = await rescheduleConnectorJob({
     userId: userA,
     workspaceId: workspaceA,
-    jobId: first.job.id,
+    jobId: created.job.id,
     retryAfter: "30",
     errorCode: "provider_throttled",
   });

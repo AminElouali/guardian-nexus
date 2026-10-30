@@ -2,6 +2,8 @@
 
 **Estado:** ejecutable en desarrollo contra un agente de laboratorio local propio. No está habilitado como servicio para agentes o sistemas de clientes. No se ha creado una cuenta Scaleway, desplegado el worker ni conectado un proveedor de IA.
 
+Resultados reproducibles de probes, recuperación de cola, escaneo de imagen y alternativas de worker: [validación técnica del 30 de octubre de 2026](guardian-ai-assessment-validation.md).
+
 ## Ejecución local
 
 Requisitos: Docker Engine disponible y acceso a Internet únicamente durante la construcción de la imagen para descargar la base y dependencias. La evaluación en ejecución no descarga imágenes ni necesita acceso externo.
@@ -16,7 +18,7 @@ sh workers/guardian-ai-assessment/scripts/run-local.sh --self-test
 sh workers/guardian-ai-assessment/scripts/run-local.sh
 ```
 
-El runner fija el perfil `guardian-local-agent-v1`; no admite objetivos, URLs, probes ni parámetros Docker proporcionados por quien lo llama. Usa `--pull=never`, `--network=none`, filesystem de solo lectura, usuario no root, 0,5 CPU, 768 MiB de memoria, 64 procesos, timeout de hasta 120 segundos y `/tmp` efímero de 64 MiB. El agente de laboratorio escucha solo en loopback dentro del mismo contenedor. El test de aislamiento comprueba que no haya rutas por defecto ni interfaces externas activas, e intenta IPv4, IPv6 y DNS públicos; cualquier fallo de comprobación detiene la evaluación.
+El runner fija el perfil `guardian-local-agent-v1`; no admite objetivos, URLs, probes ni parámetros Docker proporcionados por quien lo llama. Usa `--pull=never`, `--network=none`, filesystem de solo lectura, usuario no root, 0,5 CPU, 768 MiB de memoria, 64 procesos, timeout de hasta 120 segundos y `/tmp` efímero de 64 MiB. El agente de laboratorio escucha solo en loopback dentro del mismo contenedor. En la validación actual, IPv4 y DNS públicos resultaron bloqueados. IPv6 se informó como `unavailable` porque el kernel del host no ofrece ese protocolo; esto no se cuenta como prueba de bloqueo. Una activación remota queda bloqueada hasta verificar IPv4, IPv6 y DNS desde un entorno con capacidad dual-stack.
 
 La evidencia conserva versión del motor, perfil y probe fijo, cantidad de solicitudes, resumen de puntuaciones, tipos y tamaño del informe, SHA-256, tiempos y resultado de las comprobaciones de red. No conserva el informe bruto, prompts, respuestas ni secretos. Una puntuación positiva es una señal del detector, no una vulnerabilidad confirmada. Una sola ejecución/probe no constituye una evaluación completa ni una garantía de seguridad.
 
@@ -25,8 +27,8 @@ La evidencia conserva versión del motor, perfil y probe fijo, cantidad de solic
 - La API solo ofrece disponibilidad y ejecución cuando `NODE_ENV=development`, no está en despliegue y existe la imagen local.
 - La cola ejecuta un contenedor cada vez por proceso API. No hay entrada de usuario hacia el agente ni credenciales dentro del contenedor.
 - El estado y el resumen se guardan en `ai_assessment_jobs`, con clave idempotente por workspace, cuota, auditoría, roles owner/admin para iniciar o reintentar, y RLS forzado.
-- El historial es legible por miembros del workspace. Reintentos manuales limitados a dos intentos totales. Las colas persistidas se recuperan al consultar el historial; esta primera versión no es una cola distribuida de alta disponibilidad.
-- La prueba de red real descrita aquí corresponde al Docker local disponible en este entorno. No acredita el aislamiento de un proveedor cloud.
+- El historial es legible por miembros del workspace. Reintentos limitados a dos intentos totales. Un poller de PostgreSQL reclama trabajos con `SKIP LOCKED`, leases de 45 segundos, heartbeats de 10 segundos y un único slot global; los leases caducados se recuperan automáticamente tras reinicio. No es una cola distribuida de alta disponibilidad.
+- La prueba de red real descrita aquí corresponde al Docker local disponible en este entorno. Acredita el bloqueo observado de IPv4/DNS y el modo `network=none`, pero no el bloqueo de IPv6 ni el aislamiento de un proveedor cloud.
 
 ## Atribución y licencia
 

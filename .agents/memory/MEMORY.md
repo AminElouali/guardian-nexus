@@ -1,2 +1,2 @@
-- [Guardian Nexus safety](guardian-nexus-safety.md) — Keep security claims consented, evidence-based, non-certifying, and honest about pending capabilities.
-- [PostgreSQL RLS workflow](postgres-rls-workflow.md) — Verify policy predicates in the live database; schema push alone left RLS policies unqualified here.
+- [Guardian Nexus safety](guardian-nexus-safety.md) — Keep claims evidence-based; distinguish unavailable network checks from proven egress blocks.
+- [PostgreSQL RLS workflow](postgres-rls-workflow.md) — Verify live predicates and ensure queue SELECT policies expose permitted terminal transitions without exposing results.

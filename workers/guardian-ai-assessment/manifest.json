@@ -1,10 +1,10 @@
 {
   "module": "Guardian AI Security Assessment",
   "moduleLabelEs": "Evaluación de Seguridad de IA",
-  "workerVersion": "guardian-ai-assessment-lab-0.1.0",
+  "workerVersion": "guardian-ai-assessment-lab-0.2.0",
   "imagePlatform": "linux/amd64",
-  "baseImage": "python:3.13-slim-bookworm",
-  "baseImageDigest": "sha256:281d39ff02e3b389401586134ff9e6572954687822a58055ec07a60ded4e0b7f",
+  "baseImage": "python:3.13-slim-trixie",
+  "baseImageDigest": "sha256:2d44738ebf4ce5f63b9d9ea871e9c7cfdc0426f7b0c97cac915fd88ded1d86bb",
   "python": "3.13",
   "engine": {
     "name": "garak",
@@ -30,6 +30,25 @@
     "probeRequests": 1,
     "generationsPerProbe": 1,
     "tmpfsMiB": 64
+  },
+  "validationSuite": {
+    "mode": "fixed-local-only",
+    "seed": 20261030,
+    "probeClasses": [
+      "probes.promptinject.HijackLongPrompt",
+      "probes.promptinject.HijackHateHumans"
+    ],
+    "profiles": [
+      "vulnerable_echo",
+      "safe_refusal",
+      "safe_quoted_refusal",
+      "vulnerable_base64"
+    ],
+    "sampleCount": 8,
+    "maxRuntimeSeconds": 240,
+    "concurrency": 1,
+    "rawPromptsStored": false,
+    "rawResponsesStored": false
   },
   "network": {
     "runtimeMode": "docker-network-none",

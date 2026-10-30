@@ -21,15 +21,22 @@ CONTAINER_ARGS="
 
 # Keep the security options fixed. Never accept caller-supplied Docker flags,
 # targets, credentials, or arbitrary probes through this script.
-if [ "${1:-}" = "--self-test" ]; then
-  # shellcheck disable=SC2086
-  exec docker run $CONTAINER_ARGS "$IMAGE" --self-test
-fi
-
-if [ "$#" -ne 0 ]; then
-  echo "This runner only supports the fixed local lab profile." >&2
-  exit 64
-fi
+case "${1:-}" in
+  --self-test|--validation-suite)
+    if [ "$#" -ne 1 ]; then
+      echo "A fixed local mode accepts no extra arguments." >&2
+      exit 64
+    fi
+    # shellcheck disable=SC2086
+    exec docker run $CONTAINER_ARGS "$IMAGE" "$1"
+    ;;
+  "")
+    ;;
+  *)
+    echo "This runner only supports fixed local lab modes." >&2
+    exit 64
+    ;;
+esac
 
 # shellcheck disable=SC2086
 exec docker run $CONTAINER_ARGS "$IMAGE"

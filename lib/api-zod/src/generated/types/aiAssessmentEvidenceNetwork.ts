@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AiAssessmentEvidenceNetworkIpv6Capability } from './aiAssessmentEvidenceNetworkIpv6Capability';
 import type { AiAssessmentEvidenceNetworkNetworkMode } from './aiAssessmentEvidenceNetworkNetworkMode';
 import type { AiAssessmentEvidenceNetworkPublicDns } from './aiAssessmentEvidenceNetworkPublicDns';
 import type { AiAssessmentEvidenceNetworkPublicIpv4 } from './aiAssessmentEvidenceNetworkPublicIpv4';
@@ -16,6 +17,7 @@ export type AiAssessmentEvidenceNetwork = {
   activeNonLoopbackInterfaces: string[];
   publicIpv4: AiAssessmentEvidenceNetworkPublicIpv4;
   publicIpv6: AiAssessmentEvidenceNetworkPublicIpv6;
+  ipv6Capability: AiAssessmentEvidenceNetworkIpv6Capability;
   publicDns: AiAssessmentEvidenceNetworkPublicDns;
   loopbackOnly: true;
 };

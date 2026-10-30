@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import errno
 import hashlib
 import importlib.metadata
 import json
@@ -11,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -25,12 +28,24 @@ MAX_BODY_BYTES = 16 * 1024
 PUBLIC_IPV4 = "1.1.1.1"
 PUBLIC_IPV6 = "2606:4700:4700::1111"
 MAX_RUNTIME_SECONDS = 120
+MAX_VALIDATION_RUNTIME_SECONDS = 240
+VALIDATION_PROBES = (
+    "probes.promptinject.HijackLongPrompt",
+    "probes.promptinject.HijackHateHumans",
+)
+VALIDATION_CASES = (
+    ("vulnerable_echo", True),
+    ("safe_refusal", False),
+    ("safe_quoted_refusal", False),
+    ("vulnerable_base64", True),
+)
 
 
 class LocalLabHandler(BaseHTTPRequestHandler):
     server_version = "GuardianLocalLab/1"
     sys_version = ""
     request_count = 0
+    response_profile = "safe_refusal"
 
     def log_message(self, _format: str, *_args: Any) -> None:
         return
@@ -64,10 +79,21 @@ class LocalLabHandler(BaseHTTPRequestHandler):
 
         # No model, tools, secrets, customer data, or outbound API calls exist
         # in this deliberately static, owned laboratory target.
-        response = {
-            "text": "I will not follow untrusted instruction overrides. "
-            "I can only respond within this local test profile."
-        }
+        if type(self).response_profile == "vulnerable_echo":
+            text = prompt
+        elif type(self).response_profile == "safe_quoted_refusal":
+            text = f"Quoted untrusted input; not followed: {prompt}"
+        elif type(self).response_profile == "vulnerable_base64":
+            text = base64.b64encode(prompt.encode("utf-8")).decode("ascii")
+        elif type(self).response_profile == "safe_refusal":
+            text = (
+                "I will not follow untrusted instruction overrides. "
+                "I can only respond within this local test profile."
+            )
+        else:
+            self.send_error(500)
+            return
+        response = {"text": text}
         type(self).request_count += 1
         encoded = json.dumps(response).encode()
         self.send_response(200)
@@ -98,13 +124,36 @@ def _dns_query_packet(hostname: str) -> bytes:
 
 def _probe_public_socket(family: int, address: str, port: int) -> bool:
     """Return True only when a connection was actually established."""
-    try:
-        with socket.socket(family, socket.SOCK_STREAM) as client:
-            client.settimeout(0.35)
+    with socket.socket(family, socket.SOCK_STREAM) as client:
+        client.settimeout(0.35)
+        try:
             client.connect((address, port))
             return True
-    except OSError:
-        return False
+        except OSError:
+            return False
+
+
+def _verify_ipv6_isolation() -> str:
+    if not socket.has_ipv6:
+        return "unavailable"
+    try:
+        probe = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+    except OSError as exc:
+        if exc.errno in (errno.EAFNOSUPPORT, errno.EPROTONOSUPPORT):
+            return "unavailable"
+        raise RuntimeError("ipv6_socket_check_unavailable") from exc
+    probe.close()
+
+    ipv6_routes_path = Path("/proc/net/ipv6_route")
+    if not ipv6_routes_path.exists():
+        raise RuntimeError("ipv6_route_table_unavailable")
+    for line in ipv6_routes_path.read_text().splitlines():
+        fields = line.split()
+        if len(fields) >= 10 and fields[0] == ("0" * 32) and fields[1] == "00":
+            raise RuntimeError("ipv6_default_route_present")
+    if _probe_public_socket(socket.AF_INET6, PUBLIC_IPV6, 443):
+        raise RuntimeError("public_ipv6_reachable")
+    return "blocked"
 
 
 def verify_network_isolation() -> dict[str, Any]:
@@ -139,34 +188,18 @@ def verify_network_isolation() -> dict[str, Any]:
     if has_ipv4_default:
         raise RuntimeError("ipv4_default_route_present")
 
-    ipv6_routes_path = Path("/proc/net/ipv6_route")
-    if ipv6_routes_path.exists():
-        for line in ipv6_routes_path.read_text().splitlines():
-            fields = line.split()
-            if len(fields) >= 10 and fields[0] == ("0" * 32) and fields[1] == "00":
-                raise RuntimeError("ipv6_default_route_present")
-
     if _probe_public_socket(socket.AF_INET, PUBLIC_IPV4, 443):
         raise RuntimeError("public_ipv4_reachable")
 
-    if socket.has_ipv6:
-        try:
-            if _probe_public_socket(socket.AF_INET6, PUBLIC_IPV6, 443):
-                raise RuntimeError("public_ipv6_reachable")
-        except OSError:
-            pass
+    ipv6_status = _verify_ipv6_isolation()
 
     dns_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     dns_socket.settimeout(0.35)
     try:
         dns_socket.sendto(_dns_query_packet("example.com"), (PUBLIC_IPV4, 53))
-        try:
-            dns_socket.recvfrom(512)
-        except TimeoutError:
-            pass
-        else:
-            raise RuntimeError("public_dns_reachable")
+        raise RuntimeError("public_dns_send_succeeded")
     except OSError:
+        # With no non-loopback interface or default route, sendto must fail.
         pass
     finally:
         dns_socket.close()
@@ -176,7 +209,12 @@ def verify_network_isolation() -> dict[str, Any]:
         "interfaces": interfaces,
         "activeNonLoopbackInterfaces": active_non_loopback,
         "publicIpv4": "blocked",
-        "publicIpv6": "blocked",
+        "publicIpv6": ipv6_status,
+        "ipv6Capability": (
+            "kernel_protocol_unavailable"
+            if ipv6_status == "unavailable"
+            else "socket_and_route_tested"
+        ),
         "publicDns": "blocked",
         "loopbackOnly": True,
     }
@@ -195,7 +233,10 @@ def verify_loopback_agent() -> None:
         raise RuntimeError("loopback_agent_unavailable")
 
 
-def _parse_report(report_path: Path) -> dict[str, Any]:
+def _parse_report(
+    report_path: Path,
+    probe_class: str = PROBE_CLASS,
+) -> dict[str, Any]:
     raw = report_path.read_bytes()
     if not raw:
         raise RuntimeError("empty_garak_report")
@@ -242,13 +283,224 @@ def _parse_report(report_path: Path) -> dict[str, Any]:
         "detectorHits": detector_hits,
         "findings": [
             {
-                "probeClass": PROBE_CLASS,
+                "probeClass": probe_class,
                 "detector": detector,
                 "positiveScores": hits,
             }
             for detector, hits in sorted(findings_by_detector.items())
         ],
     }
+
+
+def _compute_validation_metrics(samples: list[dict[str, Any]]) -> dict[str, Any]:
+    counts = {"truePositive": 0, "falsePositive": 0, "trueNegative": 0, "falseNegative": 0}
+    for sample in samples:
+        expected = sample.get("expectedVulnerable")
+        detected = sample.get("detected")
+        if not isinstance(expected, bool) or not isinstance(detected, bool):
+            raise RuntimeError("validation_sample_invalid")
+        if expected and detected:
+            counts["truePositive"] += 1
+        elif expected:
+            counts["falseNegative"] += 1
+        elif detected:
+            counts["falsePositive"] += 1
+        else:
+            counts["trueNegative"] += 1
+
+    positives = counts["truePositive"] + counts["falseNegative"]
+    negatives = counts["trueNegative"] + counts["falsePositive"]
+    predicted_positive = counts["truePositive"] + counts["falsePositive"]
+    total = len(samples)
+
+    def ratio(numerator: int, denominator: int) -> dict[str, Any]:
+        return {
+            "numerator": numerator,
+            "denominator": denominator,
+            "value": round(numerator / denominator, 4) if denominator else None,
+        }
+
+    return {
+        "sampleCount": total,
+        "positiveSupport": positives,
+        "negativeSupport": negatives,
+        **counts,
+        "precision": ratio(counts["truePositive"], predicted_positive),
+        "recall": ratio(counts["truePositive"], positives),
+        "falsePositiveRate": ratio(counts["falsePositive"], negatives),
+        "falseNegativeRate": ratio(counts["falseNegative"], positives),
+        "accuracy": ratio(counts["truePositive"] + counts["trueNegative"], total),
+    }
+
+
+def run_validation_suite() -> dict[str, Any]:
+    installed_version = importlib.metadata.version("garak")
+    if installed_version != ENGINE_VERSION:
+        raise RuntimeError("garak_version_mismatch")
+    if os.geteuid() == 0:
+        raise RuntimeError("worker_must_not_run_as_root")
+
+    network_evidence = verify_network_isolation()
+    started_at = datetime.now(timezone.utc)
+    deadline = time.monotonic() + MAX_VALIDATION_RUNTIME_SECONDS
+    samples: list[dict[str, Any]] = []
+    LocalLabHandler.request_count = 0
+    LocalLabHandler.response_profile = "safe_refusal"
+    server, _thread = _loopback_agent()
+    try:
+        verify_loopback_agent()
+        with tempfile.TemporaryDirectory(prefix="guardian-validation-") as temp_dir:
+            temp_path = Path(temp_dir)
+            generator_file = temp_path / "rest-generator.json"
+            generator_file.write_text(
+                json.dumps(
+                    {
+                        "rest": {
+                            "RestGenerator": {
+                                "name": PROFILE_ID,
+                                "uri": f"http://{AGENT_HOST}:{AGENT_PORT}/chat",
+                                "method": "post",
+                                "headers": {"Content-Type": "application/json"},
+                                "req_template_json_object": {"prompt": "$INPUT"},
+                                "response_json": True,
+                                "response_json_field": "text",
+                                "request_timeout": 2,
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            for profile, expected_vulnerable in VALIDATION_CASES:
+                for probe_class in VALIDATION_PROBES:
+                    remaining_seconds = int(deadline - time.monotonic())
+                    if remaining_seconds <= 0:
+                        raise RuntimeError("validation_suite_timeout")
+                    LocalLabHandler.response_profile = profile
+                    LocalLabHandler.request_count = 0
+                    case_id = f"{profile}-{probe_class.rsplit('.', 1)[-1]}"
+                    report_prefix = temp_path / case_id
+                    command = [
+                        sys.executable,
+                        "-m",
+                        "garak",
+                        "--target_type",
+                        "rest",
+                        "--generator_option_file",
+                        str(generator_file),
+                        "--spec",
+                        probe_class,
+                        "--config",
+                        "/opt/guardian-assessment/run-config.json",
+                        "--seed",
+                        "20261030",
+                        "--generations",
+                        "1",
+                        "--parallel_requests",
+                        "1",
+                        "--parallel_attempts",
+                        "1",
+                        "--confidence_interval_method",
+                        "none",
+                        "--report_prefix",
+                        str(report_prefix),
+                        "--narrow_output",
+                    ]
+                    completed = subprocess.run(
+                        command,
+                        stdin=subprocess.DEVNULL,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        timeout=min(60, remaining_seconds),
+                        check=False,
+                        close_fds=True,
+                    )
+                    if completed.returncode != 0:
+                        safe_logs = (
+                            completed.stderr.decode("utf-8", errors="replace")
+                            + completed.stdout.decode("utf-8", errors="replace")
+                        )
+                        missing_dependency = re.search(
+                            r"ModuleNotFoundError: No module named ['\"]([A-Za-z0-9_.-]+)['\"]",
+                            safe_logs,
+                        )
+                        if missing_dependency:
+                            module = missing_dependency.group(1).replace(".", "_")
+                            raise RuntimeError(f"missing_dependency_{module}")
+                        raise RuntimeError(
+                            f"garak_exit_code_{abs(completed.returncode)}"
+                        )
+
+                    request_count = LocalLabHandler.request_count
+                    if request_count != 1:
+                        raise RuntimeError("validation_probe_request_limit_exceeded")
+                    report_files = sorted(
+                        temp_path.glob(f"{case_id}*.report.jsonl")
+                    )
+                    if len(report_files) != 1:
+                        raise RuntimeError("validation_report_missing_or_ambiguous")
+                    report = _parse_report(report_files[0], probe_class)
+                    if report["reportBytes"] > 262_144:
+                        raise RuntimeError("validation_report_size_limit_exceeded")
+                    samples.append(
+                        {
+                            "caseId": case_id,
+                            "probeClass": probe_class,
+                            "profile": profile,
+                            "expectedVulnerable": expected_vulnerable,
+                            "detected": report["detectorHits"] > 0,
+                            "detectorHits": report["detectorHits"],
+                            "requestCount": request_count,
+                            "reportSha256": report["reportSha256"],
+                            "reportBytes": report["reportBytes"],
+                        }
+                    )
+
+            if time.monotonic() > deadline:
+                raise RuntimeError("validation_suite_timeout")
+            finished_at = datetime.now(timezone.utc)
+            duration_seconds = max(
+                0,
+                int((finished_at - started_at).total_seconds()),
+            )
+            if len(samples) != len(VALIDATION_CASES) * len(VALIDATION_PROBES):
+                raise RuntimeError("validation_sample_count_mismatch")
+            metrics = _compute_validation_metrics(samples)
+            return {
+                "suiteVersion": 1,
+                "source": "isolated_local_lab",
+                "engine": "garak",
+                "engineVersion": installed_version,
+                "seed": 20261030,
+                "probeClasses": list(VALIDATION_PROBES),
+                "profiles": [profile for profile, _expected in VALIDATION_CASES],
+                "samples": samples,
+                "metrics": metrics,
+                "network": network_evidence,
+                "limits": {
+                    "maxRuntimeSeconds": MAX_VALIDATION_RUNTIME_SECONDS,
+                    "cpuCores": 0.5,
+                    "memoryMiB": 768,
+                    "concurrency": 1,
+                    "requestsPerSample": 1,
+                    "rawPromptsStored": False,
+                    "rawResponsesStored": False,
+                },
+                "startedAt": started_at.isoformat(),
+                "completedAt": finished_at.isoformat(),
+                "durationSeconds": duration_seconds,
+                "externalCalls": 0,
+                "customerDataUsed": False,
+                "interpretation": (
+                    "Synthetic local fixtures only. Metrics describe this bounded "
+                    "probe/detector harness, not general model accuracy."
+                ),
+            }
+    finally:
+        LocalLabHandler.response_profile = "safe_refusal"
+        server.shutdown()
+        server.server_close()
 
 
 def run_assessment() -> dict[str, Any]:
@@ -388,9 +640,14 @@ def run_assessment() -> dict[str, Any]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--self-test", action="store_true")
+    parser.add_argument("--validation-suite", action="store_true")
     args = parser.parse_args()
+    if args.self_test and args.validation_suite:
+        parser.error("select one fixed local mode")
 
-    if args.self_test:
+    if args.validation_suite:
+        result = run_validation_suite()
+    elif args.self_test:
         result = {
             "selfTest": "passed",
             "network": verify_network_isolation(),

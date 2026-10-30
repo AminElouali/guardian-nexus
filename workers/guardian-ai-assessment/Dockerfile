@@ -1,4 +1,4 @@
-FROM python:3.13-slim-bookworm@sha256:281d39ff02e3b389401586134ff9e6572954687822a58055ec07a60ded4e0b7f
+FROM python:3.13-slim-trixie@sha256:2d44738ebf4ce5f63b9d9ea871e9c7cfdc0426f7b0c97cac915fd88ded1d86bb
 
 ARG GARAK_VERSION=0.17.1
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -16,7 +16,7 @@ COPY requirements-runtime.txt /opt/guardian-assessment/requirements-runtime.txt
 # time. Runtime execution never installs packages or downloads a model.
 RUN python -m pip install --no-cache-dir --disable-pip-version-check \
       --no-deps -r requirements-runtime.txt \
-    && python -c "import importlib.metadata; assert importlib.metadata.version('garak') == '${GARAK_VERSION}'"
+    && python -c "import importlib.metadata as m; assert m.version('garak') == '${GARAK_VERSION}'; assert m.version('aiohttp') == '3.14.5'; assert m.version('nltk') == '3.10.4'; assert m.version('requests') == '2.34.2'"
 
 COPY . /opt/guardian-assessment
 RUN chown -R 65532:65532 /opt/guardian-assessment
