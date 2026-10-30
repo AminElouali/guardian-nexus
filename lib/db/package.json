@@ -13,7 +13,8 @@
     "apply-rls-policies:dev": "node ./scripts/apply-rls-policies.mjs",
     "harden-runtime-role:dev": "node ./scripts/bootstrap-runtime-role.mjs harden",
     "verify-runtime-role:dev": "node ./scripts/bootstrap-runtime-role.mjs verify",
-    "grant-runtime-role:dev": "node ./scripts/bootstrap-runtime-role.mjs grant"
+    "grant-runtime-role:dev": "node ./scripts/bootstrap-runtime-role.mjs grant",
+    "configure-runtime-login:dev": "node ./scripts/bootstrap-runtime-role.mjs configure-login"
   },
   "dependencies": {
     "drizzle-orm": "catalog:",
