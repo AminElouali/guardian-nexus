@@ -408,3 +408,53 @@ export const RevokeWorkspaceIntegrationParams = zod.object({
 export const RevokeWorkspaceIntegrationResponse = zod.void()
 
 
+/**
+ * @summary List tenant-scoped AI mock evaluation history
+ */
+export const ListWorkspaceAiEvaluationsParams = zod.object({
+  "workspaceId": zod.uuid()
+})
+
+export const ListWorkspaceAiEvaluationsResponseItem = zod.object({
+  "id": zod.uuid(),
+  "engine": zod.enum(['guardian_mock']),
+  "execution": zod.enum(['simulated']),
+  "version": zod.string(),
+  "checks": zod.array(zod.object({
+  "checkId": zod.string(),
+  "category": zod.string(),
+  "status": zod.enum(['passed', 'failed']),
+  "reasonCode": zod.string()
+})),
+  "passedChecks": zod.int(),
+  "failedChecks": zod.int(),
+  "createdAt": zod.coerce.date()
+})
+export const ListWorkspaceAiEvaluationsResponse = zod.array(ListWorkspaceAiEvaluationsResponseItem)
+
+
+/**
+ * Runs only Guardian Nexus deterministic mock fixtures; this does not invoke NVIDIA garak or a customer agent.
+ * @summary Run a bounded local mock evaluation
+ */
+export const RunWorkspaceMockAiEvaluationParams = zod.object({
+  "workspaceId": zod.uuid()
+})
+
+export const RunWorkspaceMockAiEvaluationResponse = zod.object({
+  "id": zod.uuid(),
+  "engine": zod.enum(['guardian_mock']),
+  "execution": zod.enum(['simulated']),
+  "version": zod.string(),
+  "checks": zod.array(zod.object({
+  "checkId": zod.string(),
+  "category": zod.string(),
+  "status": zod.enum(['passed', 'failed']),
+  "reasonCode": zod.string()
+})),
+  "passedChecks": zod.int(),
+  "failedChecks": zod.int(),
+  "createdAt": zod.coerce.date()
+})
+
+

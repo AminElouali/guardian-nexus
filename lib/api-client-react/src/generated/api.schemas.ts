@@ -286,6 +286,46 @@ export interface WorkspaceIntegrationsResponse {
   readiness: IntegrationProviderReadiness;
 }
 
+export type AiEvaluationCheckStatus = typeof AiEvaluationCheckStatus[keyof typeof AiEvaluationCheckStatus];
+
+
+export const AiEvaluationCheckStatus = {
+  passed: 'passed',
+  failed: 'failed',
+} as const;
+
+export interface AiEvaluationCheck {
+  checkId: string;
+  category: string;
+  status: AiEvaluationCheckStatus;
+  reasonCode: string;
+}
+
+export type AiEvaluationRunEngine = typeof AiEvaluationRunEngine[keyof typeof AiEvaluationRunEngine];
+
+
+export const AiEvaluationRunEngine = {
+  guardian_mock: 'guardian_mock',
+} as const;
+
+export type AiEvaluationRunExecution = typeof AiEvaluationRunExecution[keyof typeof AiEvaluationRunExecution];
+
+
+export const AiEvaluationRunExecution = {
+  simulated: 'simulated',
+} as const;
+
+export interface AiEvaluationRun {
+  id: string;
+  engine: AiEvaluationRunEngine;
+  execution: AiEvaluationRunExecution;
+  version: string;
+  checks: AiEvaluationCheck[];
+  passedChecks: number;
+  failedChecks: number;
+  createdAt: string;
+}
+
 export type MicrosoftOAuthCallbackParams = {
 code?: string;
 state: string;

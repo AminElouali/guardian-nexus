@@ -10,7 +10,7 @@ import {
   parseRetryAfter,
   retryDelaySeconds,
 } from "./lib/connector-jobs";
-import { canManageIntegrations } from "./lib/access-control";
+import { canManageIntegrations, canRunAiEvaluation } from "./lib/access-control";
 
 test("OAuth state is signed, expiring, and rejects tampering", () => {
   const previousSecret = process.env.CONNECTOR_STATE_SECRET;
@@ -67,4 +67,11 @@ test("only owners and admins may manage tenant integrations", () => {
   assert.equal(canManageIntegrations("admin"), true);
   assert.equal(canManageIntegrations("analyst"), false);
   assert.equal(canManageIntegrations("viewer"), false);
+});
+
+test("only owners and admins may start AI evaluations", () => {
+  assert.equal(canRunAiEvaluation("owner"), true);
+  assert.equal(canRunAiEvaluation("admin"), true);
+  assert.equal(canRunAiEvaluation("analyst"), false);
+  assert.equal(canRunAiEvaluation("viewer"), false);
 });

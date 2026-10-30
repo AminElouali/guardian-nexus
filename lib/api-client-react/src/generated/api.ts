@@ -25,6 +25,7 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AiEvaluationRun,
   Asset,
   AssetInput,
   AwsIntegrationInput,
@@ -1899,5 +1900,181 @@ export const useRevokeWorkspaceIntegration = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getRevokeWorkspaceIntegrationMutationOptions(options), queryClient);
+    }
+
+export const getListWorkspaceAiEvaluationsUrl = (workspaceId: string,) => {
+
+
+
+
+  return `/api/workspaces/${workspaceId}/ai-evaluations`
+}
+
+/**
+ * @summary List tenant-scoped AI mock evaluation history
+ */
+export const listWorkspaceAiEvaluations = async (workspaceId: string, options?: Parameters<typeof customFetch>[1]): Promise<AiEvaluationRun[]> => {
+
+  return customFetch<AiEvaluationRun[]>(getListWorkspaceAiEvaluationsUrl(workspaceId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListWorkspaceAiEvaluationsQueryKey = (workspaceId: string,) => {
+    return [
+    `/api/workspaces/${workspaceId}/ai-evaluations`
+    ] as const;
+    }
+
+
+export const getListWorkspaceAiEvaluationsQueryOptions = <TData = Awaited<ReturnType<typeof listWorkspaceAiEvaluations>>, TError = ErrorType<void>>(workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listWorkspaceAiEvaluations>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListWorkspaceAiEvaluationsQueryKey(workspaceId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listWorkspaceAiEvaluations>>> = ({ signal }) => listWorkspaceAiEvaluations(workspaceId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: workspaceId !== null && workspaceId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listWorkspaceAiEvaluations>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListWorkspaceAiEvaluationsQueryResult = NonNullable<Awaited<ReturnType<typeof listWorkspaceAiEvaluations>>>
+export type ListWorkspaceAiEvaluationsQueryError = ErrorType<void>
+
+
+export function useListWorkspaceAiEvaluations<TData = Awaited<ReturnType<typeof listWorkspaceAiEvaluations>>, TError = ErrorType<void>>(
+ workspaceId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listWorkspaceAiEvaluations>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listWorkspaceAiEvaluations>>,
+          TError,
+          Awaited<ReturnType<typeof listWorkspaceAiEvaluations>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListWorkspaceAiEvaluations<TData = Awaited<ReturnType<typeof listWorkspaceAiEvaluations>>, TError = ErrorType<void>>(
+ workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listWorkspaceAiEvaluations>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listWorkspaceAiEvaluations>>,
+          TError,
+          Awaited<ReturnType<typeof listWorkspaceAiEvaluations>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListWorkspaceAiEvaluations<TData = Awaited<ReturnType<typeof listWorkspaceAiEvaluations>>, TError = ErrorType<void>>(
+ workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listWorkspaceAiEvaluations>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List tenant-scoped AI mock evaluation history
+ */
+
+export function useListWorkspaceAiEvaluations<TData = Awaited<ReturnType<typeof listWorkspaceAiEvaluations>>, TError = ErrorType<void>>(
+ workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listWorkspaceAiEvaluations>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListWorkspaceAiEvaluationsQueryOptions(workspaceId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getRunWorkspaceMockAiEvaluationUrl = (workspaceId: string,) => {
+
+
+
+
+  return `/api/workspaces/${workspaceId}/ai-evaluations/mock`
+}
+
+/**
+ * Runs only Guardian Nexus deterministic mock fixtures; this does not invoke NVIDIA garak or a customer agent.
+ * @summary Run a bounded local mock evaluation
+ */
+export const runWorkspaceMockAiEvaluation = async (workspaceId: string, options?: Parameters<typeof customFetch>[1]): Promise<AiEvaluationRun> => {
+
+  return customFetch<AiEvaluationRun>(getRunWorkspaceMockAiEvaluationUrl(workspaceId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRunWorkspaceMockAiEvaluationMutationKey = () => ['runWorkspaceMockAiEvaluation'] as const;
+
+export const getRunWorkspaceMockAiEvaluationMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof runWorkspaceMockAiEvaluation>>, TError,RunWorkspaceMockAiEvaluationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof runWorkspaceMockAiEvaluation>>, TError,RunWorkspaceMockAiEvaluationMutationVariables, TContext> => {
+
+const mutationKey = getRunWorkspaceMockAiEvaluationMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof runWorkspaceMockAiEvaluation>>, RunWorkspaceMockAiEvaluationMutationVariables> = (props) => {
+          const {workspaceId} = props ?? {};
+
+          return  runWorkspaceMockAiEvaluation(workspaceId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RunWorkspaceMockAiEvaluationMutationResult = NonNullable<Awaited<ReturnType<typeof runWorkspaceMockAiEvaluation>>>
+
+    export type RunWorkspaceMockAiEvaluationMutationError = ErrorType<void>
+    export type RunWorkspaceMockAiEvaluationMutationVariables = {workspaceId: string}
+
+    /**
+ * @summary Run a bounded local mock evaluation
+ */
+export const useRunWorkspaceMockAiEvaluation = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof runWorkspaceMockAiEvaluation>>, TError,RunWorkspaceMockAiEvaluationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof runWorkspaceMockAiEvaluation>>,
+        TError,
+        RunWorkspaceMockAiEvaluationMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRunWorkspaceMockAiEvaluationMutationOptions(options), queryClient);
     }
 

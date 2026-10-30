@@ -5,7 +5,7 @@ import { publishableKeyFromHost } from '@clerk/react/internal';
 import { esES } from '@clerk/localizations';
 import {
   Activity, ArrowRight, ArrowUpRight, Box, Check, CircleHelp, Cloud, Copy,
-  Command, Database, ExternalLink, Fingerprint, Gauge, Globe2, HardDrive, Layers3, LockKeyhole,
+  Command, Database, ExternalLink, Fingerprint, FlaskConical, Gauge, Globe2, HardDrive, Layers3, LockKeyhole,
   LogOut, Menu, Plus, Radio, RefreshCw, Shield, ShieldCheck, ShieldEllipsis, SlidersHorizontal,
   Sparkles, Trash2, Users, X,
 } from 'lucide-react';
@@ -22,6 +22,7 @@ import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import IntegrationReadinessPage from '@/components/IntegrationsPage';
+import AiEvaluationPage from '@/components/AiEvaluationPage';
 import NotFound from '@/pages/not-found';
 
 const queryClient = new QueryClient({
@@ -172,6 +173,7 @@ const navItems = [
   { href: '/assets', label: 'Activos', icon: Box },
   { href: '/team', label: 'Equipo', icon: Users },
   { href: '/integrations', label: 'Conexiones', icon: Globe2 },
+  { href: '/ai-evaluations', label: 'Seguridad IA', icon: FlaskConical },
   { href: '/integration-readiness', label: 'Preparación', icon: Cloud },
   { href: '/plans', label: 'Planes y uso', icon: Gauge },
   { href: '/roadmap', label: 'Hoja de ruta empresarial', icon: Layers3 },
@@ -658,6 +660,7 @@ function PlansRoute() { return <AuthGuard><WorkspaceFrame page={PlansPage} /></A
 function RoadmapRoute() { return <AuthGuard><WorkspaceFrame page={() => <RoadmapPage />} /></AuthGuard>; }
 function IntegrationsRoute() { return <AuthGuard><WorkspaceFrame page={IntegrationsPage} /></AuthGuard>; }
 function IntegrationReadinessRoute() { return <AuthGuard><WorkspaceFrame page={({ workspace }) => <IntegrationReadinessPage workspace={workspace} />} /></AuthGuard>; }
+function AiEvaluationRoute() { return <AuthGuard><WorkspaceFrame page={({ workspace }) => <AiEvaluationPage workspace={workspace} />} /></AuthGuard>; }
 
 function Router() {
   return <RoutedErrorBoundary><Switch>
@@ -669,6 +672,7 @@ function Router() {
     <Route path="/team" component={TeamRoute} />
     <Route path="/integrations" component={IntegrationsRoute} />
     <Route path="/integration-readiness" component={IntegrationReadinessRoute} />
+    <Route path="/ai-evaluations" component={AiEvaluationRoute} />
     <Route path="/plans" component={PlansRoute} />
     <Route path="/roadmap" component={RoadmapRoute} />
     <Route component={NotFound} />

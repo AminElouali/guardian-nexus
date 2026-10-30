@@ -9,6 +9,7 @@ import {
   connectorJobsTable,
   monthlyUsageTable,
   providerConnectionsTable,
+  workspaceAuditEventsTable,
   workspaceIntegrationsTable,
   db,
   pool,
@@ -125,6 +126,16 @@ before(async () => {
   integrationB = createdIntegrationB.rows[0].id;
   providerConnectionA = connectionA.rows[0].id;
   providerConnectionB = connectionB.rows[0].id;
+  await fixturePool.query(
+    `INSERT INTO public.workspace_audit_events
+       (workspace_id, actor_user_id, action, resource_type, resource_id, metadata)
+     VALUES
+       ($1, $2, 'ai_evaluation.mock.completed', 'ai_evaluation', $3,
+        '{"checks":"[]","garakInvoked":false}'::jsonb),
+       ($4, $5, 'ai_evaluation.mock.completed', 'ai_evaluation', $6,
+        '{"checks":"[]","garakInvoked":false}'::jsonb)`,
+    [workspaceA, userA, randomUUID(), workspaceB, userB, randomUUID()],
+  );
 });
 
 after(async () => {
@@ -153,7 +164,30 @@ test("API runtime login has no direct table access or elevated privileges", asyn
       has_table_privilege(session_user, 'public.assets', 'SELECT') AS direct_read,
       has_table_privilege(session_user, 'public.assets', 'INSERT') AS direct_write,
       has_table_privilege(session_user, 'public.workspace_integrations', 'SELECT') AS direct_integrations_read,
-      has_table_privilege(session_user, 'public.workspace_integrations', 'INSERT') AS direct_integrations_write
+      has_table_privilege(session_user, 'public.workspace_integrations', 'INSERT') AS direct_integrations_write,
+      EXISTS (
+        SELECT 1
+        FROM unnest(ARRAY[
+          'workspaces','workspace_memberships','assets','workspace_monthly_usage',
+          'workspace_audit_events','workspace_integrations','provider_connections',
+          'connector_oauth_states','connector_jobs'
+        ]) AS protected(table_name)
+        WHERE has_table_privilege(session_user, format('public.%I', protected.table_name), 'SELECT')
+          OR has_table_privilege(session_user, format('public.%I', protected.table_name), 'INSERT')
+          OR has_table_privilege(session_user, format('public.%I', protected.table_name), 'UPDATE')
+          OR has_table_privilege(session_user, format('public.%I', protected.table_name), 'DELETE')
+      ) AS direct_protected_access,
+      EXISTS (
+        SELECT 1 FROM pg_class AS protected
+        JOIN pg_namespace AS protected_schema ON protected_schema.oid = protected.relnamespace
+        WHERE protected_schema.nspname = 'public'
+          AND protected.relname = ANY(ARRAY[
+            'workspaces','workspace_memberships','assets','workspace_monthly_usage',
+            'workspace_audit_events','workspace_integrations','provider_connections',
+            'connector_oauth_states','connector_jobs'
+          ])
+          AND protected.relowner = (SELECT oid FROM pg_roles WHERE rolname = 'app_runtime')
+      ) AS runtime_owns_protected_table
     FROM pg_roles
     WHERE rolname = session_user
   `);
@@ -171,6 +205,41 @@ test("API runtime login has no direct table access or elevated privileges", asyn
   assert.equal(role?.direct_write, false);
   assert.equal(role?.direct_integrations_read, false);
   assert.equal(role?.direct_integrations_write, false);
+  assert.equal(role?.direct_protected_access, false);
+  assert.equal(role?.runtime_owns_protected_table, false);
+});
+
+test("AI evaluation audit reads are isolated to the verified workspace", async () => {
+  const result = await withWorkspaceUserTransaction(
+    userA,
+    workspaceA,
+    (tx) =>
+      tx
+        .select()
+        .from(workspaceAuditEventsTable)
+        .where(eq(workspaceAuditEventsTable.action, "ai_evaluation.mock.completed")),
+  );
+  assert.equal(result.authorized, true);
+  if (!result.authorized) return;
+  assert.equal(result.value.length, 1);
+  assert.equal(result.value[0]?.workspaceId, workspaceA);
+  assert.equal(result.value[0]?.metadata.garakInvoked, false);
+});
+
+test("RLS rejects cross-tenant AI evaluation evidence writes", async () => {
+  await assert.rejects(
+    withWorkspaceUserTransaction(userA, workspaceA, async (tx) => {
+      await tx.insert(workspaceAuditEventsTable).values({
+        workspaceId: workspaceB,
+        actorUserId: userA,
+        action: "ai_evaluation.mock.completed",
+        resourceType: "ai_evaluation",
+        resourceId: randomUUID(),
+        metadata: { checks: "[]", garakInvoked: false },
+      });
+    }),
+    (error: { cause?: { code?: string } }) => error.cause?.code === "42501",
+  );
 });
 
 test("RLS scopes unfiltered asset reads to the verified tenant", async () => {

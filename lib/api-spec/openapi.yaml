@@ -16,6 +16,8 @@ tags:
     description: Organization-owned assets
   - name: integrations
     description: Tenant-consented cloud and identity providers
+  - name: ai-evaluations
+    description: Explicitly simulated, tenant-scoped AI safety test runs
 paths:
   /healthz:
     get:
@@ -469,6 +471,51 @@ paths:
           description: Workspace owner or admin role required
         "404":
           description: Provider connection not found
+  /workspaces/{workspaceId}/ai-evaluations:
+    get:
+      operationId: listWorkspaceAiEvaluations
+      tags: [ai-evaluations]
+      summary: List tenant-scoped AI mock evaluation history
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Latest safe summaries; raw prompts and responses are not stored
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AiEvaluationRun" }
+        "403":
+          description: User is not a workspace member
+  /workspaces/{workspaceId}/ai-evaluations/mock:
+    post:
+      operationId: runWorkspaceMockAiEvaluation
+      tags: [ai-evaluations]
+      summary: Run a bounded local mock evaluation
+      description: Runs only Guardian Nexus deterministic mock fixtures; this does not invoke NVIDIA garak or a customer agent.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "201":
+          description: Simulated evaluation recorded in this workspace audit trail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AiEvaluationRun" }
+        "403":
+          description: Workspace owner or admin role required
+        "409":
+          description: Workspace monthly scan quota reached
+        "429":
+          description: Evaluation slot is occupied; retry shortly
 components:
   schemas:
     HealthStatus:
@@ -652,6 +699,28 @@ components:
           items: { $ref: "#/components/schemas/WorkspaceIntegration" }
         readiness: { $ref: "#/components/schemas/IntegrationProviderReadiness" }
       required: [connections, readiness]
+    AiEvaluationCheck:
+      type: object
+      properties:
+        checkId: { type: string }
+        category: { type: string }
+        status: { type: string, enum: [passed, failed] }
+        reasonCode: { type: string }
+      required: [checkId, category, status, reasonCode]
+    AiEvaluationRun:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        engine: { type: string, enum: [guardian_mock] }
+        execution: { type: string, enum: [simulated] }
+        version: { type: string }
+        checks:
+          type: array
+          items: { $ref: "#/components/schemas/AiEvaluationCheck" }
+        passedChecks: { type: integer }
+        failedChecks: { type: integer }
+        createdAt: { type: string, format: date-time }
+      required: [id, engine, execution, version, checks, passedChecks, failedChecks, createdAt]
   securitySchemes:
     bearerAuth:
       type: http

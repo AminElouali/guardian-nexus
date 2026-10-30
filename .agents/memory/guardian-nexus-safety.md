@@ -14,3 +14,9 @@ description: Product boundaries for security integrations, claims, and productio
 **Why:** Microsoft consent and AWS trust are external authorization steps, and setup metadata alone does not prove access or revoke a grant.
 
 **How to apply:** Keep readiness, preparation, consent, validated connection, and external revocation as distinct states in API responses, UI copy, evidence, and tests.
+
+**Rule:** Never describe deterministic fixtures as a garak evaluation. Run garak only in a dedicated isolated worker with deny-by-default egress, explicit loopback allowlisting, and enforceable resource/concurrency limits.
+
+**Why:** garak's REST generator accepts configurable targets, so process-level assumptions or a localhost-looking UI do not prevent network access or bound tenant cost.
+
+**How to apply:** If an isolated worker and verified egress boundary are unavailable, expose only a clearly labeled mock simulation and keep real garak execution disabled.

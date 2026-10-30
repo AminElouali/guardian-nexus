@@ -6,6 +6,11 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './aiEvaluationCheck';
+export * from './aiEvaluationCheckStatus';
+export * from './aiEvaluationRun';
+export * from './aiEvaluationRunEngine';
+export * from './aiEvaluationRunExecution';
 export * from './asset';
 export * from './assetInput';
 export * from './assetInputCriticality';

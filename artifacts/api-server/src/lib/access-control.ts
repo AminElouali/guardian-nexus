@@ -11,3 +11,7 @@ export function canManageMemberRoles(role: string): role is "owner" {
 export function canManageIntegrations(role: string): boolean {
   return role === "owner" || role === "admin";
 }
+
+export function canRunAiEvaluation(role: string): boolean {
+  return role === "owner" || role === "admin";
+}

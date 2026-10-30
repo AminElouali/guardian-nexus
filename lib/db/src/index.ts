@@ -145,9 +145,65 @@ export async function assertRlsRuntimeReady(): Promise<void> {
       runtime.rolinherit AS runtime_inherits_privileges,
       pg_has_role(session_user, 'app_runtime', 'MEMBER') AS can_set_runtime_role,
       pg_has_role(session_user, 'app_runtime', 'USAGE') AS inherits_runtime_privileges,
-      has_table_privilege(session_user, 'public.workspaces', 'SELECT') AS direct_workspace_read,
-      has_table_privilege(session_user, 'public.assets', 'SELECT') AS direct_asset_read,
-      has_table_privilege(session_user, 'public.assets', 'INSERT') AS direct_asset_write
+      EXISTS (
+        SELECT 1
+        FROM pg_class AS protected
+        JOIN pg_namespace AS protected_schema
+          ON protected_schema.oid = protected.relnamespace
+        WHERE protected_schema.nspname = 'public'
+          AND protected.relname = ANY(ARRAY[
+            'workspaces',
+            'workspace_memberships',
+            'assets',
+            'workspace_monthly_usage',
+            'workspace_audit_events',
+            'workspace_integrations',
+            'provider_connections',
+            'connector_oauth_states',
+            'connector_jobs'
+          ])
+          AND protected.relowner = runtime.oid
+      ) AS runtime_owns_protected_table,
+      NOT EXISTS (
+        SELECT 1
+        FROM unnest(ARRAY[
+          'workspaces',
+          'workspace_memberships',
+          'assets',
+          'workspace_monthly_usage',
+          'workspace_audit_events',
+          'workspace_integrations',
+          'provider_connections',
+          'connector_oauth_states',
+          'connector_jobs'
+        ]) AS protected(table_name)
+        WHERE NOT (
+          has_table_privilege(
+            runtime.oid,
+            format('public.%I', protected.table_name),
+            'SELECT,INSERT,UPDATE,DELETE'
+          )
+        )
+      ) AS runtime_has_required_table_grants,
+      EXISTS (
+        SELECT 1
+        FROM unnest(ARRAY[
+          'workspaces',
+          'workspace_memberships',
+          'assets',
+          'workspace_monthly_usage',
+          'workspace_audit_events',
+          'workspace_integrations',
+          'provider_connections',
+          'connector_oauth_states',
+          'connector_jobs'
+        ]) AS protected(table_name)
+        WHERE
+          has_table_privilege(role.oid, format('public.%I', protected.table_name), 'SELECT')
+          OR has_table_privilege(role.oid, format('public.%I', protected.table_name), 'INSERT')
+          OR has_table_privilege(role.oid, format('public.%I', protected.table_name), 'UPDATE')
+          OR has_table_privilege(role.oid, format('public.%I', protected.table_name), 'DELETE')
+      ) AS login_has_direct_protected_table_access
     FROM pg_roles AS role
     CROSS JOIN pg_roles AS runtime
     WHERE role.rolname = session_user
@@ -175,9 +231,9 @@ export async function assertRlsRuntimeReady(): Promise<void> {
     login.runtime_inherits_privileges !== false ||
     login.can_set_runtime_role !== true ||
     login.inherits_runtime_privileges !== false ||
-    login.direct_workspace_read !== false ||
-    login.direct_asset_read !== false ||
-    login.direct_asset_write !== false
+    login.runtime_owns_protected_table !== false ||
+    login.runtime_has_required_table_grants !== true ||
+    login.login_has_direct_protected_table_access !== false
   ) {
     throw new Error(
       "The API must connect as a non-privileged login with no direct tenant-data access.",
