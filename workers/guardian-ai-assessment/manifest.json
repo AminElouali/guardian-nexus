@@ -1,0 +1,43 @@
+{
+  "module": "Guardian AI Security Assessment",
+  "moduleLabelEs": "Evaluación de Seguridad de IA",
+  "workerVersion": "guardian-ai-assessment-lab-0.1.0",
+  "imagePlatform": "linux/amd64",
+  "python": "3.13",
+  "engine": {
+    "name": "garak",
+    "version": "0.17.1",
+    "license": "Apache-2.0",
+    "source": "https://github.com/NVIDIA/garak",
+    "commercialBranding": false
+  },
+  "target": {
+    "profile": "guardian-local-agent-v1",
+    "scope": "owned synthetic loopback laboratory only",
+    "publicEndpointsAllowed": false,
+    "customerDataAllowed": false,
+    "paidModelsAllowed": false
+  },
+  "limits": {
+    "maxRuntimeSeconds": 120,
+    "cpuCores": 0.5,
+    "memoryMiB": 768,
+    "pids": 64,
+    "concurrency": 1,
+    "probeClasses": 1,
+    "generationsPerProbe": 1,
+    "tmpfsMiB": 64
+  },
+  "network": {
+    "runtimeMode": "docker-network-none",
+    "egressPolicyOwner": "container runtime / external network controller",
+    "allowedInterfaces": ["lo"],
+    "allowedTargets": ["127.0.0.1"]
+  },
+  "dataRetention": {
+    "workerFilesystem": "ephemeral tmpfs",
+    "rawPromptsStored": false,
+    "rawResponsesStored": false,
+    "result": "sanitized summary and report digest only"
+  }
+}
