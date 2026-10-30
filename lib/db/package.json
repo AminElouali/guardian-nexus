@@ -9,7 +9,8 @@
   },
   "scripts": {
     "push": "drizzle-kit push --config ./drizzle.config.ts",
-    "push-force": "drizzle-kit push --force --config ./drizzle.config.ts"
+    "push-force": "drizzle-kit push --force --config ./drizzle.config.ts",
+    "bootstrap-runtime-role:dev": "node ./scripts/bootstrap-runtime-role.mjs"
   },
   "dependencies": {
     "drizzle-orm": "catalog:",

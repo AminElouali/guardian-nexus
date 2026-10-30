@@ -2,11 +2,13 @@ import {
   date,
   index,
   integer,
+  pgPolicy,
   pgTable,
   timestamp,
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { workspacesTable } from "./workspaces";
 
 export const monthlyUsageTable = pgTable(
@@ -31,5 +33,27 @@ export const monthlyUsageTable = pgTable(
       table.monthStart,
     ),
     index("workspace_monthly_usage_month_idx").on(table.monthStart),
+    pgPolicy("workspace_monthly_usage_scope", {
+      for: "all",
+      to: "app_runtime",
+      using: sql`
+        ${table.workspaceId}::text = NULLIF(current_setting('app.workspace_id', true), '')
+        AND EXISTS (
+          SELECT 1
+          FROM "workspace_memberships" AS membership
+          WHERE membership."workspace_id" = ${table.workspaceId}
+            AND membership."user_id" = NULLIF(current_setting('app.user_id', true), '')
+        )
+      `,
+      withCheck: sql`
+        ${table.workspaceId}::text = NULLIF(current_setting('app.workspace_id', true), '')
+        AND EXISTS (
+          SELECT 1
+          FROM "workspace_memberships" AS membership
+          WHERE membership."workspace_id" = ${table.workspaceId}
+            AND membership."user_id" = NULLIF(current_setting('app.user_id', true), '')
+        )
+      `,
+    }),
   ],
-);
+).enableRLS();

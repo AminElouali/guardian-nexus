@@ -1,8 +1,8 @@
-import { and, count, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq, sql } from "drizzle-orm";
 import { Router, type IRouter } from "express";
 import {
+  workspaceAuditEventsTable,
   assetsTable,
-  db,
   membershipsTable,
   monthlyUsageTable,
   workspacesTable,
@@ -28,6 +28,15 @@ import {
 } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
 import { getPlan, plans } from "../lib/plans";
+import {
+  canManageMemberRoles,
+  canWriteAssets,
+} from "../lib/access-control";
+import {
+  setWorkspaceContext,
+  withUserTransaction,
+  withWorkspaceUserTransaction,
+} from "../lib/tenant-db";
 
 const router: IRouter = Router();
 const UUID_PATTERN =
@@ -40,18 +49,23 @@ router.get("/plans", (_req, res): void => {
 router.use("/workspaces", requireAuth);
 router.get("/workspaces", async (req, res): Promise<void> => {
   const userId = req.authUserId!;
-  const rows = await db
-    .select({
-      id: workspacesTable.id,
-      name: workspacesTable.name,
-      planId: workspacesTable.planId,
-      role: membershipsTable.role,
-      createdAt: workspacesTable.createdAt,
-    })
-    .from(membershipsTable)
-    .innerJoin(workspacesTable, eq(workspacesTable.id, membershipsTable.workspaceId))
-    .where(eq(membershipsTable.userId, userId))
-    .orderBy(desc(workspacesTable.createdAt));
+  const rows = await withUserTransaction(userId, (tx) =>
+    tx
+      .select({
+        id: workspacesTable.id,
+        name: workspacesTable.name,
+        planId: workspacesTable.planId,
+        role: membershipsTable.role,
+        createdAt: workspacesTable.createdAt,
+      })
+      .from(membershipsTable)
+      .innerJoin(
+        workspacesTable,
+        eq(workspacesTable.id, membershipsTable.workspaceId),
+      )
+      .where(eq(membershipsTable.userId, userId))
+      .orderBy(desc(workspacesTable.createdAt)),
+  );
   res.json(ListWorkspacesResponse.parse(rows));
 });
 
@@ -62,15 +76,29 @@ router.post("/workspaces", async (req, res): Promise<void> => {
     return;
   }
 
-  const workspace = await db.transaction(async (tx) => {
+  const userId = req.authUserId!;
+  const workspace = await withUserTransaction(userId, async (tx) => {
     const [created] = await tx
       .insert(workspacesTable)
-      .values({ name: parsed.data.name.trim(), planId: parsed.data.planId })
+      .values({
+        name: parsed.data.name.trim(),
+        planId: parsed.data.planId,
+        createdByUserId: userId,
+      })
       .returning();
+    await setWorkspaceContext(tx, created.id);
     await tx.insert(membershipsTable).values({
       workspaceId: created.id,
-      userId: req.authUserId!,
+      userId,
       role: "owner",
+    });
+    await tx.insert(workspaceAuditEventsTable).values({
+      workspaceId: created.id,
+      actorUserId: userId,
+      action: "workspace.created",
+      resourceType: "workspace",
+      resourceId: created.id,
+      metadata: { planId: created.planId },
     });
     return created;
   });
@@ -79,25 +107,6 @@ router.post("/workspaces", async (req, res): Promise<void> => {
   );
 });
 
-async function getWorkspaceMembership(workspaceId: string, userId: string) {
-  if (!UUID_PATTERN.test(workspaceId)) return undefined;
-  const [membership] = await db
-    .select()
-    .from(membershipsTable)
-    .where(
-      and(
-        eq(membershipsTable.workspaceId, workspaceId),
-        eq(membershipsTable.userId, userId),
-      ),
-    )
-    .limit(1);
-  return membership;
-}
-
-function canWrite(role: string): boolean {
-  return role === "owner" || role === "admin" || role === "analyst";
-}
-
 router.get("/workspaces/:workspaceId/dashboard", async (req, res): Promise<void> => {
   const params = GetWorkspaceDashboardParams.safeParse(req.params);
   if (!params.success || !UUID_PATTERN.test(params.data.workspaceId)) {
@@ -105,35 +114,68 @@ router.get("/workspaces/:workspaceId/dashboard", async (req, res): Promise<void>
     return;
   }
   const workspaceId = params.data.workspaceId;
-  const membership = await getWorkspaceMembership(workspaceId, req.authUserId!);
-  if (!membership) {
+  const access = await withWorkspaceUserTransaction(
+    req.authUserId!,
+    workspaceId,
+    async (tx, membership) => {
+      const [
+        [workspace],
+        [assetCount],
+        [memberCount],
+        [usage],
+        recentAssets,
+      ] = await Promise.all([
+        tx
+          .select()
+          .from(workspacesTable)
+          .where(eq(workspacesTable.id, workspaceId))
+          .limit(1),
+        tx
+          .select({ value: count() })
+          .from(assetsTable)
+          .where(eq(assetsTable.workspaceId, workspaceId)),
+        tx
+          .select({ value: count() })
+          .from(membershipsTable)
+          .where(eq(membershipsTable.workspaceId, workspaceId)),
+        tx
+          .select()
+          .from(monthlyUsageTable)
+          .where(
+            and(
+              eq(monthlyUsageTable.workspaceId, workspaceId),
+              eq(
+                monthlyUsageTable.monthStart,
+                new Date().toISOString().slice(0, 7) + "-01",
+              ),
+            ),
+          )
+          .limit(1),
+        tx
+          .select()
+          .from(assetsTable)
+          .where(eq(assetsTable.workspaceId, workspaceId))
+          .orderBy(desc(assetsTable.createdAt))
+          .limit(5),
+      ]);
+
+      return {
+        membership,
+        workspace,
+        assetCount: assetCount.value,
+        memberCount: memberCount.value,
+        usage,
+        recentAssets,
+      };
+    },
+  );
+  if (!access.authorized) {
     res.status(403).json({ error: "Workspace access denied" });
     return;
   }
 
-  const [[workspace], [assetCount], [memberCount], [usage], recentAssets] =
-    await Promise.all([
-      db.select().from(workspacesTable).where(eq(workspacesTable.id, workspaceId)).limit(1),
-      db.select({ value: count() }).from(assetsTable).where(eq(assetsTable.workspaceId, workspaceId)),
-      db.select({ value: count() }).from(membershipsTable).where(eq(membershipsTable.workspaceId, workspaceId)),
-      db
-        .select()
-        .from(monthlyUsageTable)
-        .where(
-          and(
-            eq(monthlyUsageTable.workspaceId, workspaceId),
-            eq(monthlyUsageTable.monthStart, new Date().toISOString().slice(0, 7) + "-01"),
-          ),
-        )
-        .limit(1),
-      db
-        .select()
-        .from(assetsTable)
-        .where(eq(assetsTable.workspaceId, workspaceId))
-        .orderBy(desc(assetsTable.createdAt))
-        .limit(5),
-    ]);
-
+  const { membership, workspace, assetCount, memberCount, usage, recentAssets } =
+    access.value;
   if (!workspace) {
     res.status(404).json({ error: "Workspace not found" });
     return;
@@ -165,22 +207,26 @@ router.get("/workspaces/:workspaceId/members", async (req, res): Promise<void> =
     return;
   }
   const workspaceId = params.data.workspaceId;
-  const membership = await getWorkspaceMembership(workspaceId, req.authUserId!);
-  if (!membership) {
+  const access = await withWorkspaceUserTransaction(
+    req.authUserId!,
+    workspaceId,
+    async (tx) =>
+      tx
+        .select({
+          id: membershipsTable.id,
+          userId: membershipsTable.userId,
+          role: membershipsTable.role,
+          createdAt: membershipsTable.createdAt,
+        })
+        .from(membershipsTable)
+        .where(eq(membershipsTable.workspaceId, workspaceId))
+        .orderBy(membershipsTable.createdAt),
+  );
+  if (!access.authorized) {
     res.status(403).json({ error: "Workspace access denied" });
     return;
   }
-  const rows = await db
-    .select({
-      id: membershipsTable.id,
-      userId: membershipsTable.userId,
-      role: membershipsTable.role,
-      createdAt: membershipsTable.createdAt,
-    })
-    .from(membershipsTable)
-    .where(eq(membershipsTable.workspaceId, workspaceId))
-    .orderBy(membershipsTable.createdAt);
-  res.json(ListWorkspaceMembersResponse.parse(rows));
+  res.json(ListWorkspaceMembersResponse.parse(access.value));
 });
 
 router.patch(
@@ -198,41 +244,66 @@ router.patch(
       return;
     }
     const { workspaceId, membershipId } = params.data;
-    const actor = await getWorkspaceMembership(workspaceId, req.authUserId!);
-    if (!actor || actor.role !== "owner") {
+    const access = await withWorkspaceUserTransaction(
+      req.authUserId!,
+      workspaceId,
+      async (tx, actor) => {
+        if (!canManageMemberRoles(actor.role)) {
+          return { kind: "forbidden" as const };
+        }
+        const [target] = await tx
+          .select()
+          .from(membershipsTable)
+          .where(
+            and(
+              eq(membershipsTable.id, membershipId),
+              eq(membershipsTable.workspaceId, workspaceId),
+            ),
+          )
+          .for("update")
+          .limit(1);
+        if (!target || target.role === "owner") {
+          return { kind: "not-found" as const };
+        }
+        const [updated] = await tx
+          .update(membershipsTable)
+          .set({ role: parsed.data.role })
+          .where(
+            and(
+              eq(membershipsTable.id, membershipId),
+              eq(membershipsTable.workspaceId, workspaceId),
+            ),
+          )
+          .returning({
+            id: membershipsTable.id,
+            userId: membershipsTable.userId,
+            role: membershipsTable.role,
+            createdAt: membershipsTable.createdAt,
+          });
+        await tx.insert(workspaceAuditEventsTable).values({
+          workspaceId,
+          actorUserId: req.authUserId!,
+          action: "membership.role_updated",
+          resourceType: "membership",
+          resourceId: target.id,
+          metadata: { from: target.role, to: updated.role },
+        });
+        return { kind: "updated" as const, member: updated };
+      },
+    );
+    if (!access.authorized) {
       res.status(403).json({ error: "Only the workspace owner can change roles" });
       return;
     }
-    const [target] = await db
-      .select()
-      .from(membershipsTable)
-      .where(
-        and(
-          eq(membershipsTable.id, membershipId),
-          eq(membershipsTable.workspaceId, workspaceId),
-        ),
-      )
-      .limit(1);
-    if (!target || target.role === "owner") {
+    if (access.value.kind === "forbidden") {
+      res.status(403).json({ error: "Only the workspace owner can change roles" });
+      return;
+    }
+    if (access.value.kind === "not-found") {
       res.status(404).json({ error: "Editable member not found" });
       return;
     }
-    const [updated] = await db
-      .update(membershipsTable)
-      .set({ role: parsed.data.role })
-      .where(
-        and(
-          eq(membershipsTable.id, membershipId),
-          eq(membershipsTable.workspaceId, workspaceId),
-        ),
-      )
-      .returning({
-        id: membershipsTable.id,
-        userId: membershipsTable.userId,
-        role: membershipsTable.role,
-        createdAt: membershipsTable.createdAt,
-      });
-    res.json(UpdateWorkspaceMemberResponse.parse(updated));
+    res.json(UpdateWorkspaceMemberResponse.parse(access.value.member));
   },
 );
 
@@ -243,16 +314,21 @@ router.get("/workspaces/:workspaceId/assets", async (req, res): Promise<void> =>
     return;
   }
   const workspaceId = params.data.workspaceId;
-  if (!(await getWorkspaceMembership(workspaceId, req.authUserId!))) {
+  const access = await withWorkspaceUserTransaction(
+    req.authUserId!,
+    workspaceId,
+    (tx) =>
+      tx
+        .select()
+        .from(assetsTable)
+        .where(eq(assetsTable.workspaceId, workspaceId))
+        .orderBy(desc(assetsTable.createdAt)),
+  );
+  if (!access.authorized) {
     res.status(403).json({ error: "Workspace access denied" });
     return;
   }
-  const assets = await db
-    .select()
-    .from(assetsTable)
-    .where(eq(assetsTable.workspaceId, workspaceId))
-    .orderBy(desc(assetsTable.createdAt));
-  res.json(ListWorkspaceAssetsResponse.parse(assets));
+  res.json(ListWorkspaceAssetsResponse.parse(access.value));
 });
 
 router.post("/workspaces/:workspaceId/assets", async (req, res): Promise<void> => {
@@ -267,34 +343,54 @@ router.post("/workspaces/:workspaceId/assets", async (req, res): Promise<void> =
     return;
   }
   const workspaceId = params.data.workspaceId;
-  const membership = await getWorkspaceMembership(workspaceId, req.authUserId!);
-  if (!membership || !canWrite(membership.role)) {
+  const access = await withWorkspaceUserTransaction(
+    req.authUserId!,
+    workspaceId,
+    async (tx, membership) => {
+      if (!canWriteAssets(membership.role)) {
+        return { kind: "forbidden" as const };
+      }
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtextextended(${workspaceId}, 0))`,
+      );
+      const [workspace] = await tx
+        .select()
+        .from(workspacesTable)
+        .where(eq(workspacesTable.id, workspaceId))
+        .limit(1);
+      if (!workspace) return { kind: "not-found" as const };
+      const plan = getPlan(workspace.planId);
+      if (!plan) return { kind: "invalid-plan" as const };
+      const [assetCount] = await tx
+        .select({ value: count() })
+        .from(assetsTable)
+        .where(eq(assetsTable.workspaceId, workspaceId));
+      if (assetCount.value >= plan.maxAssets) return { kind: "limit" as const };
+      const [asset] = await tx
+        .insert(assetsTable)
+        .values({ ...parsed.data, workspaceId })
+        .returning();
+      await tx.insert(workspaceAuditEventsTable).values({
+        workspaceId,
+        actorUserId: req.authUserId!,
+        action: "asset.created",
+        resourceType: "asset",
+        resourceId: asset.id,
+        metadata: { type: asset.type, environment: asset.environment },
+      });
+      return { kind: "created" as const, asset };
+    },
+  );
+  if (!access.authorized) {
     res.status(403).json({ error: "Workspace write access denied" });
     return;
   }
 
-  const result = await db.transaction(async (tx) => {
-    const [workspace] = await tx
-      .select()
-      .from(workspacesTable)
-      .where(eq(workspacesTable.id, workspaceId))
-      .for("update")
-      .limit(1);
-    if (!workspace) return { kind: "not-found" as const };
-    const plan = getPlan(workspace.planId);
-    if (!plan) return { kind: "invalid-plan" as const };
-    const [assetCount] = await tx
-      .select({ value: count() })
-      .from(assetsTable)
-      .where(eq(assetsTable.workspaceId, workspaceId));
-    if (assetCount.value >= plan.maxAssets) return { kind: "limit" as const };
-    const [asset] = await tx
-      .insert(assetsTable)
-      .values({ ...parsed.data, workspaceId })
-      .returning();
-    return { kind: "created" as const, asset };
-  });
-
+  const result = access.value;
+  if (result.kind === "forbidden") {
+    res.status(403).json({ error: "Workspace write access denied" });
+    return;
+  }
   if (result.kind === "limit") {
     res.status(409).json({ error: "Asset limit reached for this plan" });
     return;
@@ -323,21 +419,43 @@ router.delete(
       return;
     }
     const { workspaceId, assetId } = params.data;
-    const membership = await getWorkspaceMembership(workspaceId, req.authUserId!);
-    if (!membership || !canWrite(membership.role)) {
+    const access = await withWorkspaceUserTransaction(
+      req.authUserId!,
+      workspaceId,
+      async (tx, membership) => {
+        if (!canWriteAssets(membership.role)) {
+          return { kind: "forbidden" as const };
+        }
+        const [deleted] = await tx
+          .delete(assetsTable)
+          .where(
+            and(
+              eq(assetsTable.id, assetId),
+              eq(assetsTable.workspaceId, workspaceId),
+            ),
+          )
+          .returning({ id: assetsTable.id });
+        if (!deleted) return { kind: "not-found" as const };
+        await tx.insert(workspaceAuditEventsTable).values({
+          workspaceId,
+          actorUserId: req.authUserId!,
+          action: "asset.deleted",
+          resourceType: "asset",
+          resourceId: deleted.id,
+          metadata: {},
+        });
+        return { kind: "deleted" as const };
+      },
+    );
+    if (!access.authorized) {
       res.status(403).json({ error: "Workspace write access denied" });
       return;
     }
-    const [deleted] = await db
-      .delete(assetsTable)
-      .where(
-        and(
-          eq(assetsTable.id, assetId),
-          eq(assetsTable.workspaceId, workspaceId),
-        ),
-      )
-      .returning({ id: assetsTable.id });
-    if (!deleted) {
+    if (access.value.kind !== "deleted") {
+      if (access.value.kind === "forbidden") {
+        res.status(403).json({ error: "Workspace write access denied" });
+        return;
+      }
       res.status(404).json({ error: "Asset not found" });
       return;
     }

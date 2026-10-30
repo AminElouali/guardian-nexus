@@ -57,7 +57,7 @@ function IdentityCacheBoundary({ children }: { children: ReactNode }) {
 function Brand({ inverse = false }: { inverse?: boolean }) {
   return <Link href="/" className={`brand ${inverse ? 'brand-inverse' : ''}`} data-testid="link-brand">
     <span className="brand-mark"><ShieldCheck size={19} strokeWidth={2.3} /></span>
-    <span className="brand-name">vigilant<span>.</span></span>
+    <span className="brand-name">Guardian <span>Nexus</span></span>
   </Link>;
 }
 
@@ -92,13 +92,13 @@ function EmptyState({ icon: Icon = Layers3, title, copy, action }: { icon?: type
 
 function PublicHome() {
   const { isSignedIn, isLoaded } = useAuth();
-  const health = useHealthCheck();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const startHref = isSignedIn ? '/dashboard' : '/sign-up';
   return <main className="public-page">
     <header className="public-nav wrap">
       <Brand />
       <nav className={`public-links ${mobileOpen ? 'public-links-open' : ''}`}>
-        <a href="#principles">Principios</a><a href="#workspace">Espacio de trabajo</a><a href="#roadmap">Hoja de ruta</a>
+        <a href="#alcance" onClick={() => setMobileOpen(false)}>Capacidades</a><a href="#disponible" onClick={() => setMobileOpen(false)}>Disponible hoy</a><a href="#preparacion" onClick={() => setMobileOpen(false)}>Preparación europea</a>
       </nav>
       <div className="public-actions">
         {isLoaded && isSignedIn
@@ -109,45 +109,58 @@ function PublicHome() {
     </header>
     <section className="hero wrap">
       <div className="hero-copy reveal">
-        <div className="eyebrow"><span className="eyebrow-dot" /> Operaciones de seguridad europeas</div>
-        <h1>Ten claro<br />qué necesitas <em>proteger.</em></h1>
-        <p className="hero-lede">Un espacio pensado para los activos digitales de tu empresa. Empieza con un inventario claro, reúne a tu equipo y avanza desde ahí.</p>
+        <div className="eyebrow"><span className="eyebrow-dot" /> Guardian Nexus · Seguridad de sistemas de IA</div>
+        <h1>Ciberseguridad<br />para la era de <em>la IA.</em></h1>
+        <p className="hero-lede">Ayudamos a las empresas a prepararse y demostrar controles frente a los requisitos europeos aplicables.</p>
         <div className="hero-ctas">
-          <Link href={isSignedIn ? '/dashboard' : '/sign-up'} className="button button-primary button-large" data-testid="link-hero-start">Configura tu espacio <ArrowRight size={17} /></Link>
-          <span className="hero-note"><LockKeyhole size={14} /> Privado para tu organización</span>
+          <Link href={startHref} className="button button-primary button-large" data-testid="link-hero-start">{isSignedIn ? 'Abrir mi espacio' : 'Crear espacio de trabajo'} <ArrowRight size={17} /></Link>
+          <span className="hero-note"><LockKeyhole size={14} /> Preparación, no certificación</span>
         </div>
-        <div className="hero-meta"><span className="meta-line" /> Para quienes se responsabilizan de que todo funcione.</div>
+        <div className="hero-meta"><span className="meta-line" /> Un punto de partida claro para equipos responsables.</div>
       </div>
-      <div className="hero-visual reveal reveal-delay-1" aria-label="Ilustración de un espacio de trabajo protegido">
-      <div className="hero-visual-top"><span>VIGILANT / RESUMEN</span><span className="live-mark"><i /> {health.isSuccess ? 'SERVICIO ACTIVO' : health.isError ? 'ESTADO NO DISPONIBLE' : 'CONECTANDO'}</span></div>
+      <div className="hero-visual reveal reveal-delay-1" aria-label="Ilustración del enfoque de seguridad de Guardian Nexus">
+        <div className="hero-visual-top"><span>GUARDIAN NEXUS / ENFOQUE</span><span className="live-mark"><i /> PREPARACIÓN CONTINUA</span></div>
         <div className="visual-orbit orbit-one" /><div className="visual-orbit orbit-two" />
-      <div className="visual-center"><div className="visual-shield"><ShieldCheck size={41} strokeWidth={1.4} /></div><span>TU ESPACIO</span><b>Bajo tu control</b></div>
-        <div className="orbit-node node-a"><CloudGlyph /><span>Nube</span></div>
-        <div className="orbit-node node-b"><Globe2 size={16} /><span>Aplicaciones web</span></div>
-        <div className="orbit-node node-c"><Fingerprint size={16} /><span>Identidad</span></div>
-        <div className="orbit-node node-d"><HardDrive size={16} /><span>Dispositivos</span></div>
-      <div className="visual-footer"><span><span className="tiny-square" /> Primero, el inventario</span><span>Base preparada para Europa</span></div>
+        <div className="visual-center"><div className="visual-shield"><ShieldCheck size={41} strokeWidth={1.4} /></div><span>PREPARACIÓN</span><b>Controles con contexto</b></div>
+        <div className="orbit-node node-a"><CloudGlyph /><span>Infraestructura cloud</span></div>
+        <div className="orbit-node node-b"><Globe2 size={16} /><span>Sistemas de IA</span></div>
+        <div className="orbit-node node-c"><Fingerprint size={16} /><span>Identidades</span></div>
+        <div className="orbit-node node-d"><Database size={16} /><span>Exposición de datos</span></div>
+        <div className="visual-footer"><span><span className="tiny-square" /> Visibilidad con supervisión humana</span><span>Sin promesas de certificación</span></div>
       </div>
     </section>
-    <section id="principles" className="principles-section">
+    <section id="alcance" className="principles-section">
       <div className="wrap">
-        <div className="section-intro"><div className="eyebrow">Un primer paso deliberado</div><h2>Claridad antes que complejidad.</h2><p>La seguridad empieza por saber qué existe, quién se responsabiliza y qué cubre tu plan actual.</p></div>
-        <div className="principle-list">
-          <article className="principle"><span className="principle-index">01</span><div className="principle-icon"><Box size={21} /></div><div><h3>Crea un inventario de activos</h3><p>Registra los sistemas de los que depende tu organización. Añade lo importante con el contexto que necesita tu equipo.</p></div><span className="principle-tail">Inventario</span></article>
-          <article className="principle"><span className="principle-index">02</span><div className="principle-icon"><Users size={21} /></div><div><h3>Asigna el rol adecuado</h3><p>Reúne a propietarios, administradores, analistas y lectores en un mismo espacio, con una visión clara de quién participa.</p></div><span className="principle-tail">Personas</span></article>
-          <article className="principle"><span className="principle-index">03</span><div className="principle-icon"><Gauge size={21} /></div><div><h3>Consulta los límites del plan</h3><p>Comprueba las cuotas del espacio antes de que te sorprendan. Sin consumo oculto ni señales inventadas.</p></div><span className="principle-tail">Capacidad</span></article>
+        <div className="section-intro"><div className="eyebrow">Ámbito previsto de la plataforma</div><h2>Una visión conectada de tus riesgos.</h2><p>Guardian Nexus está concebido para ayudar a los equipos a entender y documentar la seguridad de sus sistemas. Estas capacidades están planificadas; no están conectadas todavía.</p></div>
+        <div className="capability-grid">
+          <article className="capability-card capability-featured"><span className="capability-number">01 / SISTEMAS</span><div className="capability-icon"><Sparkles size={20} /></div><h3>Seguridad de sistemas y agentes de IA</h3><p>Inventario contextual y evaluación de riesgos propios de sistemas que incorporan inteligencia artificial.</p><span className="capability-state">Previsto · no disponible aún</span></article>
+          <article className="capability-card"><span className="capability-number">02 / EXPOSICIÓN</span><div className="capability-icon"><Layers3 size={20} /></div><h3>Configuración, identidades y datos</h3><p>Señales sobre configuraciones incorrectas, permisos, identidades y posibles exposiciones de datos.</p><span className="capability-state">Previsto · no disponible aún</span></article>
+          <article className="capability-card"><span className="capability-number">03 / AMENAZAS</span><div className="capability-icon"><ShieldEllipsis size={20} /></div><h3>Vulnerabilidades e inyección de prompts</h3><p>Consideración de vulnerabilidades y riesgos de prompt injection en los contextos relevantes.</p><span className="capability-state">Previsto · no disponible aún</span></article>
+          <article className="capability-card"><span className="capability-number">04 / OPERACIÓN</span><div className="capability-icon"><Activity size={20} /></div><h3>Correlación y monitorización</h3><p>Correlación de amenazas y señales a lo largo del tiempo para dar contexto a la revisión del equipo.</p><span className="capability-state">Previsto · no disponible aún</span></article>
+          <article className="capability-card"><span className="capability-number">05 / EVIDENCIA</span><div className="capability-icon"><Check size={20} /></div><h3>Evidencias verificables</h3><p>Organización de evidencias que permitan documentar controles y facilitar su revisión.</p><span className="capability-state">Previsto · no disponible aún</span></article>
+          <article className="capability-card"><span className="capability-number">06 / DECISIONES</span><div className="capability-icon"><Users size={20} /></div><h3>Recomendaciones supervisadas</h3><p>Orientación para priorizar trabajo, manteniendo las decisiones y la aprobación en manos de personas.</p><span className="capability-state">Previsto · no disponible aún</span></article>
         </div>
       </div>
     </section>
-    <section id="workspace" className="workspace-band">
-      <div className="wrap workspace-band-inner"><div className="band-mark"><Command size={22} /></div><div><div className="eyebrow">Fase 1 / lo esencial del espacio</div><h2>Empieza con una base fiable.</h2><p>El inventario y las personas de tu organización permanecen dentro de su propio espacio.</p></div><Link href={isSignedIn ? '/dashboard' : '/sign-up'} className="button button-light" data-testid="link-band-create">Crear un espacio <ArrowRight size={16} /></Link></div>
+    <section id="disponible" className="workspace-band">
+      <div className="wrap availability-layout">
+        <div className="availability-copy"><div className="eyebrow">Disponible hoy · espacio de trabajo</div><h2>Empieza por lo que ya puedes hacer.</h2><p>La experiencia actual es deliberadamente sencilla. No depende de integraciones ni presenta resultados de análisis que aún no existen.</p><Link href={startHref} className="button button-light" data-testid="link-band-create">{isSignedIn ? 'Abrir mi espacio' : 'Crear un espacio'} <ArrowRight size={16} /></Link></div>
+        <div className="available-list">
+          <div className="available-row"><span className="available-check"><Check size={15} /></span><div><b>Espacio de trabajo de autoservicio</b><p>Crea y gestiona un espacio para tu organización.</p></div><span className="availability-tag">Disponible</span></div>
+          <div className="available-row"><span className="available-check"><Check size={15} /></span><div><b>Inventario manual de activos</b><p>Registra sistemas, entorno y criticidad con contexto.</p></div><span className="availability-tag">Disponible</span></div>
+          <div className="available-row"><span className="available-check"><Check size={15} /></span><div><b>Roles básicos de equipo</b><p>Invita a miembros y gestiona su acceso al espacio.</p></div><span className="availability-tag">Disponible</span></div>
+          <div className="available-row planned-row"><span className="planned-mark"><Layers3 size={15} /></span><div><b>Integraciones y evaluaciones automatizadas</b><p>Escaneo, monitorización y recomendaciones aún no conectados.</p></div><span className="planned-tag">Planificado</span></div>
+        </div>
+      </div>
     </section>
-    <section id="roadmap" className="roadmap-preview wrap">
-      <div className="roadmap-label"><span>Más adelante</span><span className="roadmap-rule" /></div>
-      <div className="roadmap-copy"><h2>Más capacidades.<br /><span>Cuando estén listas.</span></h2><p>Las integraciones, las evaluaciones automáticas y los controles empresariales figuran como trabajo futuro, no como funciones ya disponibles.</p><Link href="/roadmap" className="text-link" data-testid="link-roadmap">Ver la hoja de ruta empresarial <ArrowRight size={15} /></Link></div>
-      <div className="roadmap-stamp"><span>01</span><i /> <small>BASE<br />EN CURSO</small></div>
+    <section id="preparacion" className="compliance-section">
+      <div className="wrap compliance-layout">
+        <div className="compliance-heading"><div className="eyebrow">Requisitos europeos aplicables</div><h2>Prepararse no es certificarse.</h2></div>
+        <div className="compliance-copy"><p>Los marcos y obligaciones aplicables dependen de tu organización, los sistemas que utiliza y su contexto. Guardian Nexus aspira a ayudar a evaluar el estado de los controles y reunir evidencias para apoyar ese trabajo.</p><p><strong>La plataforma no concede certificaciones ni garantiza el cumplimiento.</strong> La evaluación, interpretación de requisitos y validación deben realizarse con las personas responsables y, cuando corresponda, con asesoramiento cualificado.</p><Link href="/roadmap" className="text-link" data-testid="link-roadmap">Consultar la hoja de ruta <ArrowRight size={15} /></Link></div>
+        <div className="compliance-steps"><div><span>01</span><b>Preparar</b><small>Organizar activos y responsabilidades</small></div><i /><div><span>02</span><b>Evaluar</b><small>Revisar controles frente al contexto aplicable</small></div><i /><div className="certification-step"><span>03</span><b>Certificar</b><small>Proceso independiente, fuera de la plataforma</small></div></div>
+      </div>
     </section>
-    <footer className="public-footer wrap"><Brand /><span>Seguridad de tu espacio, sin rodeos.</span><span>© {new Date().getFullYear()} Vigilant</span></footer>
+    <footer className="public-footer wrap"><Brand /><span>Ciberseguridad para la era de la IA.</span><span>© {new Date().getFullYear()} Guardian Nexus</span></footer>
   </main>;
 }
 
