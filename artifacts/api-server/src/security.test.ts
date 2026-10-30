@@ -15,6 +15,7 @@ import {
   workspaceIntegrationsTable,
   db,
   pool,
+  type AiAssessmentEvidence,
 } from "@workspace/db";
 import { canManageMemberRoles, canWriteAssets } from "./lib/access-control";
 import {
@@ -404,6 +405,53 @@ test("assessment queue role exposes metadata only and recovers expired leases on
   });
   assert.ok(jobA);
   assert.ok(jobB);
+
+  const verificationSentinel = "a".repeat(64);
+  const tenantEvidence = {
+    guardianVerification: {
+      suiteEvidenceSha256: verificationSentinel,
+      caseEvidence: [{ caseEvidenceSha256: "b".repeat(64) }],
+    },
+  } as unknown as AiAssessmentEvidence;
+  const savedEvidence = await withWorkspaceUserTransaction(
+    userA,
+    workspaceA,
+    (tx) =>
+      tx
+        .update(aiAssessmentJobsTable)
+        .set({ result: tenantEvidence })
+        .where(eq(aiAssessmentJobsTable.id, jobA.id)),
+  );
+  assert.equal(savedEvidence.authorized, true);
+  const ownerEvidence = await withWorkspaceUserTransaction(
+    userA,
+    workspaceA,
+    (tx) =>
+      tx
+        .select({ result: aiAssessmentJobsTable.result })
+        .from(aiAssessmentJobsTable)
+        .where(eq(aiAssessmentJobsTable.id, jobA.id)),
+  );
+  assert.equal(ownerEvidence.authorized, true);
+  if (ownerEvidence.authorized) {
+    assert.equal(
+      ownerEvidence.value[0]?.result?.guardianVerification?.suiteEvidenceSha256,
+      verificationSentinel,
+    );
+  }
+  const crossTenantEvidence = await withWorkspaceUserTransaction(
+    userB,
+    workspaceB,
+    (tx) =>
+      tx
+        .select({ result: aiAssessmentJobsTable.result })
+        .from(aiAssessmentJobsTable)
+        .where(eq(aiAssessmentJobsTable.id, jobA.id)),
+  );
+  assert.equal(crossTenantEvidence.authorized, true);
+  if (crossTenantEvidence.authorized) {
+    assert.deepEqual(crossTenantEvidence.value, []);
+  }
 
   const queueMetadata = await withAiAssessmentQueueTransaction(null, (tx) =>
     tx

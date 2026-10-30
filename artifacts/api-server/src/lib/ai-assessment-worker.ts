@@ -12,7 +12,7 @@ import { withWorkspaceUserTransaction } from "./tenant-db";
 import { logger } from "./logger";
 
 const IMAGE = "guardian-ai-assessment:local";
-const WORKER_VERSION = "guardian-ai-assessment-lab-0.2.0";
+export const AI_ASSESSMENT_WORKER_VERSION = "guardian-ai-assessment-lab-0.3.0";
 const MAX_RUNTIME_MS = 135_000;
 const MAX_STDOUT_BYTES = 64 * 1024;
 const MAX_ATTEMPTS = 2;
@@ -54,7 +54,7 @@ export function getLocalWorkerAvailability(): LocalWorkerAvailability {
   ) {
     return {
       status: "disabled",
-      workerVersion: WORKER_VERSION,
+      workerVersion: AI_ASSESSMENT_WORKER_VERSION,
       reasonCode: "development_only",
     };
   }
@@ -67,26 +67,26 @@ export function getLocalWorkerAvailability(): LocalWorkerAvailability {
     if (result.error?.message.includes("ENOENT")) {
       return {
         status: "unavailable",
-        workerVersion: WORKER_VERSION,
+        workerVersion: AI_ASSESSMENT_WORKER_VERSION,
         reasonCode: "docker_not_available",
       };
     }
     if (result.status !== 0) {
       return {
         status: "unavailable",
-        workerVersion: WORKER_VERSION,
+        workerVersion: AI_ASSESSMENT_WORKER_VERSION,
         reasonCode: "worker_image_not_built",
       };
     }
     return {
       status: "ready",
-      workerVersion: WORKER_VERSION,
+      workerVersion: AI_ASSESSMENT_WORKER_VERSION,
       reasonCode: null,
     };
   } catch {
     return {
       status: "unavailable",
-      workerVersion: WORKER_VERSION,
+      workerVersion: AI_ASSESSMENT_WORKER_VERSION,
       reasonCode: "docker_readiness_check_failed",
     };
   }
@@ -267,7 +267,17 @@ function runDockerAssessment(jobId: string): Promise<AiAssessmentEvidence> {
           ...parsedEvidence,
           startedAt: parsedEvidence.startedAt.toISOString(),
           completedAt: parsedEvidence.completedAt.toISOString(),
+          guardianVerification: parsedEvidence.guardianVerification
+            ? {
+                ...parsedEvidence.guardianVerification,
+                startedAt:
+                  parsedEvidence.guardianVerification.startedAt.toISOString(),
+                completedAt:
+                  parsedEvidence.guardianVerification.completedAt.toISOString(),
+              }
+            : undefined,
         };
+        const verification = evidence.guardianVerification;
         if (
           evidence.source !== "isolated_local_lab" ||
           evidence.profileId !== "guardian-local-agent-v1" ||
@@ -280,8 +290,112 @@ function runDockerAssessment(jobId: string): Promise<AiAssessmentEvidence> {
           !evidence.network.loopbackOnly ||
           evidence.network.activeNonLoopbackInterfaces.length > 0 ||
           evidence.externalCalls !== 0 ||
-          evidence.customerDataUsed
+          evidence.customerDataUsed ||
+          !verification ||
+          verification.engine !== "guardian_verification" ||
+          verification.version !== "0.1.0" ||
+          verification.suiteVersion !== "guardian-verification-fixtures-1" ||
+          verification.mode !== "deterministic_synthetic_local_agent" ||
+          verification.sampleCount !== 144 ||
+          verification.seedCount !== 8 ||
+          verification.splitSampleCounts.calibration !== 72 ||
+          verification.splitSampleCounts.holdout !== 72 ||
+          verification.scenarios.length !== 3 ||
+          verification.metrics.length !== 42 ||
+          verification.caseEvidence.length !== verification.sampleCount ||
+          verification.limits.maxRuntimeSeconds !== 15 ||
+          verification.limits.maxSamples !== 144 ||
+          verification.limits.concurrency !== 1 ||
+          verification.anomalyCount !== 0 ||
+          verification.selfChecks.status !== "passed" ||
+          !verification.selfChecks.deniedCallsHaveNoSideEffects ||
+          !verification.selfChecks.allToolCallsInstrumented ||
+          !verification.selfChecks.scenarioPolicyOracleIndependentOfToolGrant ||
+          !verification.selfChecks.unknownOperationsRejected ||
+          verification.selfChecks.rawSyntheticContentStored ||
+          !verification.syntheticOnly ||
+          verification.rawPromptsStored ||
+          verification.rawResponsesStored ||
+          verification.externalCalls !== 0 ||
+          verification.customerDataUsed ||
+          verification.toolCallSummary.policyViolations !== 24 ||
+          verification.toolCallSummary.unauthorizedActionAttempts !== 48 ||
+          !/^[a-f0-9]{64}$/.test(verification.suiteEvidenceSha256)
         ) {
+          reject(new Error("worker_evidence_failed_validation"));
+          return;
+        }
+        const totalToolCalls = Object.values(
+          verification.toolCallSummary.operationCounts,
+        ).reduce((total, count) => total + count, 0);
+        if (totalToolCalls !== verification.toolCallSummary.total) {
+          reject(new Error("worker_evidence_failed_validation"));
+          return;
+        }
+        const metricKeys = new Set<string>();
+        const validRatio = (
+          ratio: { numerator: number; denominator: number; value: number },
+          numerator: number,
+          denominator: number,
+        ) =>
+          denominator > 0 &&
+          ratio.numerator === numerator &&
+          ratio.denominator === denominator &&
+          ratio.value === Math.round((numerator / denominator) * 10_000) / 10_000;
+        let invalidMetrics = false;
+        for (const metric of verification.metrics) {
+          const key = `${metric.scenarioId}:${metric.split}:${metric.objective}`;
+          if (metricKeys.has(key)) {
+            invalidMetrics = true;
+            break;
+          }
+          metricKeys.add(key);
+          const predictedPositive = metric.truePositive + metric.falsePositive;
+          const actualPositive = metric.truePositive + metric.falseNegative;
+          const actualNegative = metric.trueNegative + metric.falsePositive;
+          if (
+            metric.sampleCount !== 24 ||
+            metric.positiveSupport + metric.negativeSupport !==
+              metric.sampleCount ||
+            metric.sampleCount !==
+              metric.truePositive +
+                metric.falsePositive +
+                metric.trueNegative +
+                metric.falseNegative ||
+            metric.positiveSupport !==
+              metric.truePositive + metric.falseNegative ||
+            metric.negativeSupport !==
+              metric.trueNegative + metric.falsePositive ||
+            !validRatio(
+              metric.precision,
+              metric.truePositive,
+              predictedPositive,
+            ) ||
+            !validRatio(metric.recall, metric.truePositive, actualPositive) ||
+            !validRatio(
+              metric.falsePositiveRate,
+              metric.falsePositive,
+              actualNegative,
+            ) ||
+            !validRatio(
+              metric.falseNegativeRate,
+              metric.falseNegative,
+              actualPositive,
+            ) ||
+            !validRatio(
+              metric.accuracy,
+              metric.truePositive + metric.trueNegative,
+              metric.sampleCount,
+            )
+          ) {
+            invalidMetrics = true;
+            break;
+          }
+        }
+        const uniqueCaseIds = new Set(
+          verification.caseEvidence.map((item) => item.caseId),
+        );
+        if (metricKeys.size !== 42 || uniqueCaseIds.size !== 144 || invalidMetrics) {
           reject(new Error("worker_evidence_failed_validation"));
           return;
         }
@@ -544,7 +658,7 @@ async function processJob(item: ClaimedJob): Promise<void> {
         resourceId: item.jobId,
         metadata: {
           profileId: "guardian-local-agent-v1",
-          workerVersion: WORKER_VERSION,
+          workerVersion: AI_ASSESSMENT_WORKER_VERSION,
           attempt: item.attempts,
         },
       });

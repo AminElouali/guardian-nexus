@@ -59,6 +59,136 @@ const labStatusLabels: Record<AiAssessmentLabJob['status'], string> = {
   failed: 'Fallida',
 };
 
+type GuardianVerification = NonNullable<
+  NonNullable<AiAssessmentLabJob['result']>['guardianVerification']
+>;
+
+const verificationScenarioLabels: Record<string, string> = {
+  synthetic_data_exfiltration: 'Exfiltración de dato sintético',
+  unauthorized_tool_operation: 'Operación fuera de permisos',
+  indirect_document_injection: 'Inyección indirecta en documento',
+};
+
+const verificationObjectiveLabels: Record<string, string> = {
+  untrusted_text_present: 'Texto no confiable presente',
+  synthetic_data_propagated: 'Dato sintético propagado',
+  untrusted_instruction_obeyed: 'Instrucción no confiable obedecida',
+  action_attempted: 'Acción intentada',
+  unauthorized_action_attempted: 'Acción no autorizada intentada',
+  action_executed: 'Acción ejecutada',
+  policy_violation: 'Violación de política',
+};
+
+function GuardianVerificationResult({
+  verification,
+}: {
+  verification: GuardianVerification;
+}) {
+  return <section className="guardian-verification" data-testid="guardian-verification-result">
+    <div className="guardian-verification-heading">
+      <div>
+        <span className="ai-evaluation-run-label">FIXTURES DETERMINISTAS · DATOS SINTÉTICOS</span>
+        <h4>Guardian Verification Engine · v{verification.version}</h4>
+      </div>
+      <span className="guardian-verification-pill">No es una evaluación de LLM</span>
+    </div>
+    <p className="guardian-verification-disclaimer">
+      Agente y herramientas ficticios ejecutados localmente. Los resultados miden la conformidad de estos fixtures y sus oráculos; no describen sistemas de clientes ni garantizan seguridad.
+    </p>
+    <div className="guardian-verification-stats">
+      <span><b>{verification.sampleCount}</b> casos totales</span>
+      <span><b>{verification.splitSampleCounts.calibration}</b> calibración</span>
+      <span><b>{verification.splitSampleCounts.holdout}</b> holdout</span>
+      <span><b>{verification.toolCallSummary.total}</b> llamadas instrumentadas</span>
+      <span><b>{verification.toolCallSummary.policyViolations}</b> efectos no autorizados previstos en fixtures vulnerables</span>
+    </div>
+    <p className="guardian-verification-note">
+      Los intentos bloqueados, las acciones ejecutadas y las violaciones se cuentan por separado. Los casos vulnerables usan permisos ficticios excesivos para comprobar el oráculo; no modifican recursos reales.
+    </p>
+    <details className="guardian-verification-details">
+      <summary>Métricas de holdout por escenario</summary>
+      <div className="guardian-verification-scenarios">
+        {verification.scenarios.map((scenario) => (
+          <details key={scenario.scenarioId} data-testid={`gve-scenario-${scenario.scenarioId}`}>
+            <summary>{verificationScenarioLabels[scenario.scenarioId] ?? scenario.scenarioId} · 24 casos</summary>
+            <div className="guardian-verification-table-wrap">
+              <table className="guardian-verification-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Objetivo</th>
+                    <th scope="col">TP</th>
+                    <th scope="col">FP</th>
+                    <th scope="col">TN</th>
+                    <th scope="col">FN</th>
+                    <th scope="col">Positivos</th>
+                    <th scope="col">Negativos</th>
+                    <th scope="col">FPR</th>
+                    <th scope="col">FNR</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {verification.metrics
+                    .filter((metric) => metric.scenarioId === scenario.scenarioId && metric.split === 'holdout')
+                    .map((metric) => (
+                      <tr key={metric.objective} data-testid={`gve-metric-${scenario.scenarioId}-${metric.objective}`}>
+                        <th scope="row">{verificationObjectiveLabels[metric.objective] ?? metric.objective}</th>
+                        <td>{metric.truePositive}</td>
+                        <td>{metric.falsePositive}</td>
+                        <td>{metric.trueNegative}</td>
+                        <td>{metric.falseNegative}</td>
+                        <td>{metric.positiveSupport}</td>
+                        <td>{metric.negativeSupport}</td>
+                        <td>{(metric.falsePositiveRate.value * 100).toFixed(0)}%</td>
+                        <td>{(metric.falseNegativeRate.value * 100).toFixed(0)}%</td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          </details>
+        ))}
+      </div>
+    </details>
+    <details className="guardian-verification-details">
+      <summary>Contadores de herramientas y procedencia</summary>
+      <div className="guardian-verification-table-wrap">
+        <table className="guardian-verification-table">
+          <thead>
+            <tr>
+              <th scope="col">Operación ficticia</th>
+              <th scope="col">Llamadas</th>
+              <th scope="col">Denegadas</th>
+              <th scope="col">Ejecutadas</th>
+              <th scope="col">Cambios de estado</th>
+              <th scope="col">Violaciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {verification.toolCallSummary.byOperation.map((operation) => (
+              <tr key={operation.operation}>
+                <th scope="row">{operation.operation}</th>
+                <td>{operation.calls}</td>
+                <td>{operation.denied}</td>
+                <td>{operation.executed}</td>
+                <td>{operation.stateChanges}</td>
+                <td>{operation.policyViolations}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <dl>
+        <dt>Versiones</dt><dd>Agente {verification.agentVersion}; políticas {verification.policyVersion}; oráculo {verification.oracleVersion}</dd>
+        <dt>Oráculo</dt><dd>{verification.selfChecks.status}; llamadas denegadas sin efectos secundarios; sin anomalías ({verification.anomalyCount})</dd>
+        <dt>Hash del conjunto</dt><dd><code>{verification.suiteEvidenceSha256}</code></dd>
+        <dt>Casos con hash</dt><dd>{verification.caseEvidence.length} evidencias sintéticas</dd>
+        <dt>Datos y red</dt><dd>Sin prompts/respuestas guardados, llamadas externas ni datos de clientes.</dd>
+      </dl>
+      <small>Las máscaras esperadas/observadas usan el orden de objetivos del manifiesto del motor. Las métricas son de estos fixtures y no se extrapolan.</small>
+    </details>
+  </section>;
+}
+
 function LabJobCard({
   job,
   canRun,
@@ -98,6 +228,7 @@ function LabJobCard({
         </dl>
         <small>Garak es software de terceros; Guardian Nexus lo integra y conserva su atribución técnica. Esta ejecución fue en el agente local de laboratorio.</small>
       </details>
+      {evidence.guardianVerification && <GuardianVerificationResult verification={evidence.guardianVerification} />}
     </div>}
     {job.status === 'failed' && <p className="ai-lab-error">No se completó la evaluación. Código: {job.errorCode ?? 'worker_failed'}. No se guardaron salidas del agente.</p>}
     {canRun && job.status === 'failed' && job.attempts < 2 && <Button variant="outline" onClick={() => onRetry(job.id)} disabled={retryPending} data-testid="button-retry-ai-lab">
@@ -172,7 +303,7 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
       <div>
         <div className="eyebrow">GUARDIAN AI SECURITY ASSESSMENT · LABORATORIO</div>
         <h1>Evaluación de Seguridad de IA</h1>
-        <p>Una evaluación real, acotada y aislada del agente propio del laboratorio. El servicio para agentes y sistemas de clientes aún no está disponible.</p>
+        <p>Ejecución real en fixtures locales: Garak sobre un mock estático y Guardian Verification sobre un agente determinista con herramientas ficticias. No evalúa un LLM real; el servicio para clientes aún no está disponible.</p>
       </div>
       <span className="ai-evaluation-badge"><FlaskConical size={14} /> LABORATORIO INTERNO</span>
     </div>
@@ -186,10 +317,10 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
     {labError && <div className="notice notice-error ai-evaluation-feedback" role="alert">{labError}</div>}
     <section className="panel ai-evaluation-card ai-lab-card">
       <div className="panel-heading">
-        <div><span className="panel-kicker">EVALUACIÓN REAL · AGENTE PROPIO</span><h2>Laboratorio aislado</h2></div>
+        <div><span className="panel-kicker">EJECUCIÓN REAL · FIXTURES LOCALES</span><h2>Laboratorio aislado</h2></div>
         <span className={`ai-evaluation-state ${availability.data?.status === 'ready' ? '' : 'ai-state-pending'}`}><i />{availability.isLoading ? 'Comprobando' : availability.data?.status === 'ready' ? 'Disponible en desarrollo' : 'No disponible'}</span>
       </div>
-      <p>El trabajo usa un perfil local fijo, un máximo de una solicitud de prueba y un intento de reejecución. El historial y la evidencia resumida quedan aislados en este espacio.</p>
+      <p>El trabajo usa un perfil local fijo, un máximo de una solicitud Garak por trabajo, un conjunto determinista de 144 fixtures y un intento de reejecución. El historial y la evidencia resumida quedan aislados en este espacio.</p>
       {availability.data?.status !== 'ready' && <div className="ai-lab-unavailable"><LockKeyhole size={15} />{availability.data?.reasonCode === 'development_only' ? 'Deshabilitado fuera del entorno de desarrollo.' : 'El worker local no está preparado. No se iniciará ni simulará una evaluación.'}</div>}
       <div className="ai-evaluation-actions">
         <Button onClick={() => void requestLabAssessment()} disabled={!canRun || availability.data?.status !== 'ready' || createLabJob.isPending} data-testid="button-run-ai-lab">

@@ -900,7 +900,149 @@ components:
         externalCalls: { type: integer, const: 0 }
         customerDataUsed: { type: boolean, const: false }
         findingSummary: { type: string }
+        guardianVerification:
+          $ref: "#/components/schemas/GuardianVerificationEvidence"
       required: [evidenceVersion, source, engine, engineVersion, profileId, probeClasses, generationsPerProbe, probeRequests, reportRecordCount, reportRecordTypes, positiveDetectorScores, findings, reportSha256, reportBytes, network, startedAt, completedAt, durationSeconds, promptsStored, responsesStored, externalCalls, customerDataUsed, findingSummary]
+    GuardianVerificationRatio:
+      type: object
+      properties:
+        numerator: { type: integer }
+        denominator: { type: integer, minimum: 1 }
+        value: { type: number, minimum: 0, maximum: 1 }
+      required: [numerator, denominator, value]
+    GuardianVerificationMetric:
+      type: object
+      properties:
+        scenarioId:
+          type: string
+          enum: [synthetic_data_exfiltration, unauthorized_tool_operation, indirect_document_injection]
+        split: { type: string, enum: [calibration, holdout] }
+        objective:
+          type: string
+          enum: [untrusted_text_present, synthetic_data_propagated, untrusted_instruction_obeyed, action_attempted, unauthorized_action_attempted, action_executed, policy_violation]
+        sampleCount: { type: integer, minimum: 1 }
+        positiveSupport: { type: integer, minimum: 1 }
+        negativeSupport: { type: integer, minimum: 1 }
+        truePositive: { type: integer, minimum: 0 }
+        falsePositive: { type: integer, minimum: 0 }
+        trueNegative: { type: integer, minimum: 0 }
+        falseNegative: { type: integer, minimum: 0 }
+        precision: { $ref: "#/components/schemas/GuardianVerificationRatio" }
+        recall: { $ref: "#/components/schemas/GuardianVerificationRatio" }
+        falsePositiveRate: { $ref: "#/components/schemas/GuardianVerificationRatio" }
+        falseNegativeRate: { $ref: "#/components/schemas/GuardianVerificationRatio" }
+        accuracy: { $ref: "#/components/schemas/GuardianVerificationRatio" }
+      required: [scenarioId, split, objective, sampleCount, positiveSupport, negativeSupport, truePositive, falsePositive, trueNegative, falseNegative, precision, recall, falsePositiveRate, falseNegativeRate, accuracy]
+    GuardianVerificationOperationSummary:
+      type: object
+      properties:
+        operation:
+          type: string
+          enum: [email.send.external, email.send.team, workspace.admin.disable_audit, documents.read.local, documents.read.untrusted]
+        calls: { type: integer, minimum: 0 }
+        authorized: { type: integer, minimum: 0 }
+        denied: { type: integer, minimum: 0 }
+        executed: { type: integer, minimum: 0 }
+        policyAllowed: { type: integer, minimum: 0 }
+        policyDenied: { type: integer, minimum: 0 }
+        stateChanges: { type: integer, minimum: 0 }
+        targetActions: { type: integer, minimum: 0 }
+        syntheticDataObserved: { type: integer, minimum: 0 }
+        policyViolations: { type: integer, minimum: 0 }
+      required: [operation, calls, authorized, denied, executed, policyAllowed, policyDenied, stateChanges, targetActions, syntheticDataObserved, policyViolations]
+    GuardianVerificationCaseEvidence:
+      type: object
+      properties:
+        caseId: { type: string }
+        expectedMask: { type: integer, minimum: 0 }
+        observedMask: { type: integer, minimum: 0 }
+        caseEvidenceSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+      required: [caseId, expectedMask, observedMask, caseEvidenceSha256]
+    GuardianVerificationEvidence:
+      type: object
+      properties:
+        engine: { type: string, const: guardian_verification }
+        version: { type: string }
+        suiteVersion: { type: string }
+        agentVersion: { type: string }
+        policyVersion: { type: string }
+        oracleVersion: { type: string }
+        mode: { type: string, enum: [deterministic_synthetic_local_agent] }
+        objectiveBitOrder:
+          type: array
+          items:
+            type: string
+            enum: [untrusted_text_present, synthetic_data_propagated, untrusted_instruction_obeyed, action_attempted, unauthorized_action_attempted, action_executed, policy_violation]
+        scenarios:
+          type: array
+          items:
+            type: object
+            properties:
+              scenarioId:
+                type: string
+                enum: [synthetic_data_exfiltration, unauthorized_tool_operation, indirect_document_injection]
+              policyId: { type: string }
+            required: [scenarioId, policyId]
+        sampleCount: { type: integer, minimum: 1 }
+        seedCount: { type: integer, minimum: 1 }
+        splitSampleCounts:
+          type: object
+          properties:
+            calibration: { type: integer, minimum: 1 }
+            holdout: { type: integer, minimum: 1 }
+          required: [calibration, holdout]
+        metrics:
+          type: array
+          items: { $ref: "#/components/schemas/GuardianVerificationMetric" }
+        toolCallSummary:
+          type: object
+          properties:
+            total: { type: integer, minimum: 0 }
+            authorized: { type: integer, minimum: 0 }
+            denied: { type: integer, minimum: 0 }
+            executed: { type: integer, minimum: 0 }
+            stateChanges: { type: integer, minimum: 0 }
+            unauthorizedActionAttempts: { type: integer, minimum: 0 }
+            policyViolations: { type: integer, minimum: 0 }
+            operationCounts:
+              type: object
+              additionalProperties: { type: integer, minimum: 0 }
+            byOperation:
+              type: array
+              items: { $ref: "#/components/schemas/GuardianVerificationOperationSummary" }
+          required: [total, authorized, denied, executed, stateChanges, unauthorizedActionAttempts, policyViolations, operationCounts, byOperation]
+        anomalyCount: { type: integer, minimum: 0 }
+        selfChecks:
+          type: object
+          properties:
+            status: { type: string, enum: [passed] }
+            allToolCallsInstrumented: { type: boolean, const: true }
+            deniedCallsHaveNoSideEffects: { type: boolean, const: true }
+            scenarioPolicyOracleIndependentOfToolGrant: { type: boolean, const: true }
+            unknownOperationsRejected: { type: boolean, const: true }
+            rawSyntheticContentStored: { type: boolean, const: false }
+          required: [status, allToolCallsInstrumented, deniedCallsHaveNoSideEffects, scenarioPolicyOracleIndependentOfToolGrant, unknownOperationsRejected, rawSyntheticContentStored]
+        caseEvidence:
+          type: array
+          items: { $ref: "#/components/schemas/GuardianVerificationCaseEvidence" }
+        suiteEvidenceSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        startedAt: { type: string, format: date-time }
+        completedAt: { type: string, format: date-time }
+        durationMs: { type: integer, minimum: 0 }
+        limits:
+          type: object
+          properties:
+            maxRuntimeSeconds: { type: integer, const: 15 }
+            maxSamples: { type: integer, const: 144 }
+            concurrency: { type: integer, const: 1 }
+          required: [maxRuntimeSeconds, maxSamples, concurrency]
+        syntheticOnly: { type: boolean, const: true }
+        rawPromptsStored: { type: boolean, const: false }
+        rawResponsesStored: { type: boolean, const: false }
+        externalCalls: { type: integer, const: 0 }
+        customerDataUsed: { type: boolean, const: false }
+        interpretation: { type: string }
+      required: [engine, version, suiteVersion, agentVersion, policyVersion, oracleVersion, mode, objectiveBitOrder, scenarios, sampleCount, seedCount, splitSampleCounts, metrics, toolCallSummary, anomalyCount, selfChecks, caseEvidence, suiteEvidenceSha256, startedAt, completedAt, durationMs, limits, syntheticOnly, rawPromptsStored, rawResponsesStored, externalCalls, customerDataUsed, interpretation]
   securitySchemes:
     bearerAuth:
       type: http

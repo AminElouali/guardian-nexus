@@ -38,3 +38,9 @@ description: Product boundaries for security integrations, claims, and productio
 **Why:** Static local fixtures showed that quoting can be a positive for propagation but a false positive for execution, while Base64 propagation can be missed by a detector that only searches for the raw trigger.
 
 **How to apply:** Report separate confusion matrices with denominators for each task and split. When using Garak, require the expected probe/detector `eval` record and verify its `fails` count against the attempt scores; describe static fixtures as detector tests, not model evaluations.
+
+**Rule:** Persist only bounded per-case objective masks and evidence digests plus aggregate tool counters; do not persist raw prompts, responses, or tool traces.
+
+**Why:** Raw content can expose sensitive material, while retaining every trace can exceed the worker-to-API evidence limit.
+
+**How to apply:** Keep raw fixture content in worker memory only, validate hashes and aggregate denominators at API ingestion, and store compact evidence inside the tenant-scoped job result.

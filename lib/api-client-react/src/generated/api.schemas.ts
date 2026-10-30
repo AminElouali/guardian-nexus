@@ -425,6 +425,237 @@ export const AiAssessmentEvidenceNetworkPublicDns = {
   blocked: 'blocked',
 } as const;
 
+export type GuardianVerificationEvidenceMode = typeof GuardianVerificationEvidenceMode[keyof typeof GuardianVerificationEvidenceMode];
+
+
+export const GuardianVerificationEvidenceMode = {
+  deterministic_synthetic_local_agent: 'deterministic_synthetic_local_agent',
+} as const;
+
+export type GuardianVerificationEvidenceObjectiveBitOrderItem = typeof GuardianVerificationEvidenceObjectiveBitOrderItem[keyof typeof GuardianVerificationEvidenceObjectiveBitOrderItem];
+
+
+export const GuardianVerificationEvidenceObjectiveBitOrderItem = {
+  untrusted_text_present: 'untrusted_text_present',
+  synthetic_data_propagated: 'synthetic_data_propagated',
+  untrusted_instruction_obeyed: 'untrusted_instruction_obeyed',
+  action_attempted: 'action_attempted',
+  unauthorized_action_attempted: 'unauthorized_action_attempted',
+  action_executed: 'action_executed',
+  policy_violation: 'policy_violation',
+} as const;
+
+export type GuardianVerificationEvidenceScenariosItemScenarioId = typeof GuardianVerificationEvidenceScenariosItemScenarioId[keyof typeof GuardianVerificationEvidenceScenariosItemScenarioId];
+
+
+export const GuardianVerificationEvidenceScenariosItemScenarioId = {
+  synthetic_data_exfiltration: 'synthetic_data_exfiltration',
+  unauthorized_tool_operation: 'unauthorized_tool_operation',
+  indirect_document_injection: 'indirect_document_injection',
+} as const;
+
+export type GuardianVerificationMetricScenarioId = typeof GuardianVerificationMetricScenarioId[keyof typeof GuardianVerificationMetricScenarioId];
+
+
+export const GuardianVerificationMetricScenarioId = {
+  synthetic_data_exfiltration: 'synthetic_data_exfiltration',
+  unauthorized_tool_operation: 'unauthorized_tool_operation',
+  indirect_document_injection: 'indirect_document_injection',
+} as const;
+
+export type GuardianVerificationMetricSplit = typeof GuardianVerificationMetricSplit[keyof typeof GuardianVerificationMetricSplit];
+
+
+export const GuardianVerificationMetricSplit = {
+  calibration: 'calibration',
+  holdout: 'holdout',
+} as const;
+
+export type GuardianVerificationMetricObjective = typeof GuardianVerificationMetricObjective[keyof typeof GuardianVerificationMetricObjective];
+
+
+export const GuardianVerificationMetricObjective = {
+  untrusted_text_present: 'untrusted_text_present',
+  synthetic_data_propagated: 'synthetic_data_propagated',
+  untrusted_instruction_obeyed: 'untrusted_instruction_obeyed',
+  action_attempted: 'action_attempted',
+  unauthorized_action_attempted: 'unauthorized_action_attempted',
+  action_executed: 'action_executed',
+  policy_violation: 'policy_violation',
+} as const;
+
+export interface GuardianVerificationRatio {
+  numerator: number;
+  /** @minimum 1 */
+  denominator: number;
+  /**
+     * @minimum 0
+     * @maximum 1
+     */
+  value: number;
+}
+
+export interface GuardianVerificationMetric {
+  scenarioId: GuardianVerificationMetricScenarioId;
+  split: GuardianVerificationMetricSplit;
+  objective: GuardianVerificationMetricObjective;
+  /** @minimum 1 */
+  sampleCount: number;
+  /** @minimum 1 */
+  positiveSupport: number;
+  /** @minimum 1 */
+  negativeSupport: number;
+  /** @minimum 0 */
+  truePositive: number;
+  /** @minimum 0 */
+  falsePositive: number;
+  /** @minimum 0 */
+  trueNegative: number;
+  /** @minimum 0 */
+  falseNegative: number;
+  precision: GuardianVerificationRatio;
+  recall: GuardianVerificationRatio;
+  falsePositiveRate: GuardianVerificationRatio;
+  falseNegativeRate: GuardianVerificationRatio;
+  accuracy: GuardianVerificationRatio;
+}
+
+export type GuardianVerificationOperationSummaryOperation = typeof GuardianVerificationOperationSummaryOperation[keyof typeof GuardianVerificationOperationSummaryOperation];
+
+
+export const GuardianVerificationOperationSummaryOperation = {
+  emailsendexternal: 'email.send.external',
+  emailsendteam: 'email.send.team',
+  workspaceadmindisable_audit: 'workspace.admin.disable_audit',
+  documentsreadlocal: 'documents.read.local',
+  documentsreaduntrusted: 'documents.read.untrusted',
+} as const;
+
+export interface GuardianVerificationOperationSummary {
+  operation: GuardianVerificationOperationSummaryOperation;
+  /** @minimum 0 */
+  calls: number;
+  /** @minimum 0 */
+  authorized: number;
+  /** @minimum 0 */
+  denied: number;
+  /** @minimum 0 */
+  executed: number;
+  /** @minimum 0 */
+  policyAllowed: number;
+  /** @minimum 0 */
+  policyDenied: number;
+  /** @minimum 0 */
+  stateChanges: number;
+  /** @minimum 0 */
+  targetActions: number;
+  /** @minimum 0 */
+  syntheticDataObserved: number;
+  /** @minimum 0 */
+  policyViolations: number;
+}
+
+export type GuardianVerificationEvidenceSelfChecksStatus = typeof GuardianVerificationEvidenceSelfChecksStatus[keyof typeof GuardianVerificationEvidenceSelfChecksStatus];
+
+
+export const GuardianVerificationEvidenceSelfChecksStatus = {
+  passed: 'passed',
+} as const;
+
+export interface GuardianVerificationCaseEvidence {
+  caseId: string;
+  /** @minimum 0 */
+  expectedMask: number;
+  /** @minimum 0 */
+  observedMask: number;
+  /** @pattern ^[a-f0-9]{64}$ */
+  caseEvidenceSha256: string;
+}
+
+export type GuardianVerificationEvidenceScenariosItem = {
+  scenarioId: GuardianVerificationEvidenceScenariosItemScenarioId;
+  policyId: string;
+};
+
+export type GuardianVerificationEvidenceSplitSampleCounts = {
+  /** @minimum 1 */
+  calibration: number;
+  /** @minimum 1 */
+  holdout: number;
+};
+
+export type GuardianVerificationEvidenceToolCallSummaryOperationCounts = {[key: string]: number};
+
+export type GuardianVerificationEvidenceToolCallSummary = {
+  /** @minimum 0 */
+  total: number;
+  /** @minimum 0 */
+  authorized: number;
+  /** @minimum 0 */
+  denied: number;
+  /** @minimum 0 */
+  executed: number;
+  /** @minimum 0 */
+  stateChanges: number;
+  /** @minimum 0 */
+  unauthorizedActionAttempts: number;
+  /** @minimum 0 */
+  policyViolations: number;
+  operationCounts: GuardianVerificationEvidenceToolCallSummaryOperationCounts;
+  byOperation: GuardianVerificationOperationSummary[];
+};
+
+export type GuardianVerificationEvidenceSelfChecks = {
+  status: GuardianVerificationEvidenceSelfChecksStatus;
+  allToolCallsInstrumented: true;
+  deniedCallsHaveNoSideEffects: true;
+  scenarioPolicyOracleIndependentOfToolGrant: true;
+  unknownOperationsRejected: true;
+  rawSyntheticContentStored: false;
+};
+
+export type GuardianVerificationEvidenceLimits = {
+  maxRuntimeSeconds: 15;
+  maxSamples: 144;
+  concurrency: 1;
+};
+
+export interface GuardianVerificationEvidence {
+  engine: 'guardian_verification';
+  version: string;
+  suiteVersion: string;
+  agentVersion: string;
+  policyVersion: string;
+  oracleVersion: string;
+  mode: GuardianVerificationEvidenceMode;
+  objectiveBitOrder: GuardianVerificationEvidenceObjectiveBitOrderItem[];
+  scenarios: GuardianVerificationEvidenceScenariosItem[];
+  /** @minimum 1 */
+  sampleCount: number;
+  /** @minimum 1 */
+  seedCount: number;
+  splitSampleCounts: GuardianVerificationEvidenceSplitSampleCounts;
+  metrics: GuardianVerificationMetric[];
+  toolCallSummary: GuardianVerificationEvidenceToolCallSummary;
+  /** @minimum 0 */
+  anomalyCount: number;
+  selfChecks: GuardianVerificationEvidenceSelfChecks;
+  caseEvidence: GuardianVerificationCaseEvidence[];
+  /** @pattern ^[a-f0-9]{64}$ */
+  suiteEvidenceSha256: string;
+  startedAt: string;
+  completedAt: string;
+  /** @minimum 0 */
+  durationMs: number;
+  limits: GuardianVerificationEvidenceLimits;
+  syntheticOnly: true;
+  rawPromptsStored: false;
+  rawResponsesStored: false;
+  externalCalls: 0;
+  customerDataUsed: false;
+  interpretation: string;
+}
+
 export type AiAssessmentEvidenceReportRecordTypes = {[key: string]: number};
 
 export type AiAssessmentEvidenceFindingsItem = {
@@ -469,6 +700,7 @@ export interface AiAssessmentEvidence {
   externalCalls: 0;
   customerDataUsed: false;
   findingSummary: string;
+  guardianVerification?: GuardianVerificationEvidence;
 }
 
 export interface AiAssessmentLabJob {

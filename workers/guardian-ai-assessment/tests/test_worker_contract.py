@@ -23,6 +23,16 @@ class WorkerContractTests(unittest.TestCase):
         self.assertEqual(manifest["network"]["allowedInterfaces"], ["lo"])
         self.assertEqual(manifest["limits"]["probeRequests"], 1)
         self.assertEqual(manifest["engine"]["license"], "Apache-2.0")
+        self.assertEqual(manifest["verificationSuite"]["sampleCount"], 144)
+        self.assertEqual(
+            manifest["verificationSuite"]["samplesPerSplit"], 72
+        )
+        self.assertEqual(
+            manifest["verificationSuite"]["maxRuntimeSeconds"], 15
+        )
+        self.assertFalse(manifest["verificationSuite"]["realLlmInference"])
+        self.assertFalse(manifest["verificationSuite"]["importedAgentDojoCodeOrDataset"])
+        self.assertEqual(manifest["verificationSuite"]["externalCalls"], 0)
 
     def test_runtime_dependencies_do_not_install_model_providers(self):
         requirements = (
@@ -59,6 +69,8 @@ class WorkerContractTests(unittest.TestCase):
             with self.subTest(option=option):
                 self.assertIn(option, launcher)
         self.assertIn("caller-supplied Docker flags", launcher)
+        self.assertIn("--verification-suite", launcher)
+        self.assertIn("--unit-tests", launcher)
 
     def test_report_parser_checks_garak_eval_and_binary_scores(self):
         report = "\n".join(

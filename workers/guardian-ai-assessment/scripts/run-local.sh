@@ -22,7 +22,16 @@ CONTAINER_ARGS="
 # Keep the security options fixed. Never accept caller-supplied Docker flags,
 # targets, credentials, or arbitrary probes through this script.
 case "${1:-}" in
-  --self-test|--validation-suite)
+  --unit-tests)
+    if [ "$#" -ne 1 ]; then
+      echo "A fixed local mode accepts no extra arguments." >&2
+      exit 64
+    fi
+    # shellcheck disable=SC2086
+    exec docker run $CONTAINER_ARGS --entrypoint=python "$IMAGE" \
+      -m unittest discover -s tests -v
+    ;;
+  --self-test|--validation-suite|--verification-suite)
     if [ "$#" -ne 1 ]; then
       echo "A fixed local mode accepts no extra arguments." >&2
       exit 64

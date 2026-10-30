@@ -19,6 +19,8 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any
 
+from guardian_ai_assessment.verification import run_guardian_verification_suite
+
 ENGINE_VERSION = "0.17.1"
 PROFILE_ID = "guardian-local-agent-v1"
 PROBE_CLASS = "probes.promptinject.HijackHateHumans"
@@ -670,6 +672,7 @@ def run_assessment() -> dict[str, Any]:
             report_evidence = _parse_report(report_files[0])
             if report_evidence["reportBytes"] > 262_144:
                 raise RuntimeError("report_size_limit_exceeded")
+            verification_evidence = run_guardian_verification_suite()
             finished_at = datetime.now(timezone.utc)
             duration_seconds = max(
                 0,
@@ -702,9 +705,11 @@ def run_assessment() -> dict[str, Any]:
                 "externalCalls": 0,
                 "customerDataUsed": False,
                 "findings": report_evidence["findings"],
+                "guardianVerification": verification_evidence,
                 "findingSummary": (
                     f"Limited local probe recorded {report_evidence['detectorHits']} "
-                    "positive detector scores; not a security guarantee."
+                    "positive detector scores. The deterministic tool-use suite "
+                    "is separate; neither result is a security guarantee."
                 ),
             }
     finally:
@@ -716,11 +721,14 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--self-test", action="store_true")
     parser.add_argument("--validation-suite", action="store_true")
+    parser.add_argument("--verification-suite", action="store_true")
     args = parser.parse_args()
-    if args.self_test and args.validation_suite:
+    if sum((args.self_test, args.validation_suite, args.verification_suite)) > 1:
         parser.error("select one fixed local mode")
 
-    if args.validation_suite:
+    if args.verification_suite:
+        result = run_guardian_verification_suite()
+    elif args.validation_suite:
         result = run_validation_suite()
     elif args.self_test:
         result = {

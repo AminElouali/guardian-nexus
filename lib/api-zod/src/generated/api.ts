@@ -482,6 +482,87 @@ export const ListWorkspaceAiAssessmentLabJobsParams = zod.object({
 export const listWorkspaceAiAssessmentLabJobsResponseResultOneReportSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 
 
+
+
+
+
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationMetricsItemTruePositiveMin = 0;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationMetricsItemFalsePositiveMin = 0;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationMetricsItemTrueNegativeMin = 0;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationMetricsItemFalseNegativeMin = 0;
+
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationMetricsItemPrecisionValueMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationMetricsItemPrecisionValueMax = 1;
+
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationMetricsItemRecallValueMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationMetricsItemRecallValueMax = 1;
+
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationMetricsItemFalsePositiveRateValueMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationMetricsItemFalsePositiveRateValueMax = 1;
+
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationMetricsItemFalseNegativeRateValueMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationMetricsItemFalseNegativeRateValueMax = 1;
+
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationMetricsItemAccuracyValueMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationMetricsItemAccuracyValueMax = 1;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationToolCallSummaryTotalMin = 0;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationToolCallSummaryAuthorizedMin = 0;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationToolCallSummaryDeniedMin = 0;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationToolCallSummaryExecutedMin = 0;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationToolCallSummaryStateChangesMin = 0;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationToolCallSummaryUnauthorizedActionAttemptsMin = 0;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationToolCallSummaryPolicyViolationsMin = 0;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationToolCallSummaryOperationCountsMinOne = 0;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationToolCallSummaryByOperationItemCallsMin = 0;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationToolCallSummaryByOperationItemAuthorizedMin = 0;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationToolCallSummaryByOperationItemDeniedMin = 0;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationToolCallSummaryByOperationItemExecutedMin = 0;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationToolCallSummaryByOperationItemPolicyAllowedMin = 0;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationToolCallSummaryByOperationItemPolicyDeniedMin = 0;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationToolCallSummaryByOperationItemStateChangesMin = 0;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationToolCallSummaryByOperationItemTargetActionsMin = 0;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationToolCallSummaryByOperationItemSyntheticDataObservedMin = 0;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationToolCallSummaryByOperationItemPolicyViolationsMin = 0;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationAnomalyCountMin = 0;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationCaseEvidenceItemExpectedMaskMin = 0;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationCaseEvidenceItemObservedMaskMin = 0;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationCaseEvidenceItemCaseEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationSuiteEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationDurationMsMin = 0;
+
+
+
 export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "id": zod.uuid(),
   "status": zod.enum(['queued', 'running', 'succeeded', 'failed']),
@@ -525,7 +606,117 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "responsesStored": zod.literal(false),
   "externalCalls": zod.literal(0),
   "customerDataUsed": zod.literal(false),
-  "findingSummary": zod.string()
+  "findingSummary": zod.string(),
+  "guardianVerification": zod.object({
+  "engine": zod.literal("guardian_verification"),
+  "version": zod.string(),
+  "suiteVersion": zod.string(),
+  "agentVersion": zod.string(),
+  "policyVersion": zod.string(),
+  "oracleVersion": zod.string(),
+  "mode": zod.enum(['deterministic_synthetic_local_agent']),
+  "objectiveBitOrder": zod.array(zod.enum(['untrusted_text_present', 'synthetic_data_propagated', 'untrusted_instruction_obeyed', 'action_attempted', 'unauthorized_action_attempted', 'action_executed', 'policy_violation'])),
+  "scenarios": zod.array(zod.object({
+  "scenarioId": zod.enum(['synthetic_data_exfiltration', 'unauthorized_tool_operation', 'indirect_document_injection']),
+  "policyId": zod.string()
+})),
+  "sampleCount": zod.int().min(1),
+  "seedCount": zod.int().min(1),
+  "splitSampleCounts": zod.object({
+  "calibration": zod.int().min(1),
+  "holdout": zod.int().min(1)
+}),
+  "metrics": zod.array(zod.object({
+  "scenarioId": zod.enum(['synthetic_data_exfiltration', 'unauthorized_tool_operation', 'indirect_document_injection']),
+  "split": zod.enum(['calibration', 'holdout']),
+  "objective": zod.enum(['untrusted_text_present', 'synthetic_data_propagated', 'untrusted_instruction_obeyed', 'action_attempted', 'unauthorized_action_attempted', 'action_executed', 'policy_violation']),
+  "sampleCount": zod.int().min(1),
+  "positiveSupport": zod.int().min(1),
+  "negativeSupport": zod.int().min(1),
+  "truePositive": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationMetricsItemTruePositiveMin),
+  "falsePositive": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationMetricsItemFalsePositiveMin),
+  "trueNegative": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationMetricsItemTrueNegativeMin),
+  "falseNegative": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationMetricsItemFalseNegativeMin),
+  "precision": zod.object({
+  "numerator": zod.int(),
+  "denominator": zod.int().min(1),
+  "value": zod.number().min(listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationMetricsItemPrecisionValueMin).max(listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationMetricsItemPrecisionValueMax)
+}),
+  "recall": zod.object({
+  "numerator": zod.int(),
+  "denominator": zod.int().min(1),
+  "value": zod.number().min(listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationMetricsItemRecallValueMin).max(listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationMetricsItemRecallValueMax)
+}),
+  "falsePositiveRate": zod.object({
+  "numerator": zod.int(),
+  "denominator": zod.int().min(1),
+  "value": zod.number().min(listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationMetricsItemFalsePositiveRateValueMin).max(listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationMetricsItemFalsePositiveRateValueMax)
+}),
+  "falseNegativeRate": zod.object({
+  "numerator": zod.int(),
+  "denominator": zod.int().min(1),
+  "value": zod.number().min(listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationMetricsItemFalseNegativeRateValueMin).max(listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationMetricsItemFalseNegativeRateValueMax)
+}),
+  "accuracy": zod.object({
+  "numerator": zod.int(),
+  "denominator": zod.int().min(1),
+  "value": zod.number().min(listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationMetricsItemAccuracyValueMin).max(listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationMetricsItemAccuracyValueMax)
+})
+})),
+  "toolCallSummary": zod.object({
+  "total": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationToolCallSummaryTotalMin),
+  "authorized": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationToolCallSummaryAuthorizedMin),
+  "denied": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationToolCallSummaryDeniedMin),
+  "executed": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationToolCallSummaryExecutedMin),
+  "stateChanges": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationToolCallSummaryStateChangesMin),
+  "unauthorizedActionAttempts": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationToolCallSummaryUnauthorizedActionAttemptsMin),
+  "policyViolations": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationToolCallSummaryPolicyViolationsMin),
+  "operationCounts": zod.record(zod.string(), zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationToolCallSummaryOperationCountsMinOne)),
+  "byOperation": zod.array(zod.object({
+  "operation": zod.enum(['email.send.external', 'email.send.team', 'workspace.admin.disable_audit', 'documents.read.local', 'documents.read.untrusted']),
+  "calls": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationToolCallSummaryByOperationItemCallsMin),
+  "authorized": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationToolCallSummaryByOperationItemAuthorizedMin),
+  "denied": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationToolCallSummaryByOperationItemDeniedMin),
+  "executed": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationToolCallSummaryByOperationItemExecutedMin),
+  "policyAllowed": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationToolCallSummaryByOperationItemPolicyAllowedMin),
+  "policyDenied": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationToolCallSummaryByOperationItemPolicyDeniedMin),
+  "stateChanges": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationToolCallSummaryByOperationItemStateChangesMin),
+  "targetActions": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationToolCallSummaryByOperationItemTargetActionsMin),
+  "syntheticDataObserved": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationToolCallSummaryByOperationItemSyntheticDataObservedMin),
+  "policyViolations": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationToolCallSummaryByOperationItemPolicyViolationsMin)
+}))
+}),
+  "anomalyCount": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationAnomalyCountMin),
+  "selfChecks": zod.object({
+  "status": zod.enum(['passed']),
+  "allToolCallsInstrumented": zod.literal(true),
+  "deniedCallsHaveNoSideEffects": zod.literal(true),
+  "scenarioPolicyOracleIndependentOfToolGrant": zod.literal(true),
+  "unknownOperationsRejected": zod.literal(true),
+  "rawSyntheticContentStored": zod.literal(false)
+}),
+  "caseEvidence": zod.array(zod.object({
+  "caseId": zod.string(),
+  "expectedMask": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationCaseEvidenceItemExpectedMaskMin),
+  "observedMask": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationCaseEvidenceItemObservedMaskMin),
+  "caseEvidenceSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationCaseEvidenceItemCaseEvidenceSha256RegExp)
+})),
+  "suiteEvidenceSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationSuiteEvidenceSha256RegExp),
+  "startedAt": zod.coerce.date(),
+  "completedAt": zod.coerce.date(),
+  "durationMs": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultOneGuardianVerificationDurationMsMin),
+  "limits": zod.object({
+  "maxRuntimeSeconds": zod.literal(15),
+  "maxSamples": zod.literal(144),
+  "concurrency": zod.literal(1)
+}),
+  "syntheticOnly": zod.literal(true),
+  "rawPromptsStored": zod.literal(false),
+  "rawResponsesStored": zod.literal(false),
+  "externalCalls": zod.literal(0),
+  "customerDataUsed": zod.literal(false),
+  "interpretation": zod.string()
+}).optional()
 }),zod.null()]),
   "errorCode": zod.string().nullable(),
   "createdAt": zod.coerce.date(),
@@ -553,6 +744,87 @@ export const CreateWorkspaceAiAssessmentLabJobBody = zod.object({
 })
 
 export const createWorkspaceAiAssessmentLabJobResponseResultOneReportSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+
+
+
+
+
+
+
+export const createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemTruePositiveMin = 0;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemFalsePositiveMin = 0;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemTrueNegativeMin = 0;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemFalseNegativeMin = 0;
+
+
+export const createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemPrecisionValueMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemPrecisionValueMax = 1;
+
+
+export const createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemRecallValueMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemRecallValueMax = 1;
+
+
+export const createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemFalsePositiveRateValueMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemFalsePositiveRateValueMax = 1;
+
+
+export const createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemFalseNegativeRateValueMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemFalseNegativeRateValueMax = 1;
+
+
+export const createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemAccuracyValueMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemAccuracyValueMax = 1;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryTotalMin = 0;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryAuthorizedMin = 0;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryDeniedMin = 0;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryExecutedMin = 0;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryStateChangesMin = 0;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryUnauthorizedActionAttemptsMin = 0;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryPolicyViolationsMin = 0;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryOperationCountsMinOne = 0;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryByOperationItemCallsMin = 0;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryByOperationItemAuthorizedMin = 0;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryByOperationItemDeniedMin = 0;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryByOperationItemExecutedMin = 0;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryByOperationItemPolicyAllowedMin = 0;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryByOperationItemPolicyDeniedMin = 0;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryByOperationItemStateChangesMin = 0;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryByOperationItemTargetActionsMin = 0;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryByOperationItemSyntheticDataObservedMin = 0;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryByOperationItemPolicyViolationsMin = 0;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationAnomalyCountMin = 0;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationCaseEvidenceItemExpectedMaskMin = 0;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationCaseEvidenceItemObservedMaskMin = 0;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationCaseEvidenceItemCaseEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationSuiteEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationDurationMsMin = 0;
+
 
 
 export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
@@ -598,7 +870,117 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "responsesStored": zod.literal(false),
   "externalCalls": zod.literal(0),
   "customerDataUsed": zod.literal(false),
-  "findingSummary": zod.string()
+  "findingSummary": zod.string(),
+  "guardianVerification": zod.object({
+  "engine": zod.literal("guardian_verification"),
+  "version": zod.string(),
+  "suiteVersion": zod.string(),
+  "agentVersion": zod.string(),
+  "policyVersion": zod.string(),
+  "oracleVersion": zod.string(),
+  "mode": zod.enum(['deterministic_synthetic_local_agent']),
+  "objectiveBitOrder": zod.array(zod.enum(['untrusted_text_present', 'synthetic_data_propagated', 'untrusted_instruction_obeyed', 'action_attempted', 'unauthorized_action_attempted', 'action_executed', 'policy_violation'])),
+  "scenarios": zod.array(zod.object({
+  "scenarioId": zod.enum(['synthetic_data_exfiltration', 'unauthorized_tool_operation', 'indirect_document_injection']),
+  "policyId": zod.string()
+})),
+  "sampleCount": zod.int().min(1),
+  "seedCount": zod.int().min(1),
+  "splitSampleCounts": zod.object({
+  "calibration": zod.int().min(1),
+  "holdout": zod.int().min(1)
+}),
+  "metrics": zod.array(zod.object({
+  "scenarioId": zod.enum(['synthetic_data_exfiltration', 'unauthorized_tool_operation', 'indirect_document_injection']),
+  "split": zod.enum(['calibration', 'holdout']),
+  "objective": zod.enum(['untrusted_text_present', 'synthetic_data_propagated', 'untrusted_instruction_obeyed', 'action_attempted', 'unauthorized_action_attempted', 'action_executed', 'policy_violation']),
+  "sampleCount": zod.int().min(1),
+  "positiveSupport": zod.int().min(1),
+  "negativeSupport": zod.int().min(1),
+  "truePositive": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemTruePositiveMin),
+  "falsePositive": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemFalsePositiveMin),
+  "trueNegative": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemTrueNegativeMin),
+  "falseNegative": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemFalseNegativeMin),
+  "precision": zod.object({
+  "numerator": zod.int(),
+  "denominator": zod.int().min(1),
+  "value": zod.number().min(createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemPrecisionValueMin).max(createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemPrecisionValueMax)
+}),
+  "recall": zod.object({
+  "numerator": zod.int(),
+  "denominator": zod.int().min(1),
+  "value": zod.number().min(createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemRecallValueMin).max(createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemRecallValueMax)
+}),
+  "falsePositiveRate": zod.object({
+  "numerator": zod.int(),
+  "denominator": zod.int().min(1),
+  "value": zod.number().min(createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemFalsePositiveRateValueMin).max(createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemFalsePositiveRateValueMax)
+}),
+  "falseNegativeRate": zod.object({
+  "numerator": zod.int(),
+  "denominator": zod.int().min(1),
+  "value": zod.number().min(createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemFalseNegativeRateValueMin).max(createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemFalseNegativeRateValueMax)
+}),
+  "accuracy": zod.object({
+  "numerator": zod.int(),
+  "denominator": zod.int().min(1),
+  "value": zod.number().min(createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemAccuracyValueMin).max(createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemAccuracyValueMax)
+})
+})),
+  "toolCallSummary": zod.object({
+  "total": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryTotalMin),
+  "authorized": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryAuthorizedMin),
+  "denied": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryDeniedMin),
+  "executed": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryExecutedMin),
+  "stateChanges": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryStateChangesMin),
+  "unauthorizedActionAttempts": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryUnauthorizedActionAttemptsMin),
+  "policyViolations": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryPolicyViolationsMin),
+  "operationCounts": zod.record(zod.string(), zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryOperationCountsMinOne)),
+  "byOperation": zod.array(zod.object({
+  "operation": zod.enum(['email.send.external', 'email.send.team', 'workspace.admin.disable_audit', 'documents.read.local', 'documents.read.untrusted']),
+  "calls": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryByOperationItemCallsMin),
+  "authorized": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryByOperationItemAuthorizedMin),
+  "denied": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryByOperationItemDeniedMin),
+  "executed": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryByOperationItemExecutedMin),
+  "policyAllowed": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryByOperationItemPolicyAllowedMin),
+  "policyDenied": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryByOperationItemPolicyDeniedMin),
+  "stateChanges": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryByOperationItemStateChangesMin),
+  "targetActions": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryByOperationItemTargetActionsMin),
+  "syntheticDataObserved": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryByOperationItemSyntheticDataObservedMin),
+  "policyViolations": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryByOperationItemPolicyViolationsMin)
+}))
+}),
+  "anomalyCount": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationAnomalyCountMin),
+  "selfChecks": zod.object({
+  "status": zod.enum(['passed']),
+  "allToolCallsInstrumented": zod.literal(true),
+  "deniedCallsHaveNoSideEffects": zod.literal(true),
+  "scenarioPolicyOracleIndependentOfToolGrant": zod.literal(true),
+  "unknownOperationsRejected": zod.literal(true),
+  "rawSyntheticContentStored": zod.literal(false)
+}),
+  "caseEvidence": zod.array(zod.object({
+  "caseId": zod.string(),
+  "expectedMask": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationCaseEvidenceItemExpectedMaskMin),
+  "observedMask": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationCaseEvidenceItemObservedMaskMin),
+  "caseEvidenceSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationCaseEvidenceItemCaseEvidenceSha256RegExp)
+})),
+  "suiteEvidenceSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationSuiteEvidenceSha256RegExp),
+  "startedAt": zod.coerce.date(),
+  "completedAt": zod.coerce.date(),
+  "durationMs": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationDurationMsMin),
+  "limits": zod.object({
+  "maxRuntimeSeconds": zod.literal(15),
+  "maxSamples": zod.literal(144),
+  "concurrency": zod.literal(1)
+}),
+  "syntheticOnly": zod.literal(true),
+  "rawPromptsStored": zod.literal(false),
+  "rawResponsesStored": zod.literal(false),
+  "externalCalls": zod.literal(0),
+  "customerDataUsed": zod.literal(false),
+  "interpretation": zod.string()
+}).optional()
 }),zod.null()]),
   "errorCode": zod.string().nullable(),
   "createdAt": zod.coerce.date(),
@@ -616,6 +998,87 @@ export const RetryWorkspaceAiAssessmentLabJobParams = zod.object({
 })
 
 export const retryWorkspaceAiAssessmentLabJobResponseResultOneReportSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+
+
+
+
+
+
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemTruePositiveMin = 0;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemFalsePositiveMin = 0;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemTrueNegativeMin = 0;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemFalseNegativeMin = 0;
+
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemPrecisionValueMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemPrecisionValueMax = 1;
+
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemRecallValueMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemRecallValueMax = 1;
+
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemFalsePositiveRateValueMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemFalsePositiveRateValueMax = 1;
+
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemFalseNegativeRateValueMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemFalseNegativeRateValueMax = 1;
+
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemAccuracyValueMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemAccuracyValueMax = 1;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryTotalMin = 0;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryAuthorizedMin = 0;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryDeniedMin = 0;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryExecutedMin = 0;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryStateChangesMin = 0;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryUnauthorizedActionAttemptsMin = 0;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryPolicyViolationsMin = 0;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryOperationCountsMinOne = 0;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryByOperationItemCallsMin = 0;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryByOperationItemAuthorizedMin = 0;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryByOperationItemDeniedMin = 0;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryByOperationItemExecutedMin = 0;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryByOperationItemPolicyAllowedMin = 0;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryByOperationItemPolicyDeniedMin = 0;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryByOperationItemStateChangesMin = 0;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryByOperationItemTargetActionsMin = 0;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryByOperationItemSyntheticDataObservedMin = 0;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryByOperationItemPolicyViolationsMin = 0;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationAnomalyCountMin = 0;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationCaseEvidenceItemExpectedMaskMin = 0;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationCaseEvidenceItemObservedMaskMin = 0;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationCaseEvidenceItemCaseEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationSuiteEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationDurationMsMin = 0;
+
 
 
 export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
@@ -661,7 +1124,117 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "responsesStored": zod.literal(false),
   "externalCalls": zod.literal(0),
   "customerDataUsed": zod.literal(false),
-  "findingSummary": zod.string()
+  "findingSummary": zod.string(),
+  "guardianVerification": zod.object({
+  "engine": zod.literal("guardian_verification"),
+  "version": zod.string(),
+  "suiteVersion": zod.string(),
+  "agentVersion": zod.string(),
+  "policyVersion": zod.string(),
+  "oracleVersion": zod.string(),
+  "mode": zod.enum(['deterministic_synthetic_local_agent']),
+  "objectiveBitOrder": zod.array(zod.enum(['untrusted_text_present', 'synthetic_data_propagated', 'untrusted_instruction_obeyed', 'action_attempted', 'unauthorized_action_attempted', 'action_executed', 'policy_violation'])),
+  "scenarios": zod.array(zod.object({
+  "scenarioId": zod.enum(['synthetic_data_exfiltration', 'unauthorized_tool_operation', 'indirect_document_injection']),
+  "policyId": zod.string()
+})),
+  "sampleCount": zod.int().min(1),
+  "seedCount": zod.int().min(1),
+  "splitSampleCounts": zod.object({
+  "calibration": zod.int().min(1),
+  "holdout": zod.int().min(1)
+}),
+  "metrics": zod.array(zod.object({
+  "scenarioId": zod.enum(['synthetic_data_exfiltration', 'unauthorized_tool_operation', 'indirect_document_injection']),
+  "split": zod.enum(['calibration', 'holdout']),
+  "objective": zod.enum(['untrusted_text_present', 'synthetic_data_propagated', 'untrusted_instruction_obeyed', 'action_attempted', 'unauthorized_action_attempted', 'action_executed', 'policy_violation']),
+  "sampleCount": zod.int().min(1),
+  "positiveSupport": zod.int().min(1),
+  "negativeSupport": zod.int().min(1),
+  "truePositive": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemTruePositiveMin),
+  "falsePositive": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemFalsePositiveMin),
+  "trueNegative": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemTrueNegativeMin),
+  "falseNegative": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemFalseNegativeMin),
+  "precision": zod.object({
+  "numerator": zod.int(),
+  "denominator": zod.int().min(1),
+  "value": zod.number().min(retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemPrecisionValueMin).max(retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemPrecisionValueMax)
+}),
+  "recall": zod.object({
+  "numerator": zod.int(),
+  "denominator": zod.int().min(1),
+  "value": zod.number().min(retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemRecallValueMin).max(retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemRecallValueMax)
+}),
+  "falsePositiveRate": zod.object({
+  "numerator": zod.int(),
+  "denominator": zod.int().min(1),
+  "value": zod.number().min(retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemFalsePositiveRateValueMin).max(retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemFalsePositiveRateValueMax)
+}),
+  "falseNegativeRate": zod.object({
+  "numerator": zod.int(),
+  "denominator": zod.int().min(1),
+  "value": zod.number().min(retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemFalseNegativeRateValueMin).max(retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemFalseNegativeRateValueMax)
+}),
+  "accuracy": zod.object({
+  "numerator": zod.int(),
+  "denominator": zod.int().min(1),
+  "value": zod.number().min(retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemAccuracyValueMin).max(retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationMetricsItemAccuracyValueMax)
+})
+})),
+  "toolCallSummary": zod.object({
+  "total": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryTotalMin),
+  "authorized": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryAuthorizedMin),
+  "denied": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryDeniedMin),
+  "executed": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryExecutedMin),
+  "stateChanges": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryStateChangesMin),
+  "unauthorizedActionAttempts": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryUnauthorizedActionAttemptsMin),
+  "policyViolations": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryPolicyViolationsMin),
+  "operationCounts": zod.record(zod.string(), zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryOperationCountsMinOne)),
+  "byOperation": zod.array(zod.object({
+  "operation": zod.enum(['email.send.external', 'email.send.team', 'workspace.admin.disable_audit', 'documents.read.local', 'documents.read.untrusted']),
+  "calls": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryByOperationItemCallsMin),
+  "authorized": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryByOperationItemAuthorizedMin),
+  "denied": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryByOperationItemDeniedMin),
+  "executed": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryByOperationItemExecutedMin),
+  "policyAllowed": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryByOperationItemPolicyAllowedMin),
+  "policyDenied": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryByOperationItemPolicyDeniedMin),
+  "stateChanges": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryByOperationItemStateChangesMin),
+  "targetActions": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryByOperationItemTargetActionsMin),
+  "syntheticDataObserved": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryByOperationItemSyntheticDataObservedMin),
+  "policyViolations": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationToolCallSummaryByOperationItemPolicyViolationsMin)
+}))
+}),
+  "anomalyCount": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationAnomalyCountMin),
+  "selfChecks": zod.object({
+  "status": zod.enum(['passed']),
+  "allToolCallsInstrumented": zod.literal(true),
+  "deniedCallsHaveNoSideEffects": zod.literal(true),
+  "scenarioPolicyOracleIndependentOfToolGrant": zod.literal(true),
+  "unknownOperationsRejected": zod.literal(true),
+  "rawSyntheticContentStored": zod.literal(false)
+}),
+  "caseEvidence": zod.array(zod.object({
+  "caseId": zod.string(),
+  "expectedMask": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationCaseEvidenceItemExpectedMaskMin),
+  "observedMask": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationCaseEvidenceItemObservedMaskMin),
+  "caseEvidenceSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationCaseEvidenceItemCaseEvidenceSha256RegExp)
+})),
+  "suiteEvidenceSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationSuiteEvidenceSha256RegExp),
+  "startedAt": zod.coerce.date(),
+  "completedAt": zod.coerce.date(),
+  "durationMs": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultOneGuardianVerificationDurationMsMin),
+  "limits": zod.object({
+  "maxRuntimeSeconds": zod.literal(15),
+  "maxSamples": zod.literal(144),
+  "concurrency": zod.literal(1)
+}),
+  "syntheticOnly": zod.literal(true),
+  "rawPromptsStored": zod.literal(false),
+  "rawResponsesStored": zod.literal(false),
+  "externalCalls": zod.literal(0),
+  "customerDataUsed": zod.literal(false),
+  "interpretation": zod.string()
+}).optional()
 }),zod.null()]),
   "errorCode": zod.string().nullable(),
   "createdAt": zod.coerce.date(),

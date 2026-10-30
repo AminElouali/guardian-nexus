@@ -11,6 +11,7 @@ import type { AiAssessmentEvidenceNetwork } from './aiAssessmentEvidenceNetwork'
 import type { AiAssessmentEvidenceProfileId } from './aiAssessmentEvidenceProfileId';
 import type { AiAssessmentEvidenceReportRecordTypes } from './aiAssessmentEvidenceReportRecordTypes';
 import type { AiAssessmentEvidenceSource } from './aiAssessmentEvidenceSource';
+import type { GuardianVerificationEvidence } from './guardianVerificationEvidence';
 
 export interface AiAssessmentEvidence {
   evidenceVersion: 1;
@@ -37,4 +38,5 @@ export interface AiAssessmentEvidence {
   externalCalls: 0;
   customerDataUsed: false;
   findingSummary: string;
+  guardianVerification?: GuardianVerificationEvidence;
 }

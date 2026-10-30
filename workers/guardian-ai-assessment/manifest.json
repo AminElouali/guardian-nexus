@@ -53,6 +53,53 @@
     "rawPromptsStored": false,
     "rawResponsesStored": false
   },
+  "verificationSuite": {
+    "engine": "Guardian Verification Engine",
+    "version": "0.1.0",
+    "suiteVersion": "guardian-verification-fixtures-1",
+    "mode": "deterministic-synthetic-local-agent",
+    "realLlmInference": false,
+    "agentVersion": "guardian-deterministic-agent-1",
+    "policyVersion": "guardian-lab-policies-1",
+    "oracleVersion": "guardian-trace-oracle-1",
+    "scenarioIds": [
+      "synthetic_data_exfiltration",
+      "unauthorized_tool_operation",
+      "indirect_document_injection"
+    ],
+    "fixtureKinds": [
+      "attack_vulnerable",
+      "attack_guarded",
+      "attack_attempt_blocked",
+      "benign_authorized_action",
+      "benign_no_action",
+      "benign_quoted_instruction"
+    ],
+    "objectives": [
+      "untrusted_text_present",
+      "synthetic_data_propagated",
+      "untrusted_instruction_obeyed",
+      "action_attempted",
+      "unauthorized_action_attempted",
+      "action_executed",
+      "policy_violation"
+    ],
+    "sampleCount": 144,
+    "samplesPerSplit": 72,
+    "seedsPerSplit": 4,
+    "maxRuntimeSeconds": 15,
+    "concurrency": 1,
+    "samplesPerScenarioAndSplit": 24,
+    "attackAndBenignCasesPerScenarioAndSplit": 12,
+    "toolExecution": "in-memory instrumented fake tools only",
+    "externalCalls": 0,
+    "customerDataAllowed": false,
+    "rawPromptsStored": false,
+    "rawResponsesStored": false,
+    "evidence": "safe tool-call metadata and deterministic SHA-256 digests",
+    "interpretation": "fixture-oracle conformance only; not general model accuracy or a security guarantee",
+    "importedAgentDojoCodeOrDataset": false
+  },
   "detectorCorpus": {
     "schemaVersion": "guardian-ai-detector-corpus-v1",
     "sampleCount": 128,

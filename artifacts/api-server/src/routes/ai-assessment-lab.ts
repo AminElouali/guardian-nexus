@@ -19,6 +19,7 @@ import {
 import { canRunAiEvaluation } from "../lib/access-control";
 import {
   AI_ASSESSMENT_JOB_MAX_ATTEMPTS,
+  AI_ASSESSMENT_WORKER_VERSION,
   enqueueLocalAssessmentJob,
   getLocalWorkerAvailability,
   isAiAssessmentJobRetryable,
@@ -177,6 +178,7 @@ router.post(
               requestedByUserId: req.authUserId!,
               idempotencyKey: body.data.idempotencyKey,
               profileId: "guardian-local-agent-v1",
+              workerVersion: AI_ASSESSMENT_WORKER_VERSION,
               status: "queued",
             })
             .onConflictDoNothing({

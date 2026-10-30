@@ -14,6 +14,117 @@ import {
 import { aiAssessmentWorkerRole, appRuntimeRole } from "./roles";
 import { workspacesTable } from "./workspaces";
 
+export type GuardianVerificationObjective =
+  | "untrusted_text_present"
+  | "synthetic_data_propagated"
+  | "untrusted_instruction_obeyed"
+  | "action_attempted"
+  | "unauthorized_action_attempted"
+  | "action_executed"
+  | "policy_violation";
+
+export type GuardianVerificationMetric = {
+  scenarioId:
+    | "synthetic_data_exfiltration"
+    | "unauthorized_tool_operation"
+    | "indirect_document_injection";
+  split: "calibration" | "holdout";
+  objective: GuardianVerificationObjective;
+  sampleCount: number;
+  positiveSupport: number;
+  negativeSupport: number;
+  truePositive: number;
+  falsePositive: number;
+  trueNegative: number;
+  falseNegative: number;
+  precision: { numerator: number; denominator: number; value: number };
+  recall: { numerator: number; denominator: number; value: number };
+  falsePositiveRate: { numerator: number; denominator: number; value: number };
+  falseNegativeRate: { numerator: number; denominator: number; value: number };
+  accuracy: { numerator: number; denominator: number; value: number };
+};
+
+export type GuardianVerificationOperation =
+  | "email.send.external"
+  | "email.send.team"
+  | "workspace.admin.disable_audit"
+  | "documents.read.local"
+  | "documents.read.untrusted";
+
+export type GuardianVerificationCaseEvidence = {
+  caseId: string;
+  expectedMask: number;
+  observedMask: number;
+  caseEvidenceSha256: string;
+};
+
+export type GuardianVerificationEvidence = {
+  engine: "guardian_verification";
+  version: string;
+  suiteVersion: string;
+  agentVersion: string;
+  policyVersion: string;
+  oracleVersion: string;
+  mode: "deterministic_synthetic_local_agent";
+  objectiveBitOrder: GuardianVerificationObjective[];
+  scenarios: Array<{
+    scenarioId: GuardianVerificationMetric["scenarioId"];
+    policyId: string;
+  }>;
+  sampleCount: number;
+  seedCount: number;
+  splitSampleCounts: { calibration: number; holdout: number };
+  metrics: GuardianVerificationMetric[];
+  toolCallSummary: {
+    total: number;
+    authorized: number;
+    denied: number;
+    executed: number;
+    stateChanges: number;
+    unauthorizedActionAttempts: number;
+    policyViolations: number;
+    operationCounts: Record<string, number>;
+    byOperation: Array<{
+      operation: GuardianVerificationOperation;
+      calls: number;
+      authorized: number;
+      denied: number;
+      executed: number;
+      policyAllowed: number;
+      policyDenied: number;
+      stateChanges: number;
+      targetActions: number;
+      syntheticDataObserved: number;
+      policyViolations: number;
+    }>;
+  };
+  anomalyCount: number;
+  selfChecks: {
+    status: "passed";
+    allToolCallsInstrumented: true;
+    deniedCallsHaveNoSideEffects: true;
+    scenarioPolicyOracleIndependentOfToolGrant: true;
+    unknownOperationsRejected: true;
+    rawSyntheticContentStored: false;
+  };
+  caseEvidence: GuardianVerificationCaseEvidence[];
+  suiteEvidenceSha256: string;
+  startedAt: string;
+  completedAt: string;
+  durationMs: number;
+  limits: {
+    maxRuntimeSeconds: 15;
+    maxSamples: 144;
+    concurrency: 1;
+  };
+  syntheticOnly: true;
+  rawPromptsStored: false;
+  rawResponsesStored: false;
+  externalCalls: 0;
+  customerDataUsed: false;
+  interpretation: string;
+};
+
 export type AiAssessmentEvidence = {
   evidenceVersion: 1;
   source: "isolated_local_lab";
@@ -51,6 +162,7 @@ export type AiAssessmentEvidence = {
   externalCalls: 0;
   customerDataUsed: false;
   findingSummary: string;
+  guardianVerification?: GuardianVerificationEvidence;
 };
 
 const memberScope = (workspaceId: SQLWrapper) => sql`
