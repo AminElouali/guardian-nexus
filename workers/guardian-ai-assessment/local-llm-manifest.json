@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "status": "development_local_lab_only",
+  "productLabel": "Guardian Nexus — Evaluación de Seguridad de IA",
+  "model": {
+    "id": "Qwen/Qwen3-0.6B-GGUF",
+    "revision": "23749fefcc72300e3a2ad315e1317431b06b590a",
+    "file": "Qwen3-0.6B-Q8_0.gguf",
+    "sizeBytes": 639446688,
+    "sha256": "9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031",
+    "quantization": "Q8_0",
+    "license": "Apache-2.0",
+    "source": "https://huggingface.co/Qwen/Qwen3-0.6B-GGUF"
+  },
+  "runtime": {
+    "name": "llama-cpp-python",
+    "version": "0.3.36",
+    "license": "MIT",
+    "wheel": "llama_cpp_python-0.3.36-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl",
+    "wheelSizeBytes": 27077498,
+    "wheelSha256": "c8a3e98093e950d7a770f794842e36f2db82b2933e8762ed7b5ffd435011e8e4",
+    "python": "3.13",
+    "baseImage": "python:3.13-slim-trixie@sha256:2d44738ebf4ce5f63b9d9ea871e9c7cfdc0426f7b0c97cac915fd88ded1d86bb",
+    "baseImageMatchesWorker": true,
+    "dependencies": [
+      {
+        "name": "diskcache",
+        "version": "5.6.3",
+        "license": "Apache-2.0",
+        "wheel": "diskcache-5.6.3-py3-none-any.whl",
+        "sha256": "5e31b2d5fbad117cc363ebaf6b689474db18a1f6438bc82358b024abd4c2ca19"
+      },
+      {
+        "name": "Jinja2",
+        "version": "3.1.6",
+        "license": "BSD",
+        "wheel": "jinja2-3.1.6-py3-none-any.whl",
+        "sha256": "85ece4451f492d0c13c5dd7c13a64681a86afae63a5f347908daf103ce6d2f67"
+      },
+      {
+        "name": "MarkupSafe",
+        "version": "3.0.4",
+        "license": "BSD",
+        "wheel": "markupsafe-3.0.4-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
+        "sha256": "434139499bb20b502ed3baa1f169e618f924a97e7a777fea1a49446d80106cf6"
+      },
+      {
+        "name": "numpy",
+        "version": "2.3.4",
+        "source": "existing worker image"
+      },
+      {
+        "name": "typing-extensions",
+        "version": "4.16.0",
+        "source": "existing worker image"
+      }
+    ]
+  },
+  "executionLimits": {
+    "network": "none",
+    "cpuCores": 1,
+    "memoryMiB": 1536,
+    "memorySwapMiB": 1536,
+    "pids": 64,
+    "concurrency": 1,
+    "hardTimeoutSeconds": 180,
+    "contextTokens": 1024,
+    "maxCompletionTokensPerCase": 96,
+    "fixedSeed": 20261031
+  },
+  "corpus": {
+    "id": "guardian-local-llm-tool-lab-v1",
+    "sampleCount": 8,
+    "languages": [
+      "en",
+      "es"
+    ],
+    "attackCases": 4,
+    "benignCases": 4,
+    "data": "synthetic_only",
+    "targetSystems": "local_fake_tools_only"
+  }
+}
