@@ -1,5 +1,5 @@
 import { and, desc, eq, sql } from "drizzle-orm";
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type RequestHandler } from "express";
 import {
   CreateWorkspaceAiAssessmentLabJobBody,
   CreateWorkspaceAiAssessmentLabJobParams,
@@ -28,7 +28,7 @@ import { withWorkspaceUserTransaction } from "../lib/tenant-db";
 import { UsageQuotaError, reserveWorkspaceUsageInTransaction } from "../lib/usage";
 import { requireAuth } from "../middlewares/requireAuth";
 
-const router: IRouter = Router();
+const routes: IRouter = Router();
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MAX_HISTORY = 20;
@@ -50,9 +50,7 @@ function formatJob(job: AiAssessmentJob) {
   });
 }
 
-router.use("/workspaces", requireAuth);
-
-router.get(
+routes.get(
   "/workspaces/:workspaceId/ai-security-assessments/lab/availability",
   async (req, res): Promise<void> => {
     const params = GetWorkspaceAiAssessmentLabAvailabilityParams.safeParse(
@@ -79,7 +77,7 @@ router.get(
   },
 );
 
-router.get(
+routes.get(
   "/workspaces/:workspaceId/ai-security-assessments/lab/jobs",
   async (req, res): Promise<void> => {
     const params = ListWorkspaceAiAssessmentLabJobsParams.safeParse(req.params);
@@ -113,7 +111,7 @@ router.get(
   },
 );
 
-router.post(
+routes.post(
   "/workspaces/:workspaceId/ai-security-assessments/lab/jobs",
   async (req, res): Promise<void> => {
     const params = CreateWorkspaceAiAssessmentLabJobParams.safeParse(req.params);
@@ -266,7 +264,7 @@ router.post(
   },
 );
 
-router.post(
+routes.post(
   "/workspaces/:workspaceId/ai-security-assessments/lab/jobs/:jobId/retry",
   async (req, res): Promise<void> => {
     const params = RetryWorkspaceAiAssessmentLabJobParams.safeParse(req.params);
@@ -376,4 +374,13 @@ router.post(
   },
 );
 
-export default router;
+export function createAiAssessmentLabRouter(
+  authMiddleware: RequestHandler = requireAuth,
+): IRouter {
+  const router: IRouter = Router();
+  router.use("/workspaces", authMiddleware);
+  router.use(routes);
+  return router;
+}
+
+export default createAiAssessmentLabRouter();

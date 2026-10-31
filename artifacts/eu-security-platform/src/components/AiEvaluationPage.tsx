@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Activity, AlertTriangle, Check, Clock3, FlaskConical, LockKeyhole, ShieldAlert, ShieldCheck } from 'lucide-react';
 import {
@@ -78,6 +78,13 @@ const verificationObjectiveLabels: Record<string, string> = {
   action_executed: 'Acción ejecutada',
   policy_violation: 'Violación de política',
 };
+
+function networkStatusLabel(status: string) {
+  if (status === 'blocked') return 'bloqueado';
+  if (status === 'unavailable') return 'no verificado';
+  if (status === 'reachable') return 'accesible';
+  return status;
+}
 
 function GuardianVerificationResult({
   verification,
@@ -189,7 +196,7 @@ function GuardianVerificationResult({
   </section>;
 }
 
-function LabJobCard({
+export function LabJobCard({
   job,
   canRun,
   onRetry,
@@ -222,7 +229,7 @@ function LabJobCard({
           <dt>Pruebas</dt><dd>{evidence.probeClasses.join(', ')}</dd>
           <dt>Puntuaciones positivas</dt><dd>{evidence.findings.length ? evidence.findings.map((finding) => `${finding.detector}: ${finding.positiveScores}`).join('; ') : 'Ninguna registrada en este informe'}</dd>
           <dt>Informe procesado</dt><dd>{evidence.reportRecordCount} registros · {evidence.reportBytes} bytes · {evidence.durationSeconds} s</dd>
-          <dt>Red</dt><dd>Sin red externa; IPv4, IPv6 y DNS públicos bloqueados en el contenedor.</dd>
+          <dt>Red</dt><dd>Modo {evidence.network.networkMode}; IPv4 {networkStatusLabel(evidence.network.publicIpv4)}, IPv6 {networkStatusLabel(evidence.network.publicIpv6)}, DNS público {networkStatusLabel(evidence.network.publicDns)}.</dd>
           <dt>Informe</dt><dd>SHA-256 {evidence.reportSha256}</dd>
           <dt>Datos</dt><dd>No se conservaron prompts ni respuestas; sin datos de clientes.</dd>
         </dl>

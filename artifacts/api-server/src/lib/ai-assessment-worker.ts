@@ -120,6 +120,14 @@ export function startLocalAssessmentQueueWorker(): void {
   void drainQueue();
 }
 
+export function stopLocalAssessmentQueueWorker(): void {
+  queueWorkerEnabled = false;
+  if (queuePollTimer) {
+    clearInterval(queuePollTimer);
+    queuePollTimer = null;
+  }
+}
+
 export function isAiAssessmentJobRetryable(
   status: string,
   attempts: number,

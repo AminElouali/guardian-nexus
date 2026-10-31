@@ -704,7 +704,6 @@ def run_assessment() -> dict[str, Any]:
                 "responsesStored": False,
                 "externalCalls": 0,
                 "customerDataUsed": False,
-                "findings": report_evidence["findings"],
                 "guardianVerification": verification_evidence,
                 "findingSummary": (
                     f"Limited local probe recorded {report_evidence['detectorHits']} "
