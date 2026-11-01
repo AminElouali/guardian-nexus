@@ -67,7 +67,11 @@ type GarakEvidence = Extract<
 type GuardianVerification = NonNullable<GarakEvidence['guardianVerification']>;
 type LocalLlmEvidence = Extract<
   NonNullable<AiAssessmentLabJob['result']>,
-  { engine: 'local_llm_lab' }
+  { profileId: 'guardian-local-llm-qwen3-0.6b-v1' }
+>;
+type NativeToolSuiteEvidence = Extract<
+  NonNullable<AiAssessmentLabJob['result']>,
+  { profileId: 'guardian-local-llm-native-tools-v1' }
 >;
 
 const verificationScenarioLabels: Record<string, string> = {
@@ -278,6 +282,111 @@ function LocalLlmResult({ evidence }: { evidence: LocalLlmEvidence }) {
   </section>;
 }
 
+const nativeObjectiveLabels: Record<string, string> = {
+  unauthorizedProposal: 'Propuesta no autorizada',
+  unauthorizedAttempt: 'Intento no autorizado',
+  unauthorizedExecution: 'Ejecución no autorizada',
+};
+
+function NativeToolSuiteResult({
+  evidence,
+}: {
+  evidence: NativeToolSuiteEvidence;
+}) {
+  const suite = evidence.nativeToolSuite;
+  return <section className="guardian-verification" data-testid="native-tool-suite-result">
+    <div className="guardian-verification-heading">
+      <div>
+        <span className="ai-evaluation-run-label">LLM REAL · LLAMADAS NATIVAS · LABORATORIO LOCAL</span>
+        <h4>Evaluación de llamadas a herramientas</h4>
+      </div>
+      <span className="guardian-verification-pill">Solo laboratorio; no disponible para clientes</span>
+    </div>
+    <p className="guardian-verification-disclaimer">
+      Qwen3 local devolvió objetos <code>message.tool_calls</code> usando el template GGUF; no se interpretó JSON del texto como tool call. Las llamadas de correo y cambio bancario solo generaron resultados ficticios en memoria.
+    </p>
+    <div className="guardian-verification-stats">
+      <span><b>{suite.sampleCount}</b> casos sintéticos</span>
+      <span><b>{suite.splitSampleCounts.calibration}</b> calibración · <b>{suite.splitSampleCounts.holdout}</b> holdout</span>
+      <span><b>{suite.languageCounts.en}/{suite.languageCounts.es}</b> casos EN/ES</span>
+      <span><b>{suite.toolSummary.nativeCallsObserved}</b> llamadas nativas observadas</span>
+      <span><b>{suite.taskSuccess.numerator}/{suite.taskSuccess.denominator}</b> tareas autorizadas verificadas</span>
+      <span><b>{suite.metrics.find((metric) => metric.split === 'all')?.inconclusiveCount ?? 0}</b> casos inconclusos</span>
+    </div>
+    <p className="guardian-verification-disclaimer">
+      En tareas benignas autorizadas, el arnés seleccionó la función específica para comprobar argumentos y autorización; eso no mide selección autónoma. Ataques y textos citados usaron selección automática. Las matrices comparan tipo de escenario con eventos de herramienta observados; un falso negativo significa que no se observó ese evento en un caso de ataque, no que un detector de ataques haya fallado.
+    </p>
+    <details className="guardian-verification-details">
+      <summary>Métricas, trazas y procedencia</summary>
+      <div className="guardian-verification-table-wrap">
+        <table className="guardian-verification-table">
+          <thead><tr>
+            <th scope="col">Conjunto</th>
+            <th scope="col">Objetivo</th>
+            <th scope="col">Evaluables</th>
+            <th scope="col">Inconclusos</th>
+            <th scope="col">TP</th>
+            <th scope="col">FP</th>
+            <th scope="col">TN</th>
+            <th scope="col">FN</th>
+          </tr></thead>
+          <tbody>
+            {suite.metrics.map((metric) => (
+              <tr key={`${metric.split}-${metric.objective}`}>
+                <th scope="row">{metric.split}</th>
+                <td>{nativeObjectiveLabels[metric.objective] ?? metric.objective}</td>
+                <td>{metric.evaluableCount}/{metric.sampleCount}</td>
+                <td>{metric.inconclusiveCount}</td>
+                <td>{metric.truePositive}</td>
+                <td>{metric.falsePositive}</td>
+                <td>{metric.trueNegative}</td>
+                <td>{metric.falseNegative}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="guardian-verification-table-wrap">
+        <table className="guardian-verification-table">
+          <thead><tr>
+            <th scope="col">Caso</th>
+            <th scope="col">Grupo</th>
+            <th scope="col">Herramientas propuestas</th>
+            <th scope="col">Intento no permitido</th>
+            <th scope="col">Ejecución ficticia</th>
+            <th scope="col">Tarea</th>
+          </tr></thead>
+          <tbody>
+            {suite.caseEvidence.map((item) => (
+              <tr key={item.caseId}>
+                <th scope="row">{item.caseId}</th>
+                <td>{item.split} · {item.language.toUpperCase()} · {item.label}</td>
+                <td>{item.proposedTools.length ? item.proposedTools.map((tool) => toolLabels[tool] ?? tool).join(', ') : 'Ninguna'}</td>
+                <td>{item.policyObservationComplete ? item.unauthorizedAttempt ? 'Sí; denegado' : 'No observado' : 'Inconcluso'}</td>
+                <td>{item.authorizedExecutionCount}</td>
+                <td>{item.taskSuccessEligible ? item.taskSucceeded ? 'Verificada' : 'No verificada' : 'No aplicable'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <dl>
+        <dt>Modelo y licencia</dt><dd>{evidence.provider.modelId} Q8_0 · {evidence.provider.license}</dd>
+        <dt>Runtime</dt><dd>{evidence.provider.runtime} {evidence.provider.runtimeVersion} · {evidence.provider.runtimeLicense}</dd>
+        <dt>Template GGUF</dt><dd><code>{evidence.provider.chatTemplateSha256}</code></dd>
+        <dt>Template efectivo</dt><dd><code>{evidence.provider.effectiveChatTemplateSha256}</code></dd>
+        <dt>Hash del modelo</dt><dd><code>{evidence.provider.sha256}</code></dd>
+        <dt>Hash de evidencia</dt><dd><code>{evidence.evidenceSha256}</code></dd>
+        <dt>Hash del conjunto</dt><dd><code>{suite.suiteEvidenceSha256}</code></dd>
+        <dt>Red</dt><dd>IPv4 {networkStatusLabel(evidence.network.publicIpv4)}, IPv6 {networkStatusLabel(evidence.network.publicIpv6)}, DNS {networkStatusLabel(evidence.network.publicDns)}.</dd>
+        <dt>Límites comprobados</dt><dd>{evidence.limits.verifiedContainerLimits.cpuCores} CPU · {Math.round(evidence.limits.verifiedContainerLimits.memoryBytes / 1024 / 1024)} MiB · {evidence.limits.verifiedContainerLimits.pids} procesos · una concurrencia · {evidence.durationSeconds} s.</dd>
+        <dt>Acciones externas</dt><dd>{suite.toolSummary.externalCalls} llamadas externas · {suite.toolSummary.stateChanges} cambios persistentes.</dd>
+      </dl>
+      <small>{suite.metricInterpretation} No extrapolar esta muestra ni tratarla como garantía de seguridad.</small>
+    </details>
+  </section>;
+}
+
 export function LabJobCard({
   job,
   canRun,
@@ -291,12 +400,21 @@ export function LabJobCard({
 }) {
   const evidence = job.result;
   const garakEvidence = evidence?.engine === 'garak' ? evidence : null;
-  const localLlmEvidence = evidence?.engine === 'local_llm_lab' ? evidence : null;
+  const localLlmEvidence =
+    evidence?.profileId === 'guardian-local-llm-qwen3-0.6b-v1'
+      ? evidence
+      : null;
+  const nativeToolEvidence =
+    evidence?.profileId === 'guardian-local-llm-native-tools-v1'
+      ? evidence
+      : null;
   return <article className="ai-evaluation-run" data-testid="ai-lab-job">
     <div className="ai-evaluation-run-head">
       <div>
         <span className="ai-evaluation-run-label">
-          {job.profileId === 'guardian-local-llm-qwen3-0.6b-v1'
+          {job.profileId === 'guardian-local-llm-native-tools-v1'
+            ? 'LLM REAL · TOOL CALLS NATIVAS'
+            : job.profileId === 'guardian-local-llm-qwen3-0.6b-v1'
             ? 'INFERENCIA REAL · LLM LOCAL'
             : 'EVALUACIÓN LOCAL · MOCK Y FIXTURES'}
         </span>
@@ -326,6 +444,7 @@ export function LabJobCard({
       {garakEvidence.guardianVerification && <GuardianVerificationResult verification={garakEvidence.guardianVerification} />}
     </div>}
     {localLlmEvidence && <LocalLlmResult evidence={localLlmEvidence} />}
+    {nativeToolEvidence && <NativeToolSuiteResult evidence={nativeToolEvidence} />}
     {job.status === 'failed' && <p className="ai-lab-error">No se completó la evaluación. Código: {job.errorCode ?? 'worker_failed'}. No se guardaron salidas del agente.</p>}
     {canRun && job.status === 'failed' && job.attempts < 2 && <Button variant="outline" onClick={() => onRetry(job.id)} disabled={retryPending} data-testid="button-retry-ai-lab">
       {retryPending ? 'Reintentando…' : 'Reintentar una vez'}
@@ -355,6 +474,9 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
   ) ?? false;
   const qwenAvailable = availability.data?.profiles.some(
     (profile) => profile.profileId === 'guardian-local-llm-qwen3-0.6b-v1' && profile.status === 'ready',
+  ) ?? false;
+  const nativeToolsAvailable = availability.data?.profiles.some(
+    (profile) => profile.profileId === 'guardian-local-llm-native-tools-v1' && profile.status === 'ready',
   ) ?? false;
 
   async function requestLabAssessment(profileId: AiAssessmentLabJobRequestProfileId) {
@@ -405,7 +527,7 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
       <div>
         <div className="eyebrow">GUARDIAN AI SECURITY ASSESSMENT · LABORATORIO</div>
         <h1>Evaluación de Seguridad de IA</h1>
-        <p>El perfil de pruebas ejecuta un motor de evaluación contra un mock local y conserva la verificación determinista con fixtures. El perfil de LLM ejecuta inferencia local real en una tarea sintética acotada. Ninguno está habilitado como servicio para clientes.</p>
+        <p>El perfil de pruebas ejecuta verificaciones deterministas con fixtures. Los perfiles de LLM ejecutan inferencia local real: una tarea sintética acotada y una suite experimental de llamadas nativas a herramientas. Ninguno está habilitado como servicio para clientes.</p>
       </div>
       <span className="ai-evaluation-badge"><FlaskConical size={14} /> LABORATORIO INTERNO</span>
     </div>
@@ -422,7 +544,7 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
         <div><span className="panel-kicker">EJECUCIONES LOCALES · DESARROLLO</span><h2>Laboratorio aislado</h2></div>
         <span className={`ai-evaluation-state ${availability.data?.status === 'ready' ? '' : 'ai-state-pending'}`}><i />{availability.isLoading ? 'Comprobando' : availability.data?.status === 'ready' ? 'Disponible en desarrollo' : 'No disponible'}</span>
       </div>
-      <p>El perfil de pruebas conserva el flujo existente con fixtures. El perfil de LLM ejecuta una sola tarea de factura sintética con 1 CPU, 1.536 MiB y una concurrencia global; sus herramientas son ficticias y la respuesta en bruto no se persiste.</p>
+       <p>Garak/GVE conserva el flujo local existente con fixtures. El perfil Qwen simple ejecuta una tarea de factura sintética; la nueva suite utiliza el template de herramientas del modelo y 12 casos fijos en español e inglés, con 1 CPU, 1.536 MiB y concurrencia global 1. Los resultados son solo del laboratorio; ningún perfil está habilitado para clientes.</p>
       {availability.data?.status !== 'ready' && <div className="ai-lab-unavailable"><LockKeyhole size={15} />{availability.data?.reasonCode === 'development_only' ? 'Deshabilitado fuera del entorno de desarrollo.' : 'El worker local no está preparado. No se iniciará ni simulará una evaluación.'}</div>}
       <div className="ai-evaluation-actions">
         <Button onClick={() => void requestLabAssessment('guardian-local-agent-v1')} disabled={!canRun || !garakAvailable || createLabJob.isPending} data-testid="button-run-ai-lab">
@@ -433,8 +555,13 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
           {createLabJob.isPending ? <Activity className="spin" size={15} /> : <FlaskConical size={15} />}
           {createLabJob.isPending ? 'Encolando…' : 'Solicitar tarea con LLM local'}
         </Button>
+        <Button variant="outline" onClick={() => void requestLabAssessment('guardian-local-llm-native-tools-v1')} disabled={!canRun || !nativeToolsAvailable || createLabJob.isPending} data-testid="button-run-native-tool-suite">
+          {createLabJob.isPending ? <Activity className="spin" size={15} /> : <ShieldCheck size={15} />}
+          {createLabJob.isPending ? 'Encolando…' : 'Solicitar suite de llamadas nativas'}
+        </Button>
         {!canRun && <small>Solo owner/admin puede iniciar o reintentar.</small>}
         {canRun && !qwenAvailable && <small>Qwen local no disponible: {availability.data?.profiles.find((profile) => profile.profileId === 'guardian-local-llm-qwen3-0.6b-v1')?.reasonCode ?? 'worker_unavailable'}.</small>}
+        {canRun && !nativeToolsAvailable && <small>Suite de tool calls nativas no disponible: {availability.data?.profiles.find((profile) => profile.profileId === 'guardian-local-llm-native-tools-v1')?.reasonCode ?? 'worker_unavailable'}.</small>}
       </div>
       {labJobs.isLoading && <div className="ai-history-empty" role="status">Cargando trabajos del laboratorio…</div>}
       {labJobs.isError && <div className="notice notice-error" role="alert">No se pudo cargar el estado del laboratorio. <Button variant="outline" onClick={() => void labJobs.refetch()}>Reintentar</Button></div>}

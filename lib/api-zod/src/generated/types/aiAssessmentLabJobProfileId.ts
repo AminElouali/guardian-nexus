@@ -12,4 +12,5 @@ export type AiAssessmentLabJobProfileId = typeof AiAssessmentLabJobProfileId[key
 export const AiAssessmentLabJobProfileId = {
   'guardian-local-agent-v1': 'guardian-local-agent-v1',
   'guardian-local-llm-qwen3-06b-v1': 'guardian-local-llm-qwen3-0.6b-v1',
+  'guardian-local-llm-native-tools-v1': 'guardian-local-llm-native-tools-v1',
 } as const;

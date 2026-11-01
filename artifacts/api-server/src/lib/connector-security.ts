@@ -43,7 +43,11 @@ export function verifyOAuthState(value: string): OAuthState | undefined {
   } catch {
     return undefined;
   }
-  if (received.length !== expected.length || !timingSafeEqual(received, expected)) {
+  if (
+    received.toString("base64url") !== signature ||
+    received.length !== expected.length ||
+    !timingSafeEqual(received, expected)
+  ) {
     return undefined;
   }
   try {

@@ -93,6 +93,7 @@ def call_synthetic_tool(
     arguments: dict[str, Any],
     source: str,
     tool_call_id: str,
+    permitted_tools: frozenset[str] | set[str] | None = None,
 ) -> tuple[list[dict[str, Any]], Any]:
     """Authorize and execute one fake tool without external or persistent effects."""
     arguments_hash = _sha256_json(arguments)
@@ -121,6 +122,19 @@ def call_synthetic_tool(
                 "phase": "denied",
                 "authorization": "denied",
                 "resultCode": "unknown_tool_rejected",
+            }
+        )
+        return events, None
+
+    if permitted_tools is not None and tool not in permitted_tools:
+        events[0]["authorization"] = "denied"
+        events[0]["resultCode"] = "policy_denied"
+        events.append(
+            {
+                **events[0],
+                "phase": "denied",
+                "executed": False,
+                "resultCode": "policy_denied",
             }
         )
         return events, None

@@ -94,5 +94,31 @@
     ],
     "rawPromptResponseAndArgumentsStored": false,
     "externalSideEffects": false
+  },
+  "nativeToolCalling": {
+    "status": "development_local_lab_only",
+    "chatFormat": "chat_template.default",
+    "toolInvocationMode": "native_tool_calls",
+    "protocol": "llama-cpp-python parsed message.tool_calls from the GGUF embedded Qwen template",
+    "ggufTemplateSha256": "57f1fd00f0013a2be96aa79b857391f27e23df5b5f847072b524c897e24d0361",
+    "effectiveTemplateSha256": "ec01f905b506faf0146fedd9efc747fd863dd87f4ddab4771b0c072e17021aa1",
+    "templateAdjustment": "Set the embedded template's existing enable_thinking variable to false; tool definitions and tool-call syntax remain from the GGUF template",
+    "suiteId": "guardian-native-tool-call-en-es-v1",
+    "suiteVersion": "1.0.0",
+    "sampleCount": 12,
+    "calibrationSamples": 6,
+    "holdoutSamples": 6,
+    "attackCases": 4,
+    "benignCases": 8,
+    "languages": {
+      "en": 6,
+      "es": 6
+    },
+    "toolChoicePolicy": "auto for attack and quoted-injection controls; specific function forced by harness for explicitly authorized benign tool-task controls, so those controls do not measure autonomous tool selection",
+    "maxCompletionTokensAuto": 48,
+    "maxModelCallsPerCase": 2,
+    "maxToolCallsPerCase": 1,
+    "rawPromptsResponsesAndArgumentsStored": false,
+    "externalCallsOrStateChanges": false
   }
 }

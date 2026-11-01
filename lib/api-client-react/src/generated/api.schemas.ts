@@ -341,6 +341,7 @@ export type AiAssessmentLabProfileAvailabilityProfileId = typeof AiAssessmentLab
 export const AiAssessmentLabProfileAvailabilityProfileId = {
   'guardian-local-agent-v1': 'guardian-local-agent-v1',
   'guardian-local-llm-qwen3-06b-v1': 'guardian-local-llm-qwen3-0.6b-v1',
+  'guardian-local-llm-native-tools-v1': 'guardian-local-llm-native-tools-v1',
 } as const;
 
 export type AiAssessmentLabProfileAvailabilityEngine = typeof AiAssessmentLabProfileAvailabilityEngine[keyof typeof AiAssessmentLabProfileAvailabilityEngine];
@@ -382,6 +383,7 @@ export type AiAssessmentLabJobRequestProfileId = typeof AiAssessmentLabJobReques
 export const AiAssessmentLabJobRequestProfileId = {
   'guardian-local-agent-v1': 'guardian-local-agent-v1',
   'guardian-local-llm-qwen3-06b-v1': 'guardian-local-llm-qwen3-0.6b-v1',
+  'guardian-local-llm-native-tools-v1': 'guardian-local-llm-native-tools-v1',
 } as const;
 
 export interface AiAssessmentLabJobRequest {
@@ -409,6 +411,7 @@ export type AiAssessmentLabJobProfileId = typeof AiAssessmentLabJobProfileId[key
 export const AiAssessmentLabJobProfileId = {
   'guardian-local-agent-v1': 'guardian-local-agent-v1',
   'guardian-local-llm-qwen3-06b-v1': 'guardian-local-llm-qwen3-0.6b-v1',
+  'guardian-local-llm-native-tools-v1': 'guardian-local-llm-native-tools-v1',
 } as const;
 
 export type AiAssessmentEvidenceSource = typeof AiAssessmentEvidenceSource[keyof typeof AiAssessmentEvidenceSource];
@@ -1126,6 +1129,768 @@ export interface GuardianLocalLlmEvidence {
   evidenceSha256: string;
 }
 
+export type GuardianLocalLlmNativeToolSuiteEvidenceSource = typeof GuardianLocalLlmNativeToolSuiteEvidenceSource[keyof typeof GuardianLocalLlmNativeToolSuiteEvidenceSource];
+
+
+export const GuardianLocalLlmNativeToolSuiteEvidenceSource = {
+  isolated_local_lab: 'isolated_local_lab',
+} as const;
+
+export type GuardianLocalLlmNativeToolSuiteEvidenceEngine = typeof GuardianLocalLlmNativeToolSuiteEvidenceEngine[keyof typeof GuardianLocalLlmNativeToolSuiteEvidenceEngine];
+
+
+export const GuardianLocalLlmNativeToolSuiteEvidenceEngine = {
+  local_llm_lab: 'local_llm_lab',
+} as const;
+
+export type GuardianLocalLlmNativeToolSuiteEvidenceProfileId = typeof GuardianLocalLlmNativeToolSuiteEvidenceProfileId[keyof typeof GuardianLocalLlmNativeToolSuiteEvidenceProfileId];
+
+
+export const GuardianLocalLlmNativeToolSuiteEvidenceProfileId = {
+  'guardian-local-llm-native-tools-v1': 'guardian-local-llm-native-tools-v1',
+} as const;
+
+export type GuardianLocalLlmNativeToolSuiteEvidenceExecutionMode = typeof GuardianLocalLlmNativeToolSuiteEvidenceExecutionMode[keyof typeof GuardianLocalLlmNativeToolSuiteEvidenceExecutionMode];
+
+
+export const GuardianLocalLlmNativeToolSuiteEvidenceExecutionMode = {
+  real_local_llm_inference: 'real_local_llm_inference',
+} as const;
+
+export type GuardianLocalLlmNativeToolSuiteEvidenceToolInvocationMode = typeof GuardianLocalLlmNativeToolSuiteEvidenceToolInvocationMode[keyof typeof GuardianLocalLlmNativeToolSuiteEvidenceToolInvocationMode];
+
+
+export const GuardianLocalLlmNativeToolSuiteEvidenceToolInvocationMode = {
+  native_tool_calls: 'native_tool_calls',
+} as const;
+
+export type GuardianLocalLlmNativeToolSuiteEvidenceTaskId = typeof GuardianLocalLlmNativeToolSuiteEvidenceTaskId[keyof typeof GuardianLocalLlmNativeToolSuiteEvidenceTaskId];
+
+
+export const GuardianLocalLlmNativeToolSuiteEvidenceTaskId = {
+  native_tool_call_security_suite_v1: 'native_tool_call_security_suite_v1',
+} as const;
+
+export type GuardianLocalLlmNativeToolSuiteEvidenceProviderId = typeof GuardianLocalLlmNativeToolSuiteEvidenceProviderId[keyof typeof GuardianLocalLlmNativeToolSuiteEvidenceProviderId];
+
+
+export const GuardianLocalLlmNativeToolSuiteEvidenceProviderId = {
+  local_qwen_gguf: 'local_qwen_gguf',
+} as const;
+
+export type GuardianLocalLlmNativeToolSuiteEvidenceProviderModelId = typeof GuardianLocalLlmNativeToolSuiteEvidenceProviderModelId[keyof typeof GuardianLocalLlmNativeToolSuiteEvidenceProviderModelId];
+
+
+export const GuardianLocalLlmNativeToolSuiteEvidenceProviderModelId = {
+  'Qwen/Qwen3-06B-GGUF': 'Qwen/Qwen3-0.6B-GGUF',
+} as const;
+
+export type GuardianLocalLlmNativeToolSuiteEvidenceProviderFile = typeof GuardianLocalLlmNativeToolSuiteEvidenceProviderFile[keyof typeof GuardianLocalLlmNativeToolSuiteEvidenceProviderFile];
+
+
+export const GuardianLocalLlmNativeToolSuiteEvidenceProviderFile = {
+  'Qwen3-06B-Q8_0gguf': 'Qwen3-0.6B-Q8_0.gguf',
+} as const;
+
+export type GuardianLocalLlmNativeToolSuiteEvidenceProviderQuantization = typeof GuardianLocalLlmNativeToolSuiteEvidenceProviderQuantization[keyof typeof GuardianLocalLlmNativeToolSuiteEvidenceProviderQuantization];
+
+
+export const GuardianLocalLlmNativeToolSuiteEvidenceProviderQuantization = {
+  Q8_0: 'Q8_0',
+} as const;
+
+export type GuardianLocalLlmNativeToolSuiteEvidenceProviderLicense = typeof GuardianLocalLlmNativeToolSuiteEvidenceProviderLicense[keyof typeof GuardianLocalLlmNativeToolSuiteEvidenceProviderLicense];
+
+
+export const GuardianLocalLlmNativeToolSuiteEvidenceProviderLicense = {
+  'Apache-20': 'Apache-2.0',
+} as const;
+
+export type GuardianLocalLlmNativeToolSuiteEvidenceProviderRuntime = typeof GuardianLocalLlmNativeToolSuiteEvidenceProviderRuntime[keyof typeof GuardianLocalLlmNativeToolSuiteEvidenceProviderRuntime];
+
+
+export const GuardianLocalLlmNativeToolSuiteEvidenceProviderRuntime = {
+  'llama-cpp-python': 'llama-cpp-python',
+} as const;
+
+export type GuardianLocalLlmNativeToolSuiteEvidenceProviderRuntimeVersion = typeof GuardianLocalLlmNativeToolSuiteEvidenceProviderRuntimeVersion[keyof typeof GuardianLocalLlmNativeToolSuiteEvidenceProviderRuntimeVersion];
+
+
+export const GuardianLocalLlmNativeToolSuiteEvidenceProviderRuntimeVersion = {
+  '0336': '0.3.36',
+} as const;
+
+export type GuardianLocalLlmNativeToolSuiteEvidenceProviderRuntimeLicense = typeof GuardianLocalLlmNativeToolSuiteEvidenceProviderRuntimeLicense[keyof typeof GuardianLocalLlmNativeToolSuiteEvidenceProviderRuntimeLicense];
+
+
+export const GuardianLocalLlmNativeToolSuiteEvidenceProviderRuntimeLicense = {
+  MIT: 'MIT',
+} as const;
+
+export type GuardianLocalLlmNativeToolSuiteEvidenceProviderChatFormat = typeof GuardianLocalLlmNativeToolSuiteEvidenceProviderChatFormat[keyof typeof GuardianLocalLlmNativeToolSuiteEvidenceProviderChatFormat];
+
+
+export const GuardianLocalLlmNativeToolSuiteEvidenceProviderChatFormat = {
+  chat_templatedefault: 'chat_template.default',
+} as const;
+
+export type GuardianLocalLlmNativeToolSuiteEvidenceNetworkNetworkMode = typeof GuardianLocalLlmNativeToolSuiteEvidenceNetworkNetworkMode[keyof typeof GuardianLocalLlmNativeToolSuiteEvidenceNetworkNetworkMode];
+
+
+export const GuardianLocalLlmNativeToolSuiteEvidenceNetworkNetworkMode = {
+  'docker-network-none': 'docker-network-none',
+} as const;
+
+export type GuardianLocalLlmNativeToolSuiteEvidenceNetworkPublicIpv4 = typeof GuardianLocalLlmNativeToolSuiteEvidenceNetworkPublicIpv4[keyof typeof GuardianLocalLlmNativeToolSuiteEvidenceNetworkPublicIpv4];
+
+
+export const GuardianLocalLlmNativeToolSuiteEvidenceNetworkPublicIpv4 = {
+  blocked: 'blocked',
+} as const;
+
+export type GuardianLocalLlmNativeToolSuiteEvidenceNetworkPublicIpv6 = typeof GuardianLocalLlmNativeToolSuiteEvidenceNetworkPublicIpv6[keyof typeof GuardianLocalLlmNativeToolSuiteEvidenceNetworkPublicIpv6];
+
+
+export const GuardianLocalLlmNativeToolSuiteEvidenceNetworkPublicIpv6 = {
+  blocked: 'blocked',
+  unavailable: 'unavailable',
+} as const;
+
+export type GuardianLocalLlmNativeToolSuiteEvidenceNetworkIpv6Capability = typeof GuardianLocalLlmNativeToolSuiteEvidenceNetworkIpv6Capability[keyof typeof GuardianLocalLlmNativeToolSuiteEvidenceNetworkIpv6Capability];
+
+
+export const GuardianLocalLlmNativeToolSuiteEvidenceNetworkIpv6Capability = {
+  kernel_protocol_unavailable: 'kernel_protocol_unavailable',
+  socket_and_route_tested: 'socket_and_route_tested',
+} as const;
+
+export type GuardianLocalLlmNativeToolSuiteEvidenceNetworkPublicDns = typeof GuardianLocalLlmNativeToolSuiteEvidenceNetworkPublicDns[keyof typeof GuardianLocalLlmNativeToolSuiteEvidenceNetworkPublicDns];
+
+
+export const GuardianLocalLlmNativeToolSuiteEvidenceNetworkPublicDns = {
+  blocked: 'blocked',
+} as const;
+
+export type GuardianLocalLlmNativeToolSuiteEvidenceLimitsNetwork = typeof GuardianLocalLlmNativeToolSuiteEvidenceLimitsNetwork[keyof typeof GuardianLocalLlmNativeToolSuiteEvidenceLimitsNetwork];
+
+
+export const GuardianLocalLlmNativeToolSuiteEvidenceLimitsNetwork = {
+  none: 'none',
+} as const;
+
+export type GuardianNativeToolTraceEventCaseId = typeof GuardianNativeToolTraceEventCaseId[keyof typeof GuardianNativeToolTraceEventCaseId];
+
+
+export const GuardianNativeToolTraceEventCaseId = {
+  capability_preflight: 'capability_preflight',
+  attack_email_en_cal: 'attack_email_en_cal',
+  attack_bank_es_cal: 'attack_bank_es_cal',
+  benign_invoice_en_cal: 'benign_invoice_en_cal',
+  benign_quote_es_cal: 'benign_quote_es_cal',
+  benign_email_en_cal: 'benign_email_en_cal',
+  benign_bank_es_cal: 'benign_bank_es_cal',
+  attack_email_es_holdout: 'attack_email_es_holdout',
+  attack_bank_en_holdout: 'attack_bank_en_holdout',
+  benign_invoice_es_holdout: 'benign_invoice_es_holdout',
+  benign_quote_en_holdout: 'benign_quote_en_holdout',
+  benign_email_es_holdout: 'benign_email_es_holdout',
+  benign_bank_en_holdout: 'benign_bank_en_holdout',
+} as const;
+
+export type GuardianNativeToolTraceEventSource = typeof GuardianNativeToolTraceEventSource[keyof typeof GuardianNativeToolTraceEventSource];
+
+
+export const GuardianNativeToolTraceEventSource = {
+  native_tool_call: 'native_tool_call',
+} as const;
+
+export type GuardianNativeToolTraceEventTool = typeof GuardianNativeToolTraceEventTool[keyof typeof GuardianNativeToolTraceEventTool];
+
+
+export const GuardianNativeToolTraceEventTool = {
+  consult_synthetic_invoice: 'consult_synthetic_invoice',
+  send_email_simulated: 'send_email_simulated',
+  request_bank_account_change: 'request_bank_account_change',
+  unknown: 'unknown',
+} as const;
+
+export type GuardianNativeToolTraceEventPhase = typeof GuardianNativeToolTraceEventPhase[keyof typeof GuardianNativeToolTraceEventPhase];
+
+
+export const GuardianNativeToolTraceEventPhase = {
+  proposal: 'proposal',
+  authorization_attempt: 'authorization_attempt',
+  executed: 'executed',
+  denied: 'denied',
+} as const;
+
+export type GuardianNativeToolTraceEventAuthorization = typeof GuardianNativeToolTraceEventAuthorization[keyof typeof GuardianNativeToolTraceEventAuthorization];
+
+
+export const GuardianNativeToolTraceEventAuthorization = {
+  not_checked: 'not_checked',
+  allowed: 'allowed',
+  denied: 'denied',
+} as const;
+
+export interface GuardianNativeToolTraceEvent {
+  caseId: GuardianNativeToolTraceEventCaseId;
+  /** @maxLength 80 */
+  toolCallId: string;
+  source: GuardianNativeToolTraceEventSource;
+  tool: GuardianNativeToolTraceEventTool;
+  phase: GuardianNativeToolTraceEventPhase;
+  authorization: GuardianNativeToolTraceEventAuthorization;
+  executed: boolean;
+  simulatedOnly: true;
+  stateChanged: false;
+  externalSideEffect: false;
+  /** @pattern ^[a-f0-9]{64}$ */
+  argumentsSha256: string;
+  /** @maxLength 80 */
+  resultCode: string;
+}
+
+export type GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteSuiteId = typeof GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteSuiteId[keyof typeof GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteSuiteId];
+
+
+export const GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteSuiteId = {
+  'guardian-native-tool-call-en-es-v1': 'guardian-native-tool-call-en-es-v1',
+} as const;
+
+export type GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteSuiteVersion = typeof GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteSuiteVersion[keyof typeof GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteSuiteVersion];
+
+
+export const GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteSuiteVersion = {
+  '100': '1.0.0',
+} as const;
+
+export type GuardianNativeToolCaseEvidenceCaseId = typeof GuardianNativeToolCaseEvidenceCaseId[keyof typeof GuardianNativeToolCaseEvidenceCaseId];
+
+
+export const GuardianNativeToolCaseEvidenceCaseId = {
+  attack_email_en_cal: 'attack_email_en_cal',
+  attack_bank_es_cal: 'attack_bank_es_cal',
+  benign_invoice_en_cal: 'benign_invoice_en_cal',
+  benign_quote_es_cal: 'benign_quote_es_cal',
+  benign_email_en_cal: 'benign_email_en_cal',
+  benign_bank_es_cal: 'benign_bank_es_cal',
+  attack_email_es_holdout: 'attack_email_es_holdout',
+  attack_bank_en_holdout: 'attack_bank_en_holdout',
+  benign_invoice_es_holdout: 'benign_invoice_es_holdout',
+  benign_quote_en_holdout: 'benign_quote_en_holdout',
+  benign_email_es_holdout: 'benign_email_es_holdout',
+  benign_bank_en_holdout: 'benign_bank_en_holdout',
+} as const;
+
+export type GuardianNativeToolCaseEvidenceSplit = typeof GuardianNativeToolCaseEvidenceSplit[keyof typeof GuardianNativeToolCaseEvidenceSplit];
+
+
+export const GuardianNativeToolCaseEvidenceSplit = {
+  calibration: 'calibration',
+  holdout: 'holdout',
+} as const;
+
+export type GuardianNativeToolCaseEvidenceLanguage = typeof GuardianNativeToolCaseEvidenceLanguage[keyof typeof GuardianNativeToolCaseEvidenceLanguage];
+
+
+export const GuardianNativeToolCaseEvidenceLanguage = {
+  en: 'en',
+  es: 'es',
+} as const;
+
+export type GuardianNativeToolCaseEvidenceLabel = typeof GuardianNativeToolCaseEvidenceLabel[keyof typeof GuardianNativeToolCaseEvidenceLabel];
+
+
+export const GuardianNativeToolCaseEvidenceLabel = {
+  attack: 'attack',
+  benign: 'benign',
+} as const;
+
+export type GuardianNativeToolCaseEvidenceToolChoiceMode = typeof GuardianNativeToolCaseEvidenceToolChoiceMode[keyof typeof GuardianNativeToolCaseEvidenceToolChoiceMode];
+
+
+export const GuardianNativeToolCaseEvidenceToolChoiceMode = {
+  auto: 'auto',
+  specific_function_for_authorized_control: 'specific_function_for_authorized_control',
+} as const;
+
+/**
+ * @nullable
+ */
+export type GuardianNativeToolCaseEvidenceInconclusiveReason = typeof GuardianNativeToolCaseEvidenceInconclusiveReason[keyof typeof GuardianNativeToolCaseEvidenceInconclusiveReason] | null;
+
+
+export const GuardianNativeToolCaseEvidenceInconclusiveReason = {
+  completion_token_limit: 'completion_token_limit',
+} as const;
+
+export type GuardianNativeToolCaseEvidenceProposedToolsItem = typeof GuardianNativeToolCaseEvidenceProposedToolsItem[keyof typeof GuardianNativeToolCaseEvidenceProposedToolsItem];
+
+
+export const GuardianNativeToolCaseEvidenceProposedToolsItem = {
+  consult_synthetic_invoice: 'consult_synthetic_invoice',
+  send_email_simulated: 'send_email_simulated',
+  request_bank_account_change: 'request_bank_account_change',
+  unknown: 'unknown',
+} as const;
+
+/**
+ * @nullable
+ */
+export type GuardianNativeToolCaseEvidenceTaskOutcomeCode = typeof GuardianNativeToolCaseEvidenceTaskOutcomeCode[keyof typeof GuardianNativeToolCaseEvidenceTaskOutcomeCode] | null;
+
+
+export const GuardianNativeToolCaseEvidenceTaskOutcomeCode = {
+  verified_simulated_tool_result: 'verified_simulated_tool_result',
+  tool_not_executed: 'tool_not_executed',
+  required_invoice_fields_not_verified: 'required_invoice_fields_not_verified',
+} as const;
+
+export interface GuardianNativeToolCaseEvidence {
+  caseId: GuardianNativeToolCaseEvidenceCaseId;
+  split: GuardianNativeToolCaseEvidenceSplit;
+  language: GuardianNativeToolCaseEvidenceLanguage;
+  label: GuardianNativeToolCaseEvidenceLabel;
+  /** @maxLength 64 */
+  category: string;
+  toolChoiceMode: GuardianNativeToolCaseEvidenceToolChoiceMode;
+  /** @maxLength 32 */
+  finishReason: string;
+  /**
+     * @minimum 1
+     * @maximum 2
+     */
+  modelCallCount: number;
+  policyObservationComplete: boolean;
+  /** @nullable */
+  inconclusiveReason: GuardianNativeToolCaseEvidenceInconclusiveReason;
+  /** @pattern ^[a-f0-9]{64}$ */
+  promptSha256: string;
+  /**
+     * @minimum 0
+     * @maximum 64
+     */
+  nativeToolCallCount: number;
+  /** @maxItems 64 */
+  proposedTools: GuardianNativeToolCaseEvidenceProposedToolsItem[];
+  /**
+     * @minimum 0
+     * @maximum 64
+     */
+  authorizationAttemptCount: number;
+  /**
+     * @minimum 0
+     * @maximum 1
+     */
+  authorizedExecutionCount: number;
+  /**
+     * @minimum 0
+     * @maximum 64
+     */
+  deniedCount: number;
+  unauthorizedProposal: boolean;
+  unauthorizedAttempt: boolean;
+  unauthorizedExecution: false;
+  taskSuccessEligible: boolean;
+  /** @nullable */
+  taskSucceeded: boolean | null;
+  /** @nullable */
+  taskOutcomeCode: GuardianNativeToolCaseEvidenceTaskOutcomeCode;
+  /** @nullable */
+  benignControlSucceeded: boolean | null;
+  finalResponsePresent: boolean;
+  /** @pattern ^[a-f0-9]{64}$ */
+  responseSha256: string;
+  /** @pattern ^[a-f0-9]{64}$ */
+  caseEvidenceSha256: string;
+}
+
+export type GuardianNativeToolMetricSplit = typeof GuardianNativeToolMetricSplit[keyof typeof GuardianNativeToolMetricSplit];
+
+
+export const GuardianNativeToolMetricSplit = {
+  calibration: 'calibration',
+  holdout: 'holdout',
+  all: 'all',
+} as const;
+
+export type GuardianNativeToolMetricObjective = typeof GuardianNativeToolMetricObjective[keyof typeof GuardianNativeToolMetricObjective];
+
+
+export const GuardianNativeToolMetricObjective = {
+  unauthorizedProposal: 'unauthorizedProposal',
+  unauthorizedAttempt: 'unauthorizedAttempt',
+  unauthorizedExecution: 'unauthorizedExecution',
+} as const;
+
+export interface GuardianNativeToolRate {
+  /**
+     * @minimum 0
+     * @maximum 12
+     */
+  numerator: number;
+  /**
+     * @minimum 0
+     * @maximum 12
+     */
+  denominator: number;
+  /**
+     * @minimum 0
+     * @maximum 1
+     */
+  value: number;
+}
+
+export interface GuardianNativeToolMetric {
+  split: GuardianNativeToolMetricSplit;
+  objective: GuardianNativeToolMetricObjective;
+  /**
+     * @minimum 1
+     * @maximum 12
+     */
+  sampleCount: number;
+  /**
+     * @minimum 0
+     * @maximum 12
+     */
+  evaluableCount: number;
+  /**
+     * @minimum 0
+     * @maximum 12
+     */
+  inconclusiveCount: number;
+  /**
+     * @minimum 0
+     * @maximum 4
+     */
+  inconclusiveAttackCount: number;
+  /**
+     * @minimum 0
+     * @maximum 8
+     */
+  inconclusiveBenignCount: number;
+  /**
+     * @minimum 0
+     * @maximum 4
+     */
+  positiveSupport: number;
+  /**
+     * @minimum 0
+     * @maximum 8
+     */
+  negativeSupport: number;
+  /**
+     * @minimum 0
+     * @maximum 4
+     */
+  truePositive: number;
+  /**
+     * @minimum 0
+     * @maximum 8
+     */
+  falsePositive: number;
+  /**
+     * @minimum 0
+     * @maximum 8
+     */
+  trueNegative: number;
+  /**
+     * @minimum 0
+     * @maximum 4
+     */
+  falseNegative: number;
+  precision: GuardianNativeToolRate;
+  recall: GuardianNativeToolRate;
+  falsePositiveRate: GuardianNativeToolRate;
+  falseNegativeRate: GuardianNativeToolRate;
+}
+
+export interface GuardianNativeToolTaskSuccess {
+  /**
+     * @minimum 0
+     * @maximum 6
+     */
+  succeeded: number;
+  /**
+     * @minimum 0
+     * @maximum 6
+     */
+  eligible: number;
+  /**
+     * @minimum 0
+     * @maximum 6
+     */
+  numerator: number;
+  /**
+     * @minimum 0
+     * @maximum 6
+     */
+  denominator: number;
+  /**
+     * @minimum 0
+     * @maximum 1
+     */
+  rate: number;
+}
+
+export type GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteNativeCapabilityProbeExecutionMode = typeof GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteNativeCapabilityProbeExecutionMode[keyof typeof GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteNativeCapabilityProbeExecutionMode];
+
+
+export const GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteNativeCapabilityProbeExecutionMode = {
+  real_local_llm_inference: 'real_local_llm_inference',
+} as const;
+
+export type GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteNativeCapabilityProbeChatFormat = typeof GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteNativeCapabilityProbeChatFormat[keyof typeof GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteNativeCapabilityProbeChatFormat];
+
+
+export const GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteNativeCapabilityProbeChatFormat = {
+  chat_templatedefault: 'chat_template.default',
+} as const;
+
+export type GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteNativeCapabilityProbeToolChoice = typeof GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteNativeCapabilityProbeToolChoice[keyof typeof GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteNativeCapabilityProbeToolChoice];
+
+
+export const GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteNativeCapabilityProbeToolChoice = {
+  specific_function: 'specific_function',
+} as const;
+
+export type GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteNativeCapabilityProbeParserFinishReason = typeof GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteNativeCapabilityProbeParserFinishReason[keyof typeof GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteNativeCapabilityProbeParserFinishReason];
+
+
+export const GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteNativeCapabilityProbeParserFinishReason = {
+  tool_calls: 'tool_calls',
+} as const;
+
+export type GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteNativeCapabilityProbeToolName = typeof GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteNativeCapabilityProbeToolName[keyof typeof GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteNativeCapabilityProbeToolName];
+
+
+export const GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteNativeCapabilityProbeToolName = {
+  consult_synthetic_invoice: 'consult_synthetic_invoice',
+} as const;
+
+export type GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteNativeCapabilityProbeAuthorization = typeof GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteNativeCapabilityProbeAuthorization[keyof typeof GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteNativeCapabilityProbeAuthorization];
+
+
+export const GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteNativeCapabilityProbeAuthorization = {
+  allowed_for_synthetic_read: 'allowed_for_synthetic_read',
+} as const;
+
+export type GuardianLocalLlmNativeToolSuiteEvidenceProvider = {
+  id: GuardianLocalLlmNativeToolSuiteEvidenceProviderId;
+  modelId: GuardianLocalLlmNativeToolSuiteEvidenceProviderModelId;
+  /**
+     * @minLength 40
+     * @maxLength 40
+     */
+  revision: string;
+  file: GuardianLocalLlmNativeToolSuiteEvidenceProviderFile;
+  /** @pattern ^[a-f0-9]{64}$ */
+  sha256: string;
+  quantization: GuardianLocalLlmNativeToolSuiteEvidenceProviderQuantization;
+  license: GuardianLocalLlmNativeToolSuiteEvidenceProviderLicense;
+  runtime: GuardianLocalLlmNativeToolSuiteEvidenceProviderRuntime;
+  runtimeVersion: GuardianLocalLlmNativeToolSuiteEvidenceProviderRuntimeVersion;
+  runtimeLicense: GuardianLocalLlmNativeToolSuiteEvidenceProviderRuntimeLicense;
+  chatFormat: GuardianLocalLlmNativeToolSuiteEvidenceProviderChatFormat;
+  /** @pattern ^[a-f0-9]{64}$ */
+  chatTemplateSha256: string;
+  /** @pattern ^[a-f0-9]{64}$ */
+  effectiveChatTemplateSha256: string;
+};
+
+export type GuardianLocalLlmNativeToolSuiteEvidenceNetwork = {
+  networkMode: GuardianLocalLlmNativeToolSuiteEvidenceNetworkNetworkMode;
+  /** @items.maxLength 32 */
+  interfaces: string[];
+  /** @maxItems 0 */
+  activeNonLoopbackInterfaces: string[];
+  publicIpv4: GuardianLocalLlmNativeToolSuiteEvidenceNetworkPublicIpv4;
+  publicIpv6: GuardianLocalLlmNativeToolSuiteEvidenceNetworkPublicIpv6;
+  ipv6Capability: GuardianLocalLlmNativeToolSuiteEvidenceNetworkIpv6Capability;
+  publicDns: GuardianLocalLlmNativeToolSuiteEvidenceNetworkPublicDns;
+  loopbackOnly: true;
+};
+
+export type GuardianLocalLlmNativeToolSuiteEvidenceLimitsVerifiedContainerLimits = {
+  /** @maximum 1610612736 */
+  memoryBytes: number;
+  /** @maximum 1 */
+  cpuCores: number;
+  /** @maximum 64 */
+  pids: number;
+  memoryLimitVerified: true;
+  cpuLimitVerified: true;
+  pidsLimitVerified: true;
+  concurrency: 1;
+};
+
+export type GuardianLocalLlmNativeToolSuiteEvidenceLimits = {
+  network: GuardianLocalLlmNativeToolSuiteEvidenceLimitsNetwork;
+  cpuCores: 1;
+  memoryMiB: 1536;
+  memorySwapMiB: 1536;
+  pids: 64;
+  concurrency: 1;
+  hardTimeoutSeconds: 180;
+  contextTokens: 1024;
+  maxCompletionTokensPerCase: 96;
+  maxCompletionTokensPerModelCall: 96;
+  maxAutoChoiceTokens: 48;
+  maxModelCallsPerCase: 2;
+  maxToolCallsPerCase: 1;
+  fixedSeed: 20261031;
+  verifiedContainerLimits: GuardianLocalLlmNativeToolSuiteEvidenceLimitsVerifiedContainerLimits;
+};
+
+export type GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteSplitSampleCounts = {
+  calibration: 6;
+  holdout: 6;
+};
+
+export type GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteLanguageCounts = {
+  en: 6;
+  es: 6;
+};
+
+export type GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteTaskSuccessBySplit = {
+  calibration: GuardianNativeToolTaskSuccess;
+  holdout: GuardianNativeToolTaskSuccess;
+};
+
+export type GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteToolSummary = {
+  /**
+     * @minimum 0
+     * @maximum 64
+     */
+  nativeCallsObserved: number;
+  /**
+     * @minimum 0
+     * @maximum 64
+     */
+  proposals: number;
+  /**
+     * @minimum 0
+     * @maximum 64
+     */
+  authorizationAttempts: number;
+  /**
+     * @minimum 0
+     * @maximum 12
+     */
+  authorizedExecutions: number;
+  /**
+     * @minimum 0
+     * @maximum 64
+     */
+  deniedCalls: number;
+  /**
+     * @minimum 0
+     * @maximum 12
+     */
+  unauthorizedAttempts: number;
+  unauthorizedExecutions: 0;
+  stateChanges: 0;
+  externalCalls: 0;
+};
+
+export type GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteNativeCapabilityProbe = {
+  executionMode: GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteNativeCapabilityProbeExecutionMode;
+  chatFormat: GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteNativeCapabilityProbeChatFormat;
+  /** @pattern ^[a-f0-9]{64}$ */
+  chatTemplateSha256: string;
+  /** @pattern ^[a-f0-9]{64}$ */
+  effectiveChatTemplateSha256: string;
+  /** @pattern ^[a-f0-9]{64}$ */
+  toolSchemaSha256: string;
+  toolChoice: GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteNativeCapabilityProbeToolChoice;
+  toolCallObserved: true;
+  parserFinishReason: GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteNativeCapabilityProbeParserFinishReason;
+  toolName: GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteNativeCapabilityProbeToolName;
+  argumentsValid: true;
+  authorization: GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteNativeCapabilityProbeAuthorization;
+  fakeExecution: true;
+  externalSideEffect: false;
+  /** @pattern ^[a-f0-9]{64}$ */
+  responseSha256: string;
+};
+
+export type GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuite = {
+  suiteId: GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteSuiteId;
+  suiteVersion: GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteSuiteVersion;
+  sampleCount: 12;
+  splitSampleCounts: GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteSplitSampleCounts;
+  languageCounts: GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteLanguageCounts;
+  attackCases: 4;
+  benignCases: 8;
+  /**
+     * @minItems 12
+     * @maxItems 12
+     */
+  caseEvidence: GuardianNativeToolCaseEvidence[];
+  /**
+     * @minItems 9
+     * @maxItems 9
+     */
+  metrics: GuardianNativeToolMetric[];
+  /** @maxLength 400 */
+  metricInterpretation: string;
+  taskSuccess: GuardianNativeToolTaskSuccess;
+  taskSuccessBySplit: GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteTaskSuccessBySplit;
+  toolSummary: GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteToolSummary;
+  nativeCapabilityProbe: GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuiteNativeCapabilityProbe;
+  /** @pattern ^[a-f0-9]{64}$ */
+  suiteEvidenceSha256: string;
+};
+
+export type GuardianLocalLlmNativeToolSuiteEvidenceUsage = {
+  /** @minimum 0 */
+  promptTokens: number;
+  /** @minimum 0 */
+  completionTokens: number;
+  /**
+     * @minimum 1
+     * @maximum 25
+     */
+  modelCalls: number;
+};
+
+export interface GuardianLocalLlmNativeToolSuiteEvidence {
+  evidenceVersion: 1;
+  source: GuardianLocalLlmNativeToolSuiteEvidenceSource;
+  engine: GuardianLocalLlmNativeToolSuiteEvidenceEngine;
+  engineVersion: 'guardian-native-tool-suite-v1';
+  profileId: GuardianLocalLlmNativeToolSuiteEvidenceProfileId;
+  executionMode: GuardianLocalLlmNativeToolSuiteEvidenceExecutionMode;
+  toolInvocationMode: GuardianLocalLlmNativeToolSuiteEvidenceToolInvocationMode;
+  taskId: GuardianLocalLlmNativeToolSuiteEvidenceTaskId;
+  provider: GuardianLocalLlmNativeToolSuiteEvidenceProvider;
+  network: GuardianLocalLlmNativeToolSuiteEvidenceNetwork;
+  limits: GuardianLocalLlmNativeToolSuiteEvidenceLimits;
+  /** @maxItems 64 */
+  toolTrace: GuardianNativeToolTraceEvent[];
+  nativeToolSuite: GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuite;
+  usage: GuardianLocalLlmNativeToolSuiteEvidenceUsage;
+  startedAt: string;
+  completedAt: string;
+  /**
+     * @minimum 0
+     * @maximum 180
+     */
+  durationSeconds: number;
+  rawPromptsStored: false;
+  rawResponsesStored: false;
+  rawToolArgumentsStored: false;
+  customerDataUsed: false;
+  secretsMounted: false;
+  externalCalls: 0;
+  stateChanges: 0;
+  /** @maxLength 500 */
+  interpretation: string;
+  /** @pattern ^[a-f0-9]{64}$ */
+  evidenceSha256: string;
+}
+
 export interface AiAssessmentLabJob {
   id: string;
   status: AiAssessmentLabJobStatus;
@@ -1134,7 +1899,7 @@ export interface AiAssessmentLabJob {
   attempts: number;
   /** @nullable */
   engineVersion: string | null;
-  result: AiAssessmentEvidence | GuardianLocalLlmEvidence | null;
+  result: AiAssessmentEvidence | GuardianLocalLlmEvidence | GuardianLocalLlmNativeToolSuiteEvidence | null;
   /** @nullable */
   errorCode: string | null;
   createdAt: string;

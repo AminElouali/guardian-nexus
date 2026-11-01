@@ -15,6 +15,7 @@ import {
   aiAssessmentJobsTable,
   assertRlsRuntimeReady,
   pool,
+  type GuardianLocalLlmNativeToolSuiteEvidence,
 } from "@workspace/db";
 import { withWorkspaceUserTransaction } from "./lib/tenant-db";
 import {
@@ -23,7 +24,7 @@ import {
 } from "./lib/ai-assessment-worker";
 import { createAiAssessmentLabRouter } from "./routes/ai-assessment-lab";
 
-const TIMEOUT_MS = 300_000;
+const TIMEOUT_MS = 480_000;
 const POLL_INTERVAL_MS = 500;
 const userA = `assessment-e2e-owner-${randomUUID()}`;
 const userB = `assessment-e2e-owner-${randomUUID()}`;
@@ -52,6 +53,7 @@ let workspaceA = "";
 let workspaceB = "";
 let jobId = "";
 let localLlmJobId = "";
+let nativeToolJobId = "";
 let server: Server | undefined;
 let baseUrl = "";
 
@@ -64,6 +66,12 @@ if (
 before(async () => {
   await assertRlsRuntimeReady();
   assert.equal(getLocalWorkerAvailability().status, "ready");
+  assert.equal(
+    getLocalWorkerAvailability().profiles.find(
+      (profile) => profile.profileId === "guardian-local-llm-native-tools-v1",
+    )?.status,
+    "ready",
+  );
   assert.notEqual(
     process.env.GUARDIAN_AI_ASSESSMENT_QUEUE_ENABLED,
     "false",
@@ -110,7 +118,7 @@ before(async () => {
 
 after(async () => {
   stopLocalAssessmentQueueWorker();
-  for (const candidateJobId of [jobId, localLlmJobId].filter(Boolean)) {
+  for (const candidateJobId of [jobId, localLlmJobId, nativeToolJobId].filter(Boolean)) {
     spawnSync(
       "docker",
       ["rm", "--force", `guardian-ai-lab-${candidateJobId}`],
@@ -453,5 +461,200 @@ test(
       artifactPath,
       JSON.stringify([completedRawJob, completedLocalRawJob], null, 2),
     );
+  },
+);
+
+test(
+  "native Qwen tool calls stay tenant-isolated and persist only verified evidence",
+  { timeout: TIMEOUT_MS },
+  async () => {
+    const pathA = `/api/workspaces/${workspaceA}/ai-security-assessments/lab/jobs`;
+    const pathB = `/api/workspaces/${workspaceB}/ai-security-assessments/lab/jobs`;
+    const idempotencyKey = `native-tools-e2e-${randomUUID()}`;
+    assert.equal(
+      (
+        await apiRequest(viewerA, pathA, "POST", {
+          idempotencyKey: `native-viewer-${randomUUID()}`,
+          profileId: "guardian-local-llm-native-tools-v1",
+        })
+      ).status,
+      403,
+      "viewer cannot request a native tool-call evaluation",
+    );
+    const created = await apiRequest(userA, pathA, "POST", {
+      idempotencyKey,
+      profileId: "guardian-local-llm-native-tools-v1",
+    });
+    assert.equal(created.status, 202);
+    const accepted = (await created.json()) as {
+      id: string;
+      status: string;
+      profileId: string;
+    };
+    nativeToolJobId = accepted.id;
+    assert.equal(accepted.status, "queued");
+    assert.equal(accepted.profileId, "guardian-local-llm-native-tools-v1");
+    const duplicate = await apiRequest(userA, pathA, "POST", {
+      idempotencyKey,
+      profileId: "guardian-local-llm-native-tools-v1",
+    });
+    assert.equal(duplicate.status, 202);
+    assert.equal(
+      ((await duplicate.json()) as { id: string }).id,
+      nativeToolJobId,
+    );
+    assert.equal(
+      (
+        await apiRequest(userA, pathA, "POST", {
+          idempotencyKey,
+          profileId: "guardian-local-agent-v1",
+        })
+      ).status,
+      409,
+      "idempotency key cannot change the execution profile",
+    );
+
+    let rawJob: Record<string, unknown> | undefined;
+    let nativeEvidence: GuardianLocalLlmNativeToolSuiteEvidence | undefined;
+    const deadline = Date.now() + TIMEOUT_MS - 10_000;
+    while (Date.now() < deadline) {
+      const response = await apiRequest(userA, pathA);
+      assert.equal(response.status, 200);
+      const rawJobs = (await response.json()) as unknown;
+      const jobs = ListWorkspaceAiAssessmentLabJobsResponse.parse(rawJobs);
+      const job = jobs.find((candidate) => candidate.id === nativeToolJobId);
+      if (job?.status === "succeeded" || job?.status === "failed") {
+        rawJob = (rawJobs as Record<string, unknown>[]).find(
+          (candidate) => candidate.id === nativeToolJobId,
+        );
+        assert.equal(job.status, "succeeded", `native worker failed: ${job.errorCode}`);
+        assert.equal(job.attempts, 1);
+        assert.equal(job.profileId, "guardian-local-llm-native-tools-v1");
+        if (
+          job.result?.engine !== "local_llm_lab" ||
+          job.result.profileId !== "guardian-local-llm-native-tools-v1"
+        ) {
+          assert.fail("job must identify its real local native-call engine");
+        }
+        nativeEvidence =
+          job.result as unknown as GuardianLocalLlmNativeToolSuiteEvidence;
+        break;
+      }
+      await delay(POLL_INTERVAL_MS);
+    }
+    assert.ok(rawJob && nativeEvidence, "native job did not complete");
+    assert.equal(nativeEvidence.executionMode, "real_local_llm_inference");
+    assert.equal(nativeEvidence.toolInvocationMode, "native_tool_calls");
+    assert.equal(
+      nativeEvidence.nativeToolSuite.nativeCapabilityProbe.toolCallObserved,
+      true,
+    );
+    assert.equal(
+      nativeEvidence.nativeToolSuite.nativeCapabilityProbe.parserFinishReason,
+      "tool_calls",
+    );
+    assert.equal(nativeEvidence.nativeToolSuite.sampleCount, 12);
+    assert.deepEqual(
+      nativeEvidence.nativeToolSuite.splitSampleCounts,
+      { calibration: 6, holdout: 6 },
+    );
+    assert.deepEqual(
+      nativeEvidence.nativeToolSuite.languageCounts,
+      { en: 6, es: 6 },
+    );
+    assert.equal(nativeEvidence.nativeToolSuite.taskSuccess.denominator, 6);
+    assert.ok(nativeEvidence.nativeToolSuite.toolSummary.nativeCallsObserved >= 6);
+    assert.equal(nativeEvidence.nativeToolSuite.toolSummary.externalCalls, 0);
+    assert.equal(nativeEvidence.nativeToolSuite.toolSummary.stateChanges, 0);
+    assert.ok(
+      nativeEvidence.toolTrace.some(
+        (event) =>
+          event.phase === "executed" &&
+          event.source === "native_tool_call" &&
+          event.simulatedOnly,
+      ),
+    );
+    for (const metric of nativeEvidence.nativeToolSuite.metrics) {
+      assert.equal(
+        metric.truePositive +
+          metric.falsePositive +
+          metric.trueNegative +
+          metric.falseNegative,
+        metric.evaluableCount,
+        "confusion matrix counts match their denominator",
+      );
+    }
+    assert.equal(nativeEvidence.rawPromptsStored, false);
+    assert.equal(nativeEvidence.rawResponsesStored, false);
+    assert.equal(nativeEvidence.rawToolArgumentsStored, false);
+    assert.equal(nativeEvidence.network.networkMode, "docker-network-none");
+    assert.ok(
+      ["blocked", "unavailable"].includes(nativeEvidence.network.publicIpv6),
+    );
+
+    const rawEvidence = rawJob.result as Record<string, unknown>;
+    const { evidenceSha256, ...unsignedEvidence } = rawEvidence;
+    assert.equal(
+      createHash("sha256")
+        .update(canonicalJson(unsignedEvidence), "utf8")
+        .digest("hex"),
+      evidenceSha256,
+      "outer evidence digest verifies after API serialization",
+    );
+    const rawSuite = rawEvidence.nativeToolSuite as Record<string, unknown>;
+    const { suiteEvidenceSha256, ...unsignedSuite } = rawSuite;
+    assert.equal(
+      createHash("sha256")
+        .update(canonicalJson(unsignedSuite), "utf8")
+        .digest("hex"),
+      suiteEvidenceSha256,
+      "suite evidence digest verifies after API serialization",
+    );
+    for (const rawCase of rawSuite.caseEvidence as Record<string, unknown>[]) {
+      const { caseEvidenceSha256, ...unsignedCase } = rawCase;
+      assert.equal(
+        createHash("sha256")
+          .update(canonicalJson(unsignedCase), "utf8")
+          .digest("hex"),
+        caseEvidenceSha256,
+      );
+    }
+    const serialized = JSON.stringify(nativeEvidence);
+    assert.equal(serialized.includes("GN-EMAIL-EN-CAL"), false);
+    assert.equal(serialized.includes("lab-recipient@invalid.example"), false);
+
+    const persisted = await withWorkspaceUserTransaction(
+      userA,
+      workspaceA,
+      (tx) =>
+        tx
+          .select({
+            status: aiAssessmentJobsTable.status,
+            profileId: aiAssessmentJobsTable.profileId,
+            result: aiAssessmentJobsTable.result,
+          })
+          .from(aiAssessmentJobsTable)
+          .where(eq(aiAssessmentJobsTable.id, nativeToolJobId)),
+    );
+    assert.equal(persisted.authorized, true);
+    if (!persisted.authorized) return;
+    assert.equal(persisted.value[0]?.status, "succeeded");
+    assert.equal(
+      persisted.value[0]?.profileId,
+      "guardian-local-llm-native-tools-v1",
+    );
+    assert.equal((await apiRequest(userB, pathA)).status, 403);
+    const tenantBJobs = await apiRequest(userB, pathB);
+    assert.equal(tenantBJobs.status, 200);
+    assert.deepEqual(await tenantBJobs.json(), []);
+
+    const artifactPath = fileURLToPath(
+      new URL(
+        "../../../generated-artifacts/ai-assessment-native-e2e-response.json",
+        import.meta.url,
+      ),
+    );
+    mkdirSync(dirname(artifactPath), { recursive: true });
+    writeFileSync(artifactPath, JSON.stringify(rawJob, null, 2));
   },
 );

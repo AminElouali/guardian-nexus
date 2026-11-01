@@ -277,9 +277,228 @@ export type GuardianLocalLlmEvidence = {
   evidenceSha256: string;
 };
 
+type GuardianNativeToolRate = {
+  numerator: number;
+  denominator: number;
+  value: number;
+};
+
+type GuardianNativeToolTaskSuccess = {
+  succeeded: number;
+  eligible: number;
+  numerator: number;
+  denominator: number;
+  rate: number;
+};
+
+type GuardianNativeToolMetric = {
+  split: "calibration" | "holdout" | "all";
+  objective:
+    | "unauthorizedProposal"
+    | "unauthorizedAttempt"
+    | "unauthorizedExecution";
+  sampleCount: number;
+  evaluableCount: number;
+  inconclusiveCount: number;
+  inconclusiveAttackCount: number;
+  inconclusiveBenignCount: number;
+  positiveSupport: number;
+  negativeSupport: number;
+  truePositive: number;
+  falsePositive: number;
+  trueNegative: number;
+  falseNegative: number;
+  precision: GuardianNativeToolRate;
+  recall: GuardianNativeToolRate;
+  falsePositiveRate: GuardianNativeToolRate;
+  falseNegativeRate: GuardianNativeToolRate;
+};
+
+type GuardianNativeToolCaseEvidence = {
+  caseId: string;
+  split: "calibration" | "holdout";
+  language: "en" | "es";
+  label: "attack" | "benign";
+  category: string;
+  toolChoiceMode: "auto" | "specific_function_for_authorized_control";
+  finishReason: string;
+  modelCallCount: number;
+  policyObservationComplete: boolean;
+  inconclusiveReason: "completion_token_limit" | null;
+  promptSha256: string;
+  nativeToolCallCount: number;
+  proposedTools: Array<
+    | "consult_synthetic_invoice"
+    | "send_email_simulated"
+    | "request_bank_account_change"
+    | "unknown"
+  >;
+  authorizationAttemptCount: number;
+  authorizedExecutionCount: number;
+  deniedCount: number;
+  unauthorizedProposal: boolean;
+  unauthorizedAttempt: boolean;
+  unauthorizedExecution: false;
+  taskSuccessEligible: boolean;
+  taskSucceeded: boolean | null;
+  taskOutcomeCode:
+    | "verified_simulated_tool_result"
+    | "tool_not_executed"
+    | "required_invoice_fields_not_verified"
+    | null;
+  benignControlSucceeded: boolean | null;
+  finalResponsePresent: boolean;
+  responseSha256: string;
+  caseEvidenceSha256: string;
+};
+
+type GuardianNativeToolTraceEvent = {
+  caseId: string;
+  toolCallId: string;
+  source: "native_tool_call";
+  tool:
+    | "consult_synthetic_invoice"
+    | "send_email_simulated"
+    | "request_bank_account_change"
+    | "unknown";
+  phase: "proposal" | "authorization_attempt" | "executed" | "denied";
+  authorization: "not_checked" | "allowed" | "denied";
+  executed: boolean;
+  simulatedOnly: true;
+  stateChanged: false;
+  externalSideEffect: false;
+  argumentsSha256: string;
+  resultCode: string;
+};
+
+export type GuardianLocalLlmNativeToolSuiteEvidence = {
+  evidenceVersion: 1;
+  source: "isolated_local_lab";
+  engine: "local_llm_lab";
+  engineVersion: "guardian-native-tool-suite-v1";
+  profileId: "guardian-local-llm-native-tools-v1";
+  executionMode: "real_local_llm_inference";
+  toolInvocationMode: "native_tool_calls";
+  taskId: "native_tool_call_security_suite_v1";
+  provider: {
+    id: "local_qwen_gguf";
+    modelId: "Qwen/Qwen3-0.6B-GGUF";
+    revision: string;
+    file: "Qwen3-0.6B-Q8_0.gguf";
+    sha256: string;
+    quantization: "Q8_0";
+    license: "Apache-2.0";
+    runtime: "llama-cpp-python";
+    runtimeVersion: "0.3.36";
+    runtimeLicense: "MIT";
+    chatFormat: "chat_template.default";
+    chatTemplateSha256: string;
+    effectiveChatTemplateSha256: string;
+  };
+  network: {
+    networkMode: "docker-network-none";
+    interfaces: string[];
+    activeNonLoopbackInterfaces: [];
+    publicIpv4: "blocked";
+    publicIpv6: "blocked" | "unavailable";
+    ipv6Capability: "kernel_protocol_unavailable" | "socket_and_route_tested";
+    publicDns: "blocked";
+    loopbackOnly: true;
+  };
+  limits: {
+    network: "none";
+    cpuCores: 1;
+    memoryMiB: 1536;
+    memorySwapMiB: 1536;
+    pids: 64;
+    concurrency: 1;
+    hardTimeoutSeconds: 180;
+    contextTokens: 1024;
+    maxCompletionTokensPerCase: 96;
+    maxCompletionTokensPerModelCall: 96;
+    maxAutoChoiceTokens: 48;
+    maxModelCallsPerCase: 2;
+    maxToolCallsPerCase: 1;
+    fixedSeed: 20261031;
+    verifiedContainerLimits: {
+      memoryBytes: number;
+      cpuCores: number;
+      pids: number;
+      memoryLimitVerified: true;
+      cpuLimitVerified: true;
+      pidsLimitVerified: true;
+      concurrency: 1;
+    };
+  };
+  toolTrace: GuardianNativeToolTraceEvent[];
+  nativeToolSuite: {
+    suiteId: "guardian-native-tool-call-en-es-v1";
+    suiteVersion: "1.0.0";
+    sampleCount: 12;
+    splitSampleCounts: { calibration: 6; holdout: 6 };
+    languageCounts: { en: 6; es: 6 };
+    attackCases: 4;
+    benignCases: 8;
+    caseEvidence: GuardianNativeToolCaseEvidence[];
+    metrics: GuardianNativeToolMetric[];
+    metricInterpretation: string;
+    taskSuccess: GuardianNativeToolTaskSuccess;
+    taskSuccessBySplit: {
+      calibration: GuardianNativeToolTaskSuccess;
+      holdout: GuardianNativeToolTaskSuccess;
+    };
+    toolSummary: {
+      nativeCallsObserved: number;
+      proposals: number;
+      authorizationAttempts: number;
+      authorizedExecutions: number;
+      deniedCalls: number;
+      unauthorizedAttempts: number;
+      unauthorizedExecutions: 0;
+      stateChanges: 0;
+      externalCalls: 0;
+    };
+    nativeCapabilityProbe: {
+      executionMode: "real_local_llm_inference";
+      chatFormat: "chat_template.default";
+      chatTemplateSha256: string;
+      effectiveChatTemplateSha256: string;
+      toolSchemaSha256: string;
+      toolChoice: "specific_function";
+      toolCallObserved: true;
+      parserFinishReason: "tool_calls";
+      toolName: "consult_synthetic_invoice";
+      argumentsValid: true;
+      authorization: "allowed_for_synthetic_read";
+      fakeExecution: true;
+      externalSideEffect: false;
+      responseSha256: string;
+    };
+    suiteEvidenceSha256: string;
+  };
+  usage: {
+    promptTokens: number;
+    completionTokens: number;
+    modelCalls: number;
+  };
+  startedAt: string;
+  completedAt: string;
+  durationSeconds: number;
+  rawPromptsStored: false;
+  rawResponsesStored: false;
+  rawToolArgumentsStored: false;
+  customerDataUsed: false;
+  secretsMounted: false;
+  externalCalls: 0;
+  stateChanges: 0;
+  interpretation: string;
+  evidenceSha256: string;
+};
+
 export type AiAssessmentJobEvidence =
   | AiAssessmentEvidence
-  | GuardianLocalLlmEvidence;
+  | GuardianLocalLlmEvidence
+  | GuardianLocalLlmNativeToolSuiteEvidence;
 
 const memberScope = (workspaceId: SQLWrapper) => sql`
   ${workspaceId}::text = NULLIF(current_setting('app.workspace_id', true), '')
@@ -356,7 +575,7 @@ export const aiAssessmentJobsTable = pgTable(
     ),
     check(
       "ai_assessment_jobs_profile_check",
-      sql`${table.profileId} IN ('guardian-local-agent-v1', 'guardian-local-llm-qwen3-0.6b-v1')`,
+      sql`${table.profileId} IN ('guardian-local-agent-v1', 'guardian-local-llm-qwen3-0.6b-v1', 'guardian-local-llm-native-tools-v1')`,
     ),
     check(
       "ai_assessment_jobs_attempts_check",
@@ -406,7 +625,7 @@ export const aiAssessmentJobsTable = pgTable(
         )
       `,
       withCheck: sql`
-        ${table.profileId} IN ('guardian-local-agent-v1', 'guardian-local-llm-qwen3-0.6b-v1')
+        ${table.profileId} IN ('guardian-local-agent-v1', 'guardian-local-llm-qwen3-0.6b-v1', 'guardian-local-llm-native-tools-v1')
         AND ${table.status} IN ('running', 'failed')
         AND (
           ${table.status} = 'failed'

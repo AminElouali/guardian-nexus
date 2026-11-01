@@ -835,7 +835,7 @@ components:
       properties:
         profileId:
           type: string
-          enum: [guardian-local-agent-v1, guardian-local-llm-qwen3-0.6b-v1]
+          enum: [guardian-local-agent-v1, guardian-local-llm-qwen3-0.6b-v1, guardian-local-llm-native-tools-v1]
         engine: { type: string, enum: [garak, local_llm_lab] }
         status: { type: string, enum: [ready, unavailable, disabled] }
         reasonCode: { type: ["string", "null"] }
@@ -846,7 +846,7 @@ components:
         idempotencyKey: { type: string, minLength: 16, maxLength: 128 }
         profileId:
           type: string
-          enum: [guardian-local-agent-v1, guardian-local-llm-qwen3-0.6b-v1]
+          enum: [guardian-local-agent-v1, guardian-local-llm-qwen3-0.6b-v1, guardian-local-llm-native-tools-v1]
           default: guardian-local-agent-v1
       required: [idempotencyKey]
     AiAssessmentLabJob:
@@ -856,7 +856,7 @@ components:
         status: { type: string, enum: [queued, running, succeeded, failed] }
         profileId:
           type: string
-          enum: [guardian-local-agent-v1, guardian-local-llm-qwen3-0.6b-v1]
+          enum: [guardian-local-agent-v1, guardian-local-llm-qwen3-0.6b-v1, guardian-local-llm-native-tools-v1]
         workerVersion: { type: string }
         attempts: { type: integer }
         engineVersion: { type: ["string", "null"] }
@@ -864,6 +864,7 @@ components:
           oneOf:
             - { $ref: "#/components/schemas/AiAssessmentEvidence" }
             - { $ref: "#/components/schemas/GuardianLocalLlmEvidence" }
+            - { $ref: "#/components/schemas/GuardianLocalLlmNativeToolSuiteEvidence" }
             - { type: "null" }
         errorCode: { type: ["string", "null"] }
         createdAt: { type: string, format: date-time }
@@ -988,6 +989,282 @@ components:
         interpretation: { type: string, maxLength: 400 }
         evidenceSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
       required: [evidenceVersion, source, engine, engineVersion, profileId, executionMode, toolInvocationMode, taskId, provider, network, limits, toolTrace, toolSummary, decision, inputSha256, invoiceSha256, startedAt, completedAt, durationSeconds, rawPromptsStored, rawResponsesStored, rawToolArgumentsStored, customerDataUsed, secretsMounted, externalCalls, interpretation, evidenceSha256]
+    GuardianLocalLlmNativeToolSuiteEvidence:
+      type: object
+      additionalProperties: false
+      properties:
+        evidenceVersion: { type: integer, const: 1 }
+        source: { type: string, enum: [isolated_local_lab] }
+        engine: { type: string, enum: [local_llm_lab] }
+        engineVersion: { type: string, const: guardian-native-tool-suite-v1 }
+        profileId: { type: string, enum: [guardian-local-llm-native-tools-v1] }
+        executionMode: { type: string, enum: [real_local_llm_inference] }
+        toolInvocationMode: { type: string, enum: [native_tool_calls] }
+        taskId: { type: string, enum: [native_tool_call_security_suite_v1] }
+        provider:
+          type: object
+          additionalProperties: false
+          properties:
+            id: { type: string, enum: [local_qwen_gguf] }
+            modelId: { type: string, enum: [Qwen/Qwen3-0.6B-GGUF] }
+            revision: { type: string, minLength: 40, maxLength: 40 }
+            file: { type: string, enum: [Qwen3-0.6B-Q8_0.gguf] }
+            sha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+            quantization: { type: string, enum: [Q8_0] }
+            license: { type: string, enum: [Apache-2.0] }
+            runtime: { type: string, enum: [llama-cpp-python] }
+            runtimeVersion: { type: string, enum: ["0.3.36"] }
+            runtimeLicense: { type: string, enum: [MIT] }
+            chatFormat: { type: string, enum: [chat_template.default] }
+            chatTemplateSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+            effectiveChatTemplateSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+          required: [id, modelId, revision, file, sha256, quantization, license, runtime, runtimeVersion, runtimeLicense, chatFormat, chatTemplateSha256, effectiveChatTemplateSha256]
+        network:
+          type: object
+          additionalProperties: false
+          properties:
+            networkMode: { type: string, enum: [docker-network-none] }
+            interfaces:
+              type: array
+              items: { type: string, maxLength: 32 }
+            activeNonLoopbackInterfaces:
+              type: array
+              maxItems: 0
+              items: { type: string }
+            publicIpv4: { type: string, enum: [blocked] }
+            publicIpv6: { type: string, enum: [blocked, unavailable] }
+            ipv6Capability: { type: string, enum: [kernel_protocol_unavailable, socket_and_route_tested] }
+            publicDns: { type: string, enum: [blocked] }
+            loopbackOnly: { type: boolean, const: true }
+          required: [networkMode, interfaces, activeNonLoopbackInterfaces, publicIpv4, publicIpv6, ipv6Capability, publicDns, loopbackOnly]
+        limits:
+          type: object
+          additionalProperties: false
+          properties:
+            network: { type: string, enum: [none] }
+            cpuCores: { type: number, const: 1 }
+            memoryMiB: { type: integer, const: 1536 }
+            memorySwapMiB: { type: integer, const: 1536 }
+            pids: { type: integer, const: 64 }
+            concurrency: { type: integer, const: 1 }
+            hardTimeoutSeconds: { type: integer, const: 180 }
+            contextTokens: { type: integer, const: 1024 }
+            maxCompletionTokensPerCase: { type: integer, const: 96 }
+            maxCompletionTokensPerModelCall: { type: integer, const: 96 }
+            maxAutoChoiceTokens: { type: integer, const: 48 }
+            maxModelCallsPerCase: { type: integer, const: 2 }
+            maxToolCallsPerCase: { type: integer, const: 1 }
+            fixedSeed: { type: integer, const: 20261031 }
+            verifiedContainerLimits:
+              type: object
+              additionalProperties: false
+              properties:
+                memoryBytes: { type: integer, maximum: 1610612736 }
+                cpuCores: { type: number, maximum: 1 }
+                pids: { type: integer, maximum: 64 }
+                memoryLimitVerified: { type: boolean, const: true }
+                cpuLimitVerified: { type: boolean, const: true }
+                pidsLimitVerified: { type: boolean, const: true }
+                concurrency: { type: integer, const: 1 }
+              required: [memoryBytes, cpuCores, pids, memoryLimitVerified, cpuLimitVerified, pidsLimitVerified, concurrency]
+          required: [network, cpuCores, memoryMiB, memorySwapMiB, pids, concurrency, hardTimeoutSeconds, contextTokens, maxCompletionTokensPerCase, maxCompletionTokensPerModelCall, maxAutoChoiceTokens, maxModelCallsPerCase, maxToolCallsPerCase, fixedSeed, verifiedContainerLimits]
+        toolTrace:
+          type: array
+          maxItems: 64
+          items: { $ref: "#/components/schemas/GuardianNativeToolTraceEvent" }
+        nativeToolSuite:
+          type: object
+          additionalProperties: false
+          properties:
+            suiteId: { type: string, enum: [guardian-native-tool-call-en-es-v1] }
+            suiteVersion: { type: string, enum: ["1.0.0"] }
+            sampleCount: { type: integer, const: 12 }
+            splitSampleCounts:
+              type: object
+              additionalProperties: false
+              properties:
+                calibration: { type: integer, const: 6 }
+                holdout: { type: integer, const: 6 }
+              required: [calibration, holdout]
+            languageCounts:
+              type: object
+              additionalProperties: false
+              properties:
+                en: { type: integer, const: 6 }
+                es: { type: integer, const: 6 }
+              required: [en, es]
+            attackCases: { type: integer, const: 4 }
+            benignCases: { type: integer, const: 8 }
+            caseEvidence:
+              type: array
+              minItems: 12
+              maxItems: 12
+              items: { $ref: "#/components/schemas/GuardianNativeToolCaseEvidence" }
+            metrics:
+              type: array
+              minItems: 9
+              maxItems: 9
+              items: { $ref: "#/components/schemas/GuardianNativeToolMetric" }
+            metricInterpretation: { type: string, maxLength: 400 }
+            taskSuccess: { $ref: "#/components/schemas/GuardianNativeToolTaskSuccess" }
+            taskSuccessBySplit:
+              type: object
+              additionalProperties: false
+              properties:
+                calibration: { $ref: "#/components/schemas/GuardianNativeToolTaskSuccess" }
+                holdout: { $ref: "#/components/schemas/GuardianNativeToolTaskSuccess" }
+              required: [calibration, holdout]
+            toolSummary:
+              type: object
+              additionalProperties: false
+              properties:
+                nativeCallsObserved: { type: integer, minimum: 0, maximum: 64 }
+                proposals: { type: integer, minimum: 0, maximum: 64 }
+                authorizationAttempts: { type: integer, minimum: 0, maximum: 64 }
+                authorizedExecutions: { type: integer, minimum: 0, maximum: 12 }
+                deniedCalls: { type: integer, minimum: 0, maximum: 64 }
+                unauthorizedAttempts: { type: integer, minimum: 0, maximum: 12 }
+                unauthorizedExecutions: { type: integer, const: 0 }
+                stateChanges: { type: integer, const: 0 }
+                externalCalls: { type: integer, const: 0 }
+              required: [nativeCallsObserved, proposals, authorizationAttempts, authorizedExecutions, deniedCalls, unauthorizedAttempts, unauthorizedExecutions, stateChanges, externalCalls]
+            nativeCapabilityProbe:
+              type: object
+              additionalProperties: false
+              properties:
+                executionMode: { type: string, enum: [real_local_llm_inference] }
+                chatFormat: { type: string, enum: [chat_template.default] }
+                chatTemplateSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+                effectiveChatTemplateSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+                toolSchemaSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+                toolChoice: { type: string, enum: [specific_function] }
+                toolCallObserved: { type: boolean, const: true }
+                parserFinishReason: { type: string, enum: [tool_calls] }
+                toolName: { type: string, enum: [consult_synthetic_invoice] }
+                argumentsValid: { type: boolean, const: true }
+                authorization: { type: string, enum: [allowed_for_synthetic_read] }
+                fakeExecution: { type: boolean, const: true }
+                externalSideEffect: { type: boolean, const: false }
+                responseSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+              required: [executionMode, chatFormat, chatTemplateSha256, effectiveChatTemplateSha256, toolSchemaSha256, toolChoice, toolCallObserved, parserFinishReason, toolName, argumentsValid, authorization, fakeExecution, externalSideEffect, responseSha256]
+            suiteEvidenceSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+          required: [suiteId, suiteVersion, sampleCount, splitSampleCounts, languageCounts, attackCases, benignCases, caseEvidence, metrics, metricInterpretation, taskSuccess, taskSuccessBySplit, toolSummary, nativeCapabilityProbe, suiteEvidenceSha256]
+        usage:
+          type: object
+          additionalProperties: false
+          properties:
+            promptTokens: { type: integer, minimum: 0 }
+            completionTokens: { type: integer, minimum: 0 }
+            modelCalls: { type: integer, minimum: 1, maximum: 25 }
+          required: [promptTokens, completionTokens, modelCalls]
+        startedAt: { type: string, format: date-time }
+        completedAt: { type: string, format: date-time }
+        durationSeconds: { type: number, minimum: 0, maximum: 180 }
+        rawPromptsStored: { type: boolean, const: false }
+        rawResponsesStored: { type: boolean, const: false }
+        rawToolArgumentsStored: { type: boolean, const: false }
+        customerDataUsed: { type: boolean, const: false }
+        secretsMounted: { type: boolean, const: false }
+        externalCalls: { type: integer, const: 0 }
+        stateChanges: { type: integer, const: 0 }
+        interpretation: { type: string, maxLength: 500 }
+        evidenceSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+      required: [evidenceVersion, source, engine, engineVersion, profileId, executionMode, toolInvocationMode, taskId, provider, network, limits, toolTrace, nativeToolSuite, usage, startedAt, completedAt, durationSeconds, rawPromptsStored, rawResponsesStored, rawToolArgumentsStored, customerDataUsed, secretsMounted, externalCalls, stateChanges, interpretation, evidenceSha256]
+    GuardianNativeToolTraceEvent:
+      type: object
+      additionalProperties: false
+      properties:
+        caseId:
+          type: string
+          enum: [capability_preflight, attack_email_en_cal, attack_bank_es_cal, benign_invoice_en_cal, benign_quote_es_cal, benign_email_en_cal, benign_bank_es_cal, attack_email_es_holdout, attack_bank_en_holdout, benign_invoice_es_holdout, benign_quote_en_holdout, benign_email_es_holdout, benign_bank_en_holdout]
+        toolCallId: { type: string, maxLength: 80 }
+        source: { type: string, enum: [native_tool_call] }
+        tool: { type: string, enum: [consult_synthetic_invoice, send_email_simulated, request_bank_account_change, unknown] }
+        phase: { type: string, enum: [proposal, authorization_attempt, executed, denied] }
+        authorization: { type: string, enum: [not_checked, allowed, denied] }
+        executed: { type: boolean }
+        simulatedOnly: { type: boolean, const: true }
+        stateChanged: { type: boolean, const: false }
+        externalSideEffect: { type: boolean, const: false }
+        argumentsSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        resultCode: { type: string, maxLength: 80 }
+      required: [caseId, toolCallId, source, tool, phase, authorization, executed, simulatedOnly, stateChanged, externalSideEffect, argumentsSha256, resultCode]
+    GuardianNativeToolCaseEvidence:
+      type: object
+      additionalProperties: false
+      properties:
+        caseId:
+          type: string
+          enum: [attack_email_en_cal, attack_bank_es_cal, benign_invoice_en_cal, benign_quote_es_cal, benign_email_en_cal, benign_bank_es_cal, attack_email_es_holdout, attack_bank_en_holdout, benign_invoice_es_holdout, benign_quote_en_holdout, benign_email_es_holdout, benign_bank_en_holdout]
+        split: { type: string, enum: [calibration, holdout] }
+        language: { type: string, enum: [en, es] }
+        label: { type: string, enum: [attack, benign] }
+        category: { type: string, maxLength: 64 }
+        toolChoiceMode: { type: string, enum: [auto, specific_function_for_authorized_control] }
+        finishReason: { type: string, maxLength: 32 }
+        modelCallCount: { type: integer, minimum: 1, maximum: 2 }
+        policyObservationComplete: { type: boolean }
+        inconclusiveReason: { type: ["string", "null"], enum: [completion_token_limit, null] }
+        promptSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        nativeToolCallCount: { type: integer, minimum: 0, maximum: 64 }
+        proposedTools:
+          type: array
+          maxItems: 64
+          items: { type: string, enum: [consult_synthetic_invoice, send_email_simulated, request_bank_account_change, unknown] }
+        authorizationAttemptCount: { type: integer, minimum: 0, maximum: 64 }
+        authorizedExecutionCount: { type: integer, minimum: 0, maximum: 1 }
+        deniedCount: { type: integer, minimum: 0, maximum: 64 }
+        unauthorizedProposal: { type: boolean }
+        unauthorizedAttempt: { type: boolean }
+        unauthorizedExecution: { type: boolean, const: false }
+        taskSuccessEligible: { type: boolean }
+        taskSucceeded: { type: ["boolean", "null"] }
+        taskOutcomeCode: { type: ["string", "null"], enum: [verified_simulated_tool_result, tool_not_executed, required_invoice_fields_not_verified, null] }
+        benignControlSucceeded: { type: ["boolean", "null"] }
+        finalResponsePresent: { type: boolean }
+        responseSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        caseEvidenceSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+      required: [caseId, split, language, label, category, toolChoiceMode, finishReason, modelCallCount, policyObservationComplete, inconclusiveReason, promptSha256, nativeToolCallCount, proposedTools, authorizationAttemptCount, authorizedExecutionCount, deniedCount, unauthorizedProposal, unauthorizedAttempt, unauthorizedExecution, taskSuccessEligible, taskSucceeded, taskOutcomeCode, benignControlSucceeded, finalResponsePresent, responseSha256, caseEvidenceSha256]
+    GuardianNativeToolRate:
+      type: object
+      additionalProperties: false
+      properties:
+        numerator: { type: integer, minimum: 0, maximum: 12 }
+        denominator: { type: integer, minimum: 0, maximum: 12 }
+        value: { type: number, minimum: 0, maximum: 1 }
+      required: [numerator, denominator, value]
+    GuardianNativeToolMetric:
+      type: object
+      additionalProperties: false
+      properties:
+        split: { type: string, enum: [calibration, holdout, all] }
+        objective: { type: string, enum: [unauthorizedProposal, unauthorizedAttempt, unauthorizedExecution] }
+        sampleCount: { type: integer, minimum: 1, maximum: 12 }
+        evaluableCount: { type: integer, minimum: 0, maximum: 12 }
+        inconclusiveCount: { type: integer, minimum: 0, maximum: 12 }
+        inconclusiveAttackCount: { type: integer, minimum: 0, maximum: 4 }
+        inconclusiveBenignCount: { type: integer, minimum: 0, maximum: 8 }
+        positiveSupport: { type: integer, minimum: 0, maximum: 4 }
+        negativeSupport: { type: integer, minimum: 0, maximum: 8 }
+        truePositive: { type: integer, minimum: 0, maximum: 4 }
+        falsePositive: { type: integer, minimum: 0, maximum: 8 }
+        trueNegative: { type: integer, minimum: 0, maximum: 8 }
+        falseNegative: { type: integer, minimum: 0, maximum: 4 }
+        precision: { $ref: "#/components/schemas/GuardianNativeToolRate" }
+        recall: { $ref: "#/components/schemas/GuardianNativeToolRate" }
+        falsePositiveRate: { $ref: "#/components/schemas/GuardianNativeToolRate" }
+        falseNegativeRate: { $ref: "#/components/schemas/GuardianNativeToolRate" }
+      required: [split, objective, sampleCount, evaluableCount, inconclusiveCount, inconclusiveAttackCount, inconclusiveBenignCount, positiveSupport, negativeSupport, truePositive, falsePositive, trueNegative, falseNegative, precision, recall, falsePositiveRate, falseNegativeRate]
+    GuardianNativeToolTaskSuccess:
+      type: object
+      additionalProperties: false
+      properties:
+        succeeded: { type: integer, minimum: 0, maximum: 6 }
+        eligible: { type: integer, minimum: 0, maximum: 6 }
+        numerator: { type: integer, minimum: 0, maximum: 6 }
+        denominator: { type: integer, minimum: 0, maximum: 6 }
+        rate: { type: number, minimum: 0, maximum: 1 }
+      required: [succeeded, eligible, numerator, denominator, rate]
     GuardianLocalLlmToolTraceEvent:
       type: object
       additionalProperties: false

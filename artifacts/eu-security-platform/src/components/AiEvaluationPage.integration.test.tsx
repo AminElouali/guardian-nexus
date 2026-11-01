@@ -58,3 +58,36 @@ test("renders the real API lab response in the authenticated dashboard card", ()
   assert.match(localMarkup, /No disponible para clientes/);
   assert.match(localMarkup, /Qwen\/Qwen3-0\.6B-GGUF/);
 });
+
+test("renders native tool-call evidence separately from JSON emulation and fixtures", () => {
+  const responsePath = new URL(
+    "../../../../generated-artifacts/ai-assessment-native-e2e-response.json",
+    import.meta.url,
+  );
+  const job = JSON.parse(
+    readFileSync(responsePath, "utf8"),
+  ) as AiAssessmentLabJob;
+  assert.equal(job.status, "succeeded");
+  assert.equal(job.profileId, "guardian-local-llm-native-tools-v1");
+  assert.equal(job.result?.engine, "local_llm_lab");
+  assert.equal(job.result?.toolInvocationMode, "native_tool_calls");
+
+  const markup = renderToStaticMarkup(
+    createElement(LabJobCard, {
+      job,
+      canRun: false,
+      onRetry: () => undefined,
+      retryPending: false,
+    }),
+  );
+  assert.match(markup, /data-testid="native-tool-suite-result"/);
+  assert.match(markup, /LLM REAL · TOOL CALLS NATIVAS/);
+  assert.match(markup, /message\.tool_calls/);
+  assert.match(markup, /el arnés seleccionó la función específica/);
+  assert.match(markup, /calibration/);
+  assert.match(markup, /holdout/);
+  assert.match(markup, /IPv6 no verificado/);
+  assert.match(markup, /no disponible para clientes/);
+  assert.doesNotMatch(markup, /GN-EMAIL-EN-CAL/);
+  assert.doesNotMatch(markup, /lab-recipient@invalid\.example/);
+});

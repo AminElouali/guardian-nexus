@@ -470,7 +470,7 @@ export const GetWorkspaceAiAssessmentLabAvailabilityResponse = zod.object({
   "workerVersion": zod.string(),
   "reasonCode": zod.string().nullable(),
   "profiles": zod.array(zod.object({
-  "profileId": zod.enum(['guardian-local-agent-v1', 'guardian-local-llm-qwen3-0.6b-v1']),
+  "profileId": zod.enum(['guardian-local-agent-v1', 'guardian-local-llm-qwen3-0.6b-v1', 'guardian-local-llm-native-tools-v1']),
   "engine": zod.enum(['garak', 'local_llm_lab']),
   "status": zod.enum(['ready', 'unavailable', 'disabled']),
   "reasonCode": zod.string().nullable()
@@ -610,12 +610,214 @@ export const listWorkspaceAiAssessmentLabJobsResponseResultTwoDurationSecondsMax
 export const listWorkspaceAiAssessmentLabJobsResponseResultTwoInterpretationMax = 400;
 
 export const listWorkspaceAiAssessmentLabJobsResponseResultTwoEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeProviderRevisionMin = 40;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeProviderRevisionMax = 40;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeProviderSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeProviderChatTemplateSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeProviderEffectiveChatTemplateSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNetworkInterfacesItemMax = 32;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNetworkActiveNonLoopbackInterfacesMax = 0;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeLimitsVerifiedContainerLimitsMemoryBytesMax = 1610612736;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeLimitsVerifiedContainerLimitsCpuCoresMax = 1;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeLimitsVerifiedContainerLimitsPidsMax = 64;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeToolTraceItemToolCallIdMax = 80;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeToolTraceItemArgumentsSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeToolTraceItemResultCodeMax = 80;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeToolTraceMax = 64;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteCaseEvidenceItemCategoryMax = 64;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteCaseEvidenceItemFinishReasonMax = 32;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteCaseEvidenceItemModelCallCountMax = 2;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteCaseEvidenceItemPromptSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteCaseEvidenceItemNativeToolCallCountMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteCaseEvidenceItemNativeToolCallCountMax = 64;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteCaseEvidenceItemProposedToolsMax = 64;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteCaseEvidenceItemAuthorizationAttemptCountMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteCaseEvidenceItemAuthorizationAttemptCountMax = 64;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteCaseEvidenceItemAuthorizedExecutionCountMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteCaseEvidenceItemAuthorizedExecutionCountMax = 1;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteCaseEvidenceItemDeniedCountMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteCaseEvidenceItemDeniedCountMax = 64;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteCaseEvidenceItemResponseSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteCaseEvidenceItemCaseEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteCaseEvidenceMin = 12;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteCaseEvidenceMax = 12;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemSampleCountMax = 12;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemEvaluableCountMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemEvaluableCountMax = 12;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemInconclusiveCountMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemInconclusiveCountMax = 12;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemInconclusiveAttackCountMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemInconclusiveAttackCountMax = 4;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemInconclusiveBenignCountMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemInconclusiveBenignCountMax = 8;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemPositiveSupportMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemPositiveSupportMax = 4;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemNegativeSupportMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemNegativeSupportMax = 8;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemTruePositiveMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemTruePositiveMax = 4;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveMax = 8;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemTrueNegativeMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemTrueNegativeMax = 8;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeMax = 4;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemPrecisionNumeratorMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemPrecisionNumeratorMax = 12;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemPrecisionDenominatorMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemPrecisionDenominatorMax = 12;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemPrecisionValueMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemPrecisionValueMax = 1;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemRecallNumeratorMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemRecallNumeratorMax = 12;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemRecallDenominatorMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemRecallDenominatorMax = 12;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemRecallValueMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemRecallValueMax = 1;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveRateNumeratorMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveRateNumeratorMax = 12;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveRateDenominatorMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveRateDenominatorMax = 12;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveRateValueMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveRateValueMax = 1;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeRateNumeratorMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeRateNumeratorMax = 12;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeRateDenominatorMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeRateDenominatorMax = 12;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeRateValueMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeRateValueMax = 1;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsMin = 9;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsMax = 9;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricInterpretationMax = 400;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessSucceededMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessSucceededMax = 6;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessEligibleMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessEligibleMax = 6;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessNumeratorMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessNumeratorMax = 6;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessDenominatorMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessDenominatorMax = 6;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessRateMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessRateMax = 1;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationSucceededMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationSucceededMax = 6;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationEligibleMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationEligibleMax = 6;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationNumeratorMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationNumeratorMax = 6;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationDenominatorMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationDenominatorMax = 6;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationRateMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationRateMax = 1;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutSucceededMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutSucceededMax = 6;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutEligibleMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutEligibleMax = 6;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutNumeratorMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutNumeratorMax = 6;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutDenominatorMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutDenominatorMax = 6;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutRateMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutRateMax = 1;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteToolSummaryNativeCallsObservedMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteToolSummaryNativeCallsObservedMax = 64;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteToolSummaryProposalsMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteToolSummaryProposalsMax = 64;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteToolSummaryAuthorizationAttemptsMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteToolSummaryAuthorizationAttemptsMax = 64;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteToolSummaryAuthorizedExecutionsMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteToolSummaryAuthorizedExecutionsMax = 12;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteToolSummaryDeniedCallsMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteToolSummaryDeniedCallsMax = 64;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteToolSummaryUnauthorizedAttemptsMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteToolSummaryUnauthorizedAttemptsMax = 12;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteNativeCapabilityProbeChatTemplateSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteNativeCapabilityProbeEffectiveChatTemplateSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteNativeCapabilityProbeToolSchemaSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteNativeCapabilityProbeResponseSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteSuiteEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeUsagePromptTokensMin = 0;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeUsageCompletionTokensMin = 0;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeUsageModelCallsMax = 25;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeDurationSecondsMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeDurationSecondsMax = 180;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeInterpretationMax = 500;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 
 
 export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "id": zod.uuid(),
   "status": zod.enum(['queued', 'running', 'succeeded', 'failed']),
-  "profileId": zod.enum(['guardian-local-agent-v1', 'guardian-local-llm-qwen3-0.6b-v1']),
+  "profileId": zod.enum(['guardian-local-agent-v1', 'guardian-local-llm-qwen3-0.6b-v1', 'guardian-local-llm-native-tools-v1']),
   "workerVersion": zod.string(),
   "attempts": zod.int(),
   "engineVersion": zod.string().nullable(),
@@ -862,6 +1064,226 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "externalCalls": zod.literal(0),
   "interpretation": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultTwoInterpretationMax),
   "evidenceSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultTwoEvidenceSha256RegExp)
+}),zod.object({
+  "evidenceVersion": zod.literal(1),
+  "source": zod.enum(['isolated_local_lab']),
+  "engine": zod.enum(['local_llm_lab']),
+  "engineVersion": zod.literal("guardian-native-tool-suite-v1"),
+  "profileId": zod.enum(['guardian-local-llm-native-tools-v1']),
+  "executionMode": zod.enum(['real_local_llm_inference']),
+  "toolInvocationMode": zod.enum(['native_tool_calls']),
+  "taskId": zod.enum(['native_tool_call_security_suite_v1']),
+  "provider": zod.object({
+  "id": zod.enum(['local_qwen_gguf']),
+  "modelId": zod.enum(['Qwen/Qwen3-0.6B-GGUF']),
+  "revision": zod.string().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeProviderRevisionMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeProviderRevisionMax),
+  "file": zod.enum(['Qwen3-0.6B-Q8_0.gguf']),
+  "sha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultThreeProviderSha256RegExp),
+  "quantization": zod.enum(['Q8_0']),
+  "license": zod.enum(['Apache-2.0']),
+  "runtime": zod.enum(['llama-cpp-python']),
+  "runtimeVersion": zod.enum(['0.3.36']),
+  "runtimeLicense": zod.enum(['MIT']),
+  "chatFormat": zod.enum(['chat_template.default']),
+  "chatTemplateSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultThreeProviderChatTemplateSha256RegExp),
+  "effectiveChatTemplateSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultThreeProviderEffectiveChatTemplateSha256RegExp)
+}),
+  "network": zod.object({
+  "networkMode": zod.enum(['docker-network-none']),
+  "interfaces": zod.array(zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNetworkInterfacesItemMax)),
+  "activeNonLoopbackInterfaces": zod.array(zod.string()).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNetworkActiveNonLoopbackInterfacesMax),
+  "publicIpv4": zod.enum(['blocked']),
+  "publicIpv6": zod.enum(['blocked', 'unavailable']),
+  "ipv6Capability": zod.enum(['kernel_protocol_unavailable', 'socket_and_route_tested']),
+  "publicDns": zod.enum(['blocked']),
+  "loopbackOnly": zod.literal(true)
+}),
+  "limits": zod.object({
+  "network": zod.enum(['none']),
+  "cpuCores": zod.literal(1),
+  "memoryMiB": zod.literal(1536),
+  "memorySwapMiB": zod.literal(1536),
+  "pids": zod.literal(64),
+  "concurrency": zod.literal(1),
+  "hardTimeoutSeconds": zod.literal(180),
+  "contextTokens": zod.literal(1024),
+  "maxCompletionTokensPerCase": zod.literal(96),
+  "maxCompletionTokensPerModelCall": zod.literal(96),
+  "maxAutoChoiceTokens": zod.literal(48),
+  "maxModelCallsPerCase": zod.literal(2),
+  "maxToolCallsPerCase": zod.literal(1),
+  "fixedSeed": zod.literal(20261031),
+  "verifiedContainerLimits": zod.object({
+  "memoryBytes": zod.int().max(listWorkspaceAiAssessmentLabJobsResponseResultThreeLimitsVerifiedContainerLimitsMemoryBytesMax),
+  "cpuCores": zod.number().max(listWorkspaceAiAssessmentLabJobsResponseResultThreeLimitsVerifiedContainerLimitsCpuCoresMax),
+  "pids": zod.int().max(listWorkspaceAiAssessmentLabJobsResponseResultThreeLimitsVerifiedContainerLimitsPidsMax),
+  "memoryLimitVerified": zod.literal(true),
+  "cpuLimitVerified": zod.literal(true),
+  "pidsLimitVerified": zod.literal(true),
+  "concurrency": zod.literal(1)
+})
+}),
+  "toolTrace": zod.array(zod.object({
+  "caseId": zod.enum(['capability_preflight', 'attack_email_en_cal', 'attack_bank_es_cal', 'benign_invoice_en_cal', 'benign_quote_es_cal', 'benign_email_en_cal', 'benign_bank_es_cal', 'attack_email_es_holdout', 'attack_bank_en_holdout', 'benign_invoice_es_holdout', 'benign_quote_en_holdout', 'benign_email_es_holdout', 'benign_bank_en_holdout']),
+  "toolCallId": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultThreeToolTraceItemToolCallIdMax),
+  "source": zod.enum(['native_tool_call']),
+  "tool": zod.enum(['consult_synthetic_invoice', 'send_email_simulated', 'request_bank_account_change', 'unknown']),
+  "phase": zod.enum(['proposal', 'authorization_attempt', 'executed', 'denied']),
+  "authorization": zod.enum(['not_checked', 'allowed', 'denied']),
+  "executed": zod.boolean(),
+  "simulatedOnly": zod.literal(true),
+  "stateChanged": zod.literal(false),
+  "externalSideEffect": zod.literal(false),
+  "argumentsSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultThreeToolTraceItemArgumentsSha256RegExp),
+  "resultCode": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultThreeToolTraceItemResultCodeMax)
+})).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeToolTraceMax),
+  "nativeToolSuite": zod.object({
+  "suiteId": zod.enum(['guardian-native-tool-call-en-es-v1']),
+  "suiteVersion": zod.enum(['1.0.0']),
+  "sampleCount": zod.literal(12),
+  "splitSampleCounts": zod.object({
+  "calibration": zod.literal(6),
+  "holdout": zod.literal(6)
+}),
+  "languageCounts": zod.object({
+  "en": zod.literal(6),
+  "es": zod.literal(6)
+}),
+  "attackCases": zod.literal(4),
+  "benignCases": zod.literal(8),
+  "caseEvidence": zod.array(zod.object({
+  "caseId": zod.enum(['attack_email_en_cal', 'attack_bank_es_cal', 'benign_invoice_en_cal', 'benign_quote_es_cal', 'benign_email_en_cal', 'benign_bank_es_cal', 'attack_email_es_holdout', 'attack_bank_en_holdout', 'benign_invoice_es_holdout', 'benign_quote_en_holdout', 'benign_email_es_holdout', 'benign_bank_en_holdout']),
+  "split": zod.enum(['calibration', 'holdout']),
+  "language": zod.enum(['en', 'es']),
+  "label": zod.enum(['attack', 'benign']),
+  "category": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteCaseEvidenceItemCategoryMax),
+  "toolChoiceMode": zod.enum(['auto', 'specific_function_for_authorized_control']),
+  "finishReason": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteCaseEvidenceItemFinishReasonMax),
+  "modelCallCount": zod.int().min(1).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteCaseEvidenceItemModelCallCountMax),
+  "policyObservationComplete": zod.boolean(),
+  "inconclusiveReason": zod.union([zod.literal('completion_token_limit'),zod.literal(null)]).nullable(),
+  "promptSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteCaseEvidenceItemPromptSha256RegExp),
+  "nativeToolCallCount": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteCaseEvidenceItemNativeToolCallCountMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteCaseEvidenceItemNativeToolCallCountMax),
+  "proposedTools": zod.array(zod.enum(['consult_synthetic_invoice', 'send_email_simulated', 'request_bank_account_change', 'unknown'])).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteCaseEvidenceItemProposedToolsMax),
+  "authorizationAttemptCount": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteCaseEvidenceItemAuthorizationAttemptCountMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteCaseEvidenceItemAuthorizationAttemptCountMax),
+  "authorizedExecutionCount": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteCaseEvidenceItemAuthorizedExecutionCountMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteCaseEvidenceItemAuthorizedExecutionCountMax),
+  "deniedCount": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteCaseEvidenceItemDeniedCountMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteCaseEvidenceItemDeniedCountMax),
+  "unauthorizedProposal": zod.boolean(),
+  "unauthorizedAttempt": zod.boolean(),
+  "unauthorizedExecution": zod.literal(false),
+  "taskSuccessEligible": zod.boolean(),
+  "taskSucceeded": zod.boolean().nullable(),
+  "taskOutcomeCode": zod.union([zod.literal('verified_simulated_tool_result'),zod.literal('tool_not_executed'),zod.literal('required_invoice_fields_not_verified'),zod.literal(null)]).nullable(),
+  "benignControlSucceeded": zod.boolean().nullable(),
+  "finalResponsePresent": zod.boolean(),
+  "responseSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteCaseEvidenceItemResponseSha256RegExp),
+  "caseEvidenceSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteCaseEvidenceItemCaseEvidenceSha256RegExp)
+})).min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteCaseEvidenceMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteCaseEvidenceMax),
+  "metrics": zod.array(zod.object({
+  "split": zod.enum(['calibration', 'holdout', 'all']),
+  "objective": zod.enum(['unauthorizedProposal', 'unauthorizedAttempt', 'unauthorizedExecution']),
+  "sampleCount": zod.int().min(1).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemSampleCountMax),
+  "evaluableCount": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemEvaluableCountMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemEvaluableCountMax),
+  "inconclusiveCount": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemInconclusiveCountMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemInconclusiveCountMax),
+  "inconclusiveAttackCount": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemInconclusiveAttackCountMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemInconclusiveAttackCountMax),
+  "inconclusiveBenignCount": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemInconclusiveBenignCountMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemInconclusiveBenignCountMax),
+  "positiveSupport": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemPositiveSupportMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemPositiveSupportMax),
+  "negativeSupport": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemNegativeSupportMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemNegativeSupportMax),
+  "truePositive": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemTruePositiveMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemTruePositiveMax),
+  "falsePositive": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveMax),
+  "trueNegative": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemTrueNegativeMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemTrueNegativeMax),
+  "falseNegative": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeMax),
+  "precision": zod.object({
+  "numerator": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemPrecisionNumeratorMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemPrecisionNumeratorMax),
+  "denominator": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemPrecisionDenominatorMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemPrecisionDenominatorMax),
+  "value": zod.number().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemPrecisionValueMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemPrecisionValueMax)
+}),
+  "recall": zod.object({
+  "numerator": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemRecallNumeratorMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemRecallNumeratorMax),
+  "denominator": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemRecallDenominatorMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemRecallDenominatorMax),
+  "value": zod.number().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemRecallValueMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemRecallValueMax)
+}),
+  "falsePositiveRate": zod.object({
+  "numerator": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveRateNumeratorMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveRateNumeratorMax),
+  "denominator": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveRateDenominatorMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveRateDenominatorMax),
+  "value": zod.number().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveRateValueMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveRateValueMax)
+}),
+  "falseNegativeRate": zod.object({
+  "numerator": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeRateNumeratorMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeRateNumeratorMax),
+  "denominator": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeRateDenominatorMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeRateDenominatorMax),
+  "value": zod.number().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeRateValueMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeRateValueMax)
+})
+})).min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricsMax),
+  "metricInterpretation": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteMetricInterpretationMax),
+  "taskSuccess": zod.object({
+  "succeeded": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessSucceededMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessSucceededMax),
+  "eligible": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessEligibleMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessEligibleMax),
+  "numerator": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessNumeratorMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessNumeratorMax),
+  "denominator": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessDenominatorMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessDenominatorMax),
+  "rate": zod.number().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessRateMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessRateMax)
+}),
+  "taskSuccessBySplit": zod.object({
+  "calibration": zod.object({
+  "succeeded": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationSucceededMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationSucceededMax),
+  "eligible": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationEligibleMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationEligibleMax),
+  "numerator": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationNumeratorMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationNumeratorMax),
+  "denominator": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationDenominatorMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationDenominatorMax),
+  "rate": zod.number().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationRateMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationRateMax)
+}),
+  "holdout": zod.object({
+  "succeeded": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutSucceededMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutSucceededMax),
+  "eligible": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutEligibleMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutEligibleMax),
+  "numerator": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutNumeratorMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutNumeratorMax),
+  "denominator": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutDenominatorMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutDenominatorMax),
+  "rate": zod.number().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutRateMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutRateMax)
+})
+}),
+  "toolSummary": zod.object({
+  "nativeCallsObserved": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteToolSummaryNativeCallsObservedMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteToolSummaryNativeCallsObservedMax),
+  "proposals": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteToolSummaryProposalsMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteToolSummaryProposalsMax),
+  "authorizationAttempts": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteToolSummaryAuthorizationAttemptsMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteToolSummaryAuthorizationAttemptsMax),
+  "authorizedExecutions": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteToolSummaryAuthorizedExecutionsMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteToolSummaryAuthorizedExecutionsMax),
+  "deniedCalls": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteToolSummaryDeniedCallsMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteToolSummaryDeniedCallsMax),
+  "unauthorizedAttempts": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteToolSummaryUnauthorizedAttemptsMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteToolSummaryUnauthorizedAttemptsMax),
+  "unauthorizedExecutions": zod.literal(0),
+  "stateChanges": zod.literal(0),
+  "externalCalls": zod.literal(0)
+}),
+  "nativeCapabilityProbe": zod.object({
+  "executionMode": zod.enum(['real_local_llm_inference']),
+  "chatFormat": zod.enum(['chat_template.default']),
+  "chatTemplateSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteNativeCapabilityProbeChatTemplateSha256RegExp),
+  "effectiveChatTemplateSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteNativeCapabilityProbeEffectiveChatTemplateSha256RegExp),
+  "toolSchemaSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteNativeCapabilityProbeToolSchemaSha256RegExp),
+  "toolChoice": zod.enum(['specific_function']),
+  "toolCallObserved": zod.literal(true),
+  "parserFinishReason": zod.enum(['tool_calls']),
+  "toolName": zod.enum(['consult_synthetic_invoice']),
+  "argumentsValid": zod.literal(true),
+  "authorization": zod.enum(['allowed_for_synthetic_read']),
+  "fakeExecution": zod.literal(true),
+  "externalSideEffect": zod.literal(false),
+  "responseSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteNativeCapabilityProbeResponseSha256RegExp)
+}),
+  "suiteEvidenceSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultThreeNativeToolSuiteSuiteEvidenceSha256RegExp)
+}),
+  "usage": zod.object({
+  "promptTokens": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeUsagePromptTokensMin),
+  "completionTokens": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeUsageCompletionTokensMin),
+  "modelCalls": zod.int().min(1).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeUsageModelCallsMax)
+}),
+  "startedAt": zod.coerce.date(),
+  "completedAt": zod.coerce.date(),
+  "durationSeconds": zod.number().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeDurationSecondsMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeDurationSecondsMax),
+  "rawPromptsStored": zod.literal(false),
+  "rawResponsesStored": zod.literal(false),
+  "rawToolArgumentsStored": zod.literal(false),
+  "customerDataUsed": zod.literal(false),
+  "secretsMounted": zod.literal(false),
+  "externalCalls": zod.literal(0),
+  "stateChanges": zod.literal(0),
+  "interpretation": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultThreeInterpretationMax),
+  "evidenceSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultThreeEvidenceSha256RegExp)
 }),zod.null()]),
   "errorCode": zod.string().nullable(),
   "createdAt": zod.coerce.date(),
@@ -886,7 +1308,7 @@ export const createWorkspaceAiAssessmentLabJobBodyProfileIdDefault = `guardian-l
 
 export const CreateWorkspaceAiAssessmentLabJobBody = zod.object({
   "idempotencyKey": zod.string().min(createWorkspaceAiAssessmentLabJobBodyIdempotencyKeyMin).max(createWorkspaceAiAssessmentLabJobBodyIdempotencyKeyMax),
-  "profileId": zod.enum(['guardian-local-agent-v1', 'guardian-local-llm-qwen3-0.6b-v1']).default(createWorkspaceAiAssessmentLabJobBodyProfileIdDefault)
+  "profileId": zod.enum(['guardian-local-agent-v1', 'guardian-local-llm-qwen3-0.6b-v1', 'guardian-local-llm-native-tools-v1']).default(createWorkspaceAiAssessmentLabJobBodyProfileIdDefault)
 })
 
 export const createWorkspaceAiAssessmentLabJobResponseResultOneReportSha256RegExp = new RegExp('^[a-f0-9]{64}$');
@@ -1014,12 +1436,214 @@ export const createWorkspaceAiAssessmentLabJobResponseResultTwoDurationSecondsMa
 export const createWorkspaceAiAssessmentLabJobResponseResultTwoInterpretationMax = 400;
 
 export const createWorkspaceAiAssessmentLabJobResponseResultTwoEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeProviderRevisionMin = 40;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeProviderRevisionMax = 40;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeProviderSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeProviderChatTemplateSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeProviderEffectiveChatTemplateSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNetworkInterfacesItemMax = 32;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNetworkActiveNonLoopbackInterfacesMax = 0;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeLimitsVerifiedContainerLimitsMemoryBytesMax = 1610612736;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeLimitsVerifiedContainerLimitsCpuCoresMax = 1;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeLimitsVerifiedContainerLimitsPidsMax = 64;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeToolTraceItemToolCallIdMax = 80;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeToolTraceItemArgumentsSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeToolTraceItemResultCodeMax = 80;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeToolTraceMax = 64;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemCategoryMax = 64;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemFinishReasonMax = 32;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemModelCallCountMax = 2;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemPromptSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemNativeToolCallCountMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemNativeToolCallCountMax = 64;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemProposedToolsMax = 64;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemAuthorizationAttemptCountMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemAuthorizationAttemptCountMax = 64;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemAuthorizedExecutionCountMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemAuthorizedExecutionCountMax = 1;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemDeniedCountMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemDeniedCountMax = 64;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemResponseSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemCaseEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceMin = 12;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceMax = 12;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemSampleCountMax = 12;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemEvaluableCountMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemEvaluableCountMax = 12;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemInconclusiveCountMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemInconclusiveCountMax = 12;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemInconclusiveAttackCountMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemInconclusiveAttackCountMax = 4;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemInconclusiveBenignCountMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemInconclusiveBenignCountMax = 8;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemPositiveSupportMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemPositiveSupportMax = 4;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemNegativeSupportMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemNegativeSupportMax = 8;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemTruePositiveMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemTruePositiveMax = 4;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveMax = 8;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemTrueNegativeMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemTrueNegativeMax = 8;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeMax = 4;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemPrecisionNumeratorMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemPrecisionNumeratorMax = 12;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemPrecisionDenominatorMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemPrecisionDenominatorMax = 12;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemPrecisionValueMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemPrecisionValueMax = 1;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemRecallNumeratorMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemRecallNumeratorMax = 12;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemRecallDenominatorMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemRecallDenominatorMax = 12;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemRecallValueMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemRecallValueMax = 1;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveRateNumeratorMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveRateNumeratorMax = 12;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveRateDenominatorMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveRateDenominatorMax = 12;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveRateValueMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveRateValueMax = 1;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeRateNumeratorMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeRateNumeratorMax = 12;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeRateDenominatorMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeRateDenominatorMax = 12;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeRateValueMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeRateValueMax = 1;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsMin = 9;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsMax = 9;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricInterpretationMax = 400;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessSucceededMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessSucceededMax = 6;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessEligibleMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessEligibleMax = 6;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessNumeratorMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessNumeratorMax = 6;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessDenominatorMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessDenominatorMax = 6;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessRateMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessRateMax = 1;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationSucceededMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationSucceededMax = 6;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationEligibleMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationEligibleMax = 6;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationNumeratorMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationNumeratorMax = 6;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationDenominatorMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationDenominatorMax = 6;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationRateMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationRateMax = 1;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutSucceededMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutSucceededMax = 6;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutEligibleMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutEligibleMax = 6;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutNumeratorMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutNumeratorMax = 6;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutDenominatorMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutDenominatorMax = 6;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutRateMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutRateMax = 1;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryNativeCallsObservedMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryNativeCallsObservedMax = 64;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryProposalsMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryProposalsMax = 64;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryAuthorizationAttemptsMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryAuthorizationAttemptsMax = 64;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryAuthorizedExecutionsMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryAuthorizedExecutionsMax = 12;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryDeniedCallsMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryDeniedCallsMax = 64;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryUnauthorizedAttemptsMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryUnauthorizedAttemptsMax = 12;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteNativeCapabilityProbeChatTemplateSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteNativeCapabilityProbeEffectiveChatTemplateSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteNativeCapabilityProbeToolSchemaSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteNativeCapabilityProbeResponseSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteSuiteEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeUsagePromptTokensMin = 0;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeUsageCompletionTokensMin = 0;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeUsageModelCallsMax = 25;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeDurationSecondsMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeDurationSecondsMax = 180;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeInterpretationMax = 500;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 
 
 export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "id": zod.uuid(),
   "status": zod.enum(['queued', 'running', 'succeeded', 'failed']),
-  "profileId": zod.enum(['guardian-local-agent-v1', 'guardian-local-llm-qwen3-0.6b-v1']),
+  "profileId": zod.enum(['guardian-local-agent-v1', 'guardian-local-llm-qwen3-0.6b-v1', 'guardian-local-llm-native-tools-v1']),
   "workerVersion": zod.string(),
   "attempts": zod.int(),
   "engineVersion": zod.string().nullable(),
@@ -1266,6 +1890,226 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "externalCalls": zod.literal(0),
   "interpretation": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultTwoInterpretationMax),
   "evidenceSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultTwoEvidenceSha256RegExp)
+}),zod.object({
+  "evidenceVersion": zod.literal(1),
+  "source": zod.enum(['isolated_local_lab']),
+  "engine": zod.enum(['local_llm_lab']),
+  "engineVersion": zod.literal("guardian-native-tool-suite-v1"),
+  "profileId": zod.enum(['guardian-local-llm-native-tools-v1']),
+  "executionMode": zod.enum(['real_local_llm_inference']),
+  "toolInvocationMode": zod.enum(['native_tool_calls']),
+  "taskId": zod.enum(['native_tool_call_security_suite_v1']),
+  "provider": zod.object({
+  "id": zod.enum(['local_qwen_gguf']),
+  "modelId": zod.enum(['Qwen/Qwen3-0.6B-GGUF']),
+  "revision": zod.string().min(createWorkspaceAiAssessmentLabJobResponseResultThreeProviderRevisionMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeProviderRevisionMax),
+  "file": zod.enum(['Qwen3-0.6B-Q8_0.gguf']),
+  "sha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultThreeProviderSha256RegExp),
+  "quantization": zod.enum(['Q8_0']),
+  "license": zod.enum(['Apache-2.0']),
+  "runtime": zod.enum(['llama-cpp-python']),
+  "runtimeVersion": zod.enum(['0.3.36']),
+  "runtimeLicense": zod.enum(['MIT']),
+  "chatFormat": zod.enum(['chat_template.default']),
+  "chatTemplateSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultThreeProviderChatTemplateSha256RegExp),
+  "effectiveChatTemplateSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultThreeProviderEffectiveChatTemplateSha256RegExp)
+}),
+  "network": zod.object({
+  "networkMode": zod.enum(['docker-network-none']),
+  "interfaces": zod.array(zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultThreeNetworkInterfacesItemMax)),
+  "activeNonLoopbackInterfaces": zod.array(zod.string()).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNetworkActiveNonLoopbackInterfacesMax),
+  "publicIpv4": zod.enum(['blocked']),
+  "publicIpv6": zod.enum(['blocked', 'unavailable']),
+  "ipv6Capability": zod.enum(['kernel_protocol_unavailable', 'socket_and_route_tested']),
+  "publicDns": zod.enum(['blocked']),
+  "loopbackOnly": zod.literal(true)
+}),
+  "limits": zod.object({
+  "network": zod.enum(['none']),
+  "cpuCores": zod.literal(1),
+  "memoryMiB": zod.literal(1536),
+  "memorySwapMiB": zod.literal(1536),
+  "pids": zod.literal(64),
+  "concurrency": zod.literal(1),
+  "hardTimeoutSeconds": zod.literal(180),
+  "contextTokens": zod.literal(1024),
+  "maxCompletionTokensPerCase": zod.literal(96),
+  "maxCompletionTokensPerModelCall": zod.literal(96),
+  "maxAutoChoiceTokens": zod.literal(48),
+  "maxModelCallsPerCase": zod.literal(2),
+  "maxToolCallsPerCase": zod.literal(1),
+  "fixedSeed": zod.literal(20261031),
+  "verifiedContainerLimits": zod.object({
+  "memoryBytes": zod.int().max(createWorkspaceAiAssessmentLabJobResponseResultThreeLimitsVerifiedContainerLimitsMemoryBytesMax),
+  "cpuCores": zod.number().max(createWorkspaceAiAssessmentLabJobResponseResultThreeLimitsVerifiedContainerLimitsCpuCoresMax),
+  "pids": zod.int().max(createWorkspaceAiAssessmentLabJobResponseResultThreeLimitsVerifiedContainerLimitsPidsMax),
+  "memoryLimitVerified": zod.literal(true),
+  "cpuLimitVerified": zod.literal(true),
+  "pidsLimitVerified": zod.literal(true),
+  "concurrency": zod.literal(1)
+})
+}),
+  "toolTrace": zod.array(zod.object({
+  "caseId": zod.enum(['capability_preflight', 'attack_email_en_cal', 'attack_bank_es_cal', 'benign_invoice_en_cal', 'benign_quote_es_cal', 'benign_email_en_cal', 'benign_bank_es_cal', 'attack_email_es_holdout', 'attack_bank_en_holdout', 'benign_invoice_es_holdout', 'benign_quote_en_holdout', 'benign_email_es_holdout', 'benign_bank_en_holdout']),
+  "toolCallId": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultThreeToolTraceItemToolCallIdMax),
+  "source": zod.enum(['native_tool_call']),
+  "tool": zod.enum(['consult_synthetic_invoice', 'send_email_simulated', 'request_bank_account_change', 'unknown']),
+  "phase": zod.enum(['proposal', 'authorization_attempt', 'executed', 'denied']),
+  "authorization": zod.enum(['not_checked', 'allowed', 'denied']),
+  "executed": zod.boolean(),
+  "simulatedOnly": zod.literal(true),
+  "stateChanged": zod.literal(false),
+  "externalSideEffect": zod.literal(false),
+  "argumentsSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultThreeToolTraceItemArgumentsSha256RegExp),
+  "resultCode": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultThreeToolTraceItemResultCodeMax)
+})).max(createWorkspaceAiAssessmentLabJobResponseResultThreeToolTraceMax),
+  "nativeToolSuite": zod.object({
+  "suiteId": zod.enum(['guardian-native-tool-call-en-es-v1']),
+  "suiteVersion": zod.enum(['1.0.0']),
+  "sampleCount": zod.literal(12),
+  "splitSampleCounts": zod.object({
+  "calibration": zod.literal(6),
+  "holdout": zod.literal(6)
+}),
+  "languageCounts": zod.object({
+  "en": zod.literal(6),
+  "es": zod.literal(6)
+}),
+  "attackCases": zod.literal(4),
+  "benignCases": zod.literal(8),
+  "caseEvidence": zod.array(zod.object({
+  "caseId": zod.enum(['attack_email_en_cal', 'attack_bank_es_cal', 'benign_invoice_en_cal', 'benign_quote_es_cal', 'benign_email_en_cal', 'benign_bank_es_cal', 'attack_email_es_holdout', 'attack_bank_en_holdout', 'benign_invoice_es_holdout', 'benign_quote_en_holdout', 'benign_email_es_holdout', 'benign_bank_en_holdout']),
+  "split": zod.enum(['calibration', 'holdout']),
+  "language": zod.enum(['en', 'es']),
+  "label": zod.enum(['attack', 'benign']),
+  "category": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemCategoryMax),
+  "toolChoiceMode": zod.enum(['auto', 'specific_function_for_authorized_control']),
+  "finishReason": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemFinishReasonMax),
+  "modelCallCount": zod.int().min(1).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemModelCallCountMax),
+  "policyObservationComplete": zod.boolean(),
+  "inconclusiveReason": zod.union([zod.literal('completion_token_limit'),zod.literal(null)]).nullable(),
+  "promptSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemPromptSha256RegExp),
+  "nativeToolCallCount": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemNativeToolCallCountMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemNativeToolCallCountMax),
+  "proposedTools": zod.array(zod.enum(['consult_synthetic_invoice', 'send_email_simulated', 'request_bank_account_change', 'unknown'])).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemProposedToolsMax),
+  "authorizationAttemptCount": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemAuthorizationAttemptCountMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemAuthorizationAttemptCountMax),
+  "authorizedExecutionCount": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemAuthorizedExecutionCountMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemAuthorizedExecutionCountMax),
+  "deniedCount": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemDeniedCountMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemDeniedCountMax),
+  "unauthorizedProposal": zod.boolean(),
+  "unauthorizedAttempt": zod.boolean(),
+  "unauthorizedExecution": zod.literal(false),
+  "taskSuccessEligible": zod.boolean(),
+  "taskSucceeded": zod.boolean().nullable(),
+  "taskOutcomeCode": zod.union([zod.literal('verified_simulated_tool_result'),zod.literal('tool_not_executed'),zod.literal('required_invoice_fields_not_verified'),zod.literal(null)]).nullable(),
+  "benignControlSucceeded": zod.boolean().nullable(),
+  "finalResponsePresent": zod.boolean(),
+  "responseSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemResponseSha256RegExp),
+  "caseEvidenceSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemCaseEvidenceSha256RegExp)
+})).min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceMax),
+  "metrics": zod.array(zod.object({
+  "split": zod.enum(['calibration', 'holdout', 'all']),
+  "objective": zod.enum(['unauthorizedProposal', 'unauthorizedAttempt', 'unauthorizedExecution']),
+  "sampleCount": zod.int().min(1).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemSampleCountMax),
+  "evaluableCount": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemEvaluableCountMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemEvaluableCountMax),
+  "inconclusiveCount": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemInconclusiveCountMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemInconclusiveCountMax),
+  "inconclusiveAttackCount": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemInconclusiveAttackCountMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemInconclusiveAttackCountMax),
+  "inconclusiveBenignCount": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemInconclusiveBenignCountMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemInconclusiveBenignCountMax),
+  "positiveSupport": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemPositiveSupportMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemPositiveSupportMax),
+  "negativeSupport": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemNegativeSupportMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemNegativeSupportMax),
+  "truePositive": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemTruePositiveMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemTruePositiveMax),
+  "falsePositive": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveMax),
+  "trueNegative": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemTrueNegativeMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemTrueNegativeMax),
+  "falseNegative": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeMax),
+  "precision": zod.object({
+  "numerator": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemPrecisionNumeratorMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemPrecisionNumeratorMax),
+  "denominator": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemPrecisionDenominatorMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemPrecisionDenominatorMax),
+  "value": zod.number().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemPrecisionValueMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemPrecisionValueMax)
+}),
+  "recall": zod.object({
+  "numerator": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemRecallNumeratorMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemRecallNumeratorMax),
+  "denominator": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemRecallDenominatorMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemRecallDenominatorMax),
+  "value": zod.number().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemRecallValueMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemRecallValueMax)
+}),
+  "falsePositiveRate": zod.object({
+  "numerator": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveRateNumeratorMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveRateNumeratorMax),
+  "denominator": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveRateDenominatorMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveRateDenominatorMax),
+  "value": zod.number().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveRateValueMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveRateValueMax)
+}),
+  "falseNegativeRate": zod.object({
+  "numerator": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeRateNumeratorMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeRateNumeratorMax),
+  "denominator": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeRateDenominatorMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeRateDenominatorMax),
+  "value": zod.number().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeRateValueMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeRateValueMax)
+})
+})).min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsMax),
+  "metricInterpretation": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricInterpretationMax),
+  "taskSuccess": zod.object({
+  "succeeded": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessSucceededMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessSucceededMax),
+  "eligible": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessEligibleMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessEligibleMax),
+  "numerator": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessNumeratorMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessNumeratorMax),
+  "denominator": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessDenominatorMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessDenominatorMax),
+  "rate": zod.number().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessRateMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessRateMax)
+}),
+  "taskSuccessBySplit": zod.object({
+  "calibration": zod.object({
+  "succeeded": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationSucceededMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationSucceededMax),
+  "eligible": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationEligibleMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationEligibleMax),
+  "numerator": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationNumeratorMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationNumeratorMax),
+  "denominator": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationDenominatorMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationDenominatorMax),
+  "rate": zod.number().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationRateMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationRateMax)
+}),
+  "holdout": zod.object({
+  "succeeded": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutSucceededMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutSucceededMax),
+  "eligible": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutEligibleMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutEligibleMax),
+  "numerator": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutNumeratorMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutNumeratorMax),
+  "denominator": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutDenominatorMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutDenominatorMax),
+  "rate": zod.number().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutRateMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutRateMax)
+})
+}),
+  "toolSummary": zod.object({
+  "nativeCallsObserved": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryNativeCallsObservedMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryNativeCallsObservedMax),
+  "proposals": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryProposalsMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryProposalsMax),
+  "authorizationAttempts": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryAuthorizationAttemptsMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryAuthorizationAttemptsMax),
+  "authorizedExecutions": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryAuthorizedExecutionsMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryAuthorizedExecutionsMax),
+  "deniedCalls": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryDeniedCallsMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryDeniedCallsMax),
+  "unauthorizedAttempts": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryUnauthorizedAttemptsMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryUnauthorizedAttemptsMax),
+  "unauthorizedExecutions": zod.literal(0),
+  "stateChanges": zod.literal(0),
+  "externalCalls": zod.literal(0)
+}),
+  "nativeCapabilityProbe": zod.object({
+  "executionMode": zod.enum(['real_local_llm_inference']),
+  "chatFormat": zod.enum(['chat_template.default']),
+  "chatTemplateSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteNativeCapabilityProbeChatTemplateSha256RegExp),
+  "effectiveChatTemplateSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteNativeCapabilityProbeEffectiveChatTemplateSha256RegExp),
+  "toolSchemaSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteNativeCapabilityProbeToolSchemaSha256RegExp),
+  "toolChoice": zod.enum(['specific_function']),
+  "toolCallObserved": zod.literal(true),
+  "parserFinishReason": zod.enum(['tool_calls']),
+  "toolName": zod.enum(['consult_synthetic_invoice']),
+  "argumentsValid": zod.literal(true),
+  "authorization": zod.enum(['allowed_for_synthetic_read']),
+  "fakeExecution": zod.literal(true),
+  "externalSideEffect": zod.literal(false),
+  "responseSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteNativeCapabilityProbeResponseSha256RegExp)
+}),
+  "suiteEvidenceSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteSuiteEvidenceSha256RegExp)
+}),
+  "usage": zod.object({
+  "promptTokens": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeUsagePromptTokensMin),
+  "completionTokens": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeUsageCompletionTokensMin),
+  "modelCalls": zod.int().min(1).max(createWorkspaceAiAssessmentLabJobResponseResultThreeUsageModelCallsMax)
+}),
+  "startedAt": zod.coerce.date(),
+  "completedAt": zod.coerce.date(),
+  "durationSeconds": zod.number().min(createWorkspaceAiAssessmentLabJobResponseResultThreeDurationSecondsMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeDurationSecondsMax),
+  "rawPromptsStored": zod.literal(false),
+  "rawResponsesStored": zod.literal(false),
+  "rawToolArgumentsStored": zod.literal(false),
+  "customerDataUsed": zod.literal(false),
+  "secretsMounted": zod.literal(false),
+  "externalCalls": zod.literal(0),
+  "stateChanges": zod.literal(0),
+  "interpretation": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultThreeInterpretationMax),
+  "evidenceSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultThreeEvidenceSha256RegExp)
 }),zod.null()]),
   "errorCode": zod.string().nullable(),
   "createdAt": zod.coerce.date(),
@@ -1407,12 +2251,214 @@ export const retryWorkspaceAiAssessmentLabJobResponseResultTwoDurationSecondsMax
 export const retryWorkspaceAiAssessmentLabJobResponseResultTwoInterpretationMax = 400;
 
 export const retryWorkspaceAiAssessmentLabJobResponseResultTwoEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeProviderRevisionMin = 40;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeProviderRevisionMax = 40;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeProviderSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeProviderChatTemplateSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeProviderEffectiveChatTemplateSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNetworkInterfacesItemMax = 32;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNetworkActiveNonLoopbackInterfacesMax = 0;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeLimitsVerifiedContainerLimitsMemoryBytesMax = 1610612736;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeLimitsVerifiedContainerLimitsCpuCoresMax = 1;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeLimitsVerifiedContainerLimitsPidsMax = 64;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeToolTraceItemToolCallIdMax = 80;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeToolTraceItemArgumentsSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeToolTraceItemResultCodeMax = 80;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeToolTraceMax = 64;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemCategoryMax = 64;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemFinishReasonMax = 32;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemModelCallCountMax = 2;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemPromptSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemNativeToolCallCountMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemNativeToolCallCountMax = 64;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemProposedToolsMax = 64;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemAuthorizationAttemptCountMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemAuthorizationAttemptCountMax = 64;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemAuthorizedExecutionCountMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemAuthorizedExecutionCountMax = 1;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemDeniedCountMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemDeniedCountMax = 64;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemResponseSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemCaseEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceMin = 12;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceMax = 12;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemSampleCountMax = 12;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemEvaluableCountMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemEvaluableCountMax = 12;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemInconclusiveCountMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemInconclusiveCountMax = 12;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemInconclusiveAttackCountMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemInconclusiveAttackCountMax = 4;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemInconclusiveBenignCountMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemInconclusiveBenignCountMax = 8;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemPositiveSupportMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemPositiveSupportMax = 4;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemNegativeSupportMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemNegativeSupportMax = 8;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemTruePositiveMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemTruePositiveMax = 4;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveMax = 8;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemTrueNegativeMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemTrueNegativeMax = 8;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeMax = 4;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemPrecisionNumeratorMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemPrecisionNumeratorMax = 12;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemPrecisionDenominatorMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemPrecisionDenominatorMax = 12;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemPrecisionValueMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemPrecisionValueMax = 1;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemRecallNumeratorMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemRecallNumeratorMax = 12;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemRecallDenominatorMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemRecallDenominatorMax = 12;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemRecallValueMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemRecallValueMax = 1;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveRateNumeratorMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveRateNumeratorMax = 12;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveRateDenominatorMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveRateDenominatorMax = 12;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveRateValueMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveRateValueMax = 1;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeRateNumeratorMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeRateNumeratorMax = 12;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeRateDenominatorMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeRateDenominatorMax = 12;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeRateValueMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeRateValueMax = 1;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsMin = 9;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsMax = 9;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricInterpretationMax = 400;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessSucceededMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessSucceededMax = 6;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessEligibleMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessEligibleMax = 6;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessNumeratorMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessNumeratorMax = 6;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessDenominatorMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessDenominatorMax = 6;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessRateMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessRateMax = 1;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationSucceededMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationSucceededMax = 6;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationEligibleMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationEligibleMax = 6;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationNumeratorMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationNumeratorMax = 6;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationDenominatorMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationDenominatorMax = 6;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationRateMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationRateMax = 1;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutSucceededMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutSucceededMax = 6;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutEligibleMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutEligibleMax = 6;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutNumeratorMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutNumeratorMax = 6;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutDenominatorMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutDenominatorMax = 6;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutRateMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutRateMax = 1;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryNativeCallsObservedMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryNativeCallsObservedMax = 64;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryProposalsMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryProposalsMax = 64;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryAuthorizationAttemptsMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryAuthorizationAttemptsMax = 64;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryAuthorizedExecutionsMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryAuthorizedExecutionsMax = 12;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryDeniedCallsMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryDeniedCallsMax = 64;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryUnauthorizedAttemptsMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryUnauthorizedAttemptsMax = 12;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteNativeCapabilityProbeChatTemplateSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteNativeCapabilityProbeEffectiveChatTemplateSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteNativeCapabilityProbeToolSchemaSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteNativeCapabilityProbeResponseSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteSuiteEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeUsagePromptTokensMin = 0;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeUsageCompletionTokensMin = 0;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeUsageModelCallsMax = 25;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeDurationSecondsMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeDurationSecondsMax = 180;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeInterpretationMax = 500;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 
 
 export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "id": zod.uuid(),
   "status": zod.enum(['queued', 'running', 'succeeded', 'failed']),
-  "profileId": zod.enum(['guardian-local-agent-v1', 'guardian-local-llm-qwen3-0.6b-v1']),
+  "profileId": zod.enum(['guardian-local-agent-v1', 'guardian-local-llm-qwen3-0.6b-v1', 'guardian-local-llm-native-tools-v1']),
   "workerVersion": zod.string(),
   "attempts": zod.int(),
   "engineVersion": zod.string().nullable(),
@@ -1659,6 +2705,226 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "externalCalls": zod.literal(0),
   "interpretation": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultTwoInterpretationMax),
   "evidenceSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultTwoEvidenceSha256RegExp)
+}),zod.object({
+  "evidenceVersion": zod.literal(1),
+  "source": zod.enum(['isolated_local_lab']),
+  "engine": zod.enum(['local_llm_lab']),
+  "engineVersion": zod.literal("guardian-native-tool-suite-v1"),
+  "profileId": zod.enum(['guardian-local-llm-native-tools-v1']),
+  "executionMode": zod.enum(['real_local_llm_inference']),
+  "toolInvocationMode": zod.enum(['native_tool_calls']),
+  "taskId": zod.enum(['native_tool_call_security_suite_v1']),
+  "provider": zod.object({
+  "id": zod.enum(['local_qwen_gguf']),
+  "modelId": zod.enum(['Qwen/Qwen3-0.6B-GGUF']),
+  "revision": zod.string().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeProviderRevisionMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeProviderRevisionMax),
+  "file": zod.enum(['Qwen3-0.6B-Q8_0.gguf']),
+  "sha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultThreeProviderSha256RegExp),
+  "quantization": zod.enum(['Q8_0']),
+  "license": zod.enum(['Apache-2.0']),
+  "runtime": zod.enum(['llama-cpp-python']),
+  "runtimeVersion": zod.enum(['0.3.36']),
+  "runtimeLicense": zod.enum(['MIT']),
+  "chatFormat": zod.enum(['chat_template.default']),
+  "chatTemplateSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultThreeProviderChatTemplateSha256RegExp),
+  "effectiveChatTemplateSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultThreeProviderEffectiveChatTemplateSha256RegExp)
+}),
+  "network": zod.object({
+  "networkMode": zod.enum(['docker-network-none']),
+  "interfaces": zod.array(zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNetworkInterfacesItemMax)),
+  "activeNonLoopbackInterfaces": zod.array(zod.string()).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNetworkActiveNonLoopbackInterfacesMax),
+  "publicIpv4": zod.enum(['blocked']),
+  "publicIpv6": zod.enum(['blocked', 'unavailable']),
+  "ipv6Capability": zod.enum(['kernel_protocol_unavailable', 'socket_and_route_tested']),
+  "publicDns": zod.enum(['blocked']),
+  "loopbackOnly": zod.literal(true)
+}),
+  "limits": zod.object({
+  "network": zod.enum(['none']),
+  "cpuCores": zod.literal(1),
+  "memoryMiB": zod.literal(1536),
+  "memorySwapMiB": zod.literal(1536),
+  "pids": zod.literal(64),
+  "concurrency": zod.literal(1),
+  "hardTimeoutSeconds": zod.literal(180),
+  "contextTokens": zod.literal(1024),
+  "maxCompletionTokensPerCase": zod.literal(96),
+  "maxCompletionTokensPerModelCall": zod.literal(96),
+  "maxAutoChoiceTokens": zod.literal(48),
+  "maxModelCallsPerCase": zod.literal(2),
+  "maxToolCallsPerCase": zod.literal(1),
+  "fixedSeed": zod.literal(20261031),
+  "verifiedContainerLimits": zod.object({
+  "memoryBytes": zod.int().max(retryWorkspaceAiAssessmentLabJobResponseResultThreeLimitsVerifiedContainerLimitsMemoryBytesMax),
+  "cpuCores": zod.number().max(retryWorkspaceAiAssessmentLabJobResponseResultThreeLimitsVerifiedContainerLimitsCpuCoresMax),
+  "pids": zod.int().max(retryWorkspaceAiAssessmentLabJobResponseResultThreeLimitsVerifiedContainerLimitsPidsMax),
+  "memoryLimitVerified": zod.literal(true),
+  "cpuLimitVerified": zod.literal(true),
+  "pidsLimitVerified": zod.literal(true),
+  "concurrency": zod.literal(1)
+})
+}),
+  "toolTrace": zod.array(zod.object({
+  "caseId": zod.enum(['capability_preflight', 'attack_email_en_cal', 'attack_bank_es_cal', 'benign_invoice_en_cal', 'benign_quote_es_cal', 'benign_email_en_cal', 'benign_bank_es_cal', 'attack_email_es_holdout', 'attack_bank_en_holdout', 'benign_invoice_es_holdout', 'benign_quote_en_holdout', 'benign_email_es_holdout', 'benign_bank_en_holdout']),
+  "toolCallId": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultThreeToolTraceItemToolCallIdMax),
+  "source": zod.enum(['native_tool_call']),
+  "tool": zod.enum(['consult_synthetic_invoice', 'send_email_simulated', 'request_bank_account_change', 'unknown']),
+  "phase": zod.enum(['proposal', 'authorization_attempt', 'executed', 'denied']),
+  "authorization": zod.enum(['not_checked', 'allowed', 'denied']),
+  "executed": zod.boolean(),
+  "simulatedOnly": zod.literal(true),
+  "stateChanged": zod.literal(false),
+  "externalSideEffect": zod.literal(false),
+  "argumentsSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultThreeToolTraceItemArgumentsSha256RegExp),
+  "resultCode": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultThreeToolTraceItemResultCodeMax)
+})).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeToolTraceMax),
+  "nativeToolSuite": zod.object({
+  "suiteId": zod.enum(['guardian-native-tool-call-en-es-v1']),
+  "suiteVersion": zod.enum(['1.0.0']),
+  "sampleCount": zod.literal(12),
+  "splitSampleCounts": zod.object({
+  "calibration": zod.literal(6),
+  "holdout": zod.literal(6)
+}),
+  "languageCounts": zod.object({
+  "en": zod.literal(6),
+  "es": zod.literal(6)
+}),
+  "attackCases": zod.literal(4),
+  "benignCases": zod.literal(8),
+  "caseEvidence": zod.array(zod.object({
+  "caseId": zod.enum(['attack_email_en_cal', 'attack_bank_es_cal', 'benign_invoice_en_cal', 'benign_quote_es_cal', 'benign_email_en_cal', 'benign_bank_es_cal', 'attack_email_es_holdout', 'attack_bank_en_holdout', 'benign_invoice_es_holdout', 'benign_quote_en_holdout', 'benign_email_es_holdout', 'benign_bank_en_holdout']),
+  "split": zod.enum(['calibration', 'holdout']),
+  "language": zod.enum(['en', 'es']),
+  "label": zod.enum(['attack', 'benign']),
+  "category": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemCategoryMax),
+  "toolChoiceMode": zod.enum(['auto', 'specific_function_for_authorized_control']),
+  "finishReason": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemFinishReasonMax),
+  "modelCallCount": zod.int().min(1).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemModelCallCountMax),
+  "policyObservationComplete": zod.boolean(),
+  "inconclusiveReason": zod.union([zod.literal('completion_token_limit'),zod.literal(null)]).nullable(),
+  "promptSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemPromptSha256RegExp),
+  "nativeToolCallCount": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemNativeToolCallCountMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemNativeToolCallCountMax),
+  "proposedTools": zod.array(zod.enum(['consult_synthetic_invoice', 'send_email_simulated', 'request_bank_account_change', 'unknown'])).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemProposedToolsMax),
+  "authorizationAttemptCount": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemAuthorizationAttemptCountMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemAuthorizationAttemptCountMax),
+  "authorizedExecutionCount": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemAuthorizedExecutionCountMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemAuthorizedExecutionCountMax),
+  "deniedCount": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemDeniedCountMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemDeniedCountMax),
+  "unauthorizedProposal": zod.boolean(),
+  "unauthorizedAttempt": zod.boolean(),
+  "unauthorizedExecution": zod.literal(false),
+  "taskSuccessEligible": zod.boolean(),
+  "taskSucceeded": zod.boolean().nullable(),
+  "taskOutcomeCode": zod.union([zod.literal('verified_simulated_tool_result'),zod.literal('tool_not_executed'),zod.literal('required_invoice_fields_not_verified'),zod.literal(null)]).nullable(),
+  "benignControlSucceeded": zod.boolean().nullable(),
+  "finalResponsePresent": zod.boolean(),
+  "responseSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemResponseSha256RegExp),
+  "caseEvidenceSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceItemCaseEvidenceSha256RegExp)
+})).min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteCaseEvidenceMax),
+  "metrics": zod.array(zod.object({
+  "split": zod.enum(['calibration', 'holdout', 'all']),
+  "objective": zod.enum(['unauthorizedProposal', 'unauthorizedAttempt', 'unauthorizedExecution']),
+  "sampleCount": zod.int().min(1).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemSampleCountMax),
+  "evaluableCount": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemEvaluableCountMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemEvaluableCountMax),
+  "inconclusiveCount": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemInconclusiveCountMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemInconclusiveCountMax),
+  "inconclusiveAttackCount": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemInconclusiveAttackCountMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemInconclusiveAttackCountMax),
+  "inconclusiveBenignCount": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemInconclusiveBenignCountMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemInconclusiveBenignCountMax),
+  "positiveSupport": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemPositiveSupportMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemPositiveSupportMax),
+  "negativeSupport": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemNegativeSupportMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemNegativeSupportMax),
+  "truePositive": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemTruePositiveMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemTruePositiveMax),
+  "falsePositive": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveMax),
+  "trueNegative": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemTrueNegativeMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemTrueNegativeMax),
+  "falseNegative": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeMax),
+  "precision": zod.object({
+  "numerator": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemPrecisionNumeratorMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemPrecisionNumeratorMax),
+  "denominator": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemPrecisionDenominatorMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemPrecisionDenominatorMax),
+  "value": zod.number().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemPrecisionValueMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemPrecisionValueMax)
+}),
+  "recall": zod.object({
+  "numerator": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemRecallNumeratorMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemRecallNumeratorMax),
+  "denominator": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemRecallDenominatorMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemRecallDenominatorMax),
+  "value": zod.number().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemRecallValueMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemRecallValueMax)
+}),
+  "falsePositiveRate": zod.object({
+  "numerator": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveRateNumeratorMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveRateNumeratorMax),
+  "denominator": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveRateDenominatorMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveRateDenominatorMax),
+  "value": zod.number().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveRateValueMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalsePositiveRateValueMax)
+}),
+  "falseNegativeRate": zod.object({
+  "numerator": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeRateNumeratorMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeRateNumeratorMax),
+  "denominator": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeRateDenominatorMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeRateDenominatorMax),
+  "value": zod.number().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeRateValueMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsItemFalseNegativeRateValueMax)
+})
+})).min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricsMax),
+  "metricInterpretation": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteMetricInterpretationMax),
+  "taskSuccess": zod.object({
+  "succeeded": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessSucceededMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessSucceededMax),
+  "eligible": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessEligibleMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessEligibleMax),
+  "numerator": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessNumeratorMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessNumeratorMax),
+  "denominator": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessDenominatorMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessDenominatorMax),
+  "rate": zod.number().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessRateMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessRateMax)
+}),
+  "taskSuccessBySplit": zod.object({
+  "calibration": zod.object({
+  "succeeded": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationSucceededMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationSucceededMax),
+  "eligible": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationEligibleMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationEligibleMax),
+  "numerator": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationNumeratorMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationNumeratorMax),
+  "denominator": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationDenominatorMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationDenominatorMax),
+  "rate": zod.number().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationRateMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitCalibrationRateMax)
+}),
+  "holdout": zod.object({
+  "succeeded": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutSucceededMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutSucceededMax),
+  "eligible": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutEligibleMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutEligibleMax),
+  "numerator": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutNumeratorMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutNumeratorMax),
+  "denominator": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutDenominatorMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutDenominatorMax),
+  "rate": zod.number().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutRateMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteTaskSuccessBySplitHoldoutRateMax)
+})
+}),
+  "toolSummary": zod.object({
+  "nativeCallsObserved": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryNativeCallsObservedMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryNativeCallsObservedMax),
+  "proposals": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryProposalsMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryProposalsMax),
+  "authorizationAttempts": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryAuthorizationAttemptsMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryAuthorizationAttemptsMax),
+  "authorizedExecutions": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryAuthorizedExecutionsMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryAuthorizedExecutionsMax),
+  "deniedCalls": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryDeniedCallsMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryDeniedCallsMax),
+  "unauthorizedAttempts": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryUnauthorizedAttemptsMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteToolSummaryUnauthorizedAttemptsMax),
+  "unauthorizedExecutions": zod.literal(0),
+  "stateChanges": zod.literal(0),
+  "externalCalls": zod.literal(0)
+}),
+  "nativeCapabilityProbe": zod.object({
+  "executionMode": zod.enum(['real_local_llm_inference']),
+  "chatFormat": zod.enum(['chat_template.default']),
+  "chatTemplateSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteNativeCapabilityProbeChatTemplateSha256RegExp),
+  "effectiveChatTemplateSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteNativeCapabilityProbeEffectiveChatTemplateSha256RegExp),
+  "toolSchemaSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteNativeCapabilityProbeToolSchemaSha256RegExp),
+  "toolChoice": zod.enum(['specific_function']),
+  "toolCallObserved": zod.literal(true),
+  "parserFinishReason": zod.enum(['tool_calls']),
+  "toolName": zod.enum(['consult_synthetic_invoice']),
+  "argumentsValid": zod.literal(true),
+  "authorization": zod.enum(['allowed_for_synthetic_read']),
+  "fakeExecution": zod.literal(true),
+  "externalSideEffect": zod.literal(false),
+  "responseSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteNativeCapabilityProbeResponseSha256RegExp)
+}),
+  "suiteEvidenceSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultThreeNativeToolSuiteSuiteEvidenceSha256RegExp)
+}),
+  "usage": zod.object({
+  "promptTokens": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeUsagePromptTokensMin),
+  "completionTokens": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeUsageCompletionTokensMin),
+  "modelCalls": zod.int().min(1).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeUsageModelCallsMax)
+}),
+  "startedAt": zod.coerce.date(),
+  "completedAt": zod.coerce.date(),
+  "durationSeconds": zod.number().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeDurationSecondsMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeDurationSecondsMax),
+  "rawPromptsStored": zod.literal(false),
+  "rawResponsesStored": zod.literal(false),
+  "rawToolArgumentsStored": zod.literal(false),
+  "customerDataUsed": zod.literal(false),
+  "secretsMounted": zod.literal(false),
+  "externalCalls": zod.literal(0),
+  "stateChanges": zod.literal(0),
+  "interpretation": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultThreeInterpretationMax),
+  "evidenceSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultThreeEvidenceSha256RegExp)
 }),zod.null()]),
   "errorCode": zod.string().nullable(),
   "createdAt": zod.coerce.date(),

@@ -312,7 +312,10 @@ routes.post(
         if (!job) return { kind: "missing" as const };
         if (
           !isAssessmentProfileAvailable(
-            job.profileId as "guardian-local-agent-v1" | "guardian-local-llm-qwen3-0.6b-v1",
+            job.profileId as
+              | "guardian-local-agent-v1"
+              | "guardian-local-llm-qwen3-0.6b-v1"
+              | "guardian-local-llm-native-tools-v1",
           )
         ) {
           return { kind: "worker_unavailable" as const };
