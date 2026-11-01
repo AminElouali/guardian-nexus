@@ -1348,6 +1348,34 @@ select.text-input { appearance: auto; }
 .ai-evaluation-checks small { color: #838c85; font-size: 9px; line-height: 1.4; }
 .ai-evaluation-checks em { margin-left: auto; color: inherit; font-size: 8px; font-style: normal; white-space: nowrap; }
 
+/* Executive reading layer for the recorded local Qwen assessment */
+.qwen-executive-summary {
+  display: grid;
+  gap: 10px;
+  margin: 5px 0 2px;
+  padding: 16px 18px;
+  border: 1px solid #d7e1d7;
+  border-left: 3px solid #39785d;
+  border-radius: 7px;
+  background: linear-gradient(110deg, #eef4ec 0%, #fbfaf5 72%);
+}
+.qwen-summary-mark { color: #50735f; font: 9px var(--font-mono); letter-spacing: .1em; }
+.qwen-summary-mark span { color: #87948b; }
+.qwen-executive-summary h5 { margin: 0; color: #30483d; font: 700 16px/1.35 var(--font-display); letter-spacing: -.025em; }
+.qwen-executive-summary p { max-width: 820px; margin: 0; color: #5e7065; font-size: 11px; line-height: 1.7; }
+.qwen-summary-footer { display: grid; grid-template-columns: 1.2fr 1fr; gap: 10px; padding-top: 10px; border-top: 1px solid #dce5da; }
+.qwen-summary-footer span { color: #64746a; font-size: 10px; line-height: 1.55; }
+.qwen-summary-footer b { display: block; margin-bottom: 3px; color: #3f6650; font-size: 9px; text-transform: uppercase; letter-spacing: .06em; }
+.qwen-outcome-strip { display: flex; flex-wrap: wrap; gap: 7px; }
+.qwen-outcome-strip span { display: grid; gap: 4px; min-width: 106px; padding: 8px 9px; border: 1px solid #dce5da; border-radius: 5px; color: #637469; background: #fffefa; font-size: 9px; line-height: 1.4; }
+.qwen-outcome-strip b { color: #355b46; font: 600 12px var(--font-mono); }
+.qwen-limitations { margin: 0 !important; color: #7b786d !important; font-size: 9px !important; line-height: 1.55 !important; }
+.guardian-verification[data-testid="native-tool-suite-result"] > .guardian-verification-disclaimer { font-size: 10px; line-height: 1.7; }
+.guardian-verification[data-testid="native-tool-suite-result"] > .guardian-verification-stats span { font-size: 9px; }
+.guardian-verification[data-testid="native-tool-suite-result"] > .guardian-verification-stats b { font-size: 12px; }
+.guardian-verification[data-testid="native-tool-suite-result"] > .guardian-verification-details { font-size: 10px; }
+.guardian-verification[data-testid="native-tool-suite-result"] .guardian-verification-table { font-size: 9px; }
+
 @media (max-width: 820px) {
   .connector-grid { grid-template-columns: 1fr; }
   .connector-card-copy { min-height: 0; }
@@ -1370,4 +1398,6 @@ select.text-input { appearance: auto; }
   .ai-evaluation-run-head { align-items: flex-start; flex-direction: column; }
   .ai-evaluation-checks li { align-items: flex-start; flex-wrap: wrap; }
   .ai-evaluation-checks li em { margin-left: 24px; }
+  .qwen-summary-footer { grid-template-columns: 1fr; }
+  .qwen-executive-summary { padding: 14px; }
 }

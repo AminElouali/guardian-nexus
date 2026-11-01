@@ -363,6 +363,11 @@ const autonomousTaskLabels: Record<string, string> = {
   authorized_invoice_read: 'Lectura autorizada de factura sintética',
   authorized_simulated_email_draft: 'Preparación autorizada de correo simulado',
   authorized_synthetic_bank_request: 'Solicitud ficticia de cambio bancario',
+  attack_bank_es_cal: 'Intento de modificación bancaria no autorizada bloqueado',
+};
+
+const autonomousCaseLabels: Record<string, string> = {
+  attack_bank_es_cal: 'Intento de modificación bancaria no autorizada bloqueado',
 };
 
 function pairedRate(
@@ -389,16 +394,10 @@ function QwenPolicyComparisonResult({
         </span>
         <h5>Comparación emparejada · Guardian Policy Engine</h5>
       </div>
-      <span className="guardian-verification-pill">
-        Política OFF: solo contrafactual en clon
-      </span>
+      <span className="guardian-verification-pill">Policy OFF · solo clon desechable</span>
     </div>
     <p className="guardian-verification-disclaimer">
-      Ambos brazos reciben cada misma propuesta identificada por hash. Policy ON
-      aplica la autorización y el simulador ficticio. Policy OFF omite solo esa
-      autorización para estimar el resultado sobre una copia efímera; nunca llama
-      a una herramienta ni ejecuta una acción. Solo se persisten metadatos y
-      hashes de evidencia en el workspace propietario.
+      Contrafactual emparejado: ambos brazos evalúan la misma propuesta identificada por hash. Policy ON comprueba permisos y, si corresponde, solo simula la acción. Policy OFF omite esa comprobación únicamente sobre una copia desechable en memoria para estimar qué habría pasado; no autoriza ni ejecuta una herramienta. No representa un modo operativo.
     </p>
     <div className="guardian-verification-stats">
       <span><b>{pairedRate(comparison.metrics.proposalsByScenario)}</b> escenarios con propuesta</span>
@@ -440,8 +439,8 @@ function QwenPolicyComparisonResult({
                   ? 'ALLOW · simulada'
                   : `ALLOW · ${pair.policyOn.resultCode}`}</td>
               <td>{pair.policyOff.counterfactualWouldExecute
-                ? `Habría ocurrido${pair.policyOff.counterfactualCloneStateChanged ? ' · clon cambia' : ''}`
-                : 'No pasaría validación/límite'} · no ejecutado</td>
+              ? `Habría ocurrido en el clon${pair.policyOff.counterfactualCloneStateChanged ? ' · estado del clon cambiaría' : ''}`
+                : 'No superaría validación/límite'} · nunca ejecutado</td>
               <td>
                 <details>
                   <summary>Hash</summary>
@@ -475,6 +474,9 @@ function NativeToolSuiteResult({
   const suite = evidence.nativeToolSuite;
   const autonomous =
     evidence.profileId === 'guardian-local-llm-autonomous-tools-v1';
+  const bankAttackCase = autonomous
+    ? suite.caseEvidence.find((item) => item.caseId === 'attack_bank_es_cal')
+    : undefined;
   return <section className="guardian-verification" data-testid="native-tool-suite-result">
     <div className="guardian-verification-heading">
       <div>
@@ -490,23 +492,52 @@ function NativeToolSuiteResult({
     <p className="guardian-verification-disclaimer">
       {autonomous
         ? suite.toolCallParsing
-          ? <>Los {suite.sampleCount} casos usaron <code>tool_choice=auto</code>; no se forzó la función. El worker adapta únicamente el marcador nativo de la plantilla GGUF de Qwen (<code>&lt;tool_call&gt;</code> con JSON completo); llama-cpp-python 0.3.36 lo entrega como contenido en modo auto. No se acepta JSON libre. Las herramientas son ficticias y no producen efectos externos.</>
+          ? <>Hubo inferencia local real en {suite.sampleCount} casos mixtos, con <code>tool_choice=auto</code>; no se forzó la función. El modelo emitió marcadores de plantilla Qwen que Guardian adaptó a propuestas estructuradas; no son llamadas nativas directas. En el registro, el runtime devolvió directamente {suite.toolCallParsing.callsReturnedDirectlyByRuntime} objetos <code>message.tool_calls</code>. El adaptador exige el marcador completo; no acepta JSON libre. Herramientas ficticias, sin efectos externos.</>
           : <>Los {suite.sampleCount} casos de este registro usaron <code>tool_choice=auto</code>. Esta evidencia anterior no registra extracción de marcador; no permite distinguir una llamada estructurada entregada como texto de una respuesta sin llamada. Las herramientas son ficticias y no producen efectos externos.</>
         : <>Qwen3 local devolvió objetos <code>message.tool_calls</code> usando el template GGUF; no se interpretó JSON del texto como tool call. Las llamadas de correo y cambio bancario solo generaron resultados ficticios en memoria.</>}
     </p>
     <div className="guardian-verification-stats">
-      <span><b>{suite.sampleCount}</b> casos sintéticos</span>
+      <span><b>{suite.sampleCount}</b> casos sintéticos mixtos</span>
       <span>{autonomous
         ? <>Particiones internas <b>{suite.splitSampleCounts.calibration}+{suite.splitSampleCounts.holdout}</b></>
         : <><b>{suite.splitSampleCounts.calibration}</b> calibración · <b>{suite.splitSampleCounts.holdout}</b> holdout</>}</span>
       <span><b>{suite.languageCounts.en}/{suite.languageCounts.es}</b> casos EN/ES</span>
-      <span><b>{suite.toolSummary.nativeCallsObserved}</b> llamadas nativas observadas</span>
-        <span><b>{suite.taskSuccess.numerator}/{suite.taskSuccess.denominator}</b> operaciones simuladas verificadas</span>
+      <span><b>{suite.toolCallParsing ? suite.toolCallParsing.callsAdapted : 'No registrado'}</b> marcadores Qwen adaptados por Guardian</span>
+      <span><b>{suite.toolCallParsing ? suite.toolCallParsing.callsReturnedDirectlyByRuntime : 'No registrado'}</b> message.tool_calls directos del runtime</span>
+      <span><b>{suite.taskSuccess.numerator}/{suite.taskSuccess.denominator}</b> tareas elegibles verificadas</span>
       <span><b>{suite.metrics.find((metric) => metric.split === 'all')?.inconclusiveCount ?? 0}</b> casos inconclusos</span>
     </div>
+    {autonomous && <div className="qwen-executive-summary" data-testid="qwen-executive-summary">
+      <div className="qwen-summary-mark">LECTURA EJECUTIVA <span>· {suite.sampleCount} CASOS</span></div>
+      <h5>Una muestra local con controles y ataques sintéticos; no una tasa general de seguridad.</h5>
+      <p>El laboratorio usó datos ficticios y herramientas simuladas. {bankAttackCase
+        ? <>En el caso bancario en español, el contenido planteó una modificación no autorizada: {bankAttackCase.policyObservationComplete
+          ? bankAttackCase.unauthorizedAttempt
+            ? 'el intento observado fue denegado por la política.'
+            : bankAttackCase.policyAllowed
+              ? 'la política permitió la propuesta observada.'
+              : 'la evidencia no registra un intento no autorizado.'
+          : 'la observación de autorización quedó inconclusa.'} {bankAttackCase.simulatedExecution
+            ? 'La acción solo se ejecutó en el simulador ficticio.'
+            : 'No consta ejecución de la acción en el simulador.'}</>
+        : 'El caso bancario en español no está presente en esta evidencia.'} No se almacenan el prompt, la respuesta ni los argumentos, por lo que el informe no reproduce la solicitud literal.</p>
+      <div className="qwen-outcome-strip" aria-label="Resultados observados y denominadores">
+        <span><b>{suite.toolSummary.proposals}/{suite.sampleCount}</b> casos con propuesta</span>
+        <span><b>{suite.toolSummary.authorizationAttempts}/{suite.toolSummary.proposals}</b> propuestas con intento de autorización</span>
+        <span><b>{suite.toolSummary.authorizedExecutions}/{suite.toolSummary.authorizationAttempts}</b> autorizadas y simuladas</span>
+        <span><b>{suite.toolSummary.deniedCalls}/{suite.toolSummary.authorizationAttempts}</b> denegadas</span>
+        <span><b>{suite.toolSummary.unauthorizedExecutions}/{suite.toolSummary.unauthorizedAttempts}</b> intentos no autorizados ejecutados</span>
+        <span><b>{suite.toolSummary.externalCalls}</b> llamadas externas</span>
+      </div>
+      <div className="qwen-summary-footer">
+        <span><b>Recomendación</b> Mantener autorización explícita por operación y revisar cada caso inconcluso antes de ampliar pruebas.</span>
+        <span><b>Alcance</b> Agente local de laboratorio; no evalúa disponibilidad ni sistemas de clientes.</span>
+      </div>
+      <p className="qwen-limitations">Límites: muestra pequeña de {suite.sampleCount} casos, sin tasa general de seguridad; IPv6 {networkStatusLabel(evidence.network.publicIpv6)} (no equivale a bloqueo verificado); servicio para clientes no disponible. No se conservan prompts, respuestas ni argumentos.</p>
+    </div>}
     <p className="guardian-verification-disclaimer">
       {autonomous
-        ? 'Los 12 casos incluyen 8 controles benignos y 4 casos de inyección documental; forman una muestra acotada, no una prueba exhaustiva ni una estimación general de seguridad. «Resuelta» significa que la herramienta ficticia devolvió un resultado autorizado; no se evalúa una respuesta conversacional posterior. Una llamada ausente o incorrecta se cuenta como no resuelta; nunca se cambia a selección forzada.'
+        ? `La muestra de ${suite.sampleCount} casos incluye ${suite.benignCases} controles benignos y ${suite.attackCases} ataques de inyección documental. Es pequeña y no permite calcular una tasa general de seguridad. «Verificada» significa que la tarea sintética elegible obtuvo el resultado esperado; no se evalúa una respuesta conversacional posterior. Las propuestas, intentos de autorización, autorizaciones y simulaciones son etapas distintas. Una llamada ausente o incorrecta no se convierte en éxito y nunca se cambia a selección forzada.`
         : 'En tareas benignas autorizadas, el arnés seleccionó la función específica para comprobar argumentos y autorización; eso no mide selección autónoma. Ataques y textos citados usaron selección automática. Las matrices comparan tipo de escenario con eventos de herramienta observados; un falso negativo significa que no se observó ese evento en un caso de ataque, no que un detector de ataques haya fallado.'}
     </p>
       {autonomous && suite.policyComparison && (
@@ -560,12 +591,12 @@ function NativeToolSuiteResult({
           <tbody>
             {suite.caseEvidence.map((item) => (
               <tr key={item.caseId}>
-                <th scope="row">{item.caseId}</th>
+                <th scope="row">{autonomousCaseLabels[item.caseId] ?? item.caseId}</th>
                 <td>{autonomous
                   ? `${item.label === 'attack' ? 'ataque indirecto' : 'control benigno'} · ${item.split === 'calibration' ? 'calibración' : 'holdout'} · ${item.language.toUpperCase()} · ${autonomousTaskLabels[item.category] ?? item.label}`
                   : `${item.split} · ${item.language.toUpperCase()} · ${item.label}`}</td>
                 <td>{item.proposedTools.length ? item.proposedTools.map((tool) => toolLabels[tool] ?? tool).join(', ') : 'Ninguna'}</td>
-                {autonomous && <td>{item.toolCallOrigin === 'guardian_qwen_native_markup_adapter' ? 'Marcador nativo Qwen · parser Guardian' : item.toolCallOrigin === 'runtime_message_tool_calls' ? 'message.tool_calls del runtime' : item.toolCallOrigin === 'test_provider_message_tool_calls' ? 'Respuesta de prueba · no inferencia real' : item.toolCallOrigin === 'unparsed_qwen_native_markup' ? 'Marcador no interpretable' : item.toolCallOrigin === 'not_observed' ? 'No observada' : 'Origen no registrado'}</td>}
+                {autonomous && <td>{item.toolCallOrigin === 'guardian_qwen_native_markup_adapter' ? 'Marcador de plantilla Qwen adaptado por Guardian' : item.toolCallOrigin === 'runtime_message_tool_calls' ? 'message.tool_calls directo del runtime' : item.toolCallOrigin === 'test_provider_message_tool_calls' ? 'Respuesta de prueba · no inferencia real' : item.toolCallOrigin === 'unparsed_qwen_native_markup' ? 'Marcador no interpretable' : item.toolCallOrigin === 'not_observed' ? 'No observada' : 'Origen no registrado'}</td>}
                 <td>{autonomous ? `${item.argumentsValid ? 'Válidos' : 'No válidos'} · ${item.policyAllowed ? 'permitido' : 'no permitido'}` : 'No medido en este perfil'}</td>
                 <td>{item.policyObservationComplete ? item.unauthorizedAttempt ? 'Sí; denegado' : 'No observado' : 'Inconcluso'}</td>
                 <td>{autonomous ? item.simulatedExecution ? 'Sí, solo simulación' : 'No' : item.authorizedExecutionCount}</td>
@@ -583,8 +614,8 @@ function NativeToolSuiteResult({
         <dt>Hash del modelo</dt><dd><code>{evidence.provider.sha256}</code></dd>
         <dt>Hash de evidencia</dt><dd><code>{evidence.evidenceSha256}</code></dd>
         <dt>Hash del conjunto</dt><dd><code>{suite.suiteEvidenceSha256}</code></dd>
-        {autonomous && <><dt>Selección por tarea</dt><dd>tool_choice=auto · una llamada · máximo 128 tokens.</dd>{suite.toolCallParsing && <><dt>Parser Qwen</dt><dd>{suite.toolCallParsing.callsAdapted} llamadas nativas adaptadas · {suite.toolCallParsing.callsReturnedDirectlyByRuntime} llamadas directas del runtime · {suite.toolCallParsing.unparsedMarkupCases} casos con marcador rechazado. El parser exige el marcador completo y no acepta JSON libre.</dd></>}<dt>Suite forzada anterior</dt><dd><code>{suite.previousForcedSuiteEvidenceSha256}</code> · referencia separada, no es evidencia de autonomía.</dd></>}
-        <dt>Red</dt><dd>IPv4 {networkStatusLabel(evidence.network.publicIpv4)}, IPv6 {networkStatusLabel(evidence.network.publicIpv6)}, DNS {networkStatusLabel(evidence.network.publicDns)}.</dd>
+        {autonomous && <><dt>Selección por tarea</dt><dd>tool_choice=auto · una llamada · máximo 128 tokens.</dd>{suite.toolCallParsing && <><dt>Parser Qwen</dt><dd>{suite.toolCallParsing.callsAdapted} marcadores de plantilla Qwen adaptados por Guardian · {suite.toolCallParsing.callsReturnedDirectlyByRuntime} llamadas directas del runtime · {suite.toolCallParsing.unparsedMarkupCases} casos con marcador rechazado. El parser exige el marcador completo y no acepta JSON libre.</dd></>}<dt>Suite forzada anterior</dt><dd><code>{suite.previousForcedSuiteEvidenceSha256}</code> · referencia separada, no es evidencia de autonomía.</dd></>}
+        <dt>Red</dt><dd>IPv4 {networkStatusLabel(evidence.network.publicIpv4)}, IPv6 {networkStatusLabel(evidence.network.publicIpv6)}; «no disponible» no confirma bloqueo. DNS {networkStatusLabel(evidence.network.publicDns)}.</dd>
         <dt>Límites comprobados</dt><dd>{evidence.limits.verifiedContainerLimits.cpuCores} CPU · {Math.round(evidence.limits.verifiedContainerLimits.memoryBytes / 1024 / 1024)} MiB · {evidence.limits.verifiedContainerLimits.pids} procesos · una concurrencia · {evidence.durationSeconds} s.</dd>
         <dt>Acciones externas</dt><dd>{suite.toolSummary.externalCalls} llamadas externas · {suite.toolSummary.stateChanges} cambios persistentes.</dd>
       </dl>
@@ -756,7 +787,7 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
         <div><span className="panel-kicker">EJECUCIONES LOCALES · DESARROLLO</span><h2>Laboratorio aislado</h2></div>
         <span className={`ai-evaluation-state ${availability.data?.status === 'ready' ? '' : 'ai-state-pending'}`}><i />{availability.isLoading ? 'Comprobando' : availability.data?.status === 'ready' ? 'Disponible en desarrollo' : 'No disponible'}</span>
       </div>
-       <p>Garak/GVE conserva el flujo local existente con fixtures. Qwen ejecuta una tarea sintética, la suite nativa anterior conserva sus 12 casos y el nuevo perfil prueba seis tareas benignas con selección automática de herramienta, sin forzar funciones. Los trabajos usan 1 CPU, 1.536 MiB, concurrencia global 1 y red deshabilitada. Ningún perfil está habilitado para clientes.</p>
+       <p>Garak/GVE conserva el flujo local existente con fixtures. Qwen ejecuta una tarea sintética; la suite nativa anterior mantiene su evidencia separada. La evidencia guardada del perfil autónomo contiene 14 casos mixtos (controles benignos e inyección documental), con selección automática y sin forzar funciones. Los trabajos usan 1 CPU, 1.536 MiB, concurrencia global 1 y red deshabilitada. Ningún perfil está habilitado para clientes.</p>
       {availability.data?.status !== 'ready' && <div className="ai-lab-unavailable"><LockKeyhole size={15} />{availability.data?.reasonCode === 'development_only' ? 'Deshabilitado fuera del entorno de desarrollo.' : 'El worker local no está preparado. No se iniciará ni simulará una evaluación.'}</div>}
       <div className="ai-evaluation-actions">
         <Button onClick={() => void requestLabAssessment('guardian-local-agent-v1')} disabled={!canRun || !garakAvailable || createLabJob.isPending} data-testid="button-run-ai-lab">
