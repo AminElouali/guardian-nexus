@@ -46,10 +46,41 @@ class WorkerContractTests(unittest.TestCase):
     def test_security_sensitive_runtime_packages_are_pinned_to_scanned_fixes(self):
         requirements = (
             WORKER_ROOT / "requirements-runtime.txt"
-        ).read_text().splitlines()
-        self.assertIn("aiohttp==3.14.5", requirements)
-        self.assertIn("nltk==3.10.4", requirements)
-        self.assertIn("requests==2.34.2", requirements)
+        ).read_text()
+        self.assertIn(
+            "aiohttp==3.14.5 \\\n    --hash=sha256:",
+            requirements,
+        )
+        self.assertIn(
+            "nltk==3.10.4 \\\n    --hash=sha256:",
+            requirements,
+        )
+        self.assertIn(
+            "requests==2.34.2 \\\n    --hash=sha256:",
+            requirements,
+        )
+        dockerfile = (WORKER_ROOT / "Dockerfile").read_text()
+        self.assertIn("--require-hashes", dockerfile)
+        self.assertIn("requirements-build.txt", dockerfile)
+
+    def test_runtime_and_build_requirements_have_sha256_hashes(self):
+        for filename, expected_count in (
+            ("requirements-runtime.txt", 36),
+            ("requirements-build.txt", 2),
+        ):
+            lines = (WORKER_ROOT / filename).read_text().splitlines()
+            entries = [
+                index
+                for index, line in enumerate(lines)
+                if "==" in line and not line.lstrip().startswith("#")
+            ]
+            self.assertEqual(len(entries), expected_count)
+            for index in entries:
+                self.assertTrue(lines[index].endswith("\\"))
+                self.assertRegex(
+                    lines[index + 1].strip(),
+                    r"--hash=sha256:[0-9a-f]{64}$",
+                )
 
     def test_docker_launcher_enforces_isolation_and_resource_caps(self):
         launcher = (WORKER_ROOT / "scripts/run-local.sh").read_text()
