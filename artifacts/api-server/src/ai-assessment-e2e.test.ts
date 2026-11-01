@@ -23,7 +23,7 @@ import {
 } from "./lib/ai-assessment-worker";
 import { createAiAssessmentLabRouter } from "./routes/ai-assessment-lab";
 
-const TIMEOUT_MS = 180_000;
+const TIMEOUT_MS = 300_000;
 const POLL_INTERVAL_MS = 500;
 const userA = `assessment-e2e-owner-${randomUUID()}`;
 const userB = `assessment-e2e-owner-${randomUUID()}`;
@@ -51,6 +51,7 @@ app.use("/api", createAiAssessmentLabRouter(testAuth));
 let workspaceA = "";
 let workspaceB = "";
 let jobId = "";
+let localLlmJobId = "";
 let server: Server | undefined;
 let baseUrl = "";
 
@@ -109,11 +110,15 @@ before(async () => {
 
 after(async () => {
   stopLocalAssessmentQueueWorker();
-  if (jobId) {
-    spawnSync("docker", ["rm", "--force", `guardian-ai-lab-${jobId}`], {
+  for (const candidateJobId of [jobId, localLlmJobId].filter(Boolean)) {
+    spawnSync(
+      "docker",
+      ["rm", "--force", `guardian-ai-lab-${candidateJobId}`],
+      {
       stdio: "ignore",
       timeout: 5_000,
-    });
+      },
+    );
   }
   if (server?.listening) {
     await new Promise<void>((resolveClose, rejectClose) => {
@@ -166,6 +171,7 @@ test(
       (
         await apiRequest(viewerA, pathA, "POST", {
           idempotencyKey: `viewer-denied-${crypto.randomUUID()}`,
+          profileId: "guardian-local-llm-qwen3-0.6b-v1",
         })
       ).status,
       403,
@@ -177,8 +183,17 @@ test(
       `/api/workspaces/${workspaceA}/ai-security-assessments/lab/availability`,
     );
     assert.equal(availability.status, 200);
-    const availabilityBody = (await availability.json()) as { status: string };
+    const availabilityBody = (await availability.json()) as {
+      status: string;
+      profiles: Array<{ profileId: string; status: string }>;
+    };
     assert.equal(availabilityBody.status, "ready");
+    assert.equal(
+      availabilityBody.profiles.find(
+        (profile) => profile.profileId === "guardian-local-llm-qwen3-0.6b-v1",
+      )?.status,
+      "ready",
+    );
 
     const idempotencyKey = `assessment-e2e-${randomUUID()}`;
     const created = await apiRequest(userA, pathA, "POST", { idempotencyKey });
@@ -229,7 +244,7 @@ test(
         );
         assert.equal(job.status, "succeeded", `worker failed: ${job.errorCode}`);
         assert.equal(job.attempts, 1);
-        assert.equal(job.workerVersion, "guardian-ai-assessment-lab-0.3.0");
+        assert.equal(job.workerVersion, "guardian-ai-assessment-lab-0.4.0");
         assert.ok(job.result);
         assert.equal(job.result.engine, "garak");
         assert.equal(job.result.engineVersion, "0.17.1");
@@ -279,10 +294,139 @@ test(
     assert.equal(tenantBJobs.status, 200);
     assert.deepEqual(await tenantBJobs.json(), []);
 
+    const localIdempotencyKey = `local-llm-e2e-${randomUUID()}`;
+    const localCreated = await apiRequest(userA, pathA, "POST", {
+      idempotencyKey: localIdempotencyKey,
+      profileId: "guardian-local-llm-qwen3-0.6b-v1",
+    });
+    assert.equal(localCreated.status, 202);
+    const localAccepted = (await localCreated.json()) as {
+      id: string;
+      status: string;
+      profileId: string;
+    };
+    localLlmJobId = localAccepted.id;
+    assert.equal(localAccepted.status, "queued");
+    assert.equal(localAccepted.profileId, "guardian-local-llm-qwen3-0.6b-v1");
+    const localDuplicate = await apiRequest(userA, pathA, "POST", {
+      idempotencyKey: localIdempotencyKey,
+      profileId: "guardian-local-llm-qwen3-0.6b-v1",
+    });
+    assert.equal(localDuplicate.status, 202);
+    assert.equal(
+      ((await localDuplicate.json()) as { id: string }).id,
+      localLlmJobId,
+      "local LLM profile request remains idempotent",
+    );
+    assert.equal(
+      (
+        await apiRequest(userA, pathA, "POST", {
+          idempotencyKey: localIdempotencyKey,
+          profileId: "guardian-local-agent-v1",
+        })
+      ).status,
+      409,
+      "one idempotency key cannot silently switch execution profiles",
+    );
+
+    let completedLocalRawJob: Record<string, unknown> | undefined;
+    const localDeadline = Date.now() + TIMEOUT_MS - 10_000;
+    while (Date.now() < localDeadline) {
+      const response = await apiRequest(userA, pathA);
+      assert.equal(response.status, 200);
+      const rawJobs = (await response.json()) as unknown;
+      const jobs = ListWorkspaceAiAssessmentLabJobsResponse.parse(rawJobs);
+      const localJob = jobs.find((candidate) => candidate.id === localLlmJobId);
+      if (localJob?.status === "succeeded" || localJob?.status === "failed") {
+        completedLocalRawJob = (rawJobs as Record<string, unknown>[]).find(
+          (candidate) => candidate.id === localLlmJobId,
+        );
+        assert.equal(
+          localJob.status,
+          "succeeded",
+          `local Qwen worker failed: ${localJob.errorCode}`,
+        );
+        assert.equal(localJob.attempts, 1);
+        assert.equal(
+          localJob.workerVersion,
+          "guardian-ai-assessment-lab-0.4.0",
+        );
+        assert.equal(localJob.result?.engine, "local_llm_lab");
+        if (localJob.result?.engine !== "local_llm_lab") {
+          assert.fail("local result must retain its explicit engine discriminator");
+        }
+        assert.equal(
+          localJob.result.profileId,
+          "guardian-local-llm-qwen3-0.6b-v1",
+        );
+        assert.equal(
+          localJob.result.executionMode,
+          "real_local_llm_inference",
+        );
+        assert.equal(
+          localJob.result.toolInvocationMode,
+          "structured_json_emulation",
+        );
+        assert.equal(localJob.result.taskId, "synthetic_invoice_summary_v1");
+        assert.equal(localJob.result.toolSummary.harnessToolExecutions, 1);
+        assert.equal(localJob.result.toolSummary.externalCalls, 0);
+        assert.equal(localJob.result.rawPromptsStored, false);
+        assert.equal(localJob.result.rawResponsesStored, false);
+        assert.equal(localJob.result.rawToolArgumentsStored, false);
+        assert.equal(localJob.result.secretsMounted, false);
+        assert.equal(localJob.result.network.networkMode, "docker-network-none");
+        assert.ok(/^[a-f0-9]{64}$/.test(localJob.result.evidenceSha256));
+        assert.equal(
+          JSON.stringify(localJob.result).includes("Synthetic Vendor"),
+          false,
+          "raw synthetic invoice is not persisted",
+        );
+        assert.equal(
+          JSON.stringify(localJob.result).includes("invoice is open"),
+          false,
+          "raw model response is not persisted",
+        );
+        break;
+      }
+      await delay(POLL_INTERVAL_MS);
+    }
+    assert.ok(
+      completedLocalRawJob,
+      "local Qwen job did not reach a terminal state before timeout",
+    );
+    const localPersisted = await withWorkspaceUserTransaction(
+      userA,
+      workspaceA,
+      (tx) =>
+        tx
+          .select({
+            status: aiAssessmentJobsTable.status,
+            profileId: aiAssessmentJobsTable.profileId,
+            result: aiAssessmentJobsTable.result,
+          })
+          .from(aiAssessmentJobsTable)
+          .where(eq(aiAssessmentJobsTable.id, localLlmJobId)),
+    );
+    assert.equal(localPersisted.authorized, true);
+    if (!localPersisted.authorized) return;
+    assert.equal(localPersisted.value[0]?.status, "succeeded");
+    assert.equal(
+      localPersisted.value[0]?.profileId,
+      "guardian-local-llm-qwen3-0.6b-v1",
+    );
+    assert.equal(localPersisted.value[0]?.result?.engine, "local_llm_lab");
+    assert.equal((await apiRequest(userB, pathA)).status, 403);
+    const tenantBAfterLocal = await apiRequest(userB, pathB);
+    assert.equal(tenantBAfterLocal.status, 200);
+    assert.deepEqual(await tenantBAfterLocal.json(), []);
+
     const artifactPath = fileURLToPath(
       new URL("../../../generated-artifacts/ai-assessment-e2e-response.json", import.meta.url),
     );
     mkdirSync(dirname(artifactPath), { recursive: true });
-    writeFileSync(artifactPath, JSON.stringify([completedRawJob], null, 2));
+    writeFileSync(
+      artifactPath,
+      JSON.stringify([completedRawJob, completedLocalRawJob], null, 2),
+    );
   },
 );

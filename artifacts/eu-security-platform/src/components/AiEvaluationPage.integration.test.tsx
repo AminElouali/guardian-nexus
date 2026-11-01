@@ -37,4 +37,24 @@ test("renders the real API lab response in the authenticated dashboard card", ()
   } else {
     assert.match(markup, /IPv6 bloqueado/);
   }
+
+  const localLlmJob = jobs.find(
+    (candidate) =>
+      candidate.status === "succeeded" &&
+      candidate.result?.engine === "local_llm_lab",
+  );
+  assert.ok(localLlmJob, "API integration must provide a real local Qwen response");
+  const localMarkup = renderToStaticMarkup(
+    createElement(LabJobCard, {
+      job: localLlmJob,
+      canRun: false,
+      onRetry: () => undefined,
+      retryPending: false,
+    }),
+  );
+  assert.match(localMarkup, /data-testid="local-llm-result"/);
+  assert.match(localMarkup, /INFERENCIA REAL/);
+  assert.match(localMarkup, /No es function calling nativo/);
+  assert.match(localMarkup, /No disponible para clientes/);
+  assert.match(localMarkup, /Qwen\/Qwen3-0\.6B-GGUF/);
 });

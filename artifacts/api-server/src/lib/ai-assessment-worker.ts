@@ -1,5 +1,8 @@
 import { spawn, spawnSync } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { sql } from "drizzle-orm";
 import { CreateWorkspaceAiAssessmentLabJobResponse } from "@workspace/api-zod";
 import {
@@ -7,13 +10,18 @@ import {
   withAiAssessmentQueueTransaction,
   workspaceAuditEventsTable,
   type AiAssessmentEvidence,
+  type AiAssessmentJobEvidence,
+  type GuardianLocalLlmEvidence,
 } from "@workspace/db";
 import { withWorkspaceUserTransaction } from "./tenant-db";
 import { logger } from "./logger";
 
 const IMAGE = "guardian-ai-assessment:local";
-export const AI_ASSESSMENT_WORKER_VERSION = "guardian-ai-assessment-lab-0.3.0";
-const MAX_RUNTIME_MS = 135_000;
+export const AI_ASSESSMENT_WORKER_VERSION = "guardian-ai-assessment-lab-0.4.0";
+export const GARAK_PROFILE_ID = "guardian-local-agent-v1";
+export const LOCAL_LLM_PROFILE_ID = "guardian-local-llm-qwen3-0.6b-v1";
+const GARAK_MAX_RUNTIME_MS = 135_000;
+const LOCAL_LLM_MAX_RUNTIME_MS = 180_000;
 const MAX_STDOUT_BYTES = 64 * 1024;
 const MAX_ATTEMPTS = 2;
 const LEASE_DURATION_MS = 45_000;
@@ -21,6 +29,36 @@ const HEARTBEAT_INTERVAL_MS = 10_000;
 const QUEUE_POLL_INTERVAL_MS = 2_000;
 const JOB_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+function findWorkspaceRoot(): string {
+  let current = dirname(fileURLToPath(import.meta.url));
+  for (let depth = 0; depth < 8; depth += 1) {
+    if (existsSync(resolve(current, "workers/guardian-ai-assessment/Dockerfile"))) {
+      return current;
+    }
+    const parent = dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+  throw new Error("guardian_workspace_root_not_found");
+}
+
+const WORKSPACE_ROOT = findWorkspaceRoot();
+const WORKER_ROOT = resolve(WORKSPACE_ROOT, "workers/guardian-ai-assessment");
+const LLM_ARTIFACT_ROOT = resolve(
+  WORKSPACE_ROOT,
+  "generated-artifacts/guardian-llm-lab",
+);
+const LOCAL_LLM_MODEL_FILE = "Qwen3-0.6B-Q8_0.gguf";
+const LOCAL_LLM_WHEELS = [
+  "llama_cpp_python-0.3.36-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl",
+  "diskcache-5.6.3-py3-none-any.whl",
+  "jinja2-3.1.6-py3-none-any.whl",
+  "markupsafe-3.0.4-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
+];
+
+type AssessmentProfileId =
+  | typeof GARAK_PROFILE_ID
+  | typeof LOCAL_LLM_PROFILE_ID;
 
 type JobOwner = {
   jobId: string;
@@ -29,6 +67,7 @@ type JobOwner = {
 };
 
 export type ClaimedJob = JobOwner & {
+  profileId: AssessmentProfileId;
   attempts: number;
   leaseOwnerId: string;
   startedAt: Date;
@@ -45,18 +84,92 @@ export type LocalWorkerAvailability = {
   status: "ready" | "unavailable" | "disabled";
   workerVersion: string;
   reasonCode: string | null;
+  profiles: Array<{
+    profileId: AssessmentProfileId;
+    engine: "garak" | "local_llm_lab";
+    status: "ready" | "unavailable" | "disabled";
+    reasonCode: string | null;
+  }>;
 };
 
+function getLocalLlmArtifactReason(): string | null {
+  try {
+    const manifestPath = resolve(WORKER_ROOT, "local-llm-manifest.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+      model?: { file?: string; sizeBytes?: number; sha256?: string };
+      runtime?: {
+        wheel?: string;
+        wheelSha256?: string;
+        dependencies?: Array<{ wheel?: string; sha256?: string }>;
+      };
+    };
+    if (
+      manifest.model?.file !== LOCAL_LLM_MODEL_FILE ||
+      manifest.model.sizeBytes !== 639_446_688 ||
+      manifest.model.sha256 !==
+        "9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031"
+    ) {
+      return "local_model_manifest_mismatch";
+    }
+    const modelPath = resolve(LLM_ARTIFACT_ROOT, LOCAL_LLM_MODEL_FILE);
+    if (
+      !existsSync(modelPath) ||
+      !statSync(modelPath).isFile() ||
+      statSync(modelPath).size !== manifest.model.sizeBytes
+    ) {
+      return "local_model_artifact_missing";
+    }
+    const wheelhouse = resolve(LLM_ARTIFACT_ROOT, "wheelhouse");
+    const wheelNames = [
+      manifest.runtime?.wheel,
+      ...(manifest.runtime?.dependencies ?? [])
+        .filter((item) => typeof item.wheel === "string")
+        .map((item) => item.wheel),
+    ];
+    if (
+      wheelNames.length !== LOCAL_LLM_WHEELS.length ||
+      LOCAL_LLM_WHEELS.some((expected) => !wheelNames.includes(expected)) ||
+      wheelNames.some(
+        (name) =>
+          typeof name !== "string" ||
+          name !== name.split("/").at(-1) ||
+          !existsSync(resolve(wheelhouse, name)) ||
+          !statSync(resolve(wheelhouse, name)).isFile(),
+      )
+    ) {
+      return "local_llm_runtime_artifacts_missing";
+    }
+    return null;
+  } catch {
+    return "local_llm_artifact_check_failed";
+  }
+}
+
 export function getLocalWorkerAvailability(): LocalWorkerAvailability {
+  const disabled = (reasonCode: string) => ({
+    status: "disabled" as const,
+    workerVersion: AI_ASSESSMENT_WORKER_VERSION,
+    reasonCode,
+    profiles: [
+      {
+        profileId: GARAK_PROFILE_ID,
+        engine: "garak" as const,
+        status: "disabled" as const,
+        reasonCode,
+      },
+      {
+        profileId: LOCAL_LLM_PROFILE_ID,
+        engine: "local_llm_lab" as const,
+        status: "disabled" as const,
+        reasonCode,
+      },
+    ],
+  });
   if (
     process.env.NODE_ENV !== "development" ||
     process.env.REPLIT_DEPLOYMENT === "1"
   ) {
-    return {
-      status: "disabled",
-      workerVersion: AI_ASSESSMENT_WORKER_VERSION,
-      reasonCode: "development_only",
-    };
+    return disabled("development_only");
   }
 
   try {
@@ -69,6 +182,20 @@ export function getLocalWorkerAvailability(): LocalWorkerAvailability {
         status: "unavailable",
         workerVersion: AI_ASSESSMENT_WORKER_VERSION,
         reasonCode: "docker_not_available",
+        profiles: [
+          {
+            profileId: GARAK_PROFILE_ID,
+            engine: "garak",
+            status: "unavailable",
+            reasonCode: "docker_not_available",
+          },
+          {
+            profileId: LOCAL_LLM_PROFILE_ID,
+            engine: "local_llm_lab",
+            status: "unavailable",
+            reasonCode: "docker_not_available",
+          },
+        ],
       };
     }
     if (result.status !== 0) {
@@ -76,20 +203,71 @@ export function getLocalWorkerAvailability(): LocalWorkerAvailability {
         status: "unavailable",
         workerVersion: AI_ASSESSMENT_WORKER_VERSION,
         reasonCode: "worker_image_not_built",
+        profiles: [
+          {
+            profileId: GARAK_PROFILE_ID,
+            engine: "garak",
+            status: "unavailable",
+            reasonCode: "worker_image_not_built",
+          },
+          {
+            profileId: LOCAL_LLM_PROFILE_ID,
+            engine: "local_llm_lab",
+            status: "unavailable",
+            reasonCode: "worker_image_not_built",
+          },
+        ],
       };
     }
+    const modelReason = getLocalLlmArtifactReason();
     return {
       status: "ready",
       workerVersion: AI_ASSESSMENT_WORKER_VERSION,
       reasonCode: null,
+      profiles: [
+        {
+          profileId: GARAK_PROFILE_ID,
+          engine: "garak",
+          status: "ready",
+          reasonCode: null,
+        },
+        {
+          profileId: LOCAL_LLM_PROFILE_ID,
+          engine: "local_llm_lab",
+          status: modelReason ? "unavailable" : "ready",
+          reasonCode: modelReason,
+        },
+      ],
     };
   } catch {
     return {
       status: "unavailable",
       workerVersion: AI_ASSESSMENT_WORKER_VERSION,
       reasonCode: "docker_readiness_check_failed",
+      profiles: [
+        {
+          profileId: GARAK_PROFILE_ID,
+          engine: "garak",
+          status: "unavailable",
+          reasonCode: "docker_readiness_check_failed",
+        },
+        {
+          profileId: LOCAL_LLM_PROFILE_ID,
+          engine: "local_llm_lab",
+          status: "unavailable",
+          reasonCode: "docker_readiness_check_failed",
+        },
+      ],
     };
   }
+}
+
+export function isAssessmentProfileAvailable(
+  profileId: AssessmentProfileId,
+): boolean {
+  return getLocalWorkerAvailability().profiles.some(
+    (profile) => profile.profileId === profileId && profile.status === "ready",
+  );
 }
 
 export function enqueueLocalAssessmentJob(_item: JobOwner): boolean {
@@ -135,8 +313,11 @@ export function isAiAssessmentJobRetryable(
   return status === "failed" && attempts < MAX_ATTEMPTS;
 }
 
-function dockerRunArgs(containerName: string): string[] {
-  return [
+function dockerRunArgs(
+  containerName: string,
+  profileId: AssessmentProfileId,
+): string[] {
+  const common = [
     "run",
     "--rm",
     "--init",
@@ -144,16 +325,38 @@ function dockerRunArgs(containerName: string): string[] {
     `--name=${containerName}`,
     "--network=none",
     "--read-only",
-    "--cpus=0.5",
-    "--memory=768m",
-    "--memory-swap=768m",
     "--pids-limit=64",
     "--cap-drop=ALL",
     "--security-opt=no-new-privileges",
     "--user=65532:65532",
     "--log-driver=none",
-    "--tmpfs=/tmp:rw,noexec,nosuid,nodev,size=64m",
+  ];
+  if (profileId === GARAK_PROFILE_ID) {
+    return [
+      ...common,
+      "--cpus=0.5",
+      "--memory=768m",
+      "--memory-swap=768m",
+      "--tmpfs=/tmp:rw,noexec,nosuid,nodev,size=64m",
+      IMAGE,
+    ];
+  }
+  return [
+    ...common,
+    "--cpus=1",
+    "--memory=1536m",
+    "--memory-swap=1536m",
+    "--tmpfs=/tmp:rw,noexec,nosuid,nodev,size=128m,mode=1777",
+    "--tmpfs=/opt/llm-runtime:rw,exec,nosuid,nodev,size=128m,mode=1777",
+    `--mount=type=bind,src=${resolve(LLM_ARTIFACT_ROOT, LOCAL_LLM_MODEL_FILE)},dst=/models/${LOCAL_LLM_MODEL_FILE},readonly`,
+    `--mount=type=bind,src=${resolve(LLM_ARTIFACT_ROOT, "wheelhouse")},dst=/wheelhouse,readonly`,
+    `--mount=type=bind,src=${resolve(WORKER_ROOT, "local-llm-manifest.json")},dst=/opt/guardian-assessment/local-llm-manifest.json,readonly`,
+    `--mount=type=bind,src=${resolve(WORKER_ROOT, "guardian_ai_assessment")},dst=/opt/guardian-assessment/guardian_ai_assessment,readonly`,
+    "--workdir=/opt/guardian-assessment",
+    "--entrypoint=/bin/sh",
     IMAGE,
+    "-ceu",
+    "python -m pip install --no-index --no-deps --disable-pip-version-check --no-cache-dir --target=/opt/llm-runtime /wheelhouse/llama_cpp_python-0.3.36-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl /wheelhouse/diskcache-5.6.3-py3-none-any.whl /wheelhouse/jinja2-3.1.6-py3-none-any.whl /wheelhouse/markupsafe-3.0.4-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl >&2; export PYTHONPATH=/opt/llm-runtime:/opt/guardian-assessment; exec python -m guardian_ai_assessment.llm_lab --integration-job",
   ];
 }
 
@@ -162,6 +365,54 @@ function getContainerName(jobId: string): string {
     throw new Error("invalid_assessment_job_id");
   }
   return `guardian-ai-lab-${jobId}`;
+}
+
+function sha256File(path: string): Promise<string> {
+  return new Promise((resolveHash, rejectHash) => {
+    const digest = createHash("sha256");
+    const stream = createReadStream(path);
+    stream.on("data", (chunk) => digest.update(chunk));
+    stream.on("error", rejectHash);
+    stream.on("end", () => resolveHash(digest.digest("hex")));
+  });
+}
+
+async function verifyLocalLlmRuntimeWheels(): Promise<void> {
+  const manifest = JSON.parse(
+    readFileSync(resolve(WORKER_ROOT, "local-llm-manifest.json"), "utf8"),
+  ) as {
+    runtime?: {
+      wheel?: string;
+      wheelSha256?: string;
+      dependencies?: Array<{ wheel?: string; sha256?: string }>;
+    };
+  };
+  const runtime = manifest.runtime;
+  const expected = [
+    { wheel: runtime?.wheel, sha256: runtime?.wheelSha256 },
+    ...(runtime?.dependencies ?? [])
+      .filter((dependency) => typeof dependency.wheel === "string")
+      .map((dependency) => dependency),
+  ];
+  if (
+    expected.length !== LOCAL_LLM_WHEELS.length ||
+    LOCAL_LLM_WHEELS.some(
+      (name) => !expected.some((item) => item.wheel === name),
+    )
+  ) {
+    throw new Error("local_llm_runtime_manifest_invalid");
+  }
+  for (const item of expected) {
+    if (
+      !item.wheel ||
+      !item.sha256 ||
+      !/^[a-f0-9]{64}$/.test(item.sha256) ||
+      await sha256File(resolve(LLM_ARTIFACT_ROOT, "wheelhouse", item.wheel)) !==
+        item.sha256
+    ) {
+      throw new Error("local_llm_runtime_artifact_hash_mismatch");
+    }
+  }
 }
 
 function killDockerContainer(jobId: string): void {
@@ -179,7 +430,109 @@ function killDockerContainer(jobId: string): void {
   killer.on("error", () => undefined);
 }
 
-function runDockerAssessment(jobId: string): Promise<AiAssessmentEvidence> {
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(canonicalJson).join(",")}]`;
+  }
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
+
+function hasValidLocalLlmEvidenceDigest(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  if (
+    typeof record.evidenceSha256 !== "string" ||
+    !/^[a-f0-9]{64}$/.test(record.evidenceSha256)
+  ) {
+    return false;
+  }
+  const { evidenceSha256, ...unsignedEvidence } = record;
+  return (
+    createHash("sha256")
+      .update(canonicalJson(unsignedEvidence), "utf8")
+      .digest("hex") === evidenceSha256
+  );
+}
+
+function validateLocalLlmEvidence(
+  evidence: GuardianLocalLlmEvidence,
+  raw: unknown,
+): boolean {
+  const network = evidence.network;
+  const limits = evidence.limits.verifiedContainerLimits;
+  const events = evidence.toolTrace;
+  const fromModel = events.filter(
+    (event) => event.source === "model_json_emulation",
+  );
+  const count = (phase: string) =>
+    fromModel.filter((event) => event.phase === phase).length;
+  return (
+    evidence.engine === "local_llm_lab" &&
+    evidence.engineVersion === "guardian-local-llm-tool-adapter-v1" &&
+    evidence.profileId === LOCAL_LLM_PROFILE_ID &&
+    evidence.executionMode === "real_local_llm_inference" &&
+    evidence.toolInvocationMode === "structured_json_emulation" &&
+    evidence.taskId === "synthetic_invoice_summary_v1" &&
+    evidence.provider.sha256 ===
+      "9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031" &&
+    evidence.provider.runtimeVersion === "0.3.36" &&
+    network.networkMode === "docker-network-none" &&
+    network.publicIpv4 === "blocked" &&
+    ["blocked", "unavailable"].includes(network.publicIpv6) &&
+    network.publicDns === "blocked" &&
+    network.loopbackOnly &&
+    network.activeNonLoopbackInterfaces.length === 0 &&
+    limits.memoryLimitVerified &&
+    limits.cpuLimitVerified &&
+    limits.pidsLimitVerified &&
+    limits.memoryBytes <= 1_610_612_736 &&
+    limits.cpuCores <= 1 &&
+    limits.pids <= 64 &&
+    evidence.toolSummary.harnessToolExecutions === 1 &&
+    evidence.toolSummary.modelActionProposals === count("proposal") &&
+    evidence.toolSummary.authorizationAttempts ===
+      count("authorization_attempt") &&
+    evidence.toolSummary.deniedActions === count("denied") &&
+    evidence.toolSummary.simulatedExecutions === count("executed") &&
+    evidence.toolSummary.realMutations === 0 &&
+    evidence.toolSummary.stateChanges === 0 &&
+    evidence.toolSummary.externalCalls === 0 &&
+    evidence.externalCalls === 0 &&
+    evidence.customerDataUsed === false &&
+    evidence.secretsMounted === false &&
+    evidence.rawPromptsStored === false &&
+    evidence.rawResponsesStored === false &&
+    evidence.rawToolArgumentsStored === false &&
+    evidence.decision.rawResponseStored === false &&
+    events.length >= 2 &&
+    events.length <= 7 &&
+    events.every(
+      (event) =>
+        event.simulatedOnly &&
+        !event.stateChanged &&
+        !event.externalSideEffect &&
+        /^[a-f0-9]{64}$/.test(event.argumentsSha256),
+    ) &&
+    hasValidLocalLlmEvidenceDigest(raw)
+  );
+}
+
+async function runDockerAssessment(
+  jobId: string,
+  profileId: AssessmentProfileId,
+): Promise<AiAssessmentJobEvidence> {
+  if (profileId === LOCAL_LLM_PROFILE_ID) {
+    await verifyLocalLlmRuntimeWheels();
+  } else if (profileId !== GARAK_PROFILE_ID) {
+    throw new Error("invalid_assessment_profile");
+  }
   const containerName = getContainerName(jobId);
   const staleContainerCleanup = spawnSync(
     "docker",
@@ -206,7 +559,7 @@ function runDockerAssessment(jobId: string): Promise<AiAssessmentEvidence> {
     let stdout = "";
     let stdoutBytes = 0;
     let timedOut = false;
-    const child = spawn("docker", dockerRunArgs(containerName), {
+    const child = spawn("docker", dockerRunArgs(containerName, profileId), {
       stdio: ["ignore", "pipe", "ignore"],
       env: {
         PATH: process.env.PATH ?? "/usr/bin:/bin",
@@ -218,7 +571,9 @@ function runDockerAssessment(jobId: string): Promise<AiAssessmentEvidence> {
       timedOut = true;
       killDockerContainer(jobId);
       child.kill("SIGKILL");
-    }, MAX_RUNTIME_MS);
+    }, profileId === LOCAL_LLM_PROFILE_ID
+      ? LOCAL_LLM_MAX_RUNTIME_MS
+      : GARAK_MAX_RUNTIME_MS);
 
     child.stdout.on("data", (chunk: Buffer) => {
       stdoutBytes += chunk.length;
@@ -262,6 +617,7 @@ function runDockerAssessment(jobId: string): Promise<AiAssessmentEvidence> {
 
       try {
         const output = JSON.parse(stdout.trim()) as unknown;
+        const isLocalLlm = profileId === LOCAL_LLM_PROFILE_ID;
         const parsedResult =
           CreateWorkspaceAiAssessmentLabJobResponse.shape.result.safeParse(
             output,
@@ -271,34 +627,69 @@ function runDockerAssessment(jobId: string): Promise<AiAssessmentEvidence> {
           return;
         }
         const parsedEvidence = parsedResult.data;
-        const evidence: AiAssessmentEvidence = {
-          ...parsedEvidence,
-          startedAt: parsedEvidence.startedAt.toISOString(),
-          completedAt: parsedEvidence.completedAt.toISOString(),
-          guardianVerification: parsedEvidence.guardianVerification
-            ? {
-                ...parsedEvidence.guardianVerification,
-                startedAt:
-                  parsedEvidence.guardianVerification.startedAt.toISOString(),
-                completedAt:
-                  parsedEvidence.guardianVerification.completedAt.toISOString(),
-              }
-            : undefined,
-        };
-        const verification = evidence.guardianVerification;
         if (
-          evidence.source !== "isolated_local_lab" ||
-          evidence.profileId !== "guardian-local-agent-v1" ||
-          evidence.engineVersion !== "0.17.1" ||
-          evidence.probeRequests !== 1 ||
-          evidence.network.networkMode !== "docker-network-none" ||
-          evidence.network.publicIpv4 !== "blocked" ||
-          !["blocked", "unavailable"].includes(evidence.network.publicIpv6) ||
-          evidence.network.publicDns !== "blocked" ||
-          !evidence.network.loopbackOnly ||
-          evidence.network.activeNonLoopbackInterfaces.length > 0 ||
-          evidence.externalCalls !== 0 ||
-          evidence.customerDataUsed ||
+          (isLocalLlm && parsedEvidence.engine !== "local_llm_lab") ||
+          (!isLocalLlm && parsedEvidence.engine !== "garak")
+        ) {
+          reject(new Error("worker_engine_profile_mismatch"));
+          return;
+        }
+        let evidence: AiAssessmentJobEvidence;
+        if (parsedEvidence.engine === "local_llm_lab") {
+          const local = parsedEvidence as unknown as GuardianLocalLlmEvidence & {
+            startedAt: Date;
+            completedAt: Date;
+          };
+          if (!validateLocalLlmEvidence(local as GuardianLocalLlmEvidence, output)) {
+            reject(new Error("worker_evidence_failed_validation"));
+            return;
+          }
+          evidence = {
+            ...local,
+            startedAt: local.startedAt.toISOString(),
+            completedAt: local.completedAt.toISOString(),
+          };
+        } else {
+          const garak = parsedEvidence as unknown as AiAssessmentEvidence & {
+            startedAt: Date;
+            completedAt: Date;
+            guardianVerification?: AiAssessmentEvidence["guardianVerification"] & {
+              startedAt: Date;
+              completedAt: Date;
+            };
+          };
+          evidence = {
+            ...garak,
+            startedAt: garak.startedAt.toISOString(),
+            completedAt: garak.completedAt.toISOString(),
+            guardianVerification: garak.guardianVerification
+              ? {
+                  ...garak.guardianVerification,
+                  startedAt: garak.guardianVerification.startedAt.toISOString(),
+                  completedAt: garak.guardianVerification.completedAt.toISOString(),
+                }
+              : undefined,
+          };
+        }
+        if (evidence.engine !== "garak") {
+          resolve(evidence);
+          return;
+        }
+        const garakEvidence = evidence;
+        const verification = garakEvidence.guardianVerification;
+        if (
+          garakEvidence.source !== "isolated_local_lab" ||
+          garakEvidence.profileId !== GARAK_PROFILE_ID ||
+          garakEvidence.engineVersion !== "0.17.1" ||
+          garakEvidence.probeRequests !== 1 ||
+          garakEvidence.network.networkMode !== "docker-network-none" ||
+          garakEvidence.network.publicIpv4 !== "blocked" ||
+          !["blocked", "unavailable"].includes(garakEvidence.network.publicIpv6) ||
+          garakEvidence.network.publicDns !== "blocked" ||
+          !garakEvidence.network.loopbackOnly ||
+          garakEvidence.network.activeNonLoopbackInterfaces.length > 0 ||
+          garakEvidence.externalCalls !== 0 ||
+          garakEvidence.customerDataUsed ||
           !verification ||
           verification.engine !== "guardian_verification" ||
           verification.version !== "0.1.0" ||
@@ -407,7 +798,7 @@ function runDockerAssessment(jobId: string): Promise<AiAssessmentEvidence> {
           reject(new Error("worker_evidence_failed_validation"));
           return;
         }
-        resolve(evidence);
+        resolve(garakEvidence);
       } catch {
         reject(new Error("worker_output_invalid"));
       }
@@ -419,7 +810,7 @@ async function updateJob(
   item: ClaimedJob,
   update: {
     status: "succeeded" | "failed";
-    result?: AiAssessmentEvidence | null;
+    result?: AiAssessmentJobEvidence | null;
     engineVersion?: string | null;
     errorCode?: string | null;
     auditAction?: string;
@@ -462,7 +853,7 @@ async function updateJob(
           resourceType: "ai_assessment_job",
           resourceId: item.jobId,
           metadata: {
-            profileId: "guardian-local-agent-v1",
+            profileId: item.profileId,
             status: update.status,
             attempts: item.attempts,
             errorCode: update.errorCode ?? null,
@@ -480,6 +871,7 @@ type QueueCandidate = {
   jobId: string;
   workspaceId: string;
   actorUserId: string;
+  profileId: AssessmentProfileId;
   status: "queued" | "running";
   attempts: number;
   startedAt: Date | null;
@@ -511,6 +903,7 @@ export async function claimNextAssessmentJob(): Promise<QueueClaim> {
             id::text AS "jobId",
             workspace_id::text AS "workspaceId",
             requested_by_user_id AS "actorUserId",
+            profile_id AS "profileId",
             status,
             attempts,
             started_at AS "startedAt"
@@ -570,6 +963,7 @@ export async function claimNextAssessmentJob(): Promise<QueueClaim> {
         return {
           job: {
             ...owner,
+            profileId: candidate.profileId,
             attempts,
             leaseOwnerId,
             startedAt,
@@ -665,7 +1059,7 @@ async function processJob(item: ClaimedJob): Promise<void> {
         resourceType: "ai_assessment_job",
         resourceId: item.jobId,
         metadata: {
-          profileId: "guardian-local-agent-v1",
+          profileId: item.profileId,
           workerVersion: AI_ASSESSMENT_WORKER_VERSION,
           attempt: item.attempts,
         },
@@ -701,7 +1095,7 @@ async function processJob(item: ClaimedJob): Promise<void> {
   heartbeat.unref();
 
   try {
-    const evidence = await runDockerAssessment(item.jobId);
+    const evidence = await runDockerAssessment(item.jobId, item.profileId);
     if (leaseLost) return;
     const saved = await updateJob(item, {
       status: "succeeded",

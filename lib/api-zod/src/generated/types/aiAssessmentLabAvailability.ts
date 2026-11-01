@@ -6,10 +6,12 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AiAssessmentLabAvailabilityStatus } from './aiAssessmentLabAvailabilityStatus';
+import type { AiAssessmentLabProfileAvailability } from './aiAssessmentLabProfileAvailability';
 
 export interface AiAssessmentLabAvailability {
   status: AiAssessmentLabAvailabilityStatus;
   workerVersion: string;
   /** @nullable */
   reasonCode: string | null;
+  profiles: AiAssessmentLabProfileAvailability[];
 }

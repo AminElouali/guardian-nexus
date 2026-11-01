@@ -20,6 +20,8 @@ import { canRunAiEvaluation } from "../lib/access-control";
 import {
   AI_ASSESSMENT_JOB_MAX_ATTEMPTS,
   AI_ASSESSMENT_WORKER_VERSION,
+  GARAK_PROFILE_ID,
+  isAssessmentProfileAvailable,
   enqueueLocalAssessmentJob,
   getLocalWorkerAvailability,
   isAiAssessmentJobRetryable,
@@ -124,9 +126,10 @@ routes.post(
       res.status(400).json({ error: "Invalid laboratory assessment request" });
       return;
     }
-    if (getLocalWorkerAvailability().status !== "ready") {
+    const profileId = body.data.profileId ?? GARAK_PROFILE_ID;
+    if (!isAssessmentProfileAvailable(profileId)) {
       res.status(503).json({
-        error: "Isolated local laboratory worker is unavailable",
+        error: "Requested isolated local assessment profile is unavailable",
       });
       return;
     }
@@ -153,7 +156,11 @@ routes.post(
               ),
             )
             .limit(1);
-          if (existing) return { kind: "existing" as const, job: existing };
+          if (existing) {
+            return existing.profileId === profileId
+              ? { kind: "existing" as const, job: existing }
+              : { kind: "idempotency_conflict" as const };
+          }
 
           const pending = await tx
             .select({ id: aiAssessmentJobsTable.id })
@@ -175,7 +182,7 @@ routes.post(
               workspaceId,
               requestedByUserId: req.authUserId!,
               idempotencyKey: body.data.idempotencyKey,
-              profileId: "guardian-local-agent-v1",
+              profileId,
               workerVersion: AI_ASSESSMENT_WORKER_VERSION,
               status: "queued",
             })
@@ -201,7 +208,9 @@ routes.post(
               )
               .limit(1);
             return raced
-              ? { kind: "existing" as const, job: raced }
+              ? raced.profileId === profileId
+                ? { kind: "existing" as const, job: raced }
+                : { kind: "idempotency_conflict" as const }
               : { kind: "queue_full" as const };
           }
 
@@ -237,6 +246,12 @@ routes.post(
       if (access.value.kind === "queue_full") {
         res.setHeader("Retry-After", "3");
         res.status(409).json({ error: "Laboratory assessment queue is full" });
+        return;
+      }
+      if (access.value.kind === "idempotency_conflict") {
+        res.status(409).json({
+          error: "Idempotency key already belongs to another assessment profile",
+        });
         return;
       }
       if (
@@ -276,13 +291,6 @@ routes.post(
       res.status(400).json({ error: "Invalid laboratory job ID" });
       return;
     }
-    if (getLocalWorkerAvailability().status !== "ready") {
-      res.status(503).json({
-        error: "Isolated local laboratory worker is unavailable",
-      });
-      return;
-    }
-
     const { workspaceId, jobId } = params.data;
     const access = await withWorkspaceUserTransaction(
       req.authUserId!,
@@ -302,6 +310,13 @@ routes.post(
           )
           .limit(1);
         if (!job) return { kind: "missing" as const };
+        if (
+          !isAssessmentProfileAvailable(
+            job.profileId as "guardian-local-agent-v1" | "guardian-local-llm-qwen3-0.6b-v1",
+          )
+        ) {
+          return { kind: "worker_unavailable" as const };
+        }
         if (!isAiAssessmentJobRetryable(job.status, job.attempts)) {
           return { kind: "not_retryable" as const };
         }
@@ -351,6 +366,12 @@ routes.post(
     }
     if (access.value.kind === "missing") {
       res.status(404).json({ error: "Laboratory job not found" });
+      return;
+    }
+    if (access.value.kind === "worker_unavailable") {
+      res.status(503).json({
+        error: "Requested isolated local assessment profile is unavailable",
+      });
       return;
     }
     if (access.value.kind === "not_retryable") {

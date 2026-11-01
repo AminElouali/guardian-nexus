@@ -11,6 +11,7 @@ import {
   useRetryWorkspaceAiAssessmentLabJob,
   useRunWorkspaceMockAiEvaluation,
   type AiAssessmentLabJob,
+  type AiAssessmentLabJobRequestProfileId,
   type AiEvaluationRun,
   type Workspace,
 } from '@workspace/api-client-react';
@@ -59,8 +60,14 @@ const labStatusLabels: Record<AiAssessmentLabJob['status'], string> = {
   failed: 'Fallida',
 };
 
-type GuardianVerification = NonNullable<
-  NonNullable<AiAssessmentLabJob['result']>['guardianVerification']
+type GarakEvidence = Extract<
+  NonNullable<AiAssessmentLabJob['result']>,
+  { engine: 'garak' }
+>;
+type GuardianVerification = NonNullable<GarakEvidence['guardianVerification']>;
+type LocalLlmEvidence = Extract<
+  NonNullable<AiAssessmentLabJob['result']>,
+  { engine: 'local_llm_lab' }
 >;
 
 const verificationScenarioLabels: Record<string, string> = {
@@ -196,6 +203,81 @@ function GuardianVerificationResult({
   </section>;
 }
 
+const toolLabels: Record<string, string> = {
+  consult_synthetic_invoice: 'Consultar factura sintética',
+  send_email_simulated: 'Preparar correo simulado',
+  request_bank_account_change: 'Solicitar cambio ficticio',
+  unknown: 'Operación desconocida',
+};
+
+const toolPhaseLabels: Record<string, string> = {
+  proposal: 'Propuesta JSON',
+  authorization_attempt: 'Comprobación de permisos',
+  executed: 'Ejecutada solo en simulación',
+  denied: 'Denegada',
+};
+
+function LocalLlmResult({ evidence }: { evidence: LocalLlmEvidence }) {
+  return <section className="guardian-verification" data-testid="local-llm-result">
+    <div className="guardian-verification-heading">
+      <div>
+        <span className="ai-evaluation-run-label">INFERENCIA REAL · LABORATORIO LOCAL</span>
+        <h4>Qwen3-0.6B · Tarea funcional sintética</h4>
+      </div>
+      <span className="guardian-verification-pill">No disponible para clientes</span>
+    </div>
+    <p className="guardian-verification-disclaimer">
+      Una tarea fija sobre una factura sintética. El modelo devuelve JSON; un adaptador valida las propuestas antes de ejecutar herramientas ficticias. No se guardan la respuesta, el prompt ni los argumentos.
+    </p>
+    <div className="guardian-verification-stats">
+      <span><b>{evidence.toolSummary.harnessToolExecutions}</b> consultas sintéticas</span>
+      <span><b>{evidence.toolSummary.modelActionProposals}</b> propuestas del modelo</span>
+      <span><b>{evidence.toolSummary.deniedActions}</b> denegadas</span>
+      <span><b>{evidence.toolSummary.simulatedExecutions}</b> ejecuciones simuladas</span>
+      <span><b>{evidence.toolSummary.externalCalls}</b> llamadas externas</span>
+    </div>
+    <details className="guardian-verification-details">
+      <summary>Trazas instrumentadas y procedencia</summary>
+      <div className="guardian-verification-table-wrap">
+        <table className="guardian-verification-table">
+          <thead><tr>
+            <th scope="col">Herramienta</th>
+            <th scope="col">Origen</th>
+            <th scope="col">Etapa</th>
+            <th scope="col">Permiso</th>
+            <th scope="col">Ejecución</th>
+            <th scope="col">Efecto externo</th>
+          </tr></thead>
+          <tbody>
+            {evidence.toolTrace.map((event, index) => (
+              <tr key={`${event.toolCallId}-${event.phase}-${index}`}>
+                <th scope="row">{toolLabels[event.tool] ?? event.tool}</th>
+                <td>{event.source === 'local_harness' ? 'Arnés local' : 'Emulación JSON del modelo'}</td>
+                <td>{toolPhaseLabels[event.phase] ?? event.phase}</td>
+                <td>{event.authorization === 'allowed' ? 'Permitido' : event.authorization === 'denied' ? 'Denegado' : 'Sin comprobar'}</td>
+                <td>{event.executed ? 'Sí, sintética' : 'No'}</td>
+                <td>{event.externalSideEffect ? 'Sí' : 'Ninguno'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <dl>
+        <dt>Modo de herramientas</dt><dd>Emulación JSON estructurada; no es function calling nativo.</dd>
+        <dt>Motor y versión</dt><dd>{evidence.engine} · {evidence.engineVersion}</dd>
+        <dt>Modelo y licencia</dt><dd>{evidence.provider.modelId} Q8_0 · {evidence.provider.license}</dd>
+        <dt>Runtime</dt><dd>{evidence.provider.runtime} {evidence.provider.runtimeVersion} · {evidence.provider.runtimeLicense}</dd>
+        <dt>Hash del modelo</dt><dd><code>{evidence.provider.sha256}</code></dd>
+        <dt>Hash de evidencia</dt><dd><code>{evidence.evidenceSha256}</code></dd>
+        <dt>Red</dt><dd>IPv4 {networkStatusLabel(evidence.network.publicIpv4)}, IPv6 {networkStatusLabel(evidence.network.publicIpv6)}, DNS {networkStatusLabel(evidence.network.publicDns)}.</dd>
+        <dt>Límites comprobados</dt><dd>{evidence.limits.verifiedContainerLimits.cpuCores} CPU · {Math.round(evidence.limits.verifiedContainerLimits.memoryBytes / 1024 / 1024)} MiB · {evidence.limits.verifiedContainerLimits.pids} procesos · una ejecución concurrente.</dd>
+        <dt>Datos</dt><dd>Factura sintética; sin secretos, datos de clientes, cambios persistentes ni llamadas externas.</dd>
+      </dl>
+      <small>{evidence.interpretation}</small>
+    </details>
+  </section>;
+}
+
 export function LabJobCard({
   job,
   canRun,
@@ -208,6 +290,8 @@ export function LabJobCard({
   retryPending: boolean;
 }) {
   const evidence = job.result;
+  const garakEvidence = evidence?.engine === 'garak' ? evidence : null;
+  const localLlmEvidence = evidence?.engine === 'local_llm_lab' ? evidence : null;
   return <article className="ai-evaluation-run" data-testid="ai-lab-job">
     <div className="ai-evaluation-run-head">
       <div>
@@ -216,27 +300,28 @@ export function LabJobCard({
       </div>
       <time dateTime={job.createdAt}><Clock3 size={13} /> {new Date(job.createdAt).toLocaleString('es-ES')}</time>
     </div>
-    {evidence && <div className="ai-lab-result" data-testid="ai-lab-real-result">
+    {garakEvidence && <div className="ai-lab-result" data-testid="ai-lab-real-result">
       <div className="ai-lab-result-summary">
-        <b>{evidence.positiveDetectorScores === 0 ? 'Sin puntuaciones positivas en esta prueba acotada' : `${evidence.positiveDetectorScores} puntuación${evidence.positiveDetectorScores === 1 ? '' : 'es'} positiva${evidence.positiveDetectorScores === 1 ? '' : 's'} del detector`}</b>
-        <span>{evidence.probeRequests} solicitud · {evidence.generationsPerProbe} generación</span>
+        <b>{garakEvidence.positiveDetectorScores === 0 ? 'Sin puntuaciones positivas en esta prueba acotada' : `${garakEvidence.positiveDetectorScores} puntuación${garakEvidence.positiveDetectorScores === 1 ? '' : 'es'} positiva${garakEvidence.positiveDetectorScores === 1 ? '' : 's'} del detector`}</b>
+        <span>{garakEvidence.probeRequests} solicitud · {garakEvidence.generationsPerProbe} generación</span>
       </div>
-      <p>{evidence.findingSummary} Esta ejecución cubre únicamente las pruebas indicadas; no garantiza la seguridad del agente.</p>
+      <p>{garakEvidence.findingSummary} Esta ejecución cubre únicamente las pruebas indicadas; no garantiza la seguridad del agente.</p>
       <details>
         <summary>Procedencia y evidencia técnica</summary>
         <dl>
-          <dt>Motor y versión</dt><dd>Garak {evidence.engineVersion} · licencia Apache-2.0</dd>
-          <dt>Pruebas</dt><dd>{evidence.probeClasses.join(', ')}</dd>
-          <dt>Puntuaciones positivas</dt><dd>{evidence.findings.length ? evidence.findings.map((finding) => `${finding.detector}: ${finding.positiveScores}`).join('; ') : 'Ninguna registrada en este informe'}</dd>
-          <dt>Informe procesado</dt><dd>{evidence.reportRecordCount} registros · {evidence.reportBytes} bytes · {evidence.durationSeconds} s</dd>
-          <dt>Red</dt><dd>Modo {evidence.network.networkMode}; IPv4 {networkStatusLabel(evidence.network.publicIpv4)}, IPv6 {networkStatusLabel(evidence.network.publicIpv6)}, DNS público {networkStatusLabel(evidence.network.publicDns)}.</dd>
-          <dt>Informe</dt><dd>SHA-256 {evidence.reportSha256}</dd>
+          <dt>Motor y versión</dt><dd>Garak {garakEvidence.engineVersion} · licencia Apache-2.0</dd>
+          <dt>Pruebas</dt><dd>{garakEvidence.probeClasses.join(', ')}</dd>
+          <dt>Puntuaciones positivas</dt><dd>{garakEvidence.findings.length ? garakEvidence.findings.map((finding) => `${finding.detector}: ${finding.positiveScores}`).join('; ') : 'Ninguna registrada en este informe'}</dd>
+          <dt>Informe procesado</dt><dd>{garakEvidence.reportRecordCount} registros · {garakEvidence.reportBytes} bytes · {garakEvidence.durationSeconds} s</dd>
+          <dt>Red</dt><dd>Modo {garakEvidence.network.networkMode}; IPv4 {networkStatusLabel(garakEvidence.network.publicIpv4)}, IPv6 {networkStatusLabel(garakEvidence.network.publicIpv6)}, DNS público {networkStatusLabel(garakEvidence.network.publicDns)}.</dd>
+          <dt>Informe</dt><dd>SHA-256 {garakEvidence.reportSha256}</dd>
           <dt>Datos</dt><dd>No se conservaron prompts ni respuestas; sin datos de clientes.</dd>
         </dl>
         <small>Garak es software de terceros; Guardian Nexus lo integra y conserva su atribución técnica. Esta ejecución fue en el agente local de laboratorio.</small>
       </details>
-      {evidence.guardianVerification && <GuardianVerificationResult verification={evidence.guardianVerification} />}
+      {garakEvidence.guardianVerification && <GuardianVerificationResult verification={garakEvidence.guardianVerification} />}
     </div>}
+    {localLlmEvidence && <LocalLlmResult evidence={localLlmEvidence} />}
     {job.status === 'failed' && <p className="ai-lab-error">No se completó la evaluación. Código: {job.errorCode ?? 'worker_failed'}. No se guardaron salidas del agente.</p>}
     {canRun && job.status === 'failed' && job.attempts < 2 && <Button variant="outline" onClick={() => onRetry(job.id)} disabled={retryPending} data-testid="button-retry-ai-lab">
       {retryPending ? 'Reintentando…' : 'Reintentar una vez'}
@@ -261,16 +346,22 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
   const [labMessage, setLabMessage] = useState('');
   const [labError, setLabError] = useState('');
   const canRun = workspace.role === 'owner' || workspace.role === 'admin';
+  const garakAvailable = availability.data?.profiles.some(
+    (profile) => profile.profileId === 'guardian-local-agent-v1' && profile.status === 'ready',
+  ) ?? false;
+  const qwenAvailable = availability.data?.profiles.some(
+    (profile) => profile.profileId === 'guardian-local-llm-qwen3-0.6b-v1' && profile.status === 'ready',
+  ) ?? false;
 
-  async function requestLabAssessment() {
+  async function requestLabAssessment(profileId: AiAssessmentLabJobRequestProfileId) {
     setLabMessage('');
     setLabError('');
     try {
       await createLabJob.mutateAsync({
         workspaceId: workspace.id,
-        data: { idempotencyKey: crypto.randomUUID() },
+        data: { idempotencyKey: crypto.randomUUID(), profileId },
       });
-      setLabMessage('Solicitud registrada. Se evaluará únicamente el agente local fijo del laboratorio.');
+      setLabMessage('Solicitud registrada. Se ejecutará únicamente el perfil local seleccionado.');
       await cache.invalidateQueries({
         queryKey: getListWorkspaceAiAssessmentLabJobsQueryKey(workspace.id),
       });
@@ -310,38 +401,43 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
       <div>
         <div className="eyebrow">GUARDIAN AI SECURITY ASSESSMENT · LABORATORIO</div>
         <h1>Evaluación de Seguridad de IA</h1>
-        <p>Ejecución real en fixtures locales: Garak sobre un mock estático y Guardian Verification sobre un agente determinista con herramientas ficticias. No evalúa un LLM real; el servicio para clientes aún no está disponible.</p>
+        <p>Garak se ejecuta contra un mock local; Guardian Verification usa fixtures deterministas; y el perfil Qwen ejecuta inferencia local real en una tarea sintética acotada. Ninguno está habilitado como servicio para clientes.</p>
       </div>
       <span className="ai-evaluation-badge"><FlaskConical size={14} /> LABORATORIO INTERNO</span>
     </div>
 
     <div className="ai-evaluation-disclaimer" role="note" data-testid="ai-evaluation-disclaimer">
       <ShieldAlert size={18} />
-      <div><b>Solo se evalúa un agente local autorizado.</b><p>El contenedor no tiene red externa y usa límites estrictos de recursos. No acepta objetivos arbitrarios, cuentas de clientes, credenciales ni modelos de pago. La disponibilidad de este laboratorio no implica que el servicio esté habilitado para clientes.</p></div>
+      <div><b>Solo se ejecutan perfiles locales fijos.</b><p>Los contenedores usan red deshabilitada y límites de recursos. No aceptan objetivos arbitrarios, cuentas de clientes, credenciales ni modelos de pago. IPv6 puede figurar como no verificado si el kernel no ofrece ese protocolo. La disponibilidad en desarrollo no habilita el servicio para clientes.</p></div>
     </div>
 
     {labMessage && <div className="notice notice-success ai-evaluation-feedback" role="status">{labMessage}</div>}
     {labError && <div className="notice notice-error ai-evaluation-feedback" role="alert">{labError}</div>}
     <section className="panel ai-evaluation-card ai-lab-card">
       <div className="panel-heading">
-        <div><span className="panel-kicker">EJECUCIÓN REAL · FIXTURES LOCALES</span><h2>Laboratorio aislado</h2></div>
+        <div><span className="panel-kicker">EJECUCIONES LOCALES · DESARROLLO</span><h2>Laboratorio aislado</h2></div>
         <span className={`ai-evaluation-state ${availability.data?.status === 'ready' ? '' : 'ai-state-pending'}`}><i />{availability.isLoading ? 'Comprobando' : availability.data?.status === 'ready' ? 'Disponible en desarrollo' : 'No disponible'}</span>
       </div>
-      <p>El trabajo usa un perfil local fijo, un máximo de una solicitud Garak por trabajo, un conjunto determinista de 144 fixtures y un intento de reejecución. El historial y la evidencia resumida quedan aislados en este espacio.</p>
+      <p>Garak y GVE conservan su flujo existente de fixtures. Qwen3-0.6B ejecuta una sola tarea de factura sintética con 1 CPU, 1.536 MiB y una concurrencia global; sus herramientas son ficticias y la respuesta en bruto no se persiste.</p>
       {availability.data?.status !== 'ready' && <div className="ai-lab-unavailable"><LockKeyhole size={15} />{availability.data?.reasonCode === 'development_only' ? 'Deshabilitado fuera del entorno de desarrollo.' : 'El worker local no está preparado. No se iniciará ni simulará una evaluación.'}</div>}
       <div className="ai-evaluation-actions">
-        <Button onClick={() => void requestLabAssessment()} disabled={!canRun || availability.data?.status !== 'ready' || createLabJob.isPending} data-testid="button-run-ai-lab">
+        <Button onClick={() => void requestLabAssessment('guardian-local-agent-v1')} disabled={!canRun || !garakAvailable || createLabJob.isPending} data-testid="button-run-ai-lab">
           {createLabJob.isPending ? <Activity className="spin" size={15} /> : <ShieldCheck size={15} />}
-          {createLabJob.isPending ? 'Encolando…' : 'Solicitar evaluación local'}
+          {createLabJob.isPending ? 'Encolando…' : 'Solicitar Garak + GVE'}
+        </Button>
+        <Button variant="outline" onClick={() => void requestLabAssessment('guardian-local-llm-qwen3-0.6b-v1')} disabled={!canRun || !qwenAvailable || createLabJob.isPending} data-testid="button-run-local-llm">
+          {createLabJob.isPending ? <Activity className="spin" size={15} /> : <FlaskConical size={15} />}
+          {createLabJob.isPending ? 'Encolando…' : 'Solicitar tarea con Qwen local'}
         </Button>
         {!canRun && <small>Solo owner/admin puede iniciar o reintentar.</small>}
+        {canRun && !qwenAvailable && <small>Qwen local no disponible: {availability.data?.profiles.find((profile) => profile.profileId === 'guardian-local-llm-qwen3-0.6b-v1')?.reasonCode ?? 'worker_unavailable'}.</small>}
       </div>
       {labJobs.isLoading && <div className="ai-history-empty" role="status">Cargando trabajos del laboratorio…</div>}
       {labJobs.isError && <div className="notice notice-error" role="alert">No se pudo cargar el estado del laboratorio. <Button variant="outline" onClick={() => void labJobs.refetch()}>Reintentar</Button></div>}
       {!!labJobs.data?.length && <div className="ai-history-list">{labJobs.data.map((job) => <LabJobCard key={job.id} job={job} canRun={canRun} onRetry={(id) => void retryLabAssessment(id)} retryPending={retryLabJob.isPending} />)}</div>}
       <details className="ai-lab-provenance">
         <summary>Origen técnico y licencia</summary>
-        <p>El motor de evaluación de código abierto utilizado internamente es NVIDIA Garak v0.17.1, licenciado bajo Apache-2.0. Guardian Nexus no reclama autoría del motor; su versión y procedencia se conservan en cada evidencia.</p>
+        <p>Garak v0.17.1 conserva su atribución de terceros y licencia Apache-2.0. La inferencia local utiliza Qwen3-0.6B-GGUF Q8_0 (Apache-2.0) mediante llama-cpp-python 0.3.36 (MIT). Sus versiones, hashes y procedencia se registran por separado en la evidencia.</p>
       </details>
     </section>
 

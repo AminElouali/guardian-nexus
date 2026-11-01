@@ -354,7 +354,10 @@ ALTER POLICY ai_assessment_jobs_worker_update_queue
     )
   )
   WITH CHECK (
-    profile_id = 'guardian-local-agent-v1'
+    profile_id IN (
+      'guardian-local-agent-v1',
+      'guardian-local-llm-qwen3-0.6b-v1'
+    )
     AND status IN ('running', 'failed')
     AND (
       status = 'failed'

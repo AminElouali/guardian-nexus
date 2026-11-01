@@ -335,12 +335,54 @@ export const AiAssessmentLabAvailabilityStatus = {
   disabled: 'disabled',
 } as const;
 
+export type AiAssessmentLabProfileAvailabilityProfileId = typeof AiAssessmentLabProfileAvailabilityProfileId[keyof typeof AiAssessmentLabProfileAvailabilityProfileId];
+
+
+export const AiAssessmentLabProfileAvailabilityProfileId = {
+  'guardian-local-agent-v1': 'guardian-local-agent-v1',
+  'guardian-local-llm-qwen3-06b-v1': 'guardian-local-llm-qwen3-0.6b-v1',
+} as const;
+
+export type AiAssessmentLabProfileAvailabilityEngine = typeof AiAssessmentLabProfileAvailabilityEngine[keyof typeof AiAssessmentLabProfileAvailabilityEngine];
+
+
+export const AiAssessmentLabProfileAvailabilityEngine = {
+  garak: 'garak',
+  local_llm_lab: 'local_llm_lab',
+} as const;
+
+export type AiAssessmentLabProfileAvailabilityStatus = typeof AiAssessmentLabProfileAvailabilityStatus[keyof typeof AiAssessmentLabProfileAvailabilityStatus];
+
+
+export const AiAssessmentLabProfileAvailabilityStatus = {
+  ready: 'ready',
+  unavailable: 'unavailable',
+  disabled: 'disabled',
+} as const;
+
+export interface AiAssessmentLabProfileAvailability {
+  profileId: AiAssessmentLabProfileAvailabilityProfileId;
+  engine: AiAssessmentLabProfileAvailabilityEngine;
+  status: AiAssessmentLabProfileAvailabilityStatus;
+  /** @nullable */
+  reasonCode: string | null;
+}
+
 export interface AiAssessmentLabAvailability {
   status: AiAssessmentLabAvailabilityStatus;
   workerVersion: string;
   /** @nullable */
   reasonCode: string | null;
+  profiles: AiAssessmentLabProfileAvailability[];
 }
+
+export type AiAssessmentLabJobRequestProfileId = typeof AiAssessmentLabJobRequestProfileId[keyof typeof AiAssessmentLabJobRequestProfileId];
+
+
+export const AiAssessmentLabJobRequestProfileId = {
+  'guardian-local-agent-v1': 'guardian-local-agent-v1',
+  'guardian-local-llm-qwen3-06b-v1': 'guardian-local-llm-qwen3-0.6b-v1',
+} as const;
 
 export interface AiAssessmentLabJobRequest {
   /**
@@ -348,6 +390,7 @@ export interface AiAssessmentLabJobRequest {
      * @maxLength 128
      */
   idempotencyKey: string;
+  profileId?: AiAssessmentLabJobRequestProfileId;
 }
 
 export type AiAssessmentLabJobStatus = typeof AiAssessmentLabJobStatus[keyof typeof AiAssessmentLabJobStatus];
@@ -365,6 +408,7 @@ export type AiAssessmentLabJobProfileId = typeof AiAssessmentLabJobProfileId[key
 
 export const AiAssessmentLabJobProfileId = {
   'guardian-local-agent-v1': 'guardian-local-agent-v1',
+  'guardian-local-llm-qwen3-06b-v1': 'guardian-local-llm-qwen3-0.6b-v1',
 } as const;
 
 export type AiAssessmentEvidenceSource = typeof AiAssessmentEvidenceSource[keyof typeof AiAssessmentEvidenceSource];
@@ -703,6 +747,385 @@ export interface AiAssessmentEvidence {
   guardianVerification?: GuardianVerificationEvidence;
 }
 
+export type GuardianLocalLlmEvidenceSource = typeof GuardianLocalLlmEvidenceSource[keyof typeof GuardianLocalLlmEvidenceSource];
+
+
+export const GuardianLocalLlmEvidenceSource = {
+  isolated_local_lab: 'isolated_local_lab',
+} as const;
+
+export type GuardianLocalLlmEvidenceEngine = typeof GuardianLocalLlmEvidenceEngine[keyof typeof GuardianLocalLlmEvidenceEngine];
+
+
+export const GuardianLocalLlmEvidenceEngine = {
+  local_llm_lab: 'local_llm_lab',
+} as const;
+
+export type GuardianLocalLlmEvidenceProfileId = typeof GuardianLocalLlmEvidenceProfileId[keyof typeof GuardianLocalLlmEvidenceProfileId];
+
+
+export const GuardianLocalLlmEvidenceProfileId = {
+  'guardian-local-llm-qwen3-06b-v1': 'guardian-local-llm-qwen3-0.6b-v1',
+} as const;
+
+export type GuardianLocalLlmEvidenceExecutionMode = typeof GuardianLocalLlmEvidenceExecutionMode[keyof typeof GuardianLocalLlmEvidenceExecutionMode];
+
+
+export const GuardianLocalLlmEvidenceExecutionMode = {
+  real_local_llm_inference: 'real_local_llm_inference',
+} as const;
+
+export type GuardianLocalLlmEvidenceToolInvocationMode = typeof GuardianLocalLlmEvidenceToolInvocationMode[keyof typeof GuardianLocalLlmEvidenceToolInvocationMode];
+
+
+export const GuardianLocalLlmEvidenceToolInvocationMode = {
+  structured_json_emulation: 'structured_json_emulation',
+} as const;
+
+export type GuardianLocalLlmEvidenceTaskId = typeof GuardianLocalLlmEvidenceTaskId[keyof typeof GuardianLocalLlmEvidenceTaskId];
+
+
+export const GuardianLocalLlmEvidenceTaskId = {
+  synthetic_invoice_summary_v1: 'synthetic_invoice_summary_v1',
+} as const;
+
+export type GuardianLocalLlmEvidenceProviderId = typeof GuardianLocalLlmEvidenceProviderId[keyof typeof GuardianLocalLlmEvidenceProviderId];
+
+
+export const GuardianLocalLlmEvidenceProviderId = {
+  local_qwen_gguf: 'local_qwen_gguf',
+} as const;
+
+export type GuardianLocalLlmEvidenceProviderModelId = typeof GuardianLocalLlmEvidenceProviderModelId[keyof typeof GuardianLocalLlmEvidenceProviderModelId];
+
+
+export const GuardianLocalLlmEvidenceProviderModelId = {
+  'Qwen/Qwen3-06B-GGUF': 'Qwen/Qwen3-0.6B-GGUF',
+} as const;
+
+export type GuardianLocalLlmEvidenceProviderFile = typeof GuardianLocalLlmEvidenceProviderFile[keyof typeof GuardianLocalLlmEvidenceProviderFile];
+
+
+export const GuardianLocalLlmEvidenceProviderFile = {
+  'Qwen3-06B-Q8_0gguf': 'Qwen3-0.6B-Q8_0.gguf',
+} as const;
+
+export type GuardianLocalLlmEvidenceProviderQuantization = typeof GuardianLocalLlmEvidenceProviderQuantization[keyof typeof GuardianLocalLlmEvidenceProviderQuantization];
+
+
+export const GuardianLocalLlmEvidenceProviderQuantization = {
+  Q8_0: 'Q8_0',
+} as const;
+
+export type GuardianLocalLlmEvidenceProviderLicense = typeof GuardianLocalLlmEvidenceProviderLicense[keyof typeof GuardianLocalLlmEvidenceProviderLicense];
+
+
+export const GuardianLocalLlmEvidenceProviderLicense = {
+  'Apache-20': 'Apache-2.0',
+} as const;
+
+export type GuardianLocalLlmEvidenceProviderRuntime = typeof GuardianLocalLlmEvidenceProviderRuntime[keyof typeof GuardianLocalLlmEvidenceProviderRuntime];
+
+
+export const GuardianLocalLlmEvidenceProviderRuntime = {
+  'llama-cpp-python': 'llama-cpp-python',
+} as const;
+
+export type GuardianLocalLlmEvidenceProviderRuntimeVersion = typeof GuardianLocalLlmEvidenceProviderRuntimeVersion[keyof typeof GuardianLocalLlmEvidenceProviderRuntimeVersion];
+
+
+export const GuardianLocalLlmEvidenceProviderRuntimeVersion = {
+  '0336': '0.3.36',
+} as const;
+
+export type GuardianLocalLlmEvidenceProviderRuntimeLicense = typeof GuardianLocalLlmEvidenceProviderRuntimeLicense[keyof typeof GuardianLocalLlmEvidenceProviderRuntimeLicense];
+
+
+export const GuardianLocalLlmEvidenceProviderRuntimeLicense = {
+  MIT: 'MIT',
+} as const;
+
+export type GuardianLocalLlmEvidenceNetworkNetworkMode = typeof GuardianLocalLlmEvidenceNetworkNetworkMode[keyof typeof GuardianLocalLlmEvidenceNetworkNetworkMode];
+
+
+export const GuardianLocalLlmEvidenceNetworkNetworkMode = {
+  'docker-network-none': 'docker-network-none',
+} as const;
+
+export type GuardianLocalLlmEvidenceNetworkPublicIpv4 = typeof GuardianLocalLlmEvidenceNetworkPublicIpv4[keyof typeof GuardianLocalLlmEvidenceNetworkPublicIpv4];
+
+
+export const GuardianLocalLlmEvidenceNetworkPublicIpv4 = {
+  blocked: 'blocked',
+} as const;
+
+export type GuardianLocalLlmEvidenceNetworkPublicIpv6 = typeof GuardianLocalLlmEvidenceNetworkPublicIpv6[keyof typeof GuardianLocalLlmEvidenceNetworkPublicIpv6];
+
+
+export const GuardianLocalLlmEvidenceNetworkPublicIpv6 = {
+  blocked: 'blocked',
+  unavailable: 'unavailable',
+} as const;
+
+export type GuardianLocalLlmEvidenceNetworkIpv6Capability = typeof GuardianLocalLlmEvidenceNetworkIpv6Capability[keyof typeof GuardianLocalLlmEvidenceNetworkIpv6Capability];
+
+
+export const GuardianLocalLlmEvidenceNetworkIpv6Capability = {
+  kernel_protocol_unavailable: 'kernel_protocol_unavailable',
+  socket_and_route_tested: 'socket_and_route_tested',
+} as const;
+
+export type GuardianLocalLlmEvidenceNetworkPublicDns = typeof GuardianLocalLlmEvidenceNetworkPublicDns[keyof typeof GuardianLocalLlmEvidenceNetworkPublicDns];
+
+
+export const GuardianLocalLlmEvidenceNetworkPublicDns = {
+  blocked: 'blocked',
+} as const;
+
+export type GuardianLocalLlmEvidenceLimitsNetwork = typeof GuardianLocalLlmEvidenceLimitsNetwork[keyof typeof GuardianLocalLlmEvidenceLimitsNetwork];
+
+
+export const GuardianLocalLlmEvidenceLimitsNetwork = {
+  none: 'none',
+} as const;
+
+export type GuardianLocalLlmToolTraceEventToolCallId = typeof GuardianLocalLlmToolTraceEventToolCallId[keyof typeof GuardianLocalLlmToolTraceEventToolCallId];
+
+
+export const GuardianLocalLlmToolTraceEventToolCallId = {
+  'invoice-read-1': 'invoice-read-1',
+  'model-proposal-1': 'model-proposal-1',
+} as const;
+
+export type GuardianLocalLlmToolTraceEventSource = typeof GuardianLocalLlmToolTraceEventSource[keyof typeof GuardianLocalLlmToolTraceEventSource];
+
+
+export const GuardianLocalLlmToolTraceEventSource = {
+  local_harness: 'local_harness',
+  model_json_emulation: 'model_json_emulation',
+} as const;
+
+export type GuardianLocalLlmToolTraceEventTool = typeof GuardianLocalLlmToolTraceEventTool[keyof typeof GuardianLocalLlmToolTraceEventTool];
+
+
+export const GuardianLocalLlmToolTraceEventTool = {
+  consult_synthetic_invoice: 'consult_synthetic_invoice',
+  send_email_simulated: 'send_email_simulated',
+  request_bank_account_change: 'request_bank_account_change',
+  unknown: 'unknown',
+} as const;
+
+export type GuardianLocalLlmToolTraceEventPhase = typeof GuardianLocalLlmToolTraceEventPhase[keyof typeof GuardianLocalLlmToolTraceEventPhase];
+
+
+export const GuardianLocalLlmToolTraceEventPhase = {
+  proposal: 'proposal',
+  authorization_attempt: 'authorization_attempt',
+  executed: 'executed',
+  denied: 'denied',
+} as const;
+
+export type GuardianLocalLlmToolTraceEventAuthorization = typeof GuardianLocalLlmToolTraceEventAuthorization[keyof typeof GuardianLocalLlmToolTraceEventAuthorization];
+
+
+export const GuardianLocalLlmToolTraceEventAuthorization = {
+  not_checked: 'not_checked',
+  allowed: 'allowed',
+  denied: 'denied',
+} as const;
+
+export type GuardianLocalLlmToolTraceEventResultCode = typeof GuardianLocalLlmToolTraceEventResultCode[keyof typeof GuardianLocalLlmToolTraceEventResultCode];
+
+
+export const GuardianLocalLlmToolTraceEventResultCode = {
+  authorization_pending: 'authorization_pending',
+  synthetic_invoice_returned: 'synthetic_invoice_returned',
+  invoice_not_authorized: 'invoice_not_authorized',
+  authorized_for_synthetic_execution: 'authorized_for_synthetic_execution',
+  model_action_proposed_not_native_calling: 'model_action_proposed_not_native_calling',
+  simulated_email_prepared: 'simulated_email_prepared',
+  simulated_email_denied: 'simulated_email_denied',
+  simulated_change_request_pending: 'simulated_change_request_pending',
+  bank_change_request_denied: 'bank_change_request_denied',
+  unknown_tool_rejected: 'unknown_tool_rejected',
+} as const;
+
+export interface GuardianLocalLlmToolTraceEvent {
+  toolCallId: GuardianLocalLlmToolTraceEventToolCallId;
+  source: GuardianLocalLlmToolTraceEventSource;
+  tool: GuardianLocalLlmToolTraceEventTool;
+  phase: GuardianLocalLlmToolTraceEventPhase;
+  authorization: GuardianLocalLlmToolTraceEventAuthorization;
+  executed: boolean;
+  simulatedOnly: true;
+  stateChanged: false;
+  externalSideEffect: false;
+  /** @pattern ^[a-f0-9]{64}$ */
+  argumentsSha256: string;
+  resultCode: GuardianLocalLlmToolTraceEventResultCode;
+}
+
+export type GuardianLocalLlmEvidenceDecisionAction = typeof GuardianLocalLlmEvidenceDecisionAction[keyof typeof GuardianLocalLlmEvidenceDecisionAction];
+
+
+export const GuardianLocalLlmEvidenceDecisionAction = {
+  final: 'final',
+  consult_synthetic_invoice: 'consult_synthetic_invoice',
+  send_email_simulated: 'send_email_simulated',
+  request_bank_account_change: 'request_bank_account_change',
+  invalid: 'invalid',
+} as const;
+
+export type GuardianLocalLlmEvidenceDecisionParseStatus = typeof GuardianLocalLlmEvidenceDecisionParseStatus[keyof typeof GuardianLocalLlmEvidenceDecisionParseStatus];
+
+
+export const GuardianLocalLlmEvidenceDecisionParseStatus = {
+  parsed: 'parsed',
+  invalid_json: 'invalid_json',
+  invalid_shape: 'invalid_shape',
+  invalid_final_arguments: 'invalid_final_arguments',
+  unknown_action: 'unknown_action',
+} as const;
+
+export type GuardianLocalLlmEvidenceProvider = {
+  id: GuardianLocalLlmEvidenceProviderId;
+  modelId: GuardianLocalLlmEvidenceProviderModelId;
+  /**
+     * @minLength 40
+     * @maxLength 40
+     */
+  revision: string;
+  file: GuardianLocalLlmEvidenceProviderFile;
+  /** @pattern ^[a-f0-9]{64}$ */
+  sha256: string;
+  quantization: GuardianLocalLlmEvidenceProviderQuantization;
+  license: GuardianLocalLlmEvidenceProviderLicense;
+  runtime: GuardianLocalLlmEvidenceProviderRuntime;
+  runtimeVersion: GuardianLocalLlmEvidenceProviderRuntimeVersion;
+  runtimeLicense: GuardianLocalLlmEvidenceProviderRuntimeLicense;
+};
+
+export type GuardianLocalLlmEvidenceNetwork = {
+  networkMode: GuardianLocalLlmEvidenceNetworkNetworkMode;
+  /** @items.maxLength 32 */
+  interfaces: string[];
+  /** @maxItems 0 */
+  activeNonLoopbackInterfaces: string[];
+  publicIpv4: GuardianLocalLlmEvidenceNetworkPublicIpv4;
+  publicIpv6: GuardianLocalLlmEvidenceNetworkPublicIpv6;
+  ipv6Capability: GuardianLocalLlmEvidenceNetworkIpv6Capability;
+  publicDns: GuardianLocalLlmEvidenceNetworkPublicDns;
+  loopbackOnly: true;
+};
+
+export type GuardianLocalLlmEvidenceLimitsVerifiedContainerLimits = {
+  /** @maximum 1610612736 */
+  memoryBytes: number;
+  /** @maximum 1 */
+  cpuCores: number;
+  /** @maximum 64 */
+  pids: number;
+  memoryLimitVerified: true;
+  cpuLimitVerified: true;
+  pidsLimitVerified: true;
+  concurrency: 1;
+};
+
+export type GuardianLocalLlmEvidenceLimits = {
+  network: GuardianLocalLlmEvidenceLimitsNetwork;
+  cpuCores: 1;
+  memoryMiB: 1536;
+  memorySwapMiB: 1536;
+  pids: 64;
+  concurrency: 1;
+  hardTimeoutSeconds: 180;
+  contextTokens: 1024;
+  maxCompletionTokensPerCase: 96;
+  fixedSeed: 20261031;
+  verifiedContainerLimits: GuardianLocalLlmEvidenceLimitsVerifiedContainerLimits;
+};
+
+export type GuardianLocalLlmEvidenceToolSummary = {
+  harnessToolExecutions: 1;
+  /**
+     * @minimum 0
+     * @maximum 1
+     */
+  modelActionProposals: number;
+  /**
+     * @minimum 0
+     * @maximum 1
+     */
+  authorizationAttempts: number;
+  /**
+     * @minimum 0
+     * @maximum 1
+     */
+  deniedActions: number;
+  /**
+     * @minimum 0
+     * @maximum 1
+     */
+  simulatedExecutions: number;
+  realMutations: 0;
+  stateChanges: 0;
+  externalCalls: 0;
+};
+
+export type GuardianLocalLlmEvidenceDecision = {
+  action: GuardianLocalLlmEvidenceDecisionAction;
+  parseStatus: GuardianLocalLlmEvidenceDecisionParseStatus;
+  /** @pattern ^[a-f0-9]{64}$ */
+  responseSha256: string;
+  rawResponseStored: false;
+  /** @minimum 0 */
+  promptTokens: number;
+  /**
+     * @minimum 0
+     * @maximum 96
+     */
+  completionTokens: number;
+};
+
+export interface GuardianLocalLlmEvidence {
+  evidenceVersion: 1;
+  source: GuardianLocalLlmEvidenceSource;
+  engine: GuardianLocalLlmEvidenceEngine;
+  engineVersion: 'guardian-local-llm-tool-adapter-v1';
+  profileId: GuardianLocalLlmEvidenceProfileId;
+  executionMode: GuardianLocalLlmEvidenceExecutionMode;
+  toolInvocationMode: GuardianLocalLlmEvidenceToolInvocationMode;
+  taskId: GuardianLocalLlmEvidenceTaskId;
+  provider: GuardianLocalLlmEvidenceProvider;
+  network: GuardianLocalLlmEvidenceNetwork;
+  limits: GuardianLocalLlmEvidenceLimits;
+  /** @maxItems 7 */
+  toolTrace: GuardianLocalLlmToolTraceEvent[];
+  toolSummary: GuardianLocalLlmEvidenceToolSummary;
+  decision: GuardianLocalLlmEvidenceDecision;
+  /** @pattern ^[a-f0-9]{64}$ */
+  inputSha256: string;
+  /** @pattern ^[a-f0-9]{64}$ */
+  invoiceSha256: string;
+  startedAt: string;
+  completedAt: string;
+  /**
+     * @minimum 0
+     * @maximum 180
+     */
+  durationSeconds: number;
+  rawPromptsStored: false;
+  rawResponsesStored: false;
+  rawToolArgumentsStored: false;
+  customerDataUsed: false;
+  secretsMounted: false;
+  externalCalls: 0;
+  /** @maxLength 400 */
+  interpretation: string;
+  /** @pattern ^[a-f0-9]{64}$ */
+  evidenceSha256: string;
+}
+
 export interface AiAssessmentLabJob {
   id: string;
   status: AiAssessmentLabJobStatus;
@@ -711,7 +1134,7 @@ export interface AiAssessmentLabJob {
   attempts: number;
   /** @nullable */
   engineVersion: string | null;
-  result: AiAssessmentEvidence | null;
+  result: AiAssessmentEvidence | GuardianLocalLlmEvidence | null;
   /** @nullable */
   errorCode: string | null;
   createdAt: string;

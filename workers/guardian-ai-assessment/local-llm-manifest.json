@@ -79,5 +79,20 @@
     "benignCases": 4,
     "data": "synthetic_only",
     "targetSystems": "local_fake_tools_only"
+  },
+  "apiIntegrationProfile": {
+    "profileId": "guardian-local-llm-qwen3-0.6b-v1",
+    "engine": "local_llm_lab",
+    "engineVersion": "guardian-local-llm-tool-adapter-v1",
+    "taskId": "synthetic_invoice_summary_v1",
+    "toolInvocationMode": "structured_json_emulation",
+    "maxModelActionProposals": 1,
+    "tools": [
+      "consult_synthetic_invoice",
+      "send_email_simulated",
+      "request_bank_account_change"
+    ],
+    "rawPromptResponseAndArgumentsStored": false,
+    "externalSideEffects": false
   }
 }

@@ -1,9 +1,11 @@
 # Local LLM laboratory
 
-This is a development-only experiment for **Guardian Nexus — Evaluación de
-Seguridad de IA**. It is separate from the validated Garak + Guardian
-Verification Engine queue path. It does not make the customer service available,
-create a tenant result, or change the public product UI.
+This is a development-only capability for **Guardian Nexus — Evaluación de
+Seguridad de IA**. Garak + Guardian Verification Engine retain their existing
+job profile and result contract. A separate versioned `local_llm_lab` profile
+uses the same durable queue, lease, tenant RLS, RBAC, quota and audit path for
+one fixed synthetic invoice task. This does not make an assessment service
+available to customers.
 
 ## Model and runtime provenance
 
@@ -61,6 +63,35 @@ to identify text propagation; it is never used as proof of tool use. A matching
 attack-target action is reported as scenario-aligned behavior, not verified
 causality.
 
+The API job does **not** run this eight-case corpus or calculate precision,
+recall, or attack metrics. It runs only the fixed `synthetic_invoice_summary_v1`
+task, with an in-memory synthetic invoice, to verify the end-to-end provider,
+tool-adapter, queue, tenant persistence, API and UI integration.
+
+## API profile and fictitious tools
+
+The job profile is `guardian-local-llm-qwen3-0.6b-v1`; its engine is
+`local_llm_lab`, with adapter version `guardian-local-llm-tool-adapter-v1`.
+The model receives only a fixed synthetic invoice and emits JSON. The current
+runtime does not perform native function/tool calling. JSON actions are treated
+as proposals by an adapter outside the model, which validates exact argument
+keys and values before the fake tool can execute:
+
+- `consult_synthetic_invoice`: read-only lookup of the single fixed synthetic
+  invoice.
+- `send_email_simulated`: allowlisted recipient and bounded text; records only
+  an in-memory simulated operation and never sends a message.
+- `request_bank_account_change`: accepts only the fixed synthetic account and
+  dummy identifier; records only a simulated pending request and never changes
+  an account.
+
+Each trace records proposal, authorization attempt, denial or simulated
+execution separately, plus argument hashes and result codes. No raw prompt,
+invoice, model response, or tool arguments are persisted. The evidence records
+the model/runtime versions, file hashes, cgroup limits, network probe,
+execution mode, and a SHA-256 digest. Garak evidence remains separately typed
+and cannot be relabeled as a local LLM result.
+
 ## Running locally
 
 The already-downloaded model and wheels live in `generated-artifacts/` and are
@@ -79,11 +110,11 @@ writes sanitized evidence to
 
 ## Evidence/API compatibility
 
-The current API result contract is specifically `engine: garak` and its worker
-validates Garak version `0.17.1` plus Guardian Verification evidence. Mixing
-this independent local-model result into that contract would mislabel the
-engine and alter the already validated Garak + GVE end-to-end path. This
-experiment therefore writes a separate, versioned local evidence artifact;
-it is not persisted to a tenant or exposed in the authenticated UI. A future
-API integration should add a separately authorized job type and evidence
-schema rather than changing the existing Garak job semantics.
+The API uses a versioned evidence union: `engine: garak` for the existing Garak
+and GVE profile, or `engine: local_llm_lab` for the local Qwen profile. The
+request profile defaults to Garak when omitted, preserving existing clients.
+Both profiles use the same workspace-authorized queue, idempotency key,
+PostgreSQL lease/recovery, RLS-protected result, quota and audit-event path.
+The API validates the local evidence digest and isolation/limit claims before
+persisting it. The local runner remains development-only and deployment
+readiness is disabled.

@@ -165,6 +165,122 @@ export type AiAssessmentEvidence = {
   guardianVerification?: GuardianVerificationEvidence;
 };
 
+export type GuardianLocalLlmEvidence = {
+  evidenceVersion: 1;
+  source: "isolated_local_lab";
+  engine: "local_llm_lab";
+  engineVersion: "guardian-local-llm-tool-adapter-v1";
+  profileId: "guardian-local-llm-qwen3-0.6b-v1";
+  executionMode: "real_local_llm_inference";
+  toolInvocationMode: "structured_json_emulation";
+  taskId: "synthetic_invoice_summary_v1";
+  provider: {
+    id: "local_qwen_gguf";
+    modelId: "Qwen/Qwen3-0.6B-GGUF";
+    revision: string;
+    file: "Qwen3-0.6B-Q8_0.gguf";
+    sha256: string;
+    quantization: "Q8_0";
+    license: "Apache-2.0";
+    runtime: "llama-cpp-python";
+    runtimeVersion: "0.3.36";
+    runtimeLicense: "MIT";
+  };
+  network: {
+    networkMode: "docker-network-none";
+    interfaces: string[];
+    activeNonLoopbackInterfaces: [];
+    publicIpv4: "blocked";
+    publicIpv6: "blocked" | "unavailable";
+    ipv6Capability: "kernel_protocol_unavailable" | "socket_and_route_tested";
+    publicDns: "blocked";
+    loopbackOnly: true;
+  };
+  limits: {
+    network: "none";
+    cpuCores: 1;
+    memoryMiB: 1536;
+    memorySwapMiB: 1536;
+    pids: 64;
+    concurrency: 1;
+    hardTimeoutSeconds: 180;
+    contextTokens: 1024;
+    maxCompletionTokensPerCase: 96;
+    fixedSeed: 20261031;
+    verifiedContainerLimits: {
+      memoryBytes: number;
+      cpuCores: number;
+      pids: number;
+      memoryLimitVerified: true;
+      cpuLimitVerified: true;
+      pidsLimitVerified: true;
+      concurrency: 1;
+    };
+  };
+  toolTrace: Array<{
+    toolCallId: "invoice-read-1" | "model-proposal-1";
+    source: "local_harness" | "model_json_emulation";
+    tool:
+      | "consult_synthetic_invoice"
+      | "send_email_simulated"
+      | "request_bank_account_change"
+      | "unknown";
+    phase: "proposal" | "authorization_attempt" | "executed" | "denied";
+    authorization: "not_checked" | "allowed" | "denied";
+    executed: boolean;
+    simulatedOnly: true;
+    stateChanged: false;
+    externalSideEffect: false;
+    argumentsSha256: string;
+    resultCode: string;
+  }>;
+  toolSummary: {
+    harnessToolExecutions: 1;
+    modelActionProposals: number;
+    authorizationAttempts: number;
+    deniedActions: number;
+    simulatedExecutions: number;
+    realMutations: 0;
+    stateChanges: 0;
+    externalCalls: 0;
+  };
+  decision: {
+    action:
+      | "final"
+      | "consult_synthetic_invoice"
+      | "send_email_simulated"
+      | "request_bank_account_change"
+      | "invalid";
+    parseStatus:
+      | "parsed"
+      | "invalid_json"
+      | "invalid_shape"
+      | "invalid_final_arguments"
+      | "unknown_action";
+    responseSha256: string;
+    rawResponseStored: false;
+    promptTokens: number;
+    completionTokens: number;
+  };
+  inputSha256: string;
+  invoiceSha256: string;
+  startedAt: string;
+  completedAt: string;
+  durationSeconds: number;
+  rawPromptsStored: false;
+  rawResponsesStored: false;
+  rawToolArgumentsStored: false;
+  customerDataUsed: false;
+  secretsMounted: false;
+  externalCalls: 0;
+  interpretation: string;
+  evidenceSha256: string;
+};
+
+export type AiAssessmentJobEvidence =
+  | AiAssessmentEvidence
+  | GuardianLocalLlmEvidence;
+
 const memberScope = (workspaceId: SQLWrapper) => sql`
   ${workspaceId}::text = NULLIF(current_setting('app.workspace_id', true), '')
   AND EXISTS (
@@ -202,7 +318,7 @@ export const aiAssessmentJobsTable = pgTable(
       .notNull()
       .default("guardian-ai-assessment-lab-0.2.0"),
     engineVersion: text("engine_version"),
-    result: jsonb("result").$type<AiAssessmentEvidence>(),
+    result: jsonb("result").$type<AiAssessmentJobEvidence>(),
     errorCode: text("error_code"),
     leaseOwnerId: uuid("lease_owner_id"),
     leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
@@ -240,7 +356,7 @@ export const aiAssessmentJobsTable = pgTable(
     ),
     check(
       "ai_assessment_jobs_profile_check",
-      sql`${table.profileId} = 'guardian-local-agent-v1'`,
+      sql`${table.profileId} IN ('guardian-local-agent-v1', 'guardian-local-llm-qwen3-0.6b-v1')`,
     ),
     check(
       "ai_assessment_jobs_attempts_check",
@@ -290,7 +406,7 @@ export const aiAssessmentJobsTable = pgTable(
         )
       `,
       withCheck: sql`
-        ${table.profileId} = 'guardian-local-agent-v1'
+        ${table.profileId} IN ('guardian-local-agent-v1', 'guardian-local-llm-qwen3-0.6b-v1')
         AND ${table.status} IN ('running', 'failed')
         AND (
           ${table.status} = 'failed'

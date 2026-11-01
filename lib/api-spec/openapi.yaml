@@ -826,27 +826,186 @@ components:
         status: { type: string, enum: [ready, unavailable, disabled] }
         workerVersion: { type: string }
         reasonCode: { type: ["string", "null"] }
-      required: [status, workerVersion, reasonCode]
+        profiles:
+          type: array
+          items: { $ref: "#/components/schemas/AiAssessmentLabProfileAvailability" }
+      required: [status, workerVersion, reasonCode, profiles]
+    AiAssessmentLabProfileAvailability:
+      type: object
+      properties:
+        profileId:
+          type: string
+          enum: [guardian-local-agent-v1, guardian-local-llm-qwen3-0.6b-v1]
+        engine: { type: string, enum: [garak, local_llm_lab] }
+        status: { type: string, enum: [ready, unavailable, disabled] }
+        reasonCode: { type: ["string", "null"] }
+      required: [profileId, engine, status, reasonCode]
     AiAssessmentLabJobRequest:
       type: object
       properties:
         idempotencyKey: { type: string, minLength: 16, maxLength: 128 }
+        profileId:
+          type: string
+          enum: [guardian-local-agent-v1, guardian-local-llm-qwen3-0.6b-v1]
+          default: guardian-local-agent-v1
       required: [idempotencyKey]
     AiAssessmentLabJob:
       type: object
       properties:
         id: { type: string, format: uuid }
         status: { type: string, enum: [queued, running, succeeded, failed] }
-        profileId: { type: string, enum: [guardian-local-agent-v1] }
+        profileId:
+          type: string
+          enum: [guardian-local-agent-v1, guardian-local-llm-qwen3-0.6b-v1]
         workerVersion: { type: string }
         attempts: { type: integer }
         engineVersion: { type: ["string", "null"] }
-        result: { oneOf: [{ $ref: "#/components/schemas/AiAssessmentEvidence" }, { type: "null" }] }
+        result:
+          oneOf:
+            - { $ref: "#/components/schemas/AiAssessmentEvidence" }
+            - { $ref: "#/components/schemas/GuardianLocalLlmEvidence" }
+            - { type: "null" }
         errorCode: { type: ["string", "null"] }
         createdAt: { type: string, format: date-time }
         startedAt: { type: ["string", "null"], format: date-time }
         completedAt: { type: ["string", "null"], format: date-time }
       required: [id, status, profileId, workerVersion, attempts, engineVersion, result, errorCode, createdAt, startedAt, completedAt]
+    GuardianLocalLlmEvidence:
+      type: object
+      additionalProperties: false
+      properties:
+        evidenceVersion: { type: integer, const: 1 }
+        source: { type: string, enum: [isolated_local_lab] }
+        engine: { type: string, enum: [local_llm_lab] }
+        engineVersion: { type: string, const: guardian-local-llm-tool-adapter-v1 }
+        profileId: { type: string, enum: [guardian-local-llm-qwen3-0.6b-v1] }
+        executionMode: { type: string, enum: [real_local_llm_inference] }
+        toolInvocationMode: { type: string, enum: [structured_json_emulation] }
+        taskId: { type: string, enum: [synthetic_invoice_summary_v1] }
+        provider:
+          type: object
+          additionalProperties: false
+          properties:
+            id: { type: string, enum: [local_qwen_gguf] }
+            modelId: { type: string, enum: [Qwen/Qwen3-0.6B-GGUF] }
+            revision: { type: string, minLength: 40, maxLength: 40 }
+            file: { type: string, enum: [Qwen3-0.6B-Q8_0.gguf] }
+            sha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+            quantization: { type: string, enum: [Q8_0] }
+            license: { type: string, enum: [Apache-2.0] }
+            runtime: { type: string, enum: [llama-cpp-python] }
+            runtimeVersion: { type: string, enum: ["0.3.36"] }
+            runtimeLicense: { type: string, enum: [MIT] }
+          required: [id, modelId, revision, file, sha256, quantization, license, runtime, runtimeVersion, runtimeLicense]
+        network:
+          type: object
+          additionalProperties: false
+          properties:
+            networkMode: { type: string, enum: [docker-network-none] }
+            interfaces:
+              type: array
+              items: { type: string, maxLength: 32 }
+            activeNonLoopbackInterfaces:
+              type: array
+              maxItems: 0
+              items: { type: string }
+            publicIpv4: { type: string, enum: [blocked] }
+            publicIpv6: { type: string, enum: [blocked, unavailable] }
+            ipv6Capability: { type: string, enum: [kernel_protocol_unavailable, socket_and_route_tested] }
+            publicDns: { type: string, enum: [blocked] }
+            loopbackOnly: { type: boolean, const: true }
+          required: [networkMode, interfaces, activeNonLoopbackInterfaces, publicIpv4, publicIpv6, ipv6Capability, publicDns, loopbackOnly]
+        limits:
+          type: object
+          additionalProperties: false
+          properties:
+            network: { type: string, enum: [none] }
+            cpuCores: { type: number, const: 1 }
+            memoryMiB: { type: integer, const: 1536 }
+            memorySwapMiB: { type: integer, const: 1536 }
+            pids: { type: integer, const: 64 }
+            concurrency: { type: integer, const: 1 }
+            hardTimeoutSeconds: { type: integer, const: 180 }
+            contextTokens: { type: integer, const: 1024 }
+            maxCompletionTokensPerCase: { type: integer, const: 96 }
+            fixedSeed: { type: integer, const: 20261031 }
+            verifiedContainerLimits:
+              type: object
+              additionalProperties: false
+              properties:
+                memoryBytes: { type: integer, maximum: 1610612736 }
+                cpuCores: { type: number, maximum: 1 }
+                pids: { type: integer, maximum: 64 }
+                memoryLimitVerified: { type: boolean, const: true }
+                cpuLimitVerified: { type: boolean, const: true }
+                pidsLimitVerified: { type: boolean, const: true }
+                concurrency: { type: integer, const: 1 }
+              required: [memoryBytes, cpuCores, pids, memoryLimitVerified, cpuLimitVerified, pidsLimitVerified, concurrency]
+          required: [network, cpuCores, memoryMiB, memorySwapMiB, pids, concurrency, hardTimeoutSeconds, contextTokens, maxCompletionTokensPerCase, fixedSeed, verifiedContainerLimits]
+        toolTrace:
+          type: array
+          maxItems: 7
+          items: { $ref: "#/components/schemas/GuardianLocalLlmToolTraceEvent" }
+        toolSummary:
+          type: object
+          additionalProperties: false
+          properties:
+            harnessToolExecutions: { type: integer, const: 1 }
+            modelActionProposals: { type: integer, minimum: 0, maximum: 1 }
+            authorizationAttempts: { type: integer, minimum: 0, maximum: 1 }
+            deniedActions: { type: integer, minimum: 0, maximum: 1 }
+            simulatedExecutions: { type: integer, minimum: 0, maximum: 1 }
+            realMutations: { type: integer, const: 0 }
+            stateChanges: { type: integer, const: 0 }
+            externalCalls: { type: integer, const: 0 }
+          required: [harnessToolExecutions, modelActionProposals, authorizationAttempts, deniedActions, simulatedExecutions, realMutations, stateChanges, externalCalls]
+        decision:
+          type: object
+          additionalProperties: false
+          properties:
+            action:
+              type: string
+              enum: [final, consult_synthetic_invoice, send_email_simulated, request_bank_account_change, invalid]
+            parseStatus:
+              type: string
+              enum: [parsed, invalid_json, invalid_shape, invalid_final_arguments, unknown_action]
+            responseSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+            rawResponseStored: { type: boolean, const: false }
+            promptTokens: { type: integer, minimum: 0 }
+            completionTokens: { type: integer, minimum: 0, maximum: 96 }
+          required: [action, parseStatus, responseSha256, rawResponseStored, promptTokens, completionTokens]
+        inputSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        invoiceSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        startedAt: { type: string, format: date-time }
+        completedAt: { type: string, format: date-time }
+        durationSeconds: { type: number, minimum: 0, maximum: 180 }
+        rawPromptsStored: { type: boolean, const: false }
+        rawResponsesStored: { type: boolean, const: false }
+        rawToolArgumentsStored: { type: boolean, const: false }
+        customerDataUsed: { type: boolean, const: false }
+        secretsMounted: { type: boolean, const: false }
+        externalCalls: { type: integer, const: 0 }
+        interpretation: { type: string, maxLength: 400 }
+        evidenceSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+      required: [evidenceVersion, source, engine, engineVersion, profileId, executionMode, toolInvocationMode, taskId, provider, network, limits, toolTrace, toolSummary, decision, inputSha256, invoiceSha256, startedAt, completedAt, durationSeconds, rawPromptsStored, rawResponsesStored, rawToolArgumentsStored, customerDataUsed, secretsMounted, externalCalls, interpretation, evidenceSha256]
+    GuardianLocalLlmToolTraceEvent:
+      type: object
+      additionalProperties: false
+      properties:
+        toolCallId: { type: string, enum: [invoice-read-1, model-proposal-1] }
+        source: { type: string, enum: [local_harness, model_json_emulation] }
+        tool: { type: string, enum: [consult_synthetic_invoice, send_email_simulated, request_bank_account_change, unknown] }
+        phase: { type: string, enum: [proposal, authorization_attempt, executed, denied] }
+        authorization: { type: string, enum: [not_checked, allowed, denied] }
+        executed: { type: boolean }
+        simulatedOnly: { type: boolean, const: true }
+        stateChanged: { type: boolean, const: false }
+        externalSideEffect: { type: boolean, const: false }
+        argumentsSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        resultCode:
+          type: string
+          enum: [authorization_pending, synthetic_invoice_returned, invoice_not_authorized, authorized_for_synthetic_execution, model_action_proposed_not_native_calling, simulated_email_prepared, simulated_email_denied, simulated_change_request_pending, bank_change_request_denied, unknown_tool_rejected]
+      required: [toolCallId, source, tool, phase, authorization, executed, simulatedOnly, stateChanged, externalSideEffect, argumentsSha256, resultCode]
     AiAssessmentEvidence:
       type: object
       properties:
