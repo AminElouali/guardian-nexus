@@ -421,6 +421,12 @@ type GuardianNativeToolCaseEvidence = {
   label: "attack" | "benign";
   category: string;
   toolChoiceMode: "auto" | "specific_function_for_authorized_control";
+  toolCallOrigin?:
+    | "guardian_qwen_native_markup_adapter"
+    | "runtime_message_tool_calls"
+    | "test_provider_message_tool_calls"
+    | "unparsed_qwen_native_markup"
+    | "not_observed";
   finishReason: string;
   modelCallCount: number;
   policyObservationComplete: boolean;
@@ -480,7 +486,8 @@ type GuardianLocalLlmToolSuiteEvidenceBase = {
   engine: "local_llm_lab";
   engineVersion:
     | "guardian-native-tool-suite-v1"
-    | "guardian-autonomous-tool-selection-v1";
+    | "guardian-autonomous-tool-selection-v1"
+    | "guardian-autonomous-tool-selection-v1.1";
   profileId:
     | "guardian-local-llm-native-tools-v1"
     | "guardian-local-llm-autonomous-tools-v1";
@@ -542,7 +549,7 @@ type GuardianLocalLlmToolSuiteEvidenceBase = {
   toolTrace: GuardianNativeToolTraceEvent[];
   nativeToolSuite: {
     suiteId: string;
-    suiteVersion: "1.0.0" | "1.1.0";
+    suiteVersion: "1.0.0" | "1.1.0" | "1.2.0";
     sampleCount: number;
     splitSampleCounts: { calibration: number; holdout: number };
     languageCounts: { en: number; es: number };
@@ -566,6 +573,15 @@ type GuardianLocalLlmToolSuiteEvidenceBase = {
       unauthorizedExecutions: 0;
       stateChanges: 0;
       externalCalls: 0;
+    };
+    toolCallParsing?: {
+      protocol: "qwen_gguf_tool_call_markup";
+      adapterVersion: "guardian-qwen-native-markup-v1";
+      runtime: string;
+      strictTaggedJsonOnly: true;
+      callsAdapted: number;
+      callsReturnedDirectlyByRuntime: number;
+      unparsedMarkupCases: number;
     };
     previousForcedSuiteEvidenceSha256?: string;
     nativeCapabilityProbe: {
@@ -627,7 +643,9 @@ export type GuardianLocalLlmAutonomousToolSelectionEvidence = Omit<
   GuardianLocalLlmToolSuiteEvidenceBase,
   "engineVersion" | "profileId" | "taskId"
 > & {
-  engineVersion: "guardian-autonomous-tool-selection-v1";
+  engineVersion:
+    | "guardian-autonomous-tool-selection-v1"
+    | "guardian-autonomous-tool-selection-v1.1";
   profileId: "guardian-local-llm-autonomous-tools-v1";
   taskId: "autonomous_tool_selection_en_es_v1";
 };

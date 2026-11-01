@@ -31,7 +31,7 @@ export interface GuardianLocalLlmToolSuiteEvidenceBase {
   provider: GuardianLocalLlmToolSuiteEvidenceBaseProvider;
   network: GuardianLocalLlmToolSuiteEvidenceBaseNetwork;
   limits: GuardianLocalLlmToolSuiteEvidenceBaseLimits;
-  /** @maxItems 64 */
+  /** @maxItems 288 */
   toolTrace: GuardianNativeToolTraceEvent[];
   nativeToolSuite: GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuite;
   usage: GuardianLocalLlmToolSuiteEvidenceBaseUsage;

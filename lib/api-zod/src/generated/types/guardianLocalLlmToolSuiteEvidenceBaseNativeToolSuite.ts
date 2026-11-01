@@ -14,6 +14,7 @@ import type { GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSplitSampleCou
 import type { GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSuiteId } from './guardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSuiteId';
 import type { GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSuiteVersion } from './guardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSuiteVersion';
 import type { GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteTaskSuccessBySplit } from './guardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteTaskSuccessBySplit';
+import type { GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteToolCallParsing } from './guardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteToolCallParsing';
 import type { GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteToolSummary } from './guardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteToolSummary';
 import type { GuardianNativeToolCaseEvidence } from './guardianNativeToolCaseEvidence';
 import type { GuardianNativeToolMetric } from './guardianNativeToolMetric';
@@ -42,6 +43,7 @@ export type GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuite = {
   taskSuccess: GuardianNativeToolTaskSuccess;
   taskSuccessBySplit: GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteTaskSuccessBySplit;
   toolSummary: GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteToolSummary;
+  toolCallParsing?: GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteToolCallParsing;
   /** @pattern ^[a-f0-9]{64}$ */
   previousForcedSuiteEvidenceSha256?: string;
   nativeCapabilityProbe: GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteNativeCapabilityProbe;

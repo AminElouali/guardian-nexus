@@ -668,7 +668,7 @@ export const listWorkspaceAiAssessmentLabJobsResponseResultThreeOneToolTraceItem
 export const listWorkspaceAiAssessmentLabJobsResponseResultThreeOneToolTraceItemArgumentsSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const listWorkspaceAiAssessmentLabJobsResponseResultThreeOneToolTraceItemResultCodeMax = 80;
 
-export const listWorkspaceAiAssessmentLabJobsResponseResultThreeOneToolTraceMax = 64;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeOneToolTraceMax = 288;
 
 export const listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuiteCaseEvidenceItemCategoryMax = 64;
 
@@ -832,6 +832,17 @@ export const listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSui
 export const listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuiteToolSummaryUnauthorizedAttemptsMin = 0;
 export const listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuiteToolSummaryUnauthorizedAttemptsMax = 12;
 
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuiteToolCallParsingRuntimeMax = 160;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuiteToolCallParsingCallsAdaptedMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuiteToolCallParsingCallsAdaptedMax = 64;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuiteToolCallParsingCallsReturnedDirectlyByRuntimeMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuiteToolCallParsingCallsReturnedDirectlyByRuntimeMax = 64;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuiteToolCallParsingUnparsedMarkupCasesMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuiteToolCallParsingUnparsedMarkupCasesMax = 12;
+
 export const listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuitePreviousForcedSuiteEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuiteNativeCapabilityProbeChatTemplateSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuiteNativeCapabilityProbeEffectiveChatTemplateSha256RegExp = new RegExp('^[a-f0-9]{64}$');
@@ -871,7 +882,7 @@ export const listWorkspaceAiAssessmentLabJobsResponseResultFourOneToolTraceItemT
 export const listWorkspaceAiAssessmentLabJobsResponseResultFourOneToolTraceItemArgumentsSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const listWorkspaceAiAssessmentLabJobsResponseResultFourOneToolTraceItemResultCodeMax = 80;
 
-export const listWorkspaceAiAssessmentLabJobsResponseResultFourOneToolTraceMax = 64;
+export const listWorkspaceAiAssessmentLabJobsResponseResultFourOneToolTraceMax = 288;
 
 export const listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuiteCaseEvidenceItemCategoryMax = 64;
 
@@ -1034,6 +1045,17 @@ export const listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuit
 
 export const listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuiteToolSummaryUnauthorizedAttemptsMin = 0;
 export const listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuiteToolSummaryUnauthorizedAttemptsMax = 12;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuiteToolCallParsingRuntimeMax = 160;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuiteToolCallParsingCallsAdaptedMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuiteToolCallParsingCallsAdaptedMax = 64;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuiteToolCallParsingCallsReturnedDirectlyByRuntimeMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuiteToolCallParsingCallsReturnedDirectlyByRuntimeMax = 64;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuiteToolCallParsingUnparsedMarkupCasesMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuiteToolCallParsingUnparsedMarkupCasesMax = 12;
 
 export const listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuitePreviousForcedSuiteEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuiteNativeCapabilityProbeChatTemplateSha256RegExp = new RegExp('^[a-f0-9]{64}$');
@@ -1397,7 +1419,7 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "evidenceVersion": zod.literal(1),
   "source": zod.enum(['isolated_local_lab']),
   "engine": zod.enum(['local_llm_lab']),
-  "engineVersion": zod.enum(['guardian-native-tool-suite-v1', 'guardian-autonomous-tool-selection-v1']),
+  "engineVersion": zod.enum(['guardian-native-tool-suite-v1', 'guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1']),
   "profileId": zod.enum(['guardian-local-llm-native-tools-v1', 'guardian-local-llm-autonomous-tools-v1']),
   "executionMode": zod.enum(['real_local_llm_inference']),
   "toolInvocationMode": zod.enum(['native_tool_calls']),
@@ -1468,7 +1490,7 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
 })).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeOneToolTraceMax),
   "nativeToolSuite": zod.object({
   "suiteId": zod.enum(['guardian-native-tool-call-en-es-v1', 'guardian-autonomous-tool-selection-en-es-v1']),
-  "suiteVersion": zod.enum(['1.0.0', '1.1.0']),
+  "suiteVersion": zod.enum(['1.0.0', '1.1.0', '1.2.0']),
   "sampleCount": zod.union([zod.literal(6),zod.literal(12)]),
   "splitSampleCounts": zod.object({
   "calibration": zod.union([zod.literal(3),zod.literal(6)]),
@@ -1487,6 +1509,7 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "label": zod.enum(['attack', 'benign']),
   "category": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuiteCaseEvidenceItemCategoryMax),
   "toolChoiceMode": zod.enum(['auto', 'specific_function_for_authorized_control']),
+  "toolCallOrigin": zod.enum(['guardian_qwen_native_markup_adapter', 'runtime_message_tool_calls', 'test_provider_message_tool_calls', 'unparsed_qwen_native_markup', 'not_observed']).optional(),
   "finishReason": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuiteCaseEvidenceItemFinishReasonMax),
   "modelCallCount": zod.int().min(1).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuiteCaseEvidenceItemModelCallCountMax),
   "policyObservationComplete": zod.boolean(),
@@ -1581,6 +1604,15 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "stateChanges": zod.literal(0),
   "externalCalls": zod.literal(0)
 }),
+  "toolCallParsing": zod.object({
+  "protocol": zod.enum(['qwen_gguf_tool_call_markup']),
+  "adapterVersion": zod.enum(['guardian-qwen-native-markup-v1']),
+  "runtime": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuiteToolCallParsingRuntimeMax),
+  "strictTaggedJsonOnly": zod.literal(true),
+  "callsAdapted": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuiteToolCallParsingCallsAdaptedMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuiteToolCallParsingCallsAdaptedMax),
+  "callsReturnedDirectlyByRuntime": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuiteToolCallParsingCallsReturnedDirectlyByRuntimeMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuiteToolCallParsingCallsReturnedDirectlyByRuntimeMax),
+  "unparsedMarkupCases": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuiteToolCallParsingUnparsedMarkupCasesMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuiteToolCallParsingUnparsedMarkupCasesMax)
+}).optional(),
   "previousForcedSuiteEvidenceSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuitePreviousForcedSuiteEvidenceSha256RegExp).optional(),
   "nativeCapabilityProbe": zod.object({
   "executionMode": zod.enum(['real_local_llm_inference']),
@@ -1625,7 +1657,7 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "evidenceVersion": zod.literal(1),
   "source": zod.enum(['isolated_local_lab']),
   "engine": zod.enum(['local_llm_lab']),
-  "engineVersion": zod.enum(['guardian-native-tool-suite-v1', 'guardian-autonomous-tool-selection-v1']),
+  "engineVersion": zod.enum(['guardian-native-tool-suite-v1', 'guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1']),
   "profileId": zod.enum(['guardian-local-llm-native-tools-v1', 'guardian-local-llm-autonomous-tools-v1']),
   "executionMode": zod.enum(['real_local_llm_inference']),
   "toolInvocationMode": zod.enum(['native_tool_calls']),
@@ -1696,7 +1728,7 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
 })).max(listWorkspaceAiAssessmentLabJobsResponseResultFourOneToolTraceMax),
   "nativeToolSuite": zod.object({
   "suiteId": zod.enum(['guardian-native-tool-call-en-es-v1', 'guardian-autonomous-tool-selection-en-es-v1']),
-  "suiteVersion": zod.enum(['1.0.0', '1.1.0']),
+  "suiteVersion": zod.enum(['1.0.0', '1.1.0', '1.2.0']),
   "sampleCount": zod.union([zod.literal(6),zod.literal(12)]),
   "splitSampleCounts": zod.object({
   "calibration": zod.union([zod.literal(3),zod.literal(6)]),
@@ -1715,6 +1747,7 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "label": zod.enum(['attack', 'benign']),
   "category": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuiteCaseEvidenceItemCategoryMax),
   "toolChoiceMode": zod.enum(['auto', 'specific_function_for_authorized_control']),
+  "toolCallOrigin": zod.enum(['guardian_qwen_native_markup_adapter', 'runtime_message_tool_calls', 'test_provider_message_tool_calls', 'unparsed_qwen_native_markup', 'not_observed']).optional(),
   "finishReason": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuiteCaseEvidenceItemFinishReasonMax),
   "modelCallCount": zod.int().min(1).max(listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuiteCaseEvidenceItemModelCallCountMax),
   "policyObservationComplete": zod.boolean(),
@@ -1809,6 +1842,15 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "stateChanges": zod.literal(0),
   "externalCalls": zod.literal(0)
 }),
+  "toolCallParsing": zod.object({
+  "protocol": zod.enum(['qwen_gguf_tool_call_markup']),
+  "adapterVersion": zod.enum(['guardian-qwen-native-markup-v1']),
+  "runtime": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuiteToolCallParsingRuntimeMax),
+  "strictTaggedJsonOnly": zod.literal(true),
+  "callsAdapted": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuiteToolCallParsingCallsAdaptedMin).max(listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuiteToolCallParsingCallsAdaptedMax),
+  "callsReturnedDirectlyByRuntime": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuiteToolCallParsingCallsReturnedDirectlyByRuntimeMin).max(listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuiteToolCallParsingCallsReturnedDirectlyByRuntimeMax),
+  "unparsedMarkupCases": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuiteToolCallParsingUnparsedMarkupCasesMin).max(listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuiteToolCallParsingUnparsedMarkupCasesMax)
+}).optional(),
   "previousForcedSuiteEvidenceSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuitePreviousForcedSuiteEvidenceSha256RegExp).optional(),
   "nativeCapabilityProbe": zod.object({
   "executionMode": zod.enum(['real_local_llm_inference']),
@@ -1846,7 +1888,7 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "interpretation": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultFourOneInterpretationMax),
   "evidenceSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultFourOneEvidenceSha256RegExp)
 }).and(zod.object({
-  "engineVersion": zod.literal("guardian-autonomous-tool-selection-v1"),
+  "engineVersion": zod.enum(['guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1']),
   "profileId": zod.literal("guardian-local-llm-autonomous-tools-v1"),
   "taskId": zod.literal("autonomous_tool_selection_en_es_v1")
 })),zod.null()]),
@@ -2059,7 +2101,7 @@ export const createWorkspaceAiAssessmentLabJobResponseResultThreeOneToolTraceIte
 export const createWorkspaceAiAssessmentLabJobResponseResultThreeOneToolTraceItemArgumentsSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const createWorkspaceAiAssessmentLabJobResponseResultThreeOneToolTraceItemResultCodeMax = 80;
 
-export const createWorkspaceAiAssessmentLabJobResponseResultThreeOneToolTraceMax = 64;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeOneToolTraceMax = 288;
 
 export const createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteCaseEvidenceItemCategoryMax = 64;
 
@@ -2223,6 +2265,17 @@ export const createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSu
 export const createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolSummaryUnauthorizedAttemptsMin = 0;
 export const createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolSummaryUnauthorizedAttemptsMax = 12;
 
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolCallParsingRuntimeMax = 160;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolCallParsingCallsAdaptedMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolCallParsingCallsAdaptedMax = 64;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolCallParsingCallsReturnedDirectlyByRuntimeMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolCallParsingCallsReturnedDirectlyByRuntimeMax = 64;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolCallParsingUnparsedMarkupCasesMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolCallParsingUnparsedMarkupCasesMax = 12;
+
 export const createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuitePreviousForcedSuiteEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteNativeCapabilityProbeChatTemplateSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteNativeCapabilityProbeEffectiveChatTemplateSha256RegExp = new RegExp('^[a-f0-9]{64}$');
@@ -2262,7 +2315,7 @@ export const createWorkspaceAiAssessmentLabJobResponseResultFourOneToolTraceItem
 export const createWorkspaceAiAssessmentLabJobResponseResultFourOneToolTraceItemArgumentsSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const createWorkspaceAiAssessmentLabJobResponseResultFourOneToolTraceItemResultCodeMax = 80;
 
-export const createWorkspaceAiAssessmentLabJobResponseResultFourOneToolTraceMax = 64;
+export const createWorkspaceAiAssessmentLabJobResponseResultFourOneToolTraceMax = 288;
 
 export const createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteCaseEvidenceItemCategoryMax = 64;
 
@@ -2425,6 +2478,17 @@ export const createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSui
 
 export const createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolSummaryUnauthorizedAttemptsMin = 0;
 export const createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolSummaryUnauthorizedAttemptsMax = 12;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolCallParsingRuntimeMax = 160;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolCallParsingCallsAdaptedMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolCallParsingCallsAdaptedMax = 64;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolCallParsingCallsReturnedDirectlyByRuntimeMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolCallParsingCallsReturnedDirectlyByRuntimeMax = 64;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolCallParsingUnparsedMarkupCasesMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolCallParsingUnparsedMarkupCasesMax = 12;
 
 export const createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuitePreviousForcedSuiteEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteNativeCapabilityProbeChatTemplateSha256RegExp = new RegExp('^[a-f0-9]{64}$');
@@ -2788,7 +2852,7 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "evidenceVersion": zod.literal(1),
   "source": zod.enum(['isolated_local_lab']),
   "engine": zod.enum(['local_llm_lab']),
-  "engineVersion": zod.enum(['guardian-native-tool-suite-v1', 'guardian-autonomous-tool-selection-v1']),
+  "engineVersion": zod.enum(['guardian-native-tool-suite-v1', 'guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1']),
   "profileId": zod.enum(['guardian-local-llm-native-tools-v1', 'guardian-local-llm-autonomous-tools-v1']),
   "executionMode": zod.enum(['real_local_llm_inference']),
   "toolInvocationMode": zod.enum(['native_tool_calls']),
@@ -2859,7 +2923,7 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
 })).max(createWorkspaceAiAssessmentLabJobResponseResultThreeOneToolTraceMax),
   "nativeToolSuite": zod.object({
   "suiteId": zod.enum(['guardian-native-tool-call-en-es-v1', 'guardian-autonomous-tool-selection-en-es-v1']),
-  "suiteVersion": zod.enum(['1.0.0', '1.1.0']),
+  "suiteVersion": zod.enum(['1.0.0', '1.1.0', '1.2.0']),
   "sampleCount": zod.union([zod.literal(6),zod.literal(12)]),
   "splitSampleCounts": zod.object({
   "calibration": zod.union([zod.literal(3),zod.literal(6)]),
@@ -2878,6 +2942,7 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "label": zod.enum(['attack', 'benign']),
   "category": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteCaseEvidenceItemCategoryMax),
   "toolChoiceMode": zod.enum(['auto', 'specific_function_for_authorized_control']),
+  "toolCallOrigin": zod.enum(['guardian_qwen_native_markup_adapter', 'runtime_message_tool_calls', 'test_provider_message_tool_calls', 'unparsed_qwen_native_markup', 'not_observed']).optional(),
   "finishReason": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteCaseEvidenceItemFinishReasonMax),
   "modelCallCount": zod.int().min(1).max(createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteCaseEvidenceItemModelCallCountMax),
   "policyObservationComplete": zod.boolean(),
@@ -2972,6 +3037,15 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "stateChanges": zod.literal(0),
   "externalCalls": zod.literal(0)
 }),
+  "toolCallParsing": zod.object({
+  "protocol": zod.enum(['qwen_gguf_tool_call_markup']),
+  "adapterVersion": zod.enum(['guardian-qwen-native-markup-v1']),
+  "runtime": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolCallParsingRuntimeMax),
+  "strictTaggedJsonOnly": zod.literal(true),
+  "callsAdapted": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolCallParsingCallsAdaptedMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolCallParsingCallsAdaptedMax),
+  "callsReturnedDirectlyByRuntime": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolCallParsingCallsReturnedDirectlyByRuntimeMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolCallParsingCallsReturnedDirectlyByRuntimeMax),
+  "unparsedMarkupCases": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolCallParsingUnparsedMarkupCasesMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolCallParsingUnparsedMarkupCasesMax)
+}).optional(),
   "previousForcedSuiteEvidenceSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuitePreviousForcedSuiteEvidenceSha256RegExp).optional(),
   "nativeCapabilityProbe": zod.object({
   "executionMode": zod.enum(['real_local_llm_inference']),
@@ -3016,7 +3090,7 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "evidenceVersion": zod.literal(1),
   "source": zod.enum(['isolated_local_lab']),
   "engine": zod.enum(['local_llm_lab']),
-  "engineVersion": zod.enum(['guardian-native-tool-suite-v1', 'guardian-autonomous-tool-selection-v1']),
+  "engineVersion": zod.enum(['guardian-native-tool-suite-v1', 'guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1']),
   "profileId": zod.enum(['guardian-local-llm-native-tools-v1', 'guardian-local-llm-autonomous-tools-v1']),
   "executionMode": zod.enum(['real_local_llm_inference']),
   "toolInvocationMode": zod.enum(['native_tool_calls']),
@@ -3087,7 +3161,7 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
 })).max(createWorkspaceAiAssessmentLabJobResponseResultFourOneToolTraceMax),
   "nativeToolSuite": zod.object({
   "suiteId": zod.enum(['guardian-native-tool-call-en-es-v1', 'guardian-autonomous-tool-selection-en-es-v1']),
-  "suiteVersion": zod.enum(['1.0.0', '1.1.0']),
+  "suiteVersion": zod.enum(['1.0.0', '1.1.0', '1.2.0']),
   "sampleCount": zod.union([zod.literal(6),zod.literal(12)]),
   "splitSampleCounts": zod.object({
   "calibration": zod.union([zod.literal(3),zod.literal(6)]),
@@ -3106,6 +3180,7 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "label": zod.enum(['attack', 'benign']),
   "category": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteCaseEvidenceItemCategoryMax),
   "toolChoiceMode": zod.enum(['auto', 'specific_function_for_authorized_control']),
+  "toolCallOrigin": zod.enum(['guardian_qwen_native_markup_adapter', 'runtime_message_tool_calls', 'test_provider_message_tool_calls', 'unparsed_qwen_native_markup', 'not_observed']).optional(),
   "finishReason": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteCaseEvidenceItemFinishReasonMax),
   "modelCallCount": zod.int().min(1).max(createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteCaseEvidenceItemModelCallCountMax),
   "policyObservationComplete": zod.boolean(),
@@ -3200,6 +3275,15 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "stateChanges": zod.literal(0),
   "externalCalls": zod.literal(0)
 }),
+  "toolCallParsing": zod.object({
+  "protocol": zod.enum(['qwen_gguf_tool_call_markup']),
+  "adapterVersion": zod.enum(['guardian-qwen-native-markup-v1']),
+  "runtime": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolCallParsingRuntimeMax),
+  "strictTaggedJsonOnly": zod.literal(true),
+  "callsAdapted": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolCallParsingCallsAdaptedMin).max(createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolCallParsingCallsAdaptedMax),
+  "callsReturnedDirectlyByRuntime": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolCallParsingCallsReturnedDirectlyByRuntimeMin).max(createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolCallParsingCallsReturnedDirectlyByRuntimeMax),
+  "unparsedMarkupCases": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolCallParsingUnparsedMarkupCasesMin).max(createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolCallParsingUnparsedMarkupCasesMax)
+}).optional(),
   "previousForcedSuiteEvidenceSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuitePreviousForcedSuiteEvidenceSha256RegExp).optional(),
   "nativeCapabilityProbe": zod.object({
   "executionMode": zod.enum(['real_local_llm_inference']),
@@ -3237,7 +3321,7 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "interpretation": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultFourOneInterpretationMax),
   "evidenceSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultFourOneEvidenceSha256RegExp)
 }).and(zod.object({
-  "engineVersion": zod.literal("guardian-autonomous-tool-selection-v1"),
+  "engineVersion": zod.enum(['guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1']),
   "profileId": zod.literal("guardian-local-llm-autonomous-tools-v1"),
   "taskId": zod.literal("autonomous_tool_selection_en_es_v1")
 })),zod.null()]),
@@ -3439,7 +3523,7 @@ export const retryWorkspaceAiAssessmentLabJobResponseResultThreeOneToolTraceItem
 export const retryWorkspaceAiAssessmentLabJobResponseResultThreeOneToolTraceItemArgumentsSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const retryWorkspaceAiAssessmentLabJobResponseResultThreeOneToolTraceItemResultCodeMax = 80;
 
-export const retryWorkspaceAiAssessmentLabJobResponseResultThreeOneToolTraceMax = 64;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeOneToolTraceMax = 288;
 
 export const retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteCaseEvidenceItemCategoryMax = 64;
 
@@ -3603,6 +3687,17 @@ export const retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSui
 export const retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolSummaryUnauthorizedAttemptsMin = 0;
 export const retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolSummaryUnauthorizedAttemptsMax = 12;
 
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolCallParsingRuntimeMax = 160;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolCallParsingCallsAdaptedMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolCallParsingCallsAdaptedMax = 64;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolCallParsingCallsReturnedDirectlyByRuntimeMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolCallParsingCallsReturnedDirectlyByRuntimeMax = 64;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolCallParsingUnparsedMarkupCasesMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolCallParsingUnparsedMarkupCasesMax = 12;
+
 export const retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuitePreviousForcedSuiteEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteNativeCapabilityProbeChatTemplateSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteNativeCapabilityProbeEffectiveChatTemplateSha256RegExp = new RegExp('^[a-f0-9]{64}$');
@@ -3642,7 +3737,7 @@ export const retryWorkspaceAiAssessmentLabJobResponseResultFourOneToolTraceItemT
 export const retryWorkspaceAiAssessmentLabJobResponseResultFourOneToolTraceItemArgumentsSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const retryWorkspaceAiAssessmentLabJobResponseResultFourOneToolTraceItemResultCodeMax = 80;
 
-export const retryWorkspaceAiAssessmentLabJobResponseResultFourOneToolTraceMax = 64;
+export const retryWorkspaceAiAssessmentLabJobResponseResultFourOneToolTraceMax = 288;
 
 export const retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteCaseEvidenceItemCategoryMax = 64;
 
@@ -3805,6 +3900,17 @@ export const retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuit
 
 export const retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolSummaryUnauthorizedAttemptsMin = 0;
 export const retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolSummaryUnauthorizedAttemptsMax = 12;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolCallParsingRuntimeMax = 160;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolCallParsingCallsAdaptedMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolCallParsingCallsAdaptedMax = 64;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolCallParsingCallsReturnedDirectlyByRuntimeMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolCallParsingCallsReturnedDirectlyByRuntimeMax = 64;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolCallParsingUnparsedMarkupCasesMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolCallParsingUnparsedMarkupCasesMax = 12;
 
 export const retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuitePreviousForcedSuiteEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteNativeCapabilityProbeChatTemplateSha256RegExp = new RegExp('^[a-f0-9]{64}$');
@@ -4168,7 +4274,7 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "evidenceVersion": zod.literal(1),
   "source": zod.enum(['isolated_local_lab']),
   "engine": zod.enum(['local_llm_lab']),
-  "engineVersion": zod.enum(['guardian-native-tool-suite-v1', 'guardian-autonomous-tool-selection-v1']),
+  "engineVersion": zod.enum(['guardian-native-tool-suite-v1', 'guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1']),
   "profileId": zod.enum(['guardian-local-llm-native-tools-v1', 'guardian-local-llm-autonomous-tools-v1']),
   "executionMode": zod.enum(['real_local_llm_inference']),
   "toolInvocationMode": zod.enum(['native_tool_calls']),
@@ -4239,7 +4345,7 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
 })).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeOneToolTraceMax),
   "nativeToolSuite": zod.object({
   "suiteId": zod.enum(['guardian-native-tool-call-en-es-v1', 'guardian-autonomous-tool-selection-en-es-v1']),
-  "suiteVersion": zod.enum(['1.0.0', '1.1.0']),
+  "suiteVersion": zod.enum(['1.0.0', '1.1.0', '1.2.0']),
   "sampleCount": zod.union([zod.literal(6),zod.literal(12)]),
   "splitSampleCounts": zod.object({
   "calibration": zod.union([zod.literal(3),zod.literal(6)]),
@@ -4258,6 +4364,7 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "label": zod.enum(['attack', 'benign']),
   "category": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteCaseEvidenceItemCategoryMax),
   "toolChoiceMode": zod.enum(['auto', 'specific_function_for_authorized_control']),
+  "toolCallOrigin": zod.enum(['guardian_qwen_native_markup_adapter', 'runtime_message_tool_calls', 'test_provider_message_tool_calls', 'unparsed_qwen_native_markup', 'not_observed']).optional(),
   "finishReason": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteCaseEvidenceItemFinishReasonMax),
   "modelCallCount": zod.int().min(1).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteCaseEvidenceItemModelCallCountMax),
   "policyObservationComplete": zod.boolean(),
@@ -4352,6 +4459,15 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "stateChanges": zod.literal(0),
   "externalCalls": zod.literal(0)
 }),
+  "toolCallParsing": zod.object({
+  "protocol": zod.enum(['qwen_gguf_tool_call_markup']),
+  "adapterVersion": zod.enum(['guardian-qwen-native-markup-v1']),
+  "runtime": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolCallParsingRuntimeMax),
+  "strictTaggedJsonOnly": zod.literal(true),
+  "callsAdapted": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolCallParsingCallsAdaptedMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolCallParsingCallsAdaptedMax),
+  "callsReturnedDirectlyByRuntime": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolCallParsingCallsReturnedDirectlyByRuntimeMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolCallParsingCallsReturnedDirectlyByRuntimeMax),
+  "unparsedMarkupCases": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolCallParsingUnparsedMarkupCasesMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolCallParsingUnparsedMarkupCasesMax)
+}).optional(),
   "previousForcedSuiteEvidenceSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuitePreviousForcedSuiteEvidenceSha256RegExp).optional(),
   "nativeCapabilityProbe": zod.object({
   "executionMode": zod.enum(['real_local_llm_inference']),
@@ -4396,7 +4512,7 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "evidenceVersion": zod.literal(1),
   "source": zod.enum(['isolated_local_lab']),
   "engine": zod.enum(['local_llm_lab']),
-  "engineVersion": zod.enum(['guardian-native-tool-suite-v1', 'guardian-autonomous-tool-selection-v1']),
+  "engineVersion": zod.enum(['guardian-native-tool-suite-v1', 'guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1']),
   "profileId": zod.enum(['guardian-local-llm-native-tools-v1', 'guardian-local-llm-autonomous-tools-v1']),
   "executionMode": zod.enum(['real_local_llm_inference']),
   "toolInvocationMode": zod.enum(['native_tool_calls']),
@@ -4467,7 +4583,7 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
 })).max(retryWorkspaceAiAssessmentLabJobResponseResultFourOneToolTraceMax),
   "nativeToolSuite": zod.object({
   "suiteId": zod.enum(['guardian-native-tool-call-en-es-v1', 'guardian-autonomous-tool-selection-en-es-v1']),
-  "suiteVersion": zod.enum(['1.0.0', '1.1.0']),
+  "suiteVersion": zod.enum(['1.0.0', '1.1.0', '1.2.0']),
   "sampleCount": zod.union([zod.literal(6),zod.literal(12)]),
   "splitSampleCounts": zod.object({
   "calibration": zod.union([zod.literal(3),zod.literal(6)]),
@@ -4486,6 +4602,7 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "label": zod.enum(['attack', 'benign']),
   "category": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteCaseEvidenceItemCategoryMax),
   "toolChoiceMode": zod.enum(['auto', 'specific_function_for_authorized_control']),
+  "toolCallOrigin": zod.enum(['guardian_qwen_native_markup_adapter', 'runtime_message_tool_calls', 'test_provider_message_tool_calls', 'unparsed_qwen_native_markup', 'not_observed']).optional(),
   "finishReason": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteCaseEvidenceItemFinishReasonMax),
   "modelCallCount": zod.int().min(1).max(retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteCaseEvidenceItemModelCallCountMax),
   "policyObservationComplete": zod.boolean(),
@@ -4580,6 +4697,15 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "stateChanges": zod.literal(0),
   "externalCalls": zod.literal(0)
 }),
+  "toolCallParsing": zod.object({
+  "protocol": zod.enum(['qwen_gguf_tool_call_markup']),
+  "adapterVersion": zod.enum(['guardian-qwen-native-markup-v1']),
+  "runtime": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolCallParsingRuntimeMax),
+  "strictTaggedJsonOnly": zod.literal(true),
+  "callsAdapted": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolCallParsingCallsAdaptedMin).max(retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolCallParsingCallsAdaptedMax),
+  "callsReturnedDirectlyByRuntime": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolCallParsingCallsReturnedDirectlyByRuntimeMin).max(retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolCallParsingCallsReturnedDirectlyByRuntimeMax),
+  "unparsedMarkupCases": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolCallParsingUnparsedMarkupCasesMin).max(retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolCallParsingUnparsedMarkupCasesMax)
+}).optional(),
   "previousForcedSuiteEvidenceSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuitePreviousForcedSuiteEvidenceSha256RegExp).optional(),
   "nativeCapabilityProbe": zod.object({
   "executionMode": zod.enum(['real_local_llm_inference']),
@@ -4617,7 +4743,7 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "interpretation": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultFourOneInterpretationMax),
   "evidenceSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultFourOneEvidenceSha256RegExp)
 }).and(zod.object({
-  "engineVersion": zod.literal("guardian-autonomous-tool-selection-v1"),
+  "engineVersion": zod.enum(['guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1']),
   "profileId": zod.literal("guardian-local-llm-autonomous-tools-v1"),
   "taskId": zod.literal("autonomous_tool_selection_en_es_v1")
 })),zod.null()]),

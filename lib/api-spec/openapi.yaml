@@ -997,7 +997,7 @@ components:
         evidenceVersion: { type: integer, const: 1 }
         source: { type: string, enum: [isolated_local_lab] }
         engine: { type: string, enum: [local_llm_lab] }
-        engineVersion: { type: string, enum: [guardian-native-tool-suite-v1, guardian-autonomous-tool-selection-v1] }
+        engineVersion: { type: string, enum: [guardian-native-tool-suite-v1, guardian-autonomous-tool-selection-v1, guardian-autonomous-tool-selection-v1.1] }
         profileId: { type: string, enum: [guardian-local-llm-native-tools-v1, guardian-local-llm-autonomous-tools-v1] }
         executionMode: { type: string, enum: [real_local_llm_inference] }
         toolInvocationMode: { type: string, enum: [native_tool_calls] }
@@ -1071,14 +1071,14 @@ components:
           required: [network, cpuCores, memoryMiB, memorySwapMiB, pids, concurrency, hardTimeoutSeconds, contextTokens, maxCompletionTokensPerCase, maxCompletionTokensPerModelCall, maxAutoChoiceTokens, maxModelCallsPerCase, maxToolCallsPerCase, fixedSeed, verifiedContainerLimits]
         toolTrace:
           type: array
-          maxItems: 64
+          maxItems: 288
           items: { $ref: "#/components/schemas/GuardianNativeToolTraceEvent" }
         nativeToolSuite:
           type: object
           additionalProperties: false
           properties:
             suiteId: { type: string, enum: [guardian-native-tool-call-en-es-v1, guardian-autonomous-tool-selection-en-es-v1] }
-            suiteVersion: { type: string, enum: ["1.0.0", "1.1.0"] }
+            suiteVersion: { type: string, enum: ["1.0.0", "1.1.0", "1.2.0"] }
             sampleCount: { type: integer, enum: [6, 12] }
             splitSampleCounts:
               type: object
@@ -1129,6 +1129,18 @@ components:
                 stateChanges: { type: integer, const: 0 }
                 externalCalls: { type: integer, const: 0 }
               required: [nativeCallsObserved, proposals, authorizationAttempts, authorizedExecutions, deniedCalls, unauthorizedAttempts, unauthorizedExecutions, stateChanges, externalCalls]
+            toolCallParsing:
+              type: object
+              additionalProperties: false
+              properties:
+                protocol: { type: string, enum: [qwen_gguf_tool_call_markup] }
+                adapterVersion: { type: string, enum: [guardian-qwen-native-markup-v1] }
+                runtime: { type: string, maxLength: 160 }
+                strictTaggedJsonOnly: { type: boolean, const: true }
+                callsAdapted: { type: integer, minimum: 0, maximum: 64 }
+                callsReturnedDirectlyByRuntime: { type: integer, minimum: 0, maximum: 64 }
+                unparsedMarkupCases: { type: integer, minimum: 0, maximum: 12 }
+              required: [protocol, adapterVersion, runtime, strictTaggedJsonOnly, callsAdapted, callsReturnedDirectlyByRuntime, unparsedMarkupCases]
             previousForcedSuiteEvidenceSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
             nativeCapabilityProbe:
               type: object
@@ -1186,7 +1198,7 @@ components:
         - { $ref: "#/components/schemas/GuardianLocalLlmToolSuiteEvidenceBase" }
         - type: object
           properties:
-            engineVersion: { type: string, const: guardian-autonomous-tool-selection-v1 }
+            engineVersion: { type: string, enum: [guardian-autonomous-tool-selection-v1, guardian-autonomous-tool-selection-v1.1] }
             profileId: { type: string, const: guardian-local-llm-autonomous-tools-v1 }
             taskId: { type: string, const: autonomous_tool_selection_en_es_v1 }
           required: [engineVersion, profileId, taskId]
@@ -1221,6 +1233,7 @@ components:
         label: { type: string, enum: [attack, benign] }
         category: { type: string, maxLength: 64 }
         toolChoiceMode: { type: string, enum: [auto, specific_function_for_authorized_control] }
+        toolCallOrigin: { type: string, enum: [guardian_qwen_native_markup_adapter, runtime_message_tool_calls, test_provider_message_tool_calls, unparsed_qwen_native_markup, not_observed] }
         finishReason: { type: string, maxLength: 32 }
         modelCallCount: { type: integer, minimum: 1, maximum: 2 }
         policyObservationComplete: { type: boolean }

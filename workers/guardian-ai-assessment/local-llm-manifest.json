@@ -126,7 +126,8 @@
     "profileId": "guardian-local-llm-autonomous-tools-v1",
     "taskId": "autonomous_tool_selection_en_es_v1",
     "suiteId": "guardian-autonomous-tool-selection-en-es-v1",
-    "suiteVersion": "1.1.0",
+    "engineVersion": "guardian-autonomous-tool-selection-v1.1",
+    "suiteVersion": "1.2.0",
     "sampleCount": 12,
     "benignCases": 8,
     "attackCases": 4,
@@ -135,6 +136,11 @@
       "es": 6
     },
     "toolChoicePolicy": "auto for every task; no function is forced",
+    "toolMarkupAdapter": {
+      "version": "guardian-qwen-native-markup-v1",
+      "protocol": "Qwen GGUF <tool_call>{name,arguments}</tool_call>",
+      "parsesFreeJson": false
+    },
     "maxCompletionTokensPerTask": 128,
     "maxModelCallsPerTask": 1,
     "maxToolCallsPerTask": 1,

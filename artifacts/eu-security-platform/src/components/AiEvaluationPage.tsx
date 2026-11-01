@@ -382,7 +382,9 @@ function NativeToolSuiteResult({
     </div>
     <p className="guardian-verification-disclaimer">
       {autonomous
-        ? <>Los {suite.sampleCount} casos usaron <code>tool_choice=auto</code>; no se forzó la función. Solo se cuentan objetos nativos <code>message.tool_calls</code>, no JSON del texto. Las tres herramientas son ficticias y no producen efectos externos.</>
+        ? suite.toolCallParsing
+          ? <>Los {suite.sampleCount} casos usaron <code>tool_choice=auto</code>; no se forzó la función. El worker adapta únicamente el marcador nativo de la plantilla GGUF de Qwen (<code>&lt;tool_call&gt;</code> con JSON completo); llama-cpp-python 0.3.36 lo entrega como contenido en modo auto. No se acepta JSON libre. Las herramientas son ficticias y no producen efectos externos.</>
+          : <>Los {suite.sampleCount} casos de este registro usaron <code>tool_choice=auto</code>. Esta evidencia anterior no registra extracción de marcador; no permite distinguir una llamada estructurada entregada como texto de una respuesta sin llamada. Las herramientas son ficticias y no producen efectos externos.</>
         : <>Qwen3 local devolvió objetos <code>message.tool_calls</code> usando el template GGUF; no se interpretó JSON del texto como tool call. Las llamadas de correo y cambio bancario solo generaron resultados ficticios en memoria.</>}
     </p>
     <div className="guardian-verification-stats">
@@ -439,6 +441,7 @@ function NativeToolSuiteResult({
             <th scope="col">Caso</th>
             <th scope="col">Grupo</th>
             <th scope="col">Herramientas propuestas</th>
+            {autonomous && <th scope="col">Origen de llamada</th>}
             <th scope="col">Argumentos · permiso</th>
             <th scope="col">Intento no permitido</th>
             <th scope="col">Ejecución ficticia</th>
@@ -452,6 +455,7 @@ function NativeToolSuiteResult({
                   ? `${item.label === 'attack' ? 'ataque indirecto' : 'control benigno'} · ${item.split === 'calibration' ? 'calibración' : 'holdout'} · ${item.language.toUpperCase()} · ${autonomousTaskLabels[item.category] ?? item.label}`
                   : `${item.split} · ${item.language.toUpperCase()} · ${item.label}`}</td>
                 <td>{item.proposedTools.length ? item.proposedTools.map((tool) => toolLabels[tool] ?? tool).join(', ') : 'Ninguna'}</td>
+                {autonomous && <td>{item.toolCallOrigin === 'guardian_qwen_native_markup_adapter' ? 'Marcador nativo Qwen · parser Guardian' : item.toolCallOrigin === 'runtime_message_tool_calls' ? 'message.tool_calls del runtime' : item.toolCallOrigin === 'test_provider_message_tool_calls' ? 'Respuesta de prueba · no inferencia real' : item.toolCallOrigin === 'unparsed_qwen_native_markup' ? 'Marcador no interpretable' : item.toolCallOrigin === 'not_observed' ? 'No observada' : 'Origen no registrado'}</td>}
                 <td>{autonomous ? `${item.argumentsValid ? 'Válidos' : 'No válidos'} · ${item.policyAllowed ? 'permitido' : 'no permitido'}` : 'No medido en este perfil'}</td>
                 <td>{item.policyObservationComplete ? item.unauthorizedAttempt ? 'Sí; denegado' : 'No observado' : 'Inconcluso'}</td>
                 <td>{autonomous ? item.simulatedExecution ? 'Sí, solo simulación' : 'No' : item.authorizedExecutionCount}</td>
@@ -469,7 +473,7 @@ function NativeToolSuiteResult({
         <dt>Hash del modelo</dt><dd><code>{evidence.provider.sha256}</code></dd>
         <dt>Hash de evidencia</dt><dd><code>{evidence.evidenceSha256}</code></dd>
         <dt>Hash del conjunto</dt><dd><code>{suite.suiteEvidenceSha256}</code></dd>
-        {autonomous && <><dt>Selección por tarea</dt><dd>tool_choice=auto · una llamada · máximo 128 tokens.</dd><dt>Suite forzada anterior</dt><dd><code>{suite.previousForcedSuiteEvidenceSha256}</code> · referencia separada, no es evidencia de autonomía.</dd></>}
+        {autonomous && <><dt>Selección por tarea</dt><dd>tool_choice=auto · una llamada · máximo 128 tokens.</dd>{suite.toolCallParsing && <><dt>Parser Qwen</dt><dd>{suite.toolCallParsing.callsAdapted} llamadas nativas adaptadas · {suite.toolCallParsing.callsReturnedDirectlyByRuntime} llamadas directas del runtime · {suite.toolCallParsing.unparsedMarkupCases} casos con marcador rechazado. El parser exige el marcador completo y no acepta JSON libre.</dd></>}<dt>Suite forzada anterior</dt><dd><code>{suite.previousForcedSuiteEvidenceSha256}</code> · referencia separada, no es evidencia de autonomía.</dd></>}
         <dt>Red</dt><dd>IPv4 {networkStatusLabel(evidence.network.publicIpv4)}, IPv6 {networkStatusLabel(evidence.network.publicIpv6)}, DNS {networkStatusLabel(evidence.network.publicDns)}.</dd>
         <dt>Límites comprobados</dt><dd>{evidence.limits.verifiedContainerLimits.cpuCores} CPU · {Math.round(evidence.limits.verifiedContainerLimits.memoryBytes / 1024 / 1024)} MiB · {evidence.limits.verifiedContainerLimits.pids} procesos · una concurrencia · {evidence.durationSeconds} s.</dd>
         <dt>Acciones externas</dt><dd>{suite.toolSummary.externalCalls} llamadas externas · {suite.toolSummary.stateChanges} cambios persistentes.</dd>

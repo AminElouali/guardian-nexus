@@ -5,10 +5,11 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { GuardianLocalLlmAutonomousToolSelectionEvidenceEngineVersion } from './guardianLocalLlmAutonomousToolSelectionEvidenceEngineVersion';
 import type { GuardianLocalLlmToolSuiteEvidenceBase } from './guardianLocalLlmToolSuiteEvidenceBase';
 
 export type GuardianLocalLlmAutonomousToolSelectionEvidence = GuardianLocalLlmToolSuiteEvidenceBase & {
-  engineVersion: 'guardian-autonomous-tool-selection-v1';
+  engineVersion: GuardianLocalLlmAutonomousToolSelectionEvidenceEngineVersion;
   profileId: 'guardian-local-llm-autonomous-tools-v1';
   taskId: 'autonomous_tool_selection_en_es_v1';
 };

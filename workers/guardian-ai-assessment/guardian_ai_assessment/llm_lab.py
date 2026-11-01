@@ -12,6 +12,7 @@ import importlib.metadata
 import argparse
 import json
 import platform
+import re
 import sys
 import time
 from dataclasses import dataclass
@@ -190,6 +191,10 @@ NATIVE_TOOL_MAX_MODEL_CALLS_PER_CASE = 2
 NATIVE_TOOL_AUTO_MAX_TOKENS = 48
 NATIVE_TOOL_TEMPLATE_SHA256 = "57f1fd00f0013a2be96aa79b857391f27e23df5b5f847072b524c897e24d0361"
 NATIVE_TOOL_EFFECTIVE_TEMPLATE_SHA256 = "ec01f905b506faf0146fedd9efc747fd863dd87f4ddab4771b0c072e17021aa1"
+QWEN_NATIVE_TOOL_MARKER_RE = re.compile(
+    r"<tool_call>(.*?)</tool_call>", re.DOTALL
+)
+QWEN_NATIVE_TOOL_MARKER_MAX_CALLS = 8
 
 NATIVE_TOOL_CASES = (
     NativeToolSuiteCase(
@@ -479,7 +484,7 @@ class LocalQwenClient:
             seed=seed,
             max_tokens=max_tokens,
         )
-        return completion
+        return adapt_qwen_native_tool_markup(completion)
 
 
 def canonical_json(value: Any) -> str:
@@ -510,6 +515,112 @@ def sha256_text(value: str) -> str:
 
 def sha256_json(value: Any) -> str:
     return sha256_text(canonical_json(value))
+
+
+def adapt_qwen_native_tool_markup(response: dict[str, Any]) -> dict[str, Any]:
+    """Normalize only complete Qwen GGUF tool markers into structured calls.
+
+    llama-cpp-python 0.3.36's generic Jinja chat handler returns tool-choice
+    auto output as assistant content; unlike forced selection, it does not
+    promote the embedded Qwen <tool_call> markup to message.tool_calls. This
+    adapter accepts only one or more complete, standalone tagged JSON objects
+    with exactly {name, arguments}. Ordinary JSON or mixed prose is not parsed.
+    """
+    choices = response.get("choices")
+    if not isinstance(choices, list) or not choices:
+        return response
+    choice = choices[0]
+    if not isinstance(choice, dict):
+        return response
+    message = choice.get("message")
+    if not isinstance(message, dict):
+        return response
+
+    existing_calls = message.get("tool_calls")
+    if isinstance(existing_calls, list) and existing_calls:
+        response["_guardianToolMarkupParse"] = {
+            "status": "runtime_message_tool_calls",
+            "runtimeToolCallCount": len(existing_calls),
+            "adapterParsedCallCount": 0,
+            "runtimeFinishReason": choice.get("finish_reason", "unknown"),
+        }
+        return response
+
+    content = message.get("content")
+    if not isinstance(content, str):
+        response["_guardianToolMarkupParse"] = {
+            "status": "no_marker",
+            "runtimeToolCallCount": 0,
+            "adapterParsedCallCount": 0,
+            "runtimeFinishReason": choice.get("finish_reason", "unknown"),
+        }
+        return response
+
+    matches = list(QWEN_NATIVE_TOOL_MARKER_RE.finditer(content))
+    marker_seen = "<tool_call>" in content or "</tool_call>" in content
+    if not matches:
+        status = "unparsed_markup" if marker_seen else "no_marker"
+        response["_guardianToolMarkupParse"] = {
+            "status": status,
+            "runtimeToolCallCount": 0,
+            "adapterParsedCallCount": 0,
+            "runtimeFinishReason": choice.get("finish_reason", "unknown"),
+        }
+        return response
+
+    if (
+        len(matches) > QWEN_NATIVE_TOOL_MARKER_MAX_CALLS
+        or QWEN_NATIVE_TOOL_MARKER_RE.sub("", content).strip()
+    ):
+        response["_guardianToolMarkupParse"] = {
+            "status": "unparsed_markup",
+            "runtimeToolCallCount": 0,
+            "adapterParsedCallCount": 0,
+            "runtimeFinishReason": choice.get("finish_reason", "unknown"),
+        }
+        return response
+
+    normalized_calls: list[dict[str, Any]] = []
+    try:
+        for index, match in enumerate(matches):
+            payload = json.loads(match.group(1))
+            if (
+                not isinstance(payload, dict)
+                or set(payload) != {"name", "arguments"}
+                or not isinstance(payload.get("name"), str)
+                or not payload["name"]
+                or len(payload["name"]) > 128
+                or not isinstance(payload.get("arguments"), dict)
+            ):
+                raise ValueError("invalid_qwen_tool_markup_payload")
+            normalized_calls.append(
+                {
+                    "id": f"qwen-native-{index + 1}",
+                    "type": "function",
+                    "function": {
+                        "name": payload["name"],
+                        "arguments": canonical_json(payload["arguments"]),
+                    },
+                }
+            )
+    except (json.JSONDecodeError, ValueError):
+        response["_guardianToolMarkupParse"] = {
+            "status": "unparsed_markup",
+            "runtimeToolCallCount": 0,
+            "adapterParsedCallCount": 0,
+            "runtimeFinishReason": choice.get("finish_reason", "unknown"),
+        }
+        return response
+
+    message["tool_calls"] = normalized_calls
+    message["content"] = None
+    response["_guardianToolMarkupParse"] = {
+        "status": "qwen_native_markup_adapter",
+        "runtimeToolCallCount": 0,
+        "adapterParsedCallCount": len(normalized_calls),
+        "runtimeFinishReason": choice.get("finish_reason", "unknown"),
+    }
+    return response
 
 
 def _iso_utc_millis(value: datetime) -> str:

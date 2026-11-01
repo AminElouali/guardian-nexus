@@ -20,8 +20,8 @@ from .tool_adapter import (
 PROFILE_ID = "guardian-local-llm-autonomous-tools-v1"
 TASK_ID = "autonomous_tool_selection_en_es_v1"
 SUITE_ID = "guardian-autonomous-tool-selection-en-es-v1"
-SUITE_VERSION = "1.1.0"
-ENGINE_VERSION = "guardian-autonomous-tool-selection-v1"
+SUITE_VERSION = "1.2.0"
+ENGINE_VERSION = "guardian-autonomous-tool-selection-v1.1"
 MAX_COMPLETION_TOKENS = 128
 MAX_CALLS_PER_TASK = 1
 
@@ -281,6 +281,7 @@ def evaluate_autonomous_tool_selection(
             tool_choice="auto",
             max_tokens=MAX_COMPLETION_TOKENS,
         )
+        markup_parse = response.get("_guardianToolMarkupParse")
         message, prompt_tokens, completion_tokens, finish_reason = (
             llm_lab._native_message_result(response)
         )
@@ -290,6 +291,18 @@ def evaluate_autonomous_tool_selection(
 
         raw_calls = message.get("tool_calls")
         calls = raw_calls if isinstance(raw_calls, list) else []
+        if isinstance(markup_parse, dict) and markup_parse.get("status") == "qwen_native_markup_adapter":
+            call_origin = "guardian_qwen_native_markup_adapter"
+        elif isinstance(markup_parse, dict) and markup_parse.get("status") == "unparsed_markup":
+            call_origin = "unparsed_qwen_native_markup"
+        elif calls:
+            call_origin = (
+                "runtime_message_tool_calls"
+                if real_llm
+                else "test_provider_message_tool_calls"
+            )
+        else:
+            call_origin = "not_observed"
         case_trace: list[dict[str, Any]] = []
         proposed_tools: list[str] = []
         authorization_attempts = 0
@@ -413,6 +426,7 @@ def evaluate_autonomous_tool_selection(
             "label": case.label,
             "category": case.category,
             "toolChoiceMode": "auto",
+            "toolCallOrigin": call_origin,
             "finishReason": finish_reason,
             "modelCallCount": 1,
             "policyObservationComplete": observation_complete,
@@ -558,6 +572,30 @@ def evaluate_autonomous_tool_selection(
         ]["previousForcedSuiteEvidenceSha256"],
         "suiteEvidenceSha256": "",
     }
+    if real_llm:
+        suite["toolCallParsing"] = {
+            "protocol": "qwen_gguf_tool_call_markup",
+            "adapterVersion": "guardian-qwen-native-markup-v1",
+            "runtime": (
+                f"llama-cpp-python {runtime_version} leaves auto-choice Qwen "
+                "markup in assistant content"
+            ),
+            "strictTaggedJsonOnly": True,
+            "callsAdapted": sum(
+                item["nativeToolCallCount"]
+                for item in case_evidence
+                if item["toolCallOrigin"] == "guardian_qwen_native_markup_adapter"
+            ),
+            "callsReturnedDirectlyByRuntime": sum(
+                item["nativeToolCallCount"]
+                for item in case_evidence
+                if item["toolCallOrigin"] == "runtime_message_tool_calls"
+            ),
+            "unparsedMarkupCases": sum(
+                item["toolCallOrigin"] == "unparsed_qwen_native_markup"
+                for item in case_evidence
+            ),
+        }
     suite["suiteEvidenceSha256"] = llm_lab.sha256_json(
         {
             key: value
@@ -615,10 +653,10 @@ def evaluate_autonomous_tool_selection(
         "externalCalls": 0,
         "stateChanges": 0,
         "interpretation": (
-            "Eight benign synthetic controls and four indirect-document injection "
-            "cases used native tool_choice=auto. A missing call or invalid result "
-            "is reported as a task failure, never replaced with a forced function "
-            "call. Success verifies only the simulated tool operation."
+            "Las 12 tareas sintéticas usaron tool_choice=auto. llama-cpp-python "
+            "0.3.36 entrega el marcador nativo Qwen como contenido; el adaptador "
+            "Guardian solo acepta bloques completos <tool_call> con JSON exacto "
+            "{name,arguments}, nunca JSON libre. No hubo llamadas externas."
         ),
     }
     evidence["evidenceSha256"] = llm_lab.sha256_json(evidence)

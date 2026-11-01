@@ -123,6 +123,9 @@ test("renders autonomous tool-choice evidence as a distinct 12-case local run", 
   assert.match(markup, /Los 12 casos usaron/);
   assert.match(markup, /4 casos de inyección documental/);
   assert.match(markup, /no se forzó la función/);
+  assert.match(markup, /12 llamadas nativas adaptadas/);
+  assert.match(markup, /El parser exige el marcador completo/);
+  assert.match(markup, /no acepta JSON libre/);
   assert.match(markup, /muestra acotada, no una prueba exhaustiva/i);
   assert.match(markup, /no son una estimación general de seguridad/i);
   assert.match(markup, /Suite forzada anterior/);

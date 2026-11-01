@@ -130,6 +130,7 @@ class AutonomousToolSelectionTests(unittest.TestCase):
         self.assertEqual(evidence["source"], "test_double")
         self.assertEqual(evidence["profileId"], autonomous.PROFILE_ID)
         self.assertEqual(evidence["toolInvocationMode"], "native_tool_calls")
+        self.assertNotIn("toolCallParsing", evidence["nativeToolSuite"])
         self.assertEqual(suite["sampleCount"], 12)
         self.assertEqual(suite["languageCounts"], {"en": 6, "es": 6})
         self.assertEqual(suite["splitSampleCounts"], {"calibration": 6, "holdout": 6})
@@ -149,6 +150,10 @@ class AutonomousToolSelectionTests(unittest.TestCase):
         self.assertEqual(suite["toolSummary"]["deniedCalls"], 0)
         self.assertEqual(suite["toolSummary"]["externalCalls"], 0)
         self.assertEqual(suite["toolSummary"]["stateChanges"], 0)
+        self.assertEqual(
+            {item["toolCallOrigin"] for item in suite["caseEvidence"]},
+            {"test_provider_message_tool_calls"},
+        )
         self.assertEqual(suite["nativeCapabilityProbe"]["toolChoice"], "auto")
         self.assertTrue(suite["nativeCapabilityProbe"]["toolCallObserved"])
         self.assertEqual(evidence["rawPromptsStored"], False)
@@ -201,6 +206,72 @@ class AutonomousToolSelectionTests(unittest.TestCase):
         self.assertTrue(all(not item["policyAllowed"] for item in suite["caseEvidence"]))
         self.assertTrue(all(not item["simulatedExecution"] for item in suite["caseEvidence"]))
         self.assertFalse(suite["nativeCapabilityProbe"]["toolCallObserved"])
+
+
+class QwenNativeMarkupAdapterTests(unittest.TestCase):
+    def _completion(self, content):
+        return {
+            "choices": [
+                {
+                    "message": {"role": "assistant", "content": content},
+                    "finish_reason": "stop",
+                }
+            ],
+            "usage": {"prompt_tokens": 4, "completion_tokens": 7},
+        }
+
+    def test_complete_qwen_markup_is_normalized_without_retaining_raw_content(self):
+        response = self._completion(
+            '<tool_call>{"name":"consult_synthetic_invoice",'
+            '"arguments":{"invoice_id":"INV-LAB-2036-0001"}}</tool_call>'
+        )
+        adapted = llm_lab.adapt_qwen_native_tool_markup(response)
+        message = adapted["choices"][0]["message"]
+        self.assertIsNone(message["content"])
+        self.assertEqual(adapted["choices"][0]["finish_reason"], "stop")
+        self.assertEqual(
+            message["tool_calls"][0]["function"]["name"],
+            "consult_synthetic_invoice",
+        )
+        self.assertEqual(
+            json.loads(message["tool_calls"][0]["function"]["arguments"]),
+            {"invoice_id": INVOICE_ID},
+        )
+        self.assertEqual(
+            adapted["_guardianToolMarkupParse"]["status"],
+            "qwen_native_markup_adapter",
+        )
+
+    def test_plain_json_is_not_promoted_to_a_tool_call(self):
+        response = self._completion(
+            '{"name":"consult_synthetic_invoice",'
+            '"arguments":{"invoice_id":"INV-LAB-2036-0001"}}'
+        )
+        adapted = llm_lab.adapt_qwen_native_tool_markup(response)
+        self.assertNotIn("tool_calls", adapted["choices"][0]["message"])
+        self.assertEqual(
+            adapted["_guardianToolMarkupParse"]["status"], "no_marker"
+        )
+
+    def test_mixed_or_malformed_markup_fails_closed(self):
+        contents = (
+            'I might call this: <tool_call>{"name":"consult_synthetic_invoice",'
+            '"arguments":{}}</tool_call>',
+            '<tool_call>{"name":"consult_synthetic_invoice",'
+            '"arguments":{}</tool_call>',
+            '<tool_call>{"name":"consult_synthetic_invoice",'
+            '"arguments":[]}</tool_call>',
+        )
+        for content in contents:
+            with self.subTest(contentLength=len(content)):
+                adapted = llm_lab.adapt_qwen_native_tool_markup(
+                    self._completion(content)
+                )
+                self.assertNotIn("tool_calls", adapted["choices"][0]["message"])
+                self.assertEqual(
+                    adapted["_guardianToolMarkupParse"]["status"],
+                    "unparsed_markup",
+                )
 
 
 if __name__ == "__main__":

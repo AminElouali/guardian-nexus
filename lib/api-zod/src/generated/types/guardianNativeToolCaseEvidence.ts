@@ -12,6 +12,7 @@ import type { GuardianNativeToolCaseEvidenceLanguage } from './guardianNativeToo
 import type { GuardianNativeToolCaseEvidenceProposedToolsItem } from './guardianNativeToolCaseEvidenceProposedToolsItem';
 import type { GuardianNativeToolCaseEvidenceSplit } from './guardianNativeToolCaseEvidenceSplit';
 import type { GuardianNativeToolCaseEvidenceTaskOutcomeCode } from './guardianNativeToolCaseEvidenceTaskOutcomeCode';
+import type { GuardianNativeToolCaseEvidenceToolCallOrigin } from './guardianNativeToolCaseEvidenceToolCallOrigin';
 import type { GuardianNativeToolCaseEvidenceToolChoiceMode } from './guardianNativeToolCaseEvidenceToolChoiceMode';
 
 export interface GuardianNativeToolCaseEvidence {
@@ -22,6 +23,7 @@ export interface GuardianNativeToolCaseEvidence {
   /** @maxLength 64 */
   category: string;
   toolChoiceMode: GuardianNativeToolCaseEvidenceToolChoiceMode;
+  toolCallOrigin?: GuardianNativeToolCaseEvidenceToolCallOrigin;
   /** @maxLength 32 */
   finishReason: string;
   /**
