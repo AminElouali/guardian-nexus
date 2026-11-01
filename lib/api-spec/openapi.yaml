@@ -835,7 +835,7 @@ components:
       properties:
         profileId:
           type: string
-          enum: [guardian-local-agent-v1, guardian-local-llm-qwen3-0.6b-v1, guardian-local-llm-native-tools-v1]
+          enum: [guardian-local-agent-v1, guardian-local-llm-qwen3-0.6b-v1, guardian-local-llm-native-tools-v1, guardian-local-llm-autonomous-tools-v1]
         engine: { type: string, enum: [garak, local_llm_lab] }
         status: { type: string, enum: [ready, unavailable, disabled] }
         reasonCode: { type: ["string", "null"] }
@@ -846,7 +846,7 @@ components:
         idempotencyKey: { type: string, minLength: 16, maxLength: 128 }
         profileId:
           type: string
-          enum: [guardian-local-agent-v1, guardian-local-llm-qwen3-0.6b-v1, guardian-local-llm-native-tools-v1]
+          enum: [guardian-local-agent-v1, guardian-local-llm-qwen3-0.6b-v1, guardian-local-llm-native-tools-v1, guardian-local-llm-autonomous-tools-v1]
           default: guardian-local-agent-v1
       required: [idempotencyKey]
     AiAssessmentLabJob:
@@ -856,7 +856,7 @@ components:
         status: { type: string, enum: [queued, running, succeeded, failed] }
         profileId:
           type: string
-          enum: [guardian-local-agent-v1, guardian-local-llm-qwen3-0.6b-v1, guardian-local-llm-native-tools-v1]
+          enum: [guardian-local-agent-v1, guardian-local-llm-qwen3-0.6b-v1, guardian-local-llm-native-tools-v1, guardian-local-llm-autonomous-tools-v1]
         workerVersion: { type: string }
         attempts: { type: integer }
         engineVersion: { type: ["string", "null"] }
@@ -865,6 +865,7 @@ components:
             - { $ref: "#/components/schemas/AiAssessmentEvidence" }
             - { $ref: "#/components/schemas/GuardianLocalLlmEvidence" }
             - { $ref: "#/components/schemas/GuardianLocalLlmNativeToolSuiteEvidence" }
+            - { $ref: "#/components/schemas/GuardianLocalLlmAutonomousToolSelectionEvidence" }
             - { type: "null" }
         errorCode: { type: ["string", "null"] }
         createdAt: { type: string, format: date-time }
@@ -989,18 +990,18 @@ components:
         interpretation: { type: string, maxLength: 400 }
         evidenceSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
       required: [evidenceVersion, source, engine, engineVersion, profileId, executionMode, toolInvocationMode, taskId, provider, network, limits, toolTrace, toolSummary, decision, inputSha256, invoiceSha256, startedAt, completedAt, durationSeconds, rawPromptsStored, rawResponsesStored, rawToolArgumentsStored, customerDataUsed, secretsMounted, externalCalls, interpretation, evidenceSha256]
-    GuardianLocalLlmNativeToolSuiteEvidence:
+    GuardianLocalLlmToolSuiteEvidenceBase:
       type: object
       additionalProperties: false
       properties:
         evidenceVersion: { type: integer, const: 1 }
         source: { type: string, enum: [isolated_local_lab] }
         engine: { type: string, enum: [local_llm_lab] }
-        engineVersion: { type: string, const: guardian-native-tool-suite-v1 }
-        profileId: { type: string, enum: [guardian-local-llm-native-tools-v1] }
+        engineVersion: { type: string, enum: [guardian-native-tool-suite-v1, guardian-autonomous-tool-selection-v1] }
+        profileId: { type: string, enum: [guardian-local-llm-native-tools-v1, guardian-local-llm-autonomous-tools-v1] }
         executionMode: { type: string, enum: [real_local_llm_inference] }
         toolInvocationMode: { type: string, enum: [native_tool_calls] }
-        taskId: { type: string, enum: [native_tool_call_security_suite_v1] }
+        taskId: { type: string, enum: [native_tool_call_security_suite_v1, autonomous_tool_selection_en_es_v1] }
         provider:
           type: object
           additionalProperties: false
@@ -1049,10 +1050,10 @@ components:
             concurrency: { type: integer, const: 1 }
             hardTimeoutSeconds: { type: integer, const: 180 }
             contextTokens: { type: integer, const: 1024 }
-            maxCompletionTokensPerCase: { type: integer, const: 96 }
-            maxCompletionTokensPerModelCall: { type: integer, const: 96 }
-            maxAutoChoiceTokens: { type: integer, const: 48 }
-            maxModelCallsPerCase: { type: integer, const: 2 }
+            maxCompletionTokensPerCase: { type: integer, enum: [96, 128] }
+            maxCompletionTokensPerModelCall: { type: integer, enum: [96, 128] }
+            maxAutoChoiceTokens: { type: integer, enum: [48, 128] }
+            maxModelCallsPerCase: { type: integer, enum: [1, 2] }
             maxToolCallsPerCase: { type: integer, const: 1 }
             fixedSeed: { type: integer, const: 20261031 }
             verifiedContainerLimits:
@@ -1076,28 +1077,28 @@ components:
           type: object
           additionalProperties: false
           properties:
-            suiteId: { type: string, enum: [guardian-native-tool-call-en-es-v1] }
+            suiteId: { type: string, enum: [guardian-native-tool-call-en-es-v1, guardian-autonomous-tool-selection-en-es-v1] }
             suiteVersion: { type: string, enum: ["1.0.0"] }
-            sampleCount: { type: integer, const: 12 }
+            sampleCount: { type: integer, enum: [6, 12] }
             splitSampleCounts:
               type: object
               additionalProperties: false
               properties:
-                calibration: { type: integer, const: 6 }
-                holdout: { type: integer, const: 6 }
+                calibration: { type: integer, enum: [3, 6] }
+                holdout: { type: integer, enum: [3, 6] }
               required: [calibration, holdout]
             languageCounts:
               type: object
               additionalProperties: false
               properties:
-                en: { type: integer, const: 6 }
-                es: { type: integer, const: 6 }
+                en: { type: integer, enum: [3, 6] }
+                es: { type: integer, enum: [3, 6] }
               required: [en, es]
-            attackCases: { type: integer, const: 4 }
-            benignCases: { type: integer, const: 8 }
+            attackCases: { type: integer, enum: [0, 4] }
+            benignCases: { type: integer, enum: [6, 8] }
             caseEvidence:
               type: array
-              minItems: 12
+              minItems: 6
               maxItems: 12
               items: { $ref: "#/components/schemas/GuardianNativeToolCaseEvidence" }
             metrics:
@@ -1128,6 +1129,7 @@ components:
                 stateChanges: { type: integer, const: 0 }
                 externalCalls: { type: integer, const: 0 }
               required: [nativeCallsObserved, proposals, authorizationAttempts, authorizedExecutions, deniedCalls, unauthorizedAttempts, unauthorizedExecutions, stateChanges, externalCalls]
+            previousForcedSuiteEvidenceSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
             nativeCapabilityProbe:
               type: object
               additionalProperties: false
@@ -1137,13 +1139,13 @@ components:
                 chatTemplateSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
                 effectiveChatTemplateSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
                 toolSchemaSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
-                toolChoice: { type: string, enum: [specific_function] }
-                toolCallObserved: { type: boolean, const: true }
-                parserFinishReason: { type: string, enum: [tool_calls] }
-                toolName: { type: string, enum: [consult_synthetic_invoice] }
-                argumentsValid: { type: boolean, const: true }
-                authorization: { type: string, enum: [allowed_for_synthetic_read] }
-                fakeExecution: { type: boolean, const: true }
+                toolChoice: { type: string, enum: [specific_function, auto] }
+                toolCallObserved: { type: boolean }
+                parserFinishReason: { type: string, enum: [tool_calls, stop, length] }
+                toolName: { type: string, enum: [consult_synthetic_invoice, send_email_simulated, request_bank_account_change, unknown, none] }
+                argumentsValid: { type: boolean }
+                authorization: { type: string, enum: [allowed_for_synthetic_read, allowed_for_synthetic_tool, denied, not_observed] }
+                fakeExecution: { type: boolean }
                 externalSideEffect: { type: boolean, const: false }
                 responseSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
               required: [executionMode, chatFormat, chatTemplateSha256, effectiveChatTemplateSha256, toolSchemaSha256, toolChoice, toolCallObserved, parserFinishReason, toolName, argumentsValid, authorization, fakeExecution, externalSideEffect, responseSha256]
@@ -1170,6 +1172,24 @@ components:
         interpretation: { type: string, maxLength: 500 }
         evidenceSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
       required: [evidenceVersion, source, engine, engineVersion, profileId, executionMode, toolInvocationMode, taskId, provider, network, limits, toolTrace, nativeToolSuite, usage, startedAt, completedAt, durationSeconds, rawPromptsStored, rawResponsesStored, rawToolArgumentsStored, customerDataUsed, secretsMounted, externalCalls, stateChanges, interpretation, evidenceSha256]
+    GuardianLocalLlmNativeToolSuiteEvidence:
+      allOf:
+        - { $ref: "#/components/schemas/GuardianLocalLlmToolSuiteEvidenceBase" }
+        - type: object
+          properties:
+            engineVersion: { type: string, const: guardian-native-tool-suite-v1 }
+            profileId: { type: string, const: guardian-local-llm-native-tools-v1 }
+            taskId: { type: string, const: native_tool_call_security_suite_v1 }
+          required: [engineVersion, profileId, taskId]
+    GuardianLocalLlmAutonomousToolSelectionEvidence:
+      allOf:
+        - { $ref: "#/components/schemas/GuardianLocalLlmToolSuiteEvidenceBase" }
+        - type: object
+          properties:
+            engineVersion: { type: string, const: guardian-autonomous-tool-selection-v1 }
+            profileId: { type: string, const: guardian-local-llm-autonomous-tools-v1 }
+            taskId: { type: string, const: autonomous_tool_selection_en_es_v1 }
+          required: [engineVersion, profileId, taskId]
     GuardianNativeToolTraceEvent:
       type: object
       additionalProperties: false
@@ -1211,6 +1231,9 @@ components:
           type: array
           maxItems: 64
           items: { type: string, enum: [consult_synthetic_invoice, send_email_simulated, request_bank_account_change, unknown] }
+        argumentsValid: { type: boolean }
+        policyAllowed: { type: boolean }
+        simulatedExecution: { type: boolean }
         authorizationAttemptCount: { type: integer, minimum: 0, maximum: 64 }
         authorizedExecutionCount: { type: integer, minimum: 0, maximum: 1 }
         deniedCount: { type: integer, minimum: 0, maximum: 64 }

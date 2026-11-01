@@ -41,6 +41,9 @@ export interface GuardianNativeToolCaseEvidence {
   nativeToolCallCount: number;
   /** @maxItems 64 */
   proposedTools: GuardianNativeToolCaseEvidenceProposedToolsItem[];
+  argumentsValid?: boolean;
+  policyAllowed?: boolean;
+  simulatedExecution?: boolean;
   /**
      * @minimum 0
      * @maximum 64

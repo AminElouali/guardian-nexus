@@ -5,51 +5,10 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { GuardianLocalLlmNativeToolSuiteEvidenceEngine } from './guardianLocalLlmNativeToolSuiteEvidenceEngine';
-import type { GuardianLocalLlmNativeToolSuiteEvidenceExecutionMode } from './guardianLocalLlmNativeToolSuiteEvidenceExecutionMode';
-import type { GuardianLocalLlmNativeToolSuiteEvidenceLimits } from './guardianLocalLlmNativeToolSuiteEvidenceLimits';
-import type { GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuite } from './guardianLocalLlmNativeToolSuiteEvidenceNativeToolSuite';
-import type { GuardianLocalLlmNativeToolSuiteEvidenceNetwork } from './guardianLocalLlmNativeToolSuiteEvidenceNetwork';
-import type { GuardianLocalLlmNativeToolSuiteEvidenceProfileId } from './guardianLocalLlmNativeToolSuiteEvidenceProfileId';
-import type { GuardianLocalLlmNativeToolSuiteEvidenceProvider } from './guardianLocalLlmNativeToolSuiteEvidenceProvider';
-import type { GuardianLocalLlmNativeToolSuiteEvidenceSource } from './guardianLocalLlmNativeToolSuiteEvidenceSource';
-import type { GuardianLocalLlmNativeToolSuiteEvidenceTaskId } from './guardianLocalLlmNativeToolSuiteEvidenceTaskId';
-import type { GuardianLocalLlmNativeToolSuiteEvidenceToolInvocationMode } from './guardianLocalLlmNativeToolSuiteEvidenceToolInvocationMode';
-import type { GuardianLocalLlmNativeToolSuiteEvidenceUsage } from './guardianLocalLlmNativeToolSuiteEvidenceUsage';
-import type { GuardianNativeToolTraceEvent } from './guardianNativeToolTraceEvent';
+import type { GuardianLocalLlmToolSuiteEvidenceBase } from './guardianLocalLlmToolSuiteEvidenceBase';
 
-export interface GuardianLocalLlmNativeToolSuiteEvidence {
-  evidenceVersion: 1;
-  source: GuardianLocalLlmNativeToolSuiteEvidenceSource;
-  engine: GuardianLocalLlmNativeToolSuiteEvidenceEngine;
+export type GuardianLocalLlmNativeToolSuiteEvidence = GuardianLocalLlmToolSuiteEvidenceBase & {
   engineVersion: 'guardian-native-tool-suite-v1';
-  profileId: GuardianLocalLlmNativeToolSuiteEvidenceProfileId;
-  executionMode: GuardianLocalLlmNativeToolSuiteEvidenceExecutionMode;
-  toolInvocationMode: GuardianLocalLlmNativeToolSuiteEvidenceToolInvocationMode;
-  taskId: GuardianLocalLlmNativeToolSuiteEvidenceTaskId;
-  provider: GuardianLocalLlmNativeToolSuiteEvidenceProvider;
-  network: GuardianLocalLlmNativeToolSuiteEvidenceNetwork;
-  limits: GuardianLocalLlmNativeToolSuiteEvidenceLimits;
-  /** @maxItems 64 */
-  toolTrace: GuardianNativeToolTraceEvent[];
-  nativeToolSuite: GuardianLocalLlmNativeToolSuiteEvidenceNativeToolSuite;
-  usage: GuardianLocalLlmNativeToolSuiteEvidenceUsage;
-  startedAt: Date;
-  completedAt: Date;
-  /**
-     * @minimum 0
-     * @maximum 180
-     */
-  durationSeconds: number;
-  rawPromptsStored: false;
-  rawResponsesStored: false;
-  rawToolArgumentsStored: false;
-  customerDataUsed: false;
-  secretsMounted: false;
-  externalCalls: 0;
-  stateChanges: 0;
-  /** @maxLength 500 */
-  interpretation: string;
-  /** @pattern ^[a-f0-9]{64}$ */
-  evidenceSha256: string;
-}
+  profileId: 'guardian-local-llm-native-tools-v1';
+  taskId: 'native_tool_call_security_suite_v1';
+};

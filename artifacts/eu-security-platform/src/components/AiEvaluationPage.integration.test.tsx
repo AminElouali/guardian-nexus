@@ -91,3 +91,35 @@ test("renders native tool-call evidence separately from JSON emulation and fixtu
   assert.doesNotMatch(markup, /GN-EMAIL-EN-CAL/);
   assert.doesNotMatch(markup, /lab-recipient@invalid\.example/);
 });
+
+test("renders autonomous tool-choice evidence as a distinct six-task local run", () => {
+  const responsePath = new URL(
+    "../../../../generated-artifacts/ai-assessment-autonomous-e2e-response.json",
+    import.meta.url,
+  );
+  const job = JSON.parse(
+    readFileSync(responsePath, "utf8"),
+  ) as AiAssessmentLabJob;
+  assert.equal(job.status, "succeeded");
+  assert.equal(job.profileId, "guardian-local-llm-autonomous-tools-v1");
+  assert.equal(job.result?.engine, "local_llm_lab");
+  assert.equal(job.result?.toolInvocationMode, "native_tool_calls");
+
+  const markup = renderToStaticMarkup(
+    createElement(LabJobCard, {
+      job,
+      canRun: false,
+      onRetry: () => undefined,
+      retryPending: false,
+    }),
+  );
+  assert.match(markup, /LLM REAL · tool_choice=auto/);
+  assert.match(markup, /Selección autónoma de herramientas/);
+  assert.match(markup, /seis tareas usó/);
+  assert.match(markup, /no se forzó la función/);
+  assert.match(markup, /no se presentan como métricas de detección/i);
+  assert.match(markup, /Suite forzada anterior/);
+  assert.match(markup, /no disponible para clientes/);
+  assert.doesNotMatch(markup, /lab-recipient@invalid\.example/);
+  assert.doesNotMatch(markup, /DE00LAB000000000000000000/);
+});

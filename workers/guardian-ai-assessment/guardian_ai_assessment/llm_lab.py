@@ -1881,11 +1881,16 @@ def main() -> int:
         task_group = parser.add_mutually_exclusive_group()
         task_group.add_argument("--integration-job", action="store_true")
         task_group.add_argument("--native-tool-suite-job", action="store_true")
+        task_group.add_argument("--autonomous-tool-selection-job", action="store_true")
         args = parser.parse_args()
         if args.integration_job:
             result = run_invoice_integration_job()
         elif args.native_tool_suite_job:
             result = run_native_tool_suite_job()
+        elif args.autonomous_tool_selection_job:
+            from .autonomous_tool_selection import run_autonomous_tool_selection_job
+
+            result = run_autonomous_tool_selection_job()
         else:
             result = run_real_evaluation()
     except Exception as error:  # Do not emit prompts or exception messages.

@@ -8,6 +8,7 @@
 import type { AiAssessmentEvidence } from './aiAssessmentEvidence';
 import type { AiAssessmentLabJobProfileId } from './aiAssessmentLabJobProfileId';
 import type { AiAssessmentLabJobStatus } from './aiAssessmentLabJobStatus';
+import type { GuardianLocalLlmAutonomousToolSelectionEvidence } from './guardianLocalLlmAutonomousToolSelectionEvidence';
 import type { GuardianLocalLlmEvidence } from './guardianLocalLlmEvidence';
 import type { GuardianLocalLlmNativeToolSuiteEvidence } from './guardianLocalLlmNativeToolSuiteEvidence';
 
@@ -19,7 +20,7 @@ export interface AiAssessmentLabJob {
   attempts: number;
   /** @nullable */
   engineVersion: string | null;
-  result: AiAssessmentEvidence | GuardianLocalLlmEvidence | GuardianLocalLlmNativeToolSuiteEvidence | null;
+  result: AiAssessmentEvidence | GuardianLocalLlmEvidence | GuardianLocalLlmNativeToolSuiteEvidence | GuardianLocalLlmAutonomousToolSelectionEvidence | null;
   /** @nullable */
   errorCode: string | null;
   createdAt: Date;

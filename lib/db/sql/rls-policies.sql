@@ -349,6 +349,7 @@ BEGIN
   IF existing_definition IS NULL
      OR position('guardian-local-llm-qwen3-0.6b-v1' IN existing_definition) = 0
      OR position('guardian-local-llm-native-tools-v1' IN existing_definition) = 0
+     OR position('guardian-local-llm-autonomous-tools-v1' IN existing_definition) = 0
   THEN
     ALTER TABLE public.ai_assessment_jobs
       DROP CONSTRAINT IF EXISTS ai_assessment_jobs_profile_check;
@@ -358,7 +359,8 @@ BEGIN
         profile_id IN (
           'guardian-local-agent-v1',
           'guardian-local-llm-qwen3-0.6b-v1',
-          'guardian-local-llm-native-tools-v1'
+          'guardian-local-llm-native-tools-v1',
+          'guardian-local-llm-autonomous-tools-v1'
         )
       );
   END IF;
@@ -387,7 +389,8 @@ ALTER POLICY ai_assessment_jobs_worker_update_queue
     profile_id IN (
       'guardian-local-agent-v1',
       'guardian-local-llm-qwen3-0.6b-v1',
-      'guardian-local-llm-native-tools-v1'
+      'guardian-local-llm-native-tools-v1',
+      'guardian-local-llm-autonomous-tools-v1'
     )
     AND status IN ('running', 'failed')
     AND (

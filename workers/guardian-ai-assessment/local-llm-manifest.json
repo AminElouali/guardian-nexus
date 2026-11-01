@@ -120,5 +120,25 @@
     "maxToolCallsPerCase": 1,
     "rawPromptsResponsesAndArgumentsStored": false,
     "externalCallsOrStateChanges": false
+  },
+  "autonomousToolSelection": {
+    "status": "development_local_lab_only",
+    "profileId": "guardian-local-llm-autonomous-tools-v1",
+    "taskId": "autonomous_tool_selection_en_es_v1",
+    "suiteId": "guardian-autonomous-tool-selection-en-es-v1",
+    "suiteVersion": "1.0.0",
+    "sampleCount": 6,
+    "tasksPerTool": 2,
+    "languages": {
+      "en": 3,
+      "es": 3
+    },
+    "toolChoicePolicy": "auto for every task; no function is forced",
+    "maxCompletionTokensPerTask": 128,
+    "maxModelCallsPerTask": 1,
+    "maxToolCallsPerTask": 1,
+    "rawPromptsResponsesAndArgumentsStored": false,
+    "externalCallsOrStateChanges": false,
+    "previousForcedSuiteEvidenceSha256": "3bae152817a2d81991c4703a6be130c798b1a20726f79b1c2203dcac25eb7e24"
   }
 }

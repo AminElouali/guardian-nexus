@@ -73,6 +73,10 @@ type NativeToolSuiteEvidence = Extract<
   NonNullable<AiAssessmentLabJob['result']>,
   { profileId: 'guardian-local-llm-native-tools-v1' }
 >;
+type AutonomousToolSelectionEvidence = Extract<
+  NonNullable<AiAssessmentLabJob['result']>,
+  { profileId: 'guardian-local-llm-autonomous-tools-v1' }
+>;
 
 const verificationScenarioLabels: Record<string, string> = {
   synthetic_data_exfiltration: 'Exfiltración de dato sintético',
@@ -288,37 +292,55 @@ const nativeObjectiveLabels: Record<string, string> = {
   unauthorizedExecution: 'Ejecución no autorizada',
 };
 
+const autonomousTaskLabels: Record<string, string> = {
+  authorized_invoice_read: 'Lectura autorizada de factura sintética',
+  authorized_simulated_email_draft: 'Preparación autorizada de correo simulado',
+  authorized_synthetic_bank_request: 'Solicitud ficticia de cambio bancario',
+};
+
 function NativeToolSuiteResult({
   evidence,
 }: {
-  evidence: NativeToolSuiteEvidence;
+  evidence: NativeToolSuiteEvidence | AutonomousToolSelectionEvidence;
 }) {
   const suite = evidence.nativeToolSuite;
+  const autonomous =
+    evidence.profileId === 'guardian-local-llm-autonomous-tools-v1';
   return <section className="guardian-verification" data-testid="native-tool-suite-result">
     <div className="guardian-verification-heading">
       <div>
-        <span className="ai-evaluation-run-label">LLM REAL · LLAMADAS NATIVAS · LABORATORIO LOCAL</span>
-        <h4>Evaluación de llamadas a herramientas</h4>
+        <span className="ai-evaluation-run-label">
+          {autonomous
+            ? 'LLM REAL · tool_choice=auto · LABORATORIO LOCAL'
+            : 'LLM REAL · LLAMADAS NATIVAS · LABORATORIO LOCAL'}
+        </span>
+        <h4>{autonomous ? 'Selección autónoma de herramientas' : 'Evaluación de llamadas a herramientas'}</h4>
       </div>
       <span className="guardian-verification-pill">Solo laboratorio; no disponible para clientes</span>
     </div>
     <p className="guardian-verification-disclaimer">
-      Qwen3 local devolvió objetos <code>message.tool_calls</code> usando el template GGUF; no se interpretó JSON del texto como tool call. Las llamadas de correo y cambio bancario solo generaron resultados ficticios en memoria.
+      {autonomous
+        ? <>Cada una de las seis tareas usó <code>tool_choice=auto</code>; no se forzó la función. Solo se cuentan objetos nativos <code>message.tool_calls</code>, no JSON del texto. Las tres herramientas son ficticias y no producen efectos externos.</>
+        : <>Qwen3 local devolvió objetos <code>message.tool_calls</code> usando el template GGUF; no se interpretó JSON del texto como tool call. Las llamadas de correo y cambio bancario solo generaron resultados ficticios en memoria.</>}
     </p>
     <div className="guardian-verification-stats">
       <span><b>{suite.sampleCount}</b> casos sintéticos</span>
-      <span><b>{suite.splitSampleCounts.calibration}</b> calibración · <b>{suite.splitSampleCounts.holdout}</b> holdout</span>
+      <span>{autonomous
+        ? <>Particiones internas <b>{suite.splitSampleCounts.calibration}+{suite.splitSampleCounts.holdout}</b></>
+        : <><b>{suite.splitSampleCounts.calibration}</b> calibración · <b>{suite.splitSampleCounts.holdout}</b> holdout</>}</span>
       <span><b>{suite.languageCounts.en}/{suite.languageCounts.es}</b> casos EN/ES</span>
       <span><b>{suite.toolSummary.nativeCallsObserved}</b> llamadas nativas observadas</span>
-      <span><b>{suite.taskSuccess.numerator}/{suite.taskSuccess.denominator}</b> tareas autorizadas verificadas</span>
+        <span><b>{suite.taskSuccess.numerator}/{suite.taskSuccess.denominator}</b> operaciones simuladas verificadas</span>
       <span><b>{suite.metrics.find((metric) => metric.split === 'all')?.inconclusiveCount ?? 0}</b> casos inconclusos</span>
     </div>
     <p className="guardian-verification-disclaimer">
-      En tareas benignas autorizadas, el arnés seleccionó la función específica para comprobar argumentos y autorización; eso no mide selección autónoma. Ataques y textos citados usaron selección automática. Las matrices comparan tipo de escenario con eventos de herramienta observados; un falso negativo significa que no se observó ese evento en un caso de ataque, no que un detector de ataques haya fallado.
+      {autonomous
+        ? 'Los seis ejemplos son tareas benignas autorizadas: no constituyen una prueba de detección de ataques ni una medida general de seguridad. «Resuelta» significa que la herramienta ficticia devolvió un resultado autorizado; no se evalúa una respuesta conversacional posterior. Una llamada ausente o incorrecta se cuenta como no resuelta; nunca se cambia a selección forzada.'
+        : 'En tareas benignas autorizadas, el arnés seleccionó la función específica para comprobar argumentos y autorización; eso no mide selección autónoma. Ataques y textos citados usaron selección automática. Las matrices comparan tipo de escenario con eventos de herramienta observados; un falso negativo significa que no se observó ese evento en un caso de ataque, no que un detector de ataques haya fallado.'}
     </p>
     <details className="guardian-verification-details">
       <summary>Métricas, trazas y procedencia</summary>
-      <div className="guardian-verification-table-wrap">
+      {!autonomous && <div className="guardian-verification-table-wrap">
         <table className="guardian-verification-table">
           <thead><tr>
             <th scope="col">Conjunto</th>
@@ -345,13 +367,17 @@ function NativeToolSuiteResult({
             ))}
           </tbody>
         </table>
-      </div>
+      </div>}
+      {autonomous && <p className="guardian-verification-note">
+        Sin casos de ataque: TP/FP/TN/FN no se presentan como métricas de detección. La prueba informa únicamente selección de herramientas, autorización y resolución de estas seis tareas.
+      </p>}
       <div className="guardian-verification-table-wrap">
         <table className="guardian-verification-table">
           <thead><tr>
             <th scope="col">Caso</th>
             <th scope="col">Grupo</th>
             <th scope="col">Herramientas propuestas</th>
+            <th scope="col">Argumentos · permiso</th>
             <th scope="col">Intento no permitido</th>
             <th scope="col">Ejecución ficticia</th>
             <th scope="col">Tarea</th>
@@ -360,10 +386,13 @@ function NativeToolSuiteResult({
             {suite.caseEvidence.map((item) => (
               <tr key={item.caseId}>
                 <th scope="row">{item.caseId}</th>
-                <td>{item.split} · {item.language.toUpperCase()} · {item.label}</td>
+                <td>{autonomous
+                  ? `${item.split === 'calibration' ? 'partición A' : 'partición B'} · ${item.language.toUpperCase()} · ${autonomousTaskLabels[item.category] ?? item.label}`
+                  : `${item.split} · ${item.language.toUpperCase()} · ${item.label}`}</td>
                 <td>{item.proposedTools.length ? item.proposedTools.map((tool) => toolLabels[tool] ?? tool).join(', ') : 'Ninguna'}</td>
+                <td>{autonomous ? `${item.argumentsValid ? 'Válidos' : 'No válidos'} · ${item.policyAllowed ? 'permitido' : 'no permitido'}` : 'No medido en este perfil'}</td>
                 <td>{item.policyObservationComplete ? item.unauthorizedAttempt ? 'Sí; denegado' : 'No observado' : 'Inconcluso'}</td>
-                <td>{item.authorizedExecutionCount}</td>
+                <td>{autonomous ? item.simulatedExecution ? 'Sí, solo simulación' : 'No' : item.authorizedExecutionCount}</td>
                 <td>{item.taskSuccessEligible ? item.taskSucceeded ? 'Verificada' : 'No verificada' : 'No aplicable'}</td>
               </tr>
             ))}
@@ -378,6 +407,7 @@ function NativeToolSuiteResult({
         <dt>Hash del modelo</dt><dd><code>{evidence.provider.sha256}</code></dd>
         <dt>Hash de evidencia</dt><dd><code>{evidence.evidenceSha256}</code></dd>
         <dt>Hash del conjunto</dt><dd><code>{suite.suiteEvidenceSha256}</code></dd>
+        {autonomous && <><dt>Selección por tarea</dt><dd>tool_choice=auto · una llamada · máximo 128 tokens.</dd><dt>Suite forzada anterior</dt><dd><code>{suite.previousForcedSuiteEvidenceSha256}</code> · referencia separada, no es evidencia de autonomía.</dd></>}
         <dt>Red</dt><dd>IPv4 {networkStatusLabel(evidence.network.publicIpv4)}, IPv6 {networkStatusLabel(evidence.network.publicIpv6)}, DNS {networkStatusLabel(evidence.network.publicDns)}.</dd>
         <dt>Límites comprobados</dt><dd>{evidence.limits.verifiedContainerLimits.cpuCores} CPU · {Math.round(evidence.limits.verifiedContainerLimits.memoryBytes / 1024 / 1024)} MiB · {evidence.limits.verifiedContainerLimits.pids} procesos · una concurrencia · {evidence.durationSeconds} s.</dd>
         <dt>Acciones externas</dt><dd>{suite.toolSummary.externalCalls} llamadas externas · {suite.toolSummary.stateChanges} cambios persistentes.</dd>
@@ -405,14 +435,17 @@ export function LabJobCard({
       ? evidence
       : null;
   const nativeToolEvidence =
-    evidence?.profileId === 'guardian-local-llm-native-tools-v1'
+    evidence?.profileId === 'guardian-local-llm-native-tools-v1' ||
+    evidence?.profileId === 'guardian-local-llm-autonomous-tools-v1'
       ? evidence
       : null;
   return <article className="ai-evaluation-run" data-testid="ai-lab-job">
     <div className="ai-evaluation-run-head">
       <div>
         <span className="ai-evaluation-run-label">
-          {job.profileId === 'guardian-local-llm-native-tools-v1'
+          {job.profileId === 'guardian-local-llm-autonomous-tools-v1'
+            ? 'LLM REAL · SELECCIÓN AUTÓNOMA'
+            : job.profileId === 'guardian-local-llm-native-tools-v1'
             ? 'LLM REAL · TOOL CALLS NATIVAS'
             : job.profileId === 'guardian-local-llm-qwen3-0.6b-v1'
             ? 'INFERENCIA REAL · LLM LOCAL'
@@ -477,6 +510,9 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
   ) ?? false;
   const nativeToolsAvailable = availability.data?.profiles.some(
     (profile) => profile.profileId === 'guardian-local-llm-native-tools-v1' && profile.status === 'ready',
+  ) ?? false;
+  const autonomousToolsAvailable = availability.data?.profiles.some(
+    (profile) => profile.profileId === 'guardian-local-llm-autonomous-tools-v1' && profile.status === 'ready',
   ) ?? false;
 
   async function requestLabAssessment(profileId: AiAssessmentLabJobRequestProfileId) {
@@ -544,7 +580,7 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
         <div><span className="panel-kicker">EJECUCIONES LOCALES · DESARROLLO</span><h2>Laboratorio aislado</h2></div>
         <span className={`ai-evaluation-state ${availability.data?.status === 'ready' ? '' : 'ai-state-pending'}`}><i />{availability.isLoading ? 'Comprobando' : availability.data?.status === 'ready' ? 'Disponible en desarrollo' : 'No disponible'}</span>
       </div>
-       <p>Garak/GVE conserva el flujo local existente con fixtures. El perfil Qwen simple ejecuta una tarea de factura sintética; la nueva suite utiliza el template de herramientas del modelo y 12 casos fijos en español e inglés, con 1 CPU, 1.536 MiB y concurrencia global 1. Los resultados son solo del laboratorio; ningún perfil está habilitado para clientes.</p>
+       <p>Garak/GVE conserva el flujo local existente con fixtures. Qwen ejecuta una tarea sintética, la suite nativa anterior conserva sus 12 casos y el nuevo perfil prueba seis tareas benignas con selección automática de herramienta, sin forzar funciones. Los trabajos usan 1 CPU, 1.536 MiB, concurrencia global 1 y red deshabilitada. Ningún perfil está habilitado para clientes.</p>
       {availability.data?.status !== 'ready' && <div className="ai-lab-unavailable"><LockKeyhole size={15} />{availability.data?.reasonCode === 'development_only' ? 'Deshabilitado fuera del entorno de desarrollo.' : 'El worker local no está preparado. No se iniciará ni simulará una evaluación.'}</div>}
       <div className="ai-evaluation-actions">
         <Button onClick={() => void requestLabAssessment('guardian-local-agent-v1')} disabled={!canRun || !garakAvailable || createLabJob.isPending} data-testid="button-run-ai-lab">
@@ -559,9 +595,14 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
           {createLabJob.isPending ? <Activity className="spin" size={15} /> : <ShieldCheck size={15} />}
           {createLabJob.isPending ? 'Encolando…' : 'Solicitar suite de llamadas nativas'}
         </Button>
+        <Button variant="outline" onClick={() => void requestLabAssessment('guardian-local-llm-autonomous-tools-v1')} disabled={!canRun || !autonomousToolsAvailable || createLabJob.isPending} data-testid="button-run-autonomous-tool-selection">
+          {createLabJob.isPending ? <Activity className="spin" size={15} /> : <ShieldCheck size={15} />}
+          {createLabJob.isPending ? 'Encolando…' : 'Evaluar selección autónoma'}
+        </Button>
         {!canRun && <small>Solo owner/admin puede iniciar o reintentar.</small>}
         {canRun && !qwenAvailable && <small>Qwen local no disponible: {availability.data?.profiles.find((profile) => profile.profileId === 'guardian-local-llm-qwen3-0.6b-v1')?.reasonCode ?? 'worker_unavailable'}.</small>}
         {canRun && !nativeToolsAvailable && <small>Suite de tool calls nativas no disponible: {availability.data?.profiles.find((profile) => profile.profileId === 'guardian-local-llm-native-tools-v1')?.reasonCode ?? 'worker_unavailable'}.</small>}
+        {canRun && !autonomousToolsAvailable && <small>Selección autónoma no disponible: {availability.data?.profiles.find((profile) => profile.profileId === 'guardian-local-llm-autonomous-tools-v1')?.reasonCode ?? 'worker_unavailable'}.</small>}
       </div>
       {labJobs.isLoading && <div className="ai-history-empty" role="status">Cargando trabajos del laboratorio…</div>}
       {labJobs.isError && <div className="notice notice-error" role="alert">No se pudo cargar el estado del laboratorio. <Button variant="outline" onClick={() => void labJobs.refetch()}>Reintentar</Button></div>}

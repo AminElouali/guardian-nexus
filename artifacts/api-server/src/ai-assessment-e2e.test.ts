@@ -15,6 +15,7 @@ import {
   aiAssessmentJobsTable,
   assertRlsRuntimeReady,
   pool,
+  type GuardianLocalLlmAutonomousToolSelectionEvidence,
   type GuardianLocalLlmNativeToolSuiteEvidence,
 } from "@workspace/db";
 import { withWorkspaceUserTransaction } from "./lib/tenant-db";
@@ -54,6 +55,7 @@ let workspaceB = "";
 let jobId = "";
 let localLlmJobId = "";
 let nativeToolJobId = "";
+let autonomousToolJobId = "";
 let server: Server | undefined;
 let baseUrl = "";
 
@@ -69,6 +71,13 @@ before(async () => {
   assert.equal(
     getLocalWorkerAvailability().profiles.find(
       (profile) => profile.profileId === "guardian-local-llm-native-tools-v1",
+    )?.status,
+    "ready",
+  );
+  assert.equal(
+    getLocalWorkerAvailability().profiles.find(
+      (profile) =>
+        profile.profileId === "guardian-local-llm-autonomous-tools-v1",
     )?.status,
     "ready",
   );
@@ -118,7 +127,12 @@ before(async () => {
 
 after(async () => {
   stopLocalAssessmentQueueWorker();
-  for (const candidateJobId of [jobId, localLlmJobId, nativeToolJobId].filter(Boolean)) {
+  for (const candidateJobId of [
+    jobId,
+    localLlmJobId,
+    nativeToolJobId,
+    autonomousToolJobId,
+  ].filter(Boolean)) {
     spawnSync(
       "docker",
       ["rm", "--force", `guardian-ai-lab-${candidateJobId}`],
@@ -651,6 +665,204 @@ test(
     const artifactPath = fileURLToPath(
       new URL(
         "../../../generated-artifacts/ai-assessment-native-e2e-response.json",
+        import.meta.url,
+      ),
+    );
+    mkdirSync(dirname(artifactPath), { recursive: true });
+    writeFileSync(artifactPath, JSON.stringify(rawJob, null, 2));
+  },
+);
+
+test(
+  "autonomous Qwen tool selection uses auto for every task and persists tenant-safe evidence",
+  { timeout: TIMEOUT_MS },
+  async () => {
+    const pathA = `/api/workspaces/${workspaceA}/ai-security-assessments/lab/jobs`;
+    const pathB = `/api/workspaces/${workspaceB}/ai-security-assessments/lab/jobs`;
+    const idempotencyKey = `autonomous-tools-e2e-${randomUUID()}`;
+    const autoProfile = "guardian-local-llm-autonomous-tools-v1";
+    assert.equal(
+      (
+        await apiRequest(viewerA, pathA, "POST", {
+          idempotencyKey: `autonomous-viewer-${randomUUID()}`,
+          profileId: autoProfile,
+        })
+      ).status,
+      403,
+      "viewer cannot request an autonomous tool-selection evaluation",
+    );
+    const created = await apiRequest(userA, pathA, "POST", {
+      idempotencyKey,
+      profileId: autoProfile,
+    });
+    assert.equal(created.status, 202);
+    const accepted = (await created.json()) as {
+      id: string;
+      status: string;
+      profileId: string;
+    };
+    assert.equal(accepted.status, "queued");
+    assert.equal(accepted.profileId, autoProfile);
+    autonomousToolJobId = accepted.id;
+    const duplicate = await apiRequest(userA, pathA, "POST", {
+      idempotencyKey,
+      profileId: autoProfile,
+    });
+    assert.equal(duplicate.status, 202);
+    assert.equal(((await duplicate.json()) as { id: string }).id, accepted.id);
+    assert.equal(
+      (
+        await apiRequest(userA, pathA, "POST", {
+          idempotencyKey,
+          profileId: "guardian-local-agent-v1",
+        })
+      ).status,
+      409,
+      "idempotency key cannot change the execution profile",
+    );
+
+    let rawJob: Record<string, unknown> | undefined;
+    let evidence: GuardianLocalLlmAutonomousToolSelectionEvidence | undefined;
+    const deadline = Date.now() + TIMEOUT_MS - 10_000;
+    while (Date.now() < deadline) {
+      const response = await apiRequest(userA, pathA);
+      assert.equal(response.status, 200);
+      const rawJobs = (await response.json()) as unknown;
+      const jobs = ListWorkspaceAiAssessmentLabJobsResponse.parse(rawJobs);
+      const job = jobs.find((candidate) => candidate.id === accepted.id);
+      if (job?.status === "succeeded" || job?.status === "failed") {
+        rawJob = (rawJobs as Record<string, unknown>[]).find(
+          (candidate) => candidate.id === accepted.id,
+        );
+        assert.equal(job.status, "succeeded", `autonomous worker failed: ${job.errorCode}`);
+        assert.equal(job.attempts, 1);
+        assert.equal(job.profileId, autoProfile);
+        if (
+          job.result?.engine !== "local_llm_lab" ||
+          job.result.profileId !== autoProfile
+        ) {
+          assert.fail("job must identify real local autonomous-selection inference");
+        }
+        evidence =
+          job.result as unknown as GuardianLocalLlmAutonomousToolSelectionEvidence;
+        break;
+      }
+      await delay(POLL_INTERVAL_MS);
+    }
+    assert.ok(rawJob && evidence, "autonomous tool-selection job did not complete");
+    assert.equal(evidence.executionMode, "real_local_llm_inference");
+    assert.equal(evidence.toolInvocationMode, "native_tool_calls");
+    assert.equal(evidence.nativeToolSuite.nativeCapabilityProbe.toolChoice, "auto");
+    assert.equal(evidence.nativeToolSuite.sampleCount, 6);
+    assert.deepEqual(evidence.nativeToolSuite.splitSampleCounts, {
+      calibration: 3,
+      holdout: 3,
+    });
+    assert.deepEqual(evidence.nativeToolSuite.languageCounts, { en: 3, es: 3 });
+    assert.equal(evidence.nativeToolSuite.attackCases, 0);
+    assert.equal(evidence.nativeToolSuite.benignCases, 6);
+    assert.equal(evidence.nativeToolSuite.taskSuccess.denominator, 6);
+    assert.ok(
+      evidence.nativeToolSuite.caseEvidence.every(
+        (item) => item.toolChoiceMode === "auto" && item.modelCallCount === 1,
+      ),
+    );
+    for (const category of [
+      "authorized_invoice_read",
+      "authorized_simulated_email_draft",
+      "authorized_synthetic_bank_request",
+    ]) {
+      assert.equal(
+        evidence.nativeToolSuite.caseEvidence.filter(
+          (item) => item.category === category,
+        ).length,
+        2,
+        `suite contains two ${category} tasks`,
+      );
+    }
+    for (const item of evidence.nativeToolSuite.caseEvidence) {
+      assert.equal(item.simulatedExecution, item.authorizedExecutionCount > 0);
+      assert.equal(item.taskSucceeded, item.benignControlSucceeded);
+      if (item.taskSucceeded) {
+        assert.equal(item.argumentsValid, true);
+        assert.equal(item.policyAllowed, true);
+        assert.equal(item.simulatedExecution, true);
+        assert.equal(item.unauthorizedAttempt, false);
+      }
+    }
+    assert.equal(evidence.usage.modelCalls, 6);
+    assert.equal(
+      evidence.nativeToolSuite.toolSummary.nativeCallsObserved,
+      evidence.nativeToolSuite.caseEvidence.reduce(
+        (count, item) => count + item.nativeToolCallCount,
+        0,
+      ),
+    );
+    assert.equal(evidence.nativeToolSuite.toolSummary.externalCalls, 0);
+    assert.equal(evidence.nativeToolSuite.toolSummary.stateChanges, 0);
+    assert.equal(evidence.rawPromptsStored, false);
+    assert.equal(evidence.rawResponsesStored, false);
+    assert.equal(evidence.rawToolArgumentsStored, false);
+    assert.equal(evidence.network.networkMode, "docker-network-none");
+    assert.ok(["blocked", "unavailable"].includes(evidence.network.publicIpv6));
+
+    const rawEvidence = rawJob.result as Record<string, unknown>;
+    const { evidenceSha256, ...unsignedEvidence } = rawEvidence;
+    assert.equal(
+      createHash("sha256")
+        .update(canonicalJson(unsignedEvidence), "utf8")
+        .digest("hex"),
+      evidenceSha256,
+      "outer evidence digest verifies after API serialization",
+    );
+    const rawSuite = rawEvidence.nativeToolSuite as Record<string, unknown>;
+    const { suiteEvidenceSha256, ...unsignedSuite } = rawSuite;
+    assert.equal(
+      createHash("sha256")
+        .update(canonicalJson(unsignedSuite), "utf8")
+        .digest("hex"),
+      suiteEvidenceSha256,
+      "autonomous suite digest verifies after API serialization",
+    );
+    for (const rawCase of rawSuite.caseEvidence as Record<string, unknown>[]) {
+      const { caseEvidenceSha256, ...unsignedCase } = rawCase;
+      assert.equal(
+        createHash("sha256")
+          .update(canonicalJson(unsignedCase), "utf8")
+          .digest("hex"),
+        caseEvidenceSha256,
+      );
+    }
+    const serialized = JSON.stringify(evidence);
+    assert.equal(serialized.includes("lab-recipient@invalid.example"), false);
+    assert.equal(serialized.includes("DE00LAB000000000000000000"), false);
+    assert.equal(serialized.includes("Synthetic review"), false);
+
+    const persisted = await withWorkspaceUserTransaction(
+      userA,
+      workspaceA,
+      (tx) =>
+        tx
+          .select({
+            status: aiAssessmentJobsTable.status,
+            profileId: aiAssessmentJobsTable.profileId,
+            result: aiAssessmentJobsTable.result,
+          })
+          .from(aiAssessmentJobsTable)
+          .where(eq(aiAssessmentJobsTable.id, accepted.id)),
+    );
+    assert.equal(persisted.authorized, true);
+    if (!persisted.authorized) return;
+    assert.equal(persisted.value[0]?.status, "succeeded");
+    assert.equal(persisted.value[0]?.profileId, autoProfile);
+    assert.equal((await apiRequest(userB, pathA)).status, 403);
+    const tenantBJobs = await apiRequest(userB, pathB);
+    assert.equal(tenantBJobs.status, 200);
+    assert.deepEqual(await tenantBJobs.json(), []);
+
+    const artifactPath = fileURLToPath(
+      new URL(
+        "../../../generated-artifacts/ai-assessment-autonomous-e2e-response.json",
         import.meta.url,
       ),
     );
