@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib.metadata
+import importlib.util
 import argparse
 import json
 import platform
@@ -392,8 +393,21 @@ class NativeToolProvider(Protocol):
 CompletionClient = AgentProvider
 
 
+def _assert_llama_disk_cache_disabled(model: Any) -> None:
+    if not hasattr(model, "cache"):
+        raise RuntimeError("llama_cache_state_unverifiable")
+    if model.cache is not None:
+        raise RuntimeError("llama_disk_cache_must_remain_disabled")
+
+
+def _assert_diskcache_runtime_absent() -> None:
+    if importlib.util.find_spec("diskcache") is not None:
+        raise RuntimeError("diskcache_runtime_package_must_be_absent")
+
+
 class LocalQwenClient:
     def __init__(self, model_path: Path) -> None:
+        _assert_diskcache_runtime_absent()
         from llama_cpp import Llama
         from llama_cpp.llama_chat_format import Jinja2ChatFormatter
 
@@ -406,7 +420,9 @@ class LocalQwenClient:
             use_mmap=True,
             use_mlock=False,
             verbose=False,
+            cache=None,
         )
+        _assert_llama_disk_cache_disabled(self._model)
         template = self._model.metadata.get("tokenizer.chat_template", "")
         template_digest = hashlib.sha256(template.encode("utf-8")).hexdigest()
         if (
@@ -447,6 +463,7 @@ class LocalQwenClient:
         self.native_tool_effective_template_sha256 = effective_digest
 
     def complete(self, *, system: str, user: str, seed: int) -> tuple[str, int, int]:
+        _assert_llama_disk_cache_disabled(self._model)
         completion = self._model.create_chat_completion(
             messages=[
                 {"role": "system", "content": system},
@@ -475,6 +492,7 @@ class LocalQwenClient:
         tool_choice: Any,
         max_tokens: int = MAX_COMPLETION_TOKENS,
     ) -> dict[str, Any]:
+        _assert_llama_disk_cache_disabled(self._model)
         completion = self._model.create_chat_completion(
             messages=messages,
             tools=NATIVE_TOOL_SCHEMAS,

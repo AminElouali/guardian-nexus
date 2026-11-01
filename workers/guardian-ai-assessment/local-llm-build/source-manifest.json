@@ -46,9 +46,29 @@
   },
   "output": {
     "filename": "llama_cpp_python-0.3.36-py3-none-linux_x86_64.whl",
-    "sizeBytes": 24139061,
-    "sha256": "a71a5a2e4b27e25b0fd783bdd5deb5a612ad950e2b0e92a0b500dee24ccb7981",
+    "sizeBytes": 24140277,
+    "sha256": "5e50c8f09c0ed78512bfb16adb32be9e0c65b8ced7c1efcfc200c38782141e96",
     "runtimeLicense": "MIT"
   },
-  "repeatability": "Inputs, base image, Debian snapshot, resource limits, and compiler flags are recorded and pinned. A second independent build was not performed; bit-for-bit reproducibility is therefore not claimed."
+  "sourcePatch": {
+    "filename": "optional-diskcache.patch",
+    "sha256": "4c923e8fa07ee71fb96551797f6deebdb7cff471307bbb6e3705462a731a6202",
+    "purpose": "Make diskcache optional and lazy-loaded; the local runtime omits it and fails closed if the optional cache is requested."
+  },
+  "observedLocalBuilder": {
+    "image": "guardian-llama-source-builder:0.3.36",
+    "imageId": "sha256:1190b243b1ebdd29c6547a1959531a58c474e3c6cb953333fc9bf20b866bf2d6",
+    "pullPolicy": "never",
+    "network": "none"
+  },
+  "observedLocalRebuild": {
+    "date": "2026-11-02",
+    "filename": "llama_cpp_python-0.3.36-py3-none-linux_x86_64.whl",
+    "sizeBytes": 24140282,
+    "sha256": "7bd646f48c830457b85fe4801f2f6992065299f3fea253dea03c247683397ad1",
+    "network": "none",
+    "matchesRecordedOutput": false,
+    "difference": "Only the ELF build-id note in the shared library aliases, the temporary absolute prefix in lib/pkgconfig/llama.pc, and derived RECORD hashes differed; all 92 archive paths were unchanged."
+  },
+  "repeatability": "The offline source build completed, but bit-for-bit reproducibility is not established. The second build differed due to ELF build-id and pip temporary install-prefix metadata; keep the active runtime artifact pinned to its separately verified hash."
 }

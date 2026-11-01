@@ -17,19 +17,12 @@
     "version": "0.3.36",
     "license": "MIT",
     "wheel": "llama_cpp_python-0.3.36-py3-none-linux_x86_64.whl",
-    "wheelSizeBytes": 24139061,
-    "wheelSha256": "a71a5a2e4b27e25b0fd783bdd5deb5a612ad950e2b0e92a0b500dee24ccb7981",
+    "wheelSizeBytes": 24140277,
+    "wheelSha256": "5e50c8f09c0ed78512bfb16adb32be9e0c65b8ced7c1efcfc200c38782141e96",
     "python": "3.13",
     "baseImage": "python:3.13-slim-trixie@sha256:2d44738ebf4ce5f63b9d9ea871e9c7cfdc0426f7b0c97cac915fd88ded1d86bb",
     "baseImageMatchesWorker": true,
     "dependencies": [
-      {
-        "name": "diskcache",
-        "version": "5.6.3",
-        "license": "Apache-2.0",
-        "wheel": "diskcache-5.6.3-py3-none-any.whl",
-        "sha256": "5e31b2d5fbad117cc363ebaf6b689474db18a1f6438bc82358b024abd4c2ca19"
-      },
       {
         "name": "Jinja2",
         "version": "3.1.6",
@@ -54,7 +47,14 @@
         "version": "4.16.0",
         "source": "existing worker image"
       }
-    ]
+    ],
+    "cachePolicy": {
+      "diskcache": "excluded_from_runtime",
+      "llamaCacheArgument": null,
+      "constructor": "optional_dependency_fails_closed",
+      "sourcePatch": "local-llm-build/optional-diskcache.patch",
+      "sourcePatchSha256": "4c923e8fa07ee71fb96551797f6deebdb7cff471307bbb6e3705462a731a6202"
+    }
   },
   "executionLimits": {
     "network": "none",

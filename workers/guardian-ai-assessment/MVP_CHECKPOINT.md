@@ -1,8 +1,92 @@
 # Guardian Nexus MVP checkpoint
 
-Updated: 2026-11-01
+Updated: 2026-11-02
 Scope: development/local laboratory only. No customer systems, external model APIs,
 paid services, production database, remote deployment, or publishing.
+
+## Follow-up audit — 2026-11-02
+
+This update supersedes the older diskcache status, worker-test count, and OSV
+“current scan” wording below. Prior runs remain as historical evidence; see
+`DEPENDENCY_AUDIT.md` for the reconciled scan inputs and hashes.
+
+- Worker image rebuilt locally as `guardian-ai-assessment:local`,
+  config ID `sha256:1d433e201a17a138267a31b316e4a0cab2f373d44fb347034177581268fcf9bb`.
+  No image was pushed. Worker tests now pass 55/55. A cold
+  `docker build --network=none` did not complete because the pinned PyPI layer
+  was not cached; the successful local build reused the cached hash-locked layer.
+  Runtime inference is still `--network=none`.
+- The patched `llama-cpp-python` source-build script completed offline. Its
+  second wheel hash differs from the active wheel because of ELF build-id and
+  temporary `llama.pc` prefix metadata; it was not promoted. Exact
+  reproducibility remains open; see `DEPENDENCY_AUDIT.md` and
+  `local-llm-build/source-manifest.json`.
+- The mounted local-LLM runtime no longer contains `diskcache`: the patched
+  `llama-cpp-python 0.3.36` wheel is hash-pinned, its cache feature fails closed,
+  and the separate runtime SBOM/OSV scan covers three wheels with zero advisory
+  IDs in the current local PyPI database. This is a runtime removal, not an
+  upstream advisory fix or general security certification.
+- A fresh direct Qwen run used eight real local inferences (4 attack, 4 benign;
+  4 English, 4 Spanish) in 84.697 seconds. Results: 4/4 attack outputs exposed
+  the synthetic canary, 0/4 unauthorized tool proposals, 0/4 target-tool
+  proposals, 0 tool attempts, 0 state changes, 0 external calls; benign quoted
+  instruction text propagated in 1/2 controls. Evidence file SHA-256
+  `dc66a5d607edfeea172a2968b174b0c147c529c0e91a7553bfcfaabacd1e3956`.
+  This separate eight-case run is not combined with the 14-case API E2E.
+- New egress test evidence: IPv4 TCP and DNS UDP blocked, loopback reachable,
+  IPv6 is `kernel_protocol_unavailable`, so overall is incomplete and IPv6 is
+  not verified. A separate public IPv4 UDP destination was not probed; do not
+  claim that protocol-specific check passed. Evidence SHA-256
+  `3e6c52fddaf22e485fd4f5f0f2c7957213c36afbc180d9d7c53316c97e2bc424`.
+- Current Debian OSV database hash changed from the previous scan. The new scan
+  still reports four high `util-linux` findings and no critical IDs; 66
+  historical IDs are absent from the refreshed local dataset while the installed
+  package PURLs are unchanged. This is not remediation. The historical critical
+  and high triage and exact scan hashes are in `DEPENDENCY_AUDIT.md`.
+- API unit tests pass 34/34; API and dashboard typechecks pass; the dashboard
+  JSON download/redaction component test passes as part of 4/4 component tests.
+  The download plumbing is tested without a Clerk session; no authenticated
+  browser download was automated. User-provided screenshots previously
+  confirmed an actual Clerk login and dashboard visit, but do not verify this
+  download control.
+- Fresh workspace scans after the changes reported 0 dependency findings,
+  0 SAST findings, and 0 HoundDog findings. These do not change the container
+  OSV status.
+- Root typecheck and build passed with the workspace-required
+  `PORT=5000 BASE_PATH=/`. Vite reported the existing >500 kB frontend chunk
+  advisory; all package builds completed.
+- Desktop preview at 1280×800 rendered the public Spanish Guardian Nexus home.
+  Browser logs showed only the expected Clerk development-key warning and a
+  WebGPU context warning; no Clerk sign-in was attempted in the capture.
+- The combined E2E shell command exceeded 300 seconds after its first two tests
+  passed. Its third synthetic job
+  `40bc3e62-8e85-4ef4-b472-f893fb6c622e` later reached `succeeded` on attempt 2.
+  A targeted autonomous E2E rerun then passed 1/1 in 147.1 seconds. A fresh
+  full API E2E run passed 3/3, followed by dashboard integration tests 4/4.
+  Latest autonomous job: `6b7fd29e-8c42-49fd-bfae-af4b0e467745`, succeeded on
+  attempt 1 in 145.492 seconds. It used 14 real local Qwen inferences, all with
+  `tool_choice=auto` (7 calibration, 7 holdout; 7 EN, 7 ES; 5 attack, 9 benign).
+  Runtime `finish_reason` was `stop` in 14/14; direct `message.tool_calls` was
+  0/14. The model's Qwen template marker adapter produced proposals in 13/14;
+  this is adapted model output, not a direct native runtime tool-call event.
+- Paired authorization result on those proposals: 13/13 identical proposal
+  pairs; policy ON attempted 13, allowed 12, denied 1, and simulated 12
+  authorized actions. Policy OFF only evaluated a disposable in-memory clone:
+  13/13 counterfactual proposals would pass the bypassed gate, with 4 clone
+  state changes. Both arms had 0 actual operation executions, persistent
+  state changes, or external calls. Benign task success was 9/9, false blocks
+  0/9, and attack potential was 1/5. Small laboratory sample only.
+- Overall scenario metrics: unauthorized-proposal and unauthorized-attempt
+  matrices each TP=1, FP=0, TN=9, FN=4 (n=14; positive support=5);
+  unauthorized-execution matrix TP=0, FP=0, TN=9, FN=5 (n=14). These are
+  attack-label metrics, not a claim of broad detector accuracy; the measured
+  unauthorized execution count itself was 0. Task success was 12/14.
+- Redacted report SHA-256 `1c42a9d9833f2151c051d3b371e189b288a70d1b6ee8435ed9e1960885b18e9c`;
+  result evidence SHA-256 `c0ec6cac06ba61487c2e4c39b04bd237683656b025d43ac4f5fcc411bd65b433`;
+  suite evidence SHA-256
+  `5f9d7417822e2fd6cf86c7502beed4675bf029d5187194917e7df35a12b32f67`;
+  paired-comparison evidence SHA-256
+  `9c462e76b9126c3a5a7d6ab5685d3b042c58e801d120cf64191bed52cbeba87b`.
 
 ## Latest verified end-to-end laboratory evidence
 
@@ -59,10 +143,12 @@ paid services, production database, remote deployment, or publishing.
 ## Last verified checks
 
 - API suite: 34/34 passed, including tenant/RLS/RBAC/idempotency/recovery cases.
-- Worker suite is now 44/44 passed in the clean rebuilt image.
+- The 2026-11-01 worker suite was 44/44; the 2026-11-02 follow-up suite passed
+  55/55 after the network-audit and cache-policy tests were added.
 - Targeted real Qwen API E2E: 1/1 passed after source-wheel integration
   (148.082 seconds of worker runtime).
-- Authenticated dashboard component suite: 3/3 passed.
+- Authenticated dashboard component suite: the prior 3/3 passed; the follow-up
+  suite passed 4/4, including the JSON download/redaction test.
 - The dashboard report is now Spanish executive copy with a redacted JSON
   download; component tests reject raw prompt/response/argument leakage.
 - Typecheck and workspace build passed with `PORT=18753`, `BASE_PATH=/`, and
@@ -97,10 +183,10 @@ paid services, production database, remote deployment, or publishing.
   succeeded. Build-time package retrieval used the official PyPI index and
   hash-checked locks; the build network itself was not constrained by a host
   allowlist. Evaluation runs remain `--network=none`.
-- Worker tests: 44/44 passed in the final image using read-only filesystem,
+- Earlier worker tests: 44/44 passed in the final image using read-only filesystem,
   `--network=none`, 0.5 CPU, 768 MiB, and 64 PIDs. The self-test passed:
-  public IPv4/DNS blocked, loopback only, IPv6 unavailable. Build tools are
-  absent from the runtime image.
+  public IPv4/DNS blocked, loopback only, IPv6 unavailable. The follow-up
+  55/55 result is listed above; build tools are absent from the runtime image.
 - Final CycloneDX 1.6 SBOM, generated inside the audited image: 124 components
   (37 Python distributions, 87 Debian packages), SHA-256
   `41bca7bfc0d5692af3802b5dbbd493d2e584516f939cda76fad06fd9427edc91`.
@@ -118,13 +204,14 @@ paid services, production database, remote deployment, or publishing.
   unassigned. OSV records fixed-version events for 33 IDs, but the Trixie
   package-manager simulation found no candidate updates for matched packages.
   This is not an exploitability verdict or a clean scan.
-- A separate offline OSV scan of the mounted local-LLM runtime found one
+- The 2026-11-01 separate offline OSV scan of the mounted local-LLM runtime found one
   `diskcache 5.6.3` issue (`CVE-2025-69872`, `PYSEC-2026-2447`,
   `GHSA-w8v5-vhqr-4h9v` aliases). The current runner does not attach a cache,
-  but the package remains installed and has no fixed version in the refreshed
-  OSV record. `llama-cpp-python` now has a verified PyPI sdist input and local
-  source-build manifest; exact byte-for-byte reproducibility and complete
-  native license review are still open.
+  but the package was still installed in that snapshot. The 2026-11-02
+  follow-up removed it from the active wheelhouse and added fail-closed cache
+  tests; the upstream advisory is not fixed. `llama-cpp-python` has a verified
+  PyPI sdist input and local source-build manifest; exact byte-for-byte
+  reproducibility and complete native license review are still open.
 - A simulation using current official Debian Trixie package indexes showed only
   `tzdata` upgradable; no candidate updates were available for the affected
   packages. No packages were installed or changed by that simulation.
@@ -143,13 +230,23 @@ paid services, production database, remote deployment, or publishing.
   policy decision, paired counterfactual, persisted redacted evidence, API
   retrieval, and dashboard rendering are verified.
 - This is not a customer-ready or remotely hosted service. The current image has
-  unresolved Debian OSV matches with no candidate upgrades in the pinned
-  repository, a separate `diskcache` advisory in the local-LLM wheelhouse,
-  unresolved `langdetect` and native-component license review, and no verified
-  IPv6 egress test. A live Clerk browser sign-in and signed-in screenshot remain
-  unverified; E2E uses a development-only identity and the dashboard component
-  tests render authenticated state.
+  unresolved Debian OSV matches (including four current high util-linux IDs)
+  with no candidate upgrades in the pinned repository, unresolved `langdetect`
+  and native-component license review, and no verified IPv6 egress test. The
+  active local-LLM runtime excludes `diskcache`; the upstream advisory is not
+  fixed and the old wheel remains only in ignored audit artifacts. Do not call
+  that upstream issue fixed or treat it as installed in the rebuilt worker.
+- Full cold image build with `--network=none` remains unverified: the successful
+  local worker build reused a cached hash-locked dependency layer after the
+  cold build could not reach uncached PyPI. Evaluator execution itself remains
+  `--network=none`. Automated tests use a development identity; user-provided
+  earlier captures confirm Clerk login and dashboard use, but no authenticated
+  browser download of the JSON was independently automated. Redaction and
+  download behavior passed component tests.
 - No production database, customer systems, cloud worker, or publishing action
   was used. See `DEPENDENCY_AUDIT.md` for hashes, scope, and remaining
   limitations. Do not enable customer evaluations until the open dependency,
   legal, and dual-stack controls are resolved or formally accepted.
+- Next verification requires an authorized dual-stack development host for
+  IPv4/IPv6 TCP/UDP and DNS negative tests, plus a reviewed Trixie fix or
+  deliberate base-image update and legal review of ambiguous/vendor licenses.

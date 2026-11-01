@@ -1,0 +1,31 @@
+diff --git a/pyproject.toml b/pyproject.toml
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -14,5 +14,4 @@ dependencies = [
+     "typing-extensions>=4.5.0",
+     "numpy>=1.20.0",
+-    "diskcache>=5.6.1",
+     "jinja2>=2.11.3",
+ ]
+diff --git a/llama_cpp/llama_cache.py b/llama_cpp/llama_cache.py
+--- a/llama_cpp/llama_cache.py
++++ b/llama_cpp/llama_cache.py
+@@ -7,8 +7,6 @@ from typing import (
+ )
+ from collections import OrderedDict
+ 
+-import diskcache
+-
+ import llama_cpp.llama
+ 
+ from .llama_types import *
+@@ -107,5 +105,9 @@ class LlamaDiskCache(BaseLlamaCache):
+     ):
+         super().__init__(capacity_bytes)
++        try:
++            import diskcache
++        except ImportError as exc:
++            raise RuntimeError("diskcache_optional_feature_not_installed") from exc
+         self.cache = diskcache.Cache(cache_dir)
+ 
+     @property

@@ -79,6 +79,25 @@ timeout --signal=TERM --kill-after=10s 180s docker run \
   "$IMAGE" \
   -ceu 'python -m pip install --no-index --no-deps --disable-pip-version-check --no-cache-dir --target=/opt/llm-runtime /wheelhouse/*.whl >&2
         export PYTHONPATH=/opt/llm-runtime:/opt/guardian-assessment
+        python - <<CACHECHECK
+import importlib.util
+import sys
+from pathlib import Path
+
+assert importlib.util.find_spec("diskcache") is None
+from llama_cpp.llama_cache import LlamaDiskCache
+
+cache_dir = Path("/tmp/guardian-cache-probe")
+assert not cache_dir.exists()
+try:
+    LlamaDiskCache(str(cache_dir))
+except RuntimeError as exc:
+    assert str(exc) == "diskcache_optional_feature_not_installed", str(exc)
+else:
+    raise AssertionError("disk cache constructor did not fail closed")
+assert not cache_dir.exists()
+print("diskcache_constructor=fail_closed", file=sys.stderr)
+CACHECHECK
         exec python -m guardian_ai_assessment.llm_lab' \
   >"$TEMP_OUTPUT"
 STATUS=$?

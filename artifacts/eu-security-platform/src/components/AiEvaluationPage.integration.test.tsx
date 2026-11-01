@@ -5,7 +5,10 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { AiAssessmentLabJob } from "@workspace/api-client-react";
 import { LabJobCard } from "./AiEvaluationPage";
-import { buildQwenExecutiveReport } from "./qwenExecutiveReport";
+import {
+  buildQwenExecutiveReport,
+  downloadQwenExecutiveReport,
+} from "./qwenExecutiveReport";
 
 test("renders the real API lab response in the authenticated dashboard card", () => {
   const responsePath = new URL(
@@ -63,6 +66,96 @@ test("renders the real API lab response in the authenticated dashboard card", ()
   assert.match(localMarkup, /no es function calling nativo/);
   assert.match(localMarkup, /No disponible para clientes/);
   assert.match(localMarkup, /Qwen\/Qwen3-0\.6B-GGUF/);
+});
+
+test("downloads the allow-listed Qwen JSON report without raw case data", async () => {
+  const responsePath = new URL(
+    "../../../../generated-artifacts/ai-assessment-autonomous-e2e-response.json",
+    import.meta.url,
+  );
+  const job = JSON.parse(readFileSync(responsePath, "utf8")) as AiAssessmentLabJob;
+  assert.equal(job.status, "succeeded");
+  assert.equal(job.profileId, "guardian-local-llm-autonomous-tools-v1");
+
+  const previousDocument = Object.getOwnPropertyDescriptor(globalThis, "document");
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  const previousCreate = Object.getOwnPropertyDescriptor(URL, "createObjectURL");
+  const previousRevoke = Object.getOwnPropertyDescriptor(URL, "revokeObjectURL");
+  let clickedAnchor: { href: string; download: string } | undefined;
+  let capturedBlob: Blob | undefined;
+  let revokedUrl: string | undefined;
+
+  Object.defineProperty(globalThis, "document", {
+    configurable: true,
+    value: {
+      createElement: (tag: string) => {
+        assert.equal(tag, "a");
+        const anchor = {
+          href: "",
+          download: "",
+          click: () => {
+            clickedAnchor = anchor;
+          },
+        };
+        return anchor;
+      },
+    } as unknown as Document,
+  });
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: {
+      setTimeout: (callback: () => void) => {
+        callback();
+        return 0;
+      },
+    } as unknown as Window,
+  });
+  Object.defineProperty(URL, "createObjectURL", {
+    configurable: true,
+    value: (blob: Blob) => {
+      capturedBlob = blob;
+      return "blob:guardian-report-test";
+    },
+  });
+  Object.defineProperty(URL, "revokeObjectURL", {
+    configurable: true,
+    value: (url: string) => {
+      revokedUrl = url;
+    },
+  });
+
+  try {
+    assert.equal(downloadQwenExecutiveReport(job), true);
+    assert.equal(clickedAnchor?.href, "blob:guardian-report-test");
+    assert.match(clickedAnchor?.download ?? "", /^guardian-nexus-evaluacion-[a-zA-Z0-9-]+\.json$/);
+    assert.equal(revokedUrl, "blob:guardian-report-test");
+    assert.ok(capturedBlob);
+    assert.equal(capturedBlob.type, "application/json;charset=utf-8");
+    const exported = await capturedBlob.text();
+    assert.match(exported, /"brand": "Guardian Nexus"/);
+    assert.match(exported, /"counterfactualOnly": true/);
+    assert.match(exported, /"pairedProposalCount":\s*13/);
+    assert.doesNotMatch(exported, /lab-recipient@invalid\.example/);
+    assert.doesNotMatch(exported, /DE00LAB000000000000000000/);
+    assert.doesNotMatch(exported, /rawPrompt|rawResponse|rawArguments/i);
+    assert.doesNotMatch(exported, /<tool_call>/);
+  } finally {
+    const restore = (
+      target: object,
+      key: PropertyKey,
+      descriptor: PropertyDescriptor | undefined,
+    ) => {
+      if (descriptor) {
+        Object.defineProperty(target, key, descriptor);
+      } else {
+        Reflect.deleteProperty(target, key);
+      }
+    };
+    restore(globalThis, "document", previousDocument);
+    restore(globalThis, "window", previousWindow);
+    restore(URL, "createObjectURL", previousCreate);
+    restore(URL, "revokeObjectURL", previousRevoke);
+  }
 });
 
 test("renders native tool-call evidence separately from JSON emulation and fixtures", () => {

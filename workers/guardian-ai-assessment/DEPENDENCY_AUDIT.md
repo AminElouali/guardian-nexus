@@ -144,7 +144,9 @@ image. Therefore it is not covered by the image SBOM or image scan above.
   `self.cache` as `None`. This makes the vulnerable cache path unexercised in
   the observed code path, but does not remove the vulnerable dependency or
   establish safety for future cache use. The issue remains a customer-readiness
-  blocker until a fixed release or an approved, tested removal is available.
+  blocker in this 2026-11-01 snapshot. The 2026-11-02 addendum below records
+  its tested removal from the active runtime wheelhouse and patched optional
+  dependency behavior.
 - The PyPI metadata verification artifact is
   `generated-artifacts/guardian-ai-assessment-llm-pypi-verification.json`
   (SHA-256
@@ -167,17 +169,17 @@ image. Therefore it is not covered by the image SBOM or image scan above.
   `generated-artifacts/guardian-ai-assessment-apt-upgrade-simulation.txt`
   (SHA-256
   `bd5676eadf4f51483e50c744c9cf460425349a22270c6ed4b0b95db1c4bfcc59`).
-- Worker suite: 44/44 passed in the final image under Docker `--network=none`,
+- Earlier worker suite: 44/44 passed in the final image under Docker `--network=none`,
   read-only root, 0.5 CPU, 768 MiB memory, 64 PIDs, dropped capabilities, and
-  non-root UID. The worker self-test passed: public IPv4 and DNS blocked,
-  loopback only.
+  non-root UID. This count is superseded by the 55/55 follow-up suite below.
 - IPv6 remains **unavailable/unverified**, not blocked: the host reports
   `kernel_protocol_unavailable`. No dual-stack claim is made.
 - No Debian packages were force-removed, no alternative base was substituted,
-  and no OSV finding was suppressed. Unresolved OS advisories, the separate
-  `diskcache` advisory, the `langdetect` license ambiguity, incomplete native
-  license review, and missing dual-stack verification remain blockers for
-  customer use.
+  and no OSV finding was suppressed. This 2026-11-01 snapshot still had the
+  `diskcache` advisory in its mounted runtime; the 2026-11-02 addendum below
+  records the tested removal. OS advisories, `langdetect` license ambiguity,
+  incomplete native license review, and missing dual-stack verification remain
+  blockers for customer use.
 
 ## Workspace security scans
 
@@ -187,3 +189,143 @@ image. Therefore it is not covered by the image SBOM or image scan above.
 
 All raw images, scanner databases, package artifacts, SBOM, scan output, and
 simulation output are in ignored `generated-artifacts/`; no secrets were read.
+
+## Follow-up addendum — 2026-11-02
+
+This is a development-only follow-up; it supersedes earlier “current” statements
+about the mounted diskcache package and the worker test count. It does not claim
+that the container is vulnerability-free or ready for customer workloads.
+
+### Rebuilt image, SBOM, and current OSV snapshot
+
+- The local image `guardian-ai-assessment:local` was rebuilt with the pinned
+  Python 3.13.18 / Debian 13 base. Its local image ID is
+  `sha256:1d433e201a17a138267a31b316e4a0cab2f373d44fb347034177581268fcf9bb`.
+  It was not pushed. The full Docker build with `--network=none` could not
+  resolve an uncached PyPI build layer. The subsequent development build used
+  the configured official PyPI index and reused the locally cached, hash-locked
+  dependency layer. The evaluator itself remains `--network=none`; this is not
+  evidence that a cold full image build is network-independent.
+- CycloneDX 1.6 inventory from the rebuilt image:
+  `generated-artifacts/guardian-ai-assessment-worker-followup.sbom.cdx.json`,
+  SHA-256
+  `ba34bd7da9ef7759f69ffaeb16a0e7d39888fd64b4c1b2c68d3f66a699a14533`.
+  It contains 124 installed-package components (37 Python distributions and
+  87 Debian packages). Its 124 package PURLs are identical to the prior image
+  inventory: no OS package was removed or upgraded. The inventory explicitly
+  says vulnerability scanning is separate.
+- The current local Debian OSV archive is SHA-256
+  `4816191fe3b9edc162646d56b0f26ee417c26bacdd02d1c39a5bcfa957c53582`;
+  the PyPI archive is unchanged at
+  `8fd7138ad08c733316d229a05ac5a8a9fdcba4f6439d80cdab97fe4e18445dde`.
+  OSV Scanner 2.7.0 loaded both offline. The Debian archive hash differs from
+  the prior scan input (`95c71e88…`); neither archive has an upstream signature
+  verification in this project.
+- Current offline scan:
+  `generated-artifacts/guardian-ai-assessment-worker-followup-osv.json`,
+  SHA-256
+  `9b8f43b7482d5a36239eef4e5325940065a57dec6e0741c7602d01bbe31a87e6`.
+  The scanner exited 1 because findings were present. Of 124 inventoried
+  packages, six have current advisory groups across 18 unique IDs: 4 high, 6
+  moderate, 7 low, and 1 unscored; there are 0 critical IDs in this refreshed
+  local dataset. The four current high IDs are all in installed
+  `util-linux 2.41.5-0+deb13u1`: `DEBIAN-CVE-2026-76642` (8.5),
+  `DEBIAN-CVE-2026-78408` (7.9), `DEBIAN-CVE-2026-78410` (7.8), and
+  `DEBIAN-CVE-2026-78409` (7.0).
+- The other 14 current IDs in that JSON are low/moderate/unscored: apt
+  `2011-3374`; coreutils `2017-18018`, `2025-5278`, `2026-56391`, `2026-56392`;
+  dash `2026-102473`, `2026-102474`; diffutils `2026-53910`; tar
+  `2005-2541`, `2026-18477`, `2026-18508`, `2026-5704`; util-linux
+  `2022-0563`, `2026-3184`. No current match was suppressed.
+- The previous scan JSON still records 186 match records / 84 IDs, including
+  one critical and 25 high, against the older Debian database hash. The new
+  scan finds only 18 of those IDs (66 are absent from the newer local
+  dataset). The installed-package PURLs are identical, so this is a scanner
+  database-content difference, not a patch or remediation. Do not mark the
+  66 as fixed based on absence from the refreshed scan. The preserved old JSON
+  is the evidence for its historical result; the old database archive is no
+  longer available in the workspace.
+
+### Actionable historical critical/high triage
+
+| Priority and package | Historical IDs and affected surface | Reachability and mitigation | Fix/status |
+| --- | --- | --- | --- |
+| Critical, `libc6 2.41-12+deb13u4` (`glibc`) | `DEBIAN-CVE-2019-1010022`, score 9.8 in the prior snapshot | Core libc is present and used. Debian urgency was `unimportant`; upstream describes the issue as a mitigation bypass that requires a separate stack overflow, not an independently reachable remote flaw. No exploit test was run. | Absent from the refreshed local OSV archive, but this is not a package fix. Debian tracker: https://security-tracker.debian.org/tracker/CVE-2019-1010022 . No Trixie candidate was available in the recorded apt simulation. |
+| High, `libc6` (`glibc`) | `2019-1010023` (8.8), `2018-20796` (7.5), `2019-9192` (7.5), `2026-19499` (7.7), `2026-5435` (7.3), `2026-84243` (7.0) | Core library paths are present; applicability depends on the specific allocator, resolver, and process state described by each advisory. No public exploit was attempted. | These high IDs were in the prior result and absent from the refreshed local OSV snapshot. No installed package changed. Recorded newer-suite events include glibc 2.43-5/2.43-7; no matching Trixie package candidate. |
+| High, `libsqlite3-0 3.46.1-7+deb13u2` (`sqlite3`) | `2026-119374` (8.5), `2026-119379` (8.5), `2026-119586` (8.5), `2026-119373` (7.8), `2025-70873` (7.5) | SQLite library is installed. The `.recover` CLI finding is not reachable through the worker because the `sqlite3` CLI is absent; FTS5, session/changeset, and zipfile paths require callers to exercise those APIs/extensions. | Historical-only in the refreshed local archive; no package update. No Trixie candidate recorded. Do not infer the library findings are fixed from the missing match. |
+| High, `util-linux 2.41.5-0+deb13u1` | Current: `2026-76642` (8.5), `2026-78408` (7.9), `2026-78410` (7.8), `2026-78409` (7.0) | `mount` and `nsenter` are present. The evaluator runs non-root, read-only, with all capabilities dropped and `no-new-privileges`; these reduce privileged mount/cgroup paths but do not fix the installed code. | Current local OSV hits and official Debian tracker still require follow-up: https://security-tracker.debian.org/tracker/source-package/util-linux . No Trixie candidate; newer-suite event `2.42.4-1` is not a Trixie fix. |
+| High, `libacl1 2.3.2-2+b1` | `2026-54369` (8.4), `2026-54370` (7.2) | Library is installed; symlink/TOCTOU conditions depend on attacker-controlled filesystem paths. Worker inputs are fixed and mounts are read-only, reducing but not eliminating applicability. | Historical-only in refreshed local OSV data. Newer-suite event `acl 2.4.0-1`; no Trixie candidate. |
+| High, `libattr1 1:2.5.2-3` | `2026-54371` (8.4) | Library is installed; `getfattr`/`setfattr` tools are absent. | Historical-only in refreshed local OSV data. Newer-suite event `attr 1:2.6.0-1`; no Trixie candidate. |
+| High, `zlib1g 1:1.3.dfsg+really1.3.1-1+b1` | `2026-85091` (8.3) | Runtime library is present. Advisory concerns specific `gz_*` write behavior; no such input-controlled write path was identified in the evaluator. | Historical-only in refreshed local OSV data; no Trixie candidate or verified patch for the pinned suite. |
+| High, `ncurses-bin 6.5+20250216-2` | `2025-69720` (7.8) | `infocmp` is present, but the worker does not invoke it on untrusted terminal databases. | Historical-only in refreshed local OSV data. Newer-suite event `ncurses 6.6+20251231-1`; no Trixie candidate. |
+| High, `libpam0g`, `libpam-modules`, `libpam-modules-bin`, `libpam-runtime` 1.7.0-5 | `2025-8941` (7.8) | PAM namespace path is installed; the worker is not an interactive login service and does not invoke `pam_namespace` in its job flow. | Prior Debian status was undetermined; historical-only in refreshed local OSV data. No Trixie candidate. |
+| High, `perl-base 5.40.1-6+deb13u1` | `2026-82560` (7.5), `2026-9538` (7.5) | Perl is installed but not invoked by the worker. The reports concern Pod::Text and Archive::Tar parsing/availability. | Historical-only in refreshed local OSV data. Newer-suite event `perl 5.42.3-1`; no Trixie candidate. |
+| High, `libstdc++6 14.2.0-19` | `2026-95619` (7.7), `2026-102010` (7.0) | The C++ runtime is needed by the native llama runtime. Removing it would break inference; no exploit path was demonstrated. | Historical-only in refreshed local OSV data. Newer-suite GCC event `14.4.0-3`; no Trixie candidate. |
+
+The exact Debian-source mapping and all 186 historical match records remain in
+the preserved OSV JSON. The table distinguishes package presence and plausible
+attack surface from proof of exploitability; no findings were suppressed.
+Debian tracker source pages for the affected families:
+https://security-tracker.debian.org/tracker/source-package/glibc ,
+https://security-tracker.debian.org/tracker/source-package/sqlite3 ,
+https://security-tracker.debian.org/tracker/source-package/acl ,
+https://security-tracker.debian.org/tracker/source-package/attr ,
+https://security-tracker.debian.org/tracker/source-package/zlib ,
+https://security-tracker.debian.org/tracker/source-package/ncurses ,
+https://security-tracker.debian.org/tracker/source-package/pam ,
+https://security-tracker.debian.org/tracker/source-package/perl ,
+https://security-tracker.debian.org/tracker/source-package/gcc-14 .
+
+### Runtime, egress, and unresolved review
+
+- The separately mounted runtime now contains only `llama-cpp-python 0.3.36`,
+  `Jinja2 3.1.6`, and `MarkupSafe 3.0.4` (three wheel packages). Its
+  CycloneDX 1.6 inventory from the pinned package list is
+  `generated-artifacts/guardian-ai-assessment-llm-runtime-followup.sbom.cdx.json`,
+  SHA-256
+  `5ee47581e269eb2456a88e828cef79092ff50f18b00fd52c34f5942179e0a1f5`.
+  The offline PyPI OSV scan found 3 packages, 0 advisory IDs:
+  `generated-artifacts/guardian-ai-assessment-llm-runtime-osv-followup.json`,
+  SHA-256
+  `8b2a6f1a5c9381a396e99ac111d6d820834eae21d4fee30f79d296d72f2de0f6`.
+  The inherited `numpy` and `typing-extensions` remain covered by the worker
+  image scan, not by this separate wheelhouse SBOM.
+- The local `llama-cpp-python` wheel was rebuilt from the hash-verified official
+  sdist with `--network=none`; its size is 24,140,277 bytes and SHA-256 is
+  `5e50c8f09c0ed78512bfb16adb32be9e0c65b8ced7c1efcfc200c38782141e96`.
+  `local-llm-build/build-wheel.sh` records the source hash and offline build
+  steps. Only one build was run, so bit-for-bit reproducibility is not claimed.
+- The wheel patch makes `diskcache` optional and lazy-loaded. It is absent from
+  the active wheelhouse; `cache=None` is explicit; runtime startup fails closed
+  if `diskcache` is importable or caching is requested. Five cache-policy tests,
+  an isolated wheel smoke, and a fresh eight-case real-Qwen run passed. This
+  removes the vulnerable package from this local runtime; it does not remediate
+  the package's own advisory or certify the modified upstream component.
+- `scripts/verify-egress-isolation.sh` ran with Docker `--network=none` and
+  returned its documented incomplete status (exit 2): IPv4 TCP and DNS UDP
+  were blocked; IPv4 loopback worked; IPv6 socket creation returned
+  `kernel_protocol_unavailable`, so IPv6 TCP/DNS and IPv6 loopback are
+  **unverified**, not blocked. Evidence JSON SHA-256:
+  `3e6c52fddaf22e485fd4f5f0f2c7957213c36afbc180d9d7c53316c97e2bc424`.
+  A dual-stack host is still required to validate the IPv6 branches.
+- The 87-versus-78 Debian package comparison did not justify a new base or
+  forced package removal. The Python image's additional libraries support
+  Python, TLS/certificates, FFI, and the native runtime; the two obvious
+  candidates (`adduser`, `netbase`) offer small reduction without removing the
+  high-risk core families. No alternative image was built, so no reduced-image
+  scan is claimed. `langdetect 1.0.9` license conflict and complete native
+  vendor license review remain unresolved and require legal/source evidence.
+- Fresh workspace scans after these changes: Replit dependency audit reported
+  0 findings at every severity, SAST reported 0 results, and HoundDog reported
+  0 vulnerabilities. These results do not cover or override the Debian OSV
+  findings above.
+- A second local build of the patched `llama-cpp-python 0.3.36` wheel completed
+  offline from the verified sdist and patch, using builder image ID
+  `sha256:1190b243b1ebdd29c6547a1959531a58c474e3c6cb953333fc9bf20b866bf2d6`.
+  It produced SHA-256
+  `7bd646f48c830457b85fe4801f2f6992065299f3fea253dea03c247683397ad1`, not the
+  active wheel's `5e50c8f09c0ed78512bfb16adb32be9e0c65b8ced7c1efcfc200c38782141e96`.
+  Comparing the 92 zip entries found only ELF build-id bytes, the temporary
+  `llama.pc` prefix, and the derived `RECORD` hashes differed. This is evidence
+  of a successful offline source rebuild, not bit-for-bit reproducibility; the
+  rebuilt artifact was not installed or promoted.

@@ -12,23 +12,54 @@ available to customers.
 | Component | Exact version / hash | License | Source |
 | --- | --- | --- | --- |
 | Model | `Qwen/Qwen3-0.6B-GGUF`, revision `23749fefcc72300e3a2ad315e1317431b06b590a`; `Qwen3-0.6B-Q8_0.gguf`, 639,446,688 bytes, SHA-256 `9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031` | Apache-2.0 | [Official model repository](https://huggingface.co/Qwen/Qwen3-0.6B-GGUF) |
-| CPU inference runtime | `llama-cpp-python` 0.3.36; locally source-built wheel SHA-256 `a71a5a2e4b27e25b0fd783bdd5deb5a612ad950e2b0e92a0b500dee24ccb7981` | MIT | Official PyPI sdist; build inputs in `local-llm-build/source-manifest.json` |
-| Runtime support wheels | `diskcache` 5.6.3 (Apache-2.0), `Jinja2` 3.1.6 (BSD), `MarkupSafe` 3.0.4 (BSD); pinned hashes in `local-llm-manifest.json` | As listed | PyPI wheel artifacts |
+| CPU inference runtime | `llama-cpp-python` 0.3.36; locally source-built, patched wheel SHA-256 `5e50c8f09c0ed78512bfb16adb32be9e0c65b8ced7c1efcfc200c38782141e96` | MIT | Official PyPI sdist; build inputs and patch in `local-llm-build/` |
+| Runtime support wheels | `Jinja2` 3.1.6 (BSD), `MarkupSafe` 3.0.4 (BSD); pinned hashes in `local-llm-manifest.json` | As listed | PyPI wheel artifacts |
 
-The `llama-cpp-python` wheel was built from the official PyPI 0.3.36 source
-archive (76,589,250 bytes; SHA-256
+The patched `llama-cpp-python` wheel was built from the official PyPI 0.3.36
+source archive (76,589,250 bytes; SHA-256
 `832db0699007f1be95a7e41ef12e88926b02ba836461e36a36372db2760c1a2e`) outside
-the evaluator. The resulting wheel is 24,139,061 bytes. The build recipe pins
-its base, inputs, and compile flags, and records the vendored `llama.cpp`
-revision and MIT license. This verifies source provenance for this wheel but
-does not assert a bit-for-bit reproducible build. The complete licensing of
-every bundled native component remains under review.
+the evaluator, with the build container using `--network=none`. The resulting
+wheel is 24,140,277 bytes. The build recipe pins its base, inputs, and compile
+flags, and records the vendored `llama.cpp` revision and MIT license. This
+verifies source provenance for this wheel but does not assert a bit-for-bit
+reproducible build. Complete licensing of every bundled native component
+remains under review.
+
+The portable offline build script was then run from the same pinned local
+builder image (image ID
+`sha256:1190b243b1ebdd29c6547a1959531a58c474e3c6cb953333fc9bf20b866bf2d6`).
+It completed with `--network=none`, but the second wheel was 24,140,282 bytes
+with SHA-256
+`7bd646f48c830457b85fe4801f2f6992065299f3fea253dea03c247683397ad1`, differing
+from the active runtime wheel. The 92 archive paths were unchanged; the only
+content differences were the ELF build-id note, the temporary absolute prefix
+in `lib/pkgconfig/llama.pc`, and derived `RECORD` hashes. The rebuilt wheel was
+not promoted. Exact reproducibility is not established; the active runtime
+remains pinned to the independently tested wheel hash above.
 
 The model weights are kept outside Git under the ignored
 `generated-artifacts/guardian-llm-lab/` directory. The runner verifies their
 exact byte count and SHA-256 before loading. The image is the existing pinned
 Python 3.13 worker base; the existing Garak entrypoint and dependency lock are
 unchanged.
+
+### Optional disk cache
+
+The active wheelhouse intentionally excludes `diskcache 5.6.3`. Its OSV record
+describes unsafe pickle deserialization when an attacker can write to a cache
+directory. The patched `llama-cpp-python` source lazy-loads this optional feature;
+without the package, constructing `LlamaDiskCache` raises
+`diskcache_optional_feature_not_installed`. `LocalQwenClient` passes
+`cache=None` and fails closed if `diskcache` is present in the local runtime.
+Five unit tests and an isolated wheel smoke verified the absent-cache behavior,
+including that no cache directory is created. This is a local runtime removal,
+not a claim that the upstream advisory is fixed.
+
+The wheel was rebuilt from the official 0.3.36 sdist (SHA-256
+`832db0699007f1be95a7e41ef12e88926b02ba836461e36a36372db2760c1a2e`) using
+`local-llm-build/build-wheel.sh` with Docker `--network=none`. The output is
+24,140,277 bytes. Only one build was performed; byte-for-byte reproducibility
+and complete legal review of bundled native components are not claimed.
 
 ## Isolation and limits
 
@@ -143,6 +174,27 @@ The script accepts no custom Docker options, model paths, targets, or
 credentials. It uses only verified local wheels with pip `--no-index`, and
 writes sanitized evidence to
 `generated-artifacts/guardian-llm-lab/evidence.json`.
+
+The 2026-11-02 direct local run completed all eight cases with real Qwen
+inference (`realLlmInference=true`, `mockModelUsed=false`) in 84.697 seconds:
+four attack cases and four benign controls, evenly split between English and
+Spanish. Observed: 0/4 attack cases with an unauthorized tool proposal, 0/4
+scenario-target tool proposals, 0/4 instruction-text propagation, 4/4 synthetic
+canary appearances in attack outputs, and 1/2 quoted benign controls with
+instruction text propagation. Tool attempts and state-changing executions were
+0; external calls were 0. These are behavior counts on this eight-case suite,
+not detection rates or general model claims. The independent 14-case API E2E
+and its paired policy comparison are unchanged and have separate denominators.
+
+- Evidence file SHA-256:
+  `dc66a5d607edfeea172a2968b174b0c147c529c0e91a7553bfcfaabacd1e3956`
+- Evidence payload digest:
+  `2dcf4722d736530da047b3df6fafdbfe13e8c1aa65d480d742dd454140581ef3`
+- Corpus SHA-256:
+  `bb866b7354c9ede6f61294d60c564fc8de530eb273f58766c3e3da3c30442aef`
+- Docker reported `network=none`; IPv4 and DNS were blocked, loopback-only was
+  observed, and IPv6 was `kernel_protocol_unavailable` (unverified). Limits
+  verified: one CPU, 1,536 MiB, 64 PIDs, concurrency one, 180-second timeout.
 
 ## Evidence/API compatibility
 

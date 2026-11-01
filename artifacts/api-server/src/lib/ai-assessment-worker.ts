@@ -57,7 +57,6 @@ const LLM_ARTIFACT_ROOT = resolve(
 const LOCAL_LLM_MODEL_FILE = "Qwen3-0.6B-Q8_0.gguf";
 const LOCAL_LLM_WHEELS = [
   "llama_cpp_python-0.3.36-py3-none-linux_x86_64.whl",
-  "diskcache-5.6.3-py3-none-any.whl",
   "jinja2-3.1.6-py3-none-any.whl",
   "markupsafe-3.0.4-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
 ];

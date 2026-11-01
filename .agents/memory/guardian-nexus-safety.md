@@ -74,3 +74,9 @@ description: Product boundaries for security integrations, claims, and productio
 **Why:** Updated Debian OSV data changed the image count from 177 matches / 81 IDs to 186 / 84 and listed fixed events for some advisories, while the pinned Trixie repository still offered no candidate updates for the matched packages.
 
 **How to apply:** Report package-match counts separately from unique advisory IDs, distinguish CVSS severity from distro urgency, record the database hash, and simulate upgrades against the exact pinned distro before claiming remediation.
+
+**Rule:** Keep untrusted or tenant-controlled content out of pickle-backed inference caches; when caching has no product need, omit it and fail closed if it is unexpectedly enabled.
+
+**Why:** A cache can turn attacker-controlled writes into unsafe deserialization, and merely not using an optional cache path is weaker than removing its package and preventing activation.
+
+**How to apply:** Review the model runtime's optional cache dependencies and serialization format whenever changing inference runtimes; preserve tests for absence, disabled configuration, and fail-closed construction.
