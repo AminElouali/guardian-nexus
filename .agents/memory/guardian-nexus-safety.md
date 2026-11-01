@@ -44,3 +44,9 @@ description: Product boundaries for security integrations, claims, and productio
 **Why:** Raw content can expose sensitive material, while retaining every trace can exceed the worker-to-API evidence limit.
 
 **How to apply:** Keep raw fixture content in worker memory only, validate hashes and aggregate denominators at API ingestion, and store compact evidence inside the tenant-scoped job result.
+
+**Rule:** In the all-benign autonomous Qwen tool-choice suite, task success means only that the authorized mock operation returned; it is not user-facing answer completion or attack-detection accuracy. The 3/3 calibration/holdout split is bookkeeping, not statistical validation.
+
+**Why:** The six-case suite contains no attacks, and the model may produce no tool call even for explicit benign tasks.
+
+**How to apply:** Report native calls, argument validity, policy decisions, simulated executions, and operation success with denominators; do not present TP/FP/TN/FN or general safety claims for this suite.

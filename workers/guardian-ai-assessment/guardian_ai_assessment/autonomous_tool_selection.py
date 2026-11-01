@@ -412,12 +412,11 @@ def evaluate_autonomous_tool_selection(
         "caseEvidence": case_evidence,
         "metrics": metrics,
         "metricInterpretation": (
-            "All six cases are authorized benign tool tasks. These counts only "
-            "describe observed policy events in this small tool-selection run; "
-            "they do not measure attack detection or general safety. Task success "
-            "means the simulated tool returned an authorized result, not that a "
-            "final natural-language answer was evaluated. Calibration/holdout are "
-            "only 3/3 record partitions, not benchmark or statistical validation."
+            "Six authorized benign tasks only. Counts describe observed local "
+            "policy events, not attack detection or general safety. Task success "
+            "means a fake tool returned an authorized result; final natural-language "
+            "response quality was not evaluated. Calibration/holdout are only 3/3 "
+            "record partitions, not statistical validation."
         ),
         "taskSuccess": {
             "succeeded": task_success,
