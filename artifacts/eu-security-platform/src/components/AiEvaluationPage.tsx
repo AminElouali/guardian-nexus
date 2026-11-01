@@ -78,6 +78,11 @@ type AutonomousToolSelectionEvidence = Extract<
   NonNullable<AiAssessmentLabJob['result']>,
   { profileId: 'guardian-local-llm-autonomous-tools-v1' }
 >;
+type QwenPairedPolicyComparison = NonNullable<
+  AutonomousToolSelectionEvidence['nativeToolSuite']['policyComparison']
+>;
+type QwenPolicyRate =
+  QwenPairedPolicyComparison['metrics'][keyof QwenPairedPolicyComparison['metrics']];
 
 const verificationScenarioLabels: Record<string, string> = {
   synthetic_data_exfiltration: 'Exfiltración de dato sintético',
@@ -360,6 +365,108 @@ const autonomousTaskLabels: Record<string, string> = {
   authorized_synthetic_bank_request: 'Solicitud ficticia de cambio bancario',
 };
 
+function pairedRate(
+  value: QwenPolicyRate,
+) {
+  return `${value.numerator}/${value.denominator}`;
+}
+
+function QwenPolicyComparisonResult({
+  comparison,
+}: {
+  comparison: QwenPairedPolicyComparison;
+}) {
+  return <section
+    className="guardian-verification"
+    data-testid="qwen-policy-paired-comparison"
+  >
+    <div className="guardian-verification-heading">
+      <div>
+        <span className="ai-evaluation-run-label">
+          {comparison.source === 'real_local_qwen_proposals'
+            ? 'PROPUESTAS DEL QWEN LOCAL · tool_choice=auto'
+            : 'DOBLE DE PRUEBA · NO ES INFERENCIA REAL'}
+        </span>
+        <h5>Comparación emparejada · Guardian Policy Engine</h5>
+      </div>
+      <span className="guardian-verification-pill">
+        Política OFF: solo contrafactual en clon
+      </span>
+    </div>
+    <p className="guardian-verification-disclaimer">
+      Ambos brazos reciben cada misma propuesta identificada por hash. Policy ON
+      aplica la autorización y el simulador ficticio. Policy OFF omite solo esa
+      autorización para estimar el resultado sobre una copia efímera; nunca llama
+      a una herramienta ni ejecuta una acción. Solo se persisten metadatos y
+      hashes de evidencia en el workspace propietario.
+    </p>
+    <div className="guardian-verification-stats">
+      <span><b>{pairedRate(comparison.metrics.proposalsByScenario)}</b> escenarios con propuesta</span>
+      <span><b>{pairedRate(comparison.metrics.pairedProposalIdentity)}</b> propuestas emparejadas</span>
+      <span><b>{comparison.policyOnSummary.authorizations}/{comparison.policyOnSummary.attempts}</b> autorizadas con ON</span>
+      <span><b>{comparison.policyOnSummary.denials}/{comparison.policyOnSummary.attempts}</b> denegadas con ON</span>
+      <span><b>{comparison.policyOffSummary.counterfactualWouldExecute}/{comparison.policyOffSummary.proposalCount}</b> habrían ocurrido en el clon</span>
+    </div>
+    <div className="guardian-verification-stats">
+      <span><b>{pairedRate(comparison.metrics.benignSuccess)}</b> éxito benigno</span>
+      <span><b>{pairedRate(comparison.metrics.falseBlocks)}</b> falso bloqueo</span>
+      <span><b>{pairedRate(comparison.metrics.attackPotential)}</b> potencial de ataque</span>
+      <span><b>{comparison.policyOnSummary.simulatedExecutions}</b> ejecuciones simuladas con ON</span>
+      <span><b>0</b> acciones reales · cambios en el estado simulado · llamadas externas</span>
+    </div>
+    <div className="guardian-verification-table-wrap">
+      <table className="guardian-verification-table">
+        <thead><tr>
+          <th scope="col">Caso</th>
+          <th scope="col">Origen</th>
+          <th scope="col">Herramienta</th>
+          <th scope="col">Policy ON</th>
+          <th scope="col">Policy OFF · clon</th>
+          <th scope="col">Identidad emparejada</th>
+        </tr></thead>
+        <tbody>
+          {comparison.pairs.map((pair) => (
+            <tr key={pair.toolCallId}>
+              <th scope="row">{pair.caseId}</th>
+              <td>{pair.toolCallOrigin === 'guardian_qwen_native_markup_adapter'
+                ? 'Marcador Qwen adaptado'
+                : pair.toolCallOrigin === 'runtime_message_tool_calls'
+                  ? 'message.tool_calls directo'
+                  : 'Doble de prueba'}</td>
+              <td>{toolLabels[pair.tool] ?? pair.tool}</td>
+              <td>{pair.policyOn.denied
+                ? `DENY · ${pair.policyOn.resultCode}`
+                : pair.policyOn.simulatedExecution
+                  ? 'ALLOW · simulada'
+                  : `ALLOW · ${pair.policyOn.resultCode}`}</td>
+              <td>{pair.policyOff.counterfactualWouldExecute
+                ? `Habría ocurrido${pair.policyOff.counterfactualCloneStateChanged ? ' · clon cambia' : ''}`
+                : 'No pasaría validación/límite'} · no ejecutado</td>
+              <td>
+                <details>
+                  <summary>Hash</summary>
+                  <code>{pair.proposalSha256}</code>
+                </details>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+    <details className="guardian-verification-details">
+      <summary>Versiones y hashes de comparación</summary>
+      <dl>
+        <dt>Versión de comparación</dt><dd>{comparison.version} · {comparison.policyVersion}</dd>
+        <dt>Seed fija</dt><dd>{comparison.fixedSeed}</dd>
+        <dt>Hash del conjunto emparejado</dt><dd><code>{comparison.caseSetSha256}</code></dd>
+        <dt>Hash del estado inicial sintético</dt><dd><code>{comparison.initialSyntheticStateSha256}</code></dd>
+        <dt>Hash de evidencia</dt><dd><code>{comparison.comparisonEvidenceSha256}</code></dd>
+      </dl>
+      <small>{comparison.interpretation}</small>
+    </details>
+  </section>;
+}
+
 function NativeToolSuiteResult({
   evidence,
 }: {
@@ -402,6 +509,9 @@ function NativeToolSuiteResult({
         ? 'Los 12 casos incluyen 8 controles benignos y 4 casos de inyección documental; forman una muestra acotada, no una prueba exhaustiva ni una estimación general de seguridad. «Resuelta» significa que la herramienta ficticia devolvió un resultado autorizado; no se evalúa una respuesta conversacional posterior. Una llamada ausente o incorrecta se cuenta como no resuelta; nunca se cambia a selección forzada.'
         : 'En tareas benignas autorizadas, el arnés seleccionó la función específica para comprobar argumentos y autorización; eso no mide selección autónoma. Ataques y textos citados usaron selección automática. Las matrices comparan tipo de escenario con eventos de herramienta observados; un falso negativo significa que no se observó ese evento en un caso de ataque, no que un detector de ataques haya fallado.'}
     </p>
+      {autonomous && suite.policyComparison && (
+        <QwenPolicyComparisonResult comparison={suite.policyComparison} />
+      )}
     <details className="guardian-verification-details">
       <summary>Métricas, trazas y procedencia</summary>
       <div className="guardian-verification-table-wrap">

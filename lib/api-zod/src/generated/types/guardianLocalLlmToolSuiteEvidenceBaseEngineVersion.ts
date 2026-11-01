@@ -13,4 +13,5 @@ export const GuardianLocalLlmToolSuiteEvidenceBaseEngineVersion = {
   'guardian-native-tool-suite-v1': 'guardian-native-tool-suite-v1',
   'guardian-autonomous-tool-selection-v1': 'guardian-autonomous-tool-selection-v1',
   'guardian-autonomous-tool-selection-v11': 'guardian-autonomous-tool-selection-v1.1',
+  'guardian-autonomous-tool-selection-v12': 'guardian-autonomous-tool-selection-v1.2',
 } as const;

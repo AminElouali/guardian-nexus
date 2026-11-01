@@ -997,7 +997,7 @@ components:
         evidenceVersion: { type: integer, const: 1 }
         source: { type: string, enum: [isolated_local_lab] }
         engine: { type: string, enum: [local_llm_lab] }
-        engineVersion: { type: string, enum: [guardian-native-tool-suite-v1, guardian-autonomous-tool-selection-v1, guardian-autonomous-tool-selection-v1.1] }
+        engineVersion: { type: string, enum: [guardian-native-tool-suite-v1, guardian-autonomous-tool-selection-v1, guardian-autonomous-tool-selection-v1.1, guardian-autonomous-tool-selection-v1.2] }
         profileId: { type: string, enum: [guardian-local-llm-native-tools-v1, guardian-local-llm-autonomous-tools-v1] }
         executionMode: { type: string, enum: [real_local_llm_inference] }
         toolInvocationMode: { type: string, enum: [native_tool_calls] }
@@ -1078,7 +1078,7 @@ components:
           additionalProperties: false
           properties:
             suiteId: { type: string, enum: [guardian-native-tool-call-en-es-v1, guardian-autonomous-tool-selection-en-es-v1] }
-            suiteVersion: { type: string, enum: ["1.0.0", "1.1.0", "1.2.0"] }
+            suiteVersion: { type: string, enum: ["1.0.0", "1.1.0", "1.2.0", "1.3.0"] }
             sampleCount: { type: integer, enum: [6, 12] }
             splitSampleCounts:
               type: object
@@ -1141,6 +1141,8 @@ components:
                 callsReturnedDirectlyByRuntime: { type: integer, minimum: 0, maximum: 64 }
                 unparsedMarkupCases: { type: integer, minimum: 0, maximum: 12 }
               required: [protocol, adapterVersion, runtime, strictTaggedJsonOnly, callsAdapted, callsReturnedDirectlyByRuntime, unparsedMarkupCases]
+            policyComparison:
+              $ref: "#/components/schemas/GuardianQwenPolicyComparisonEvidence"
             previousForcedSuiteEvidenceSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
             nativeCapabilityProbe:
               type: object
@@ -1198,7 +1200,7 @@ components:
         - { $ref: "#/components/schemas/GuardianLocalLlmToolSuiteEvidenceBase" }
         - type: object
           properties:
-            engineVersion: { type: string, enum: [guardian-autonomous-tool-selection-v1, guardian-autonomous-tool-selection-v1.1] }
+            engineVersion: { type: string, enum: [guardian-autonomous-tool-selection-v1, guardian-autonomous-tool-selection-v1.1, guardian-autonomous-tool-selection-v1.2] }
             profileId: { type: string, const: guardian-local-llm-autonomous-tools-v1 }
             taskId: { type: string, const: autonomous_tool_selection_en_es_v1 }
           required: [engineVersion, profileId, taskId]
@@ -1291,6 +1293,155 @@ components:
         falsePositiveRate: { $ref: "#/components/schemas/GuardianNativeToolRate" }
         falseNegativeRate: { $ref: "#/components/schemas/GuardianNativeToolRate" }
       required: [split, objective, sampleCount, evaluableCount, inconclusiveCount, inconclusiveAttackCount, inconclusiveBenignCount, positiveSupport, negativeSupport, truePositive, falsePositive, trueNegative, falseNegative, precision, recall, falsePositiveRate, falseNegativeRate]
+    GuardianQwenPolicyRate:
+      type: object
+      additionalProperties: false
+      properties:
+        numerator: { type: integer, minimum: 0, maximum: 64 }
+        denominator: { type: integer, minimum: 0, maximum: 64 }
+        value: { type: number, minimum: 0, maximum: 1 }
+      required: [numerator, denominator, value]
+    GuardianQwenPolicyPair:
+      type: object
+      additionalProperties: false
+      properties:
+        caseId:
+          type: string
+          enum: [attack_email_en_cal, attack_bank_es_cal, benign_invoice_en_cal, benign_quote_es_cal, benign_email_en_cal, benign_bank_es_cal, attack_email_es_holdout, attack_bank_en_holdout, benign_invoice_es_holdout, benign_quote_en_holdout, benign_email_es_holdout, benign_bank_es_holdout, benign_bank_en_holdout]
+        split: { type: string, enum: [calibration, holdout] }
+        language: { type: string, enum: [en, es] }
+        label: { type: string, enum: [attack, benign] }
+        toolCallId: { type: string, maxLength: 80 }
+        toolChoiceMode: { type: string, const: auto }
+        toolCallOrigin: { type: string, enum: [guardian_qwen_native_markup_adapter, runtime_message_tool_calls, test_provider_message_tool_calls] }
+        finishReason: { type: string, enum: [tool_calls, stop, length] }
+        tool: { type: string, enum: [consult_synthetic_invoice, send_email_simulated, request_bank_account_change, unknown] }
+        argumentsValid: { type: boolean }
+        argumentsSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        proposalSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        policyOn:
+          type: object
+          additionalProperties: false
+          properties:
+            proposalSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+            attempted: { type: boolean, const: true }
+            authorized: { type: boolean }
+            denied: { type: boolean }
+            simulatedExecution: { type: boolean }
+            resultCode: { type: string, maxLength: 80 }
+            simulatedOnly: { type: boolean, const: true }
+          required: [proposalSha256, attempted, authorized, denied, simulatedExecution, resultCode, simulatedOnly]
+        policyOff:
+          type: object
+          additionalProperties: false
+          properties:
+            proposalSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+            attempted: { type: boolean, const: true }
+            authorizationBypassed: { type: boolean, const: true }
+            counterfactualWouldExecute: { type: boolean }
+            counterfactualCloneStateChanged: { type: boolean }
+            counterfactualStateBeforeSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+            counterfactualStateAfterSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+            resultCode: { type: string, maxLength: 80 }
+            executed: { type: boolean, const: false }
+            simulatedOnly: { type: boolean, const: true }
+          required: [proposalSha256, attempted, authorizationBypassed, counterfactualWouldExecute, counterfactualCloneStateChanged, counterfactualStateBeforeSha256, counterfactualStateAfterSha256, resultCode, executed, simulatedOnly]
+        actualOperationExecutions: { type: integer, const: 0 }
+        persistentStateChanges: { type: integer, const: 0 }
+        externalCalls: { type: integer, const: 0 }
+        rawArgumentsStored: { type: boolean, const: false }
+        pairEvidenceSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+      required: [caseId, split, language, label, toolCallId, toolChoiceMode, toolCallOrigin, finishReason, tool, argumentsValid, argumentsSha256, proposalSha256, policyOn, policyOff, actualOperationExecutions, persistentStateChanges, externalCalls, rawArgumentsStored, pairEvidenceSha256]
+    GuardianQwenPolicyComparisonEvidence:
+      type: object
+      additionalProperties: false
+      properties:
+        source: { type: string, enum: [real_local_qwen_proposals, test_double_proposals] }
+        version: { type: string, const: guardian-qwen-policy-paired-v1 }
+        executionMode: { type: string, enum: [real_local_llm_inference, test_double_only] }
+        toolChoiceMode: { type: string, const: auto }
+        forcedCallsIncluded: { type: boolean, const: false }
+        policyVersion: { type: string, const: guardian-tool-adapter-policy-1 }
+        fixedSeed: { type: integer, const: 20261031 }
+        scenarioCount: { type: integer, const: 12 }
+        proposalCount: { type: integer, minimum: 0, maximum: 64 }
+        pairedProposalCount: { type: integer, minimum: 0, maximum: 64 }
+        unpairedProposalCount: { type: integer, const: 0 }
+        pairs:
+          type: array
+          maxItems: 64
+          items: { $ref: "#/components/schemas/GuardianQwenPolicyPair" }
+        policyOnSummary:
+          type: object
+          additionalProperties: false
+          properties:
+            proposalCount: { type: integer, minimum: 0, maximum: 64 }
+            attempts: { type: integer, minimum: 0, maximum: 64 }
+            authorizations: { type: integer, minimum: 0, maximum: 64 }
+            denials: { type: integer, minimum: 0, maximum: 64 }
+            simulatedExecutions: { type: integer, minimum: 0, maximum: 64 }
+            actualOperationExecutions: { type: integer, const: 0 }
+            persistentStateChanges: { type: integer, const: 0 }
+            externalCalls: { type: integer, const: 0 }
+          required: [proposalCount, attempts, authorizations, denials, simulatedExecutions, actualOperationExecutions, persistentStateChanges, externalCalls]
+        policyOffSummary:
+          type: object
+          additionalProperties: false
+          properties:
+            proposalCount: { type: integer, minimum: 0, maximum: 64 }
+            attempts: { type: integer, minimum: 0, maximum: 64 }
+            authorizationBypassed: { type: integer, minimum: 0, maximum: 64 }
+            counterfactualWouldExecute: { type: integer, minimum: 0, maximum: 64 }
+            counterfactualCloneStateChanges: { type: integer, minimum: 0, maximum: 64 }
+            actualOperationExecutions: { type: integer, const: 0 }
+            persistentStateChanges: { type: integer, const: 0 }
+            externalCalls: { type: integer, const: 0 }
+          required: [proposalCount, attempts, authorizationBypassed, counterfactualWouldExecute, counterfactualCloneStateChanges, actualOperationExecutions, persistentStateChanges, externalCalls]
+        metrics:
+          type: object
+          additionalProperties: false
+          properties:
+            proposalsByScenario: { $ref: "#/components/schemas/GuardianQwenPolicyRate" }
+            pairedProposalIdentity: { $ref: "#/components/schemas/GuardianQwenPolicyRate" }
+            policyOnAttempts: { $ref: "#/components/schemas/GuardianQwenPolicyRate" }
+            policyOnAuthorizations: { $ref: "#/components/schemas/GuardianQwenPolicyRate" }
+            policyOnDenials: { $ref: "#/components/schemas/GuardianQwenPolicyRate" }
+            policyOnSimulatedExecutions: { $ref: "#/components/schemas/GuardianQwenPolicyRate" }
+            policyOffCounterfactualWouldExecute: { $ref: "#/components/schemas/GuardianQwenPolicyRate" }
+            benignSuccess: { $ref: "#/components/schemas/GuardianQwenPolicyRate" }
+            falseBlocks: { $ref: "#/components/schemas/GuardianQwenPolicyRate" }
+            attackPotential: { $ref: "#/components/schemas/GuardianQwenPolicyRate" }
+          required: [proposalsByScenario, pairedProposalIdentity, policyOnAttempts, policyOnAuthorizations, policyOnDenials, policyOnSimulatedExecutions, policyOffCounterfactualWouldExecute, benignSuccess, falseBlocks, attackPotential]
+        denominators:
+          type: object
+          additionalProperties: false
+          properties:
+            scenarios: { type: integer, const: 12 }
+            benignScenarios: { type: integer, const: 8 }
+            attackScenarios: { type: integer, const: 4 }
+            observedProposals: { type: integer, minimum: 0, maximum: 64 }
+            validExpectedBenignProposals: { type: integer, minimum: 0, maximum: 64 }
+            authorizationAttempts: { type: integer, minimum: 0, maximum: 64 }
+          required: [scenarios, benignScenarios, attackScenarios, observedProposals, validExpectedBenignProposals, authorizationAttempts]
+        caseSetSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        initialSyntheticStateSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        selfChecks:
+          type: object
+          additionalProperties: false
+          properties:
+            sameProposalIdentityInBothArms: { type: boolean, const: true }
+            sameInitialStatePerPair: { type: boolean, const: true }
+            policyOffNeverExecutes: { type: boolean, const: true }
+            noActualPersistentOrExternalEffects: { type: boolean, const: true }
+            rawArgumentsStored: { type: boolean, const: false }
+          required: [sameProposalIdentityInBothArms, sameInitialStatePerPair, policyOffNeverExecutes, noActualPersistentOrExternalEffects, rawArgumentsStored]
+        actualOperationExecutions: { type: integer, const: 0 }
+        persistentStateChanges: { type: integer, const: 0 }
+        externalCalls: { type: integer, const: 0 }
+        rawArgumentsStored: { type: boolean, const: false }
+        interpretation: { type: string, maxLength: 600 }
+        comparisonEvidenceSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+      required: [source, version, executionMode, toolChoiceMode, forcedCallsIncluded, policyVersion, fixedSeed, scenarioCount, proposalCount, pairedProposalCount, unpairedProposalCount, pairs, policyOnSummary, policyOffSummary, metrics, denominators, caseSetSha256, initialSyntheticStateSha256, selfChecks, actualOperationExecutions, persistentStateChanges, externalCalls, rawArgumentsStored, interpretation, comparisonEvidenceSha256]
     GuardianNativeToolTaskSuccess:
       type: object
       additionalProperties: false

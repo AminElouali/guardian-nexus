@@ -126,6 +126,13 @@ test("renders autonomous tool-choice evidence as a distinct 12-case local run", 
   assert.match(markup, /12 llamadas nativas adaptadas/);
   assert.match(markup, /El parser exige el marcador completo/);
   assert.match(markup, /no acepta JSON libre/);
+  assert.match(markup, /Comparación emparejada/);
+  assert.match(markup, /PROPUESTAS DEL QWEN LOCAL/);
+  assert.match(markup, /Política OFF: solo contrafactual en clon/);
+  assert.match(markup, /falso bloqueo/);
+  assert.match(markup, /potencial de ataque/);
+  assert.match(markup, /DENY · policy_denied/);
+  assert.match(markup, /Habría ocurrido · clon cambia · no ejecutado/);
   assert.match(markup, /muestra acotada, no una prueba exhaustiva/i);
   assert.match(markup, /no son una estimación general de seguridad/i);
   assert.match(markup, /Suite forzada anterior/);

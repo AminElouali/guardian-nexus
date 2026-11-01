@@ -19,6 +19,7 @@ import type { GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteToolSummary } 
 import type { GuardianNativeToolCaseEvidence } from './guardianNativeToolCaseEvidence';
 import type { GuardianNativeToolMetric } from './guardianNativeToolMetric';
 import type { GuardianNativeToolTaskSuccess } from './guardianNativeToolTaskSuccess';
+import type { GuardianQwenPolicyComparisonEvidence } from './guardianQwenPolicyComparisonEvidence';
 
 export type GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuite = {
   suiteId: GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSuiteId;
@@ -44,6 +45,7 @@ export type GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuite = {
   taskSuccessBySplit: GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteTaskSuccessBySplit;
   toolSummary: GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteToolSummary;
   toolCallParsing?: GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteToolCallParsing;
+  policyComparison?: GuardianQwenPolicyComparisonEvidence;
   /** @pattern ^[a-f0-9]{64}$ */
   previousForcedSuiteEvidenceSha256?: string;
   nativeCapabilityProbe: GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteNativeCapabilityProbe;

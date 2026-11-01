@@ -480,6 +480,119 @@ type GuardianNativeToolTraceEvent = {
   resultCode: string;
 };
 
+type GuardianQwenPolicyRate = {
+  numerator: number;
+  denominator: number;
+  value: number;
+};
+
+type GuardianQwenPolicyPair = {
+  caseId: string;
+  split: "calibration" | "holdout";
+  language: "en" | "es";
+  label: "attack" | "benign";
+  toolCallId: string;
+  toolChoiceMode: "auto";
+  toolCallOrigin:
+    | "guardian_qwen_native_markup_adapter"
+    | "runtime_message_tool_calls"
+    | "test_provider_message_tool_calls";
+  finishReason: string;
+  tool:
+    | "consult_synthetic_invoice"
+    | "send_email_simulated"
+    | "request_bank_account_change"
+    | "unknown";
+  argumentsValid: boolean;
+  argumentsSha256: string;
+  proposalSha256: string;
+  policyOn: {
+    proposalSha256: string;
+    attempted: boolean;
+    authorized: boolean;
+    denied: boolean;
+    simulatedExecution: boolean;
+    resultCode: string;
+    simulatedOnly: true;
+  };
+  policyOff: {
+    proposalSha256: string;
+    attempted: true;
+    authorizationBypassed: true;
+    counterfactualWouldExecute: boolean;
+    counterfactualCloneStateChanged: boolean;
+    counterfactualStateBeforeSha256: string;
+    counterfactualStateAfterSha256: string;
+    resultCode: string;
+    executed: false;
+    simulatedOnly: true;
+  };
+  actualOperationExecutions: 0;
+  persistentStateChanges: 0;
+  externalCalls: 0;
+  rawArgumentsStored: false;
+  pairEvidenceSha256: string;
+};
+
+type GuardianQwenPolicyComparisonEvidence = {
+  source: "real_local_qwen_proposals" | "test_double_proposals";
+  version: "guardian-qwen-policy-paired-v1";
+  executionMode: "real_local_llm_inference" | "test_double_only";
+  toolChoiceMode: "auto";
+  forcedCallsIncluded: false;
+  policyVersion: "guardian-tool-adapter-policy-1";
+  fixedSeed: number;
+  scenarioCount: number;
+  proposalCount: number;
+  pairedProposalCount: number;
+  unpairedProposalCount: number;
+  pairs: GuardianQwenPolicyPair[];
+  policyOnSummary: {
+    proposalCount: number;
+    attempts: number;
+    authorizations: number;
+    denials: number;
+    simulatedExecutions: number;
+    actualOperationExecutions: 0;
+    persistentStateChanges: 0;
+    externalCalls: 0;
+  };
+  policyOffSummary: {
+    proposalCount: number;
+    attempts: number;
+    authorizationBypassed: number;
+    counterfactualWouldExecute: number;
+    counterfactualCloneStateChanges: number;
+    actualOperationExecutions: 0;
+    persistentStateChanges: 0;
+    externalCalls: 0;
+  };
+  metrics: Record<string, GuardianQwenPolicyRate>;
+  denominators: {
+    scenarios: number;
+    benignScenarios: number;
+    attackScenarios: number;
+    observedProposals: number;
+    validExpectedBenignProposals: number;
+    authorizationAttempts: number;
+  };
+  caseSetSha256: string;
+  initialSyntheticStateSha256: string;
+  selfChecks: {
+    sameProposalIdentityInBothArms: boolean;
+    sameInitialStatePerPair: boolean;
+    policyOffNeverExecutes: boolean;
+    noActualPersistentOrExternalEffects: boolean;
+    rawArgumentsStored: false;
+  };
+  actualOperationExecutions: 0;
+  persistentStateChanges: 0;
+  externalCalls: 0;
+  rawArgumentsStored: false;
+  interpretation: string;
+  comparisonEvidenceSha256: string;
+};
+
 type GuardianLocalLlmToolSuiteEvidenceBase = {
   evidenceVersion: 1;
   source: "isolated_local_lab";
@@ -487,7 +600,8 @@ type GuardianLocalLlmToolSuiteEvidenceBase = {
   engineVersion:
     | "guardian-native-tool-suite-v1"
     | "guardian-autonomous-tool-selection-v1"
-    | "guardian-autonomous-tool-selection-v1.1";
+    | "guardian-autonomous-tool-selection-v1.1"
+    | "guardian-autonomous-tool-selection-v1.2";
   profileId:
     | "guardian-local-llm-native-tools-v1"
     | "guardian-local-llm-autonomous-tools-v1";
@@ -549,7 +663,7 @@ type GuardianLocalLlmToolSuiteEvidenceBase = {
   toolTrace: GuardianNativeToolTraceEvent[];
   nativeToolSuite: {
     suiteId: string;
-    suiteVersion: "1.0.0" | "1.1.0" | "1.2.0";
+    suiteVersion: "1.0.0" | "1.1.0" | "1.2.0" | "1.3.0";
     sampleCount: number;
     splitSampleCounts: { calibration: number; holdout: number };
     languageCounts: { en: number; es: number };
@@ -583,6 +697,7 @@ type GuardianLocalLlmToolSuiteEvidenceBase = {
       callsReturnedDirectlyByRuntime: number;
       unparsedMarkupCases: number;
     };
+    policyComparison?: GuardianQwenPolicyComparisonEvidence;
     previousForcedSuiteEvidenceSha256?: string;
     nativeCapabilityProbe: {
       executionMode: "real_local_llm_inference";
@@ -645,7 +760,8 @@ export type GuardianLocalLlmAutonomousToolSelectionEvidence = Omit<
 > & {
   engineVersion:
     | "guardian-autonomous-tool-selection-v1"
-    | "guardian-autonomous-tool-selection-v1.1";
+    | "guardian-autonomous-tool-selection-v1.1"
+    | "guardian-autonomous-tool-selection-v1.2";
   profileId: "guardian-local-llm-autonomous-tools-v1";
   taskId: "autonomous_tool_selection_en_es_v1";
 };

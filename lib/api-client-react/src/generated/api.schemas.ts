@@ -1373,6 +1373,7 @@ export const GuardianLocalLlmToolSuiteEvidenceBaseEngineVersion = {
   'guardian-native-tool-suite-v1': 'guardian-native-tool-suite-v1',
   'guardian-autonomous-tool-selection-v1': 'guardian-autonomous-tool-selection-v1',
   'guardian-autonomous-tool-selection-v11': 'guardian-autonomous-tool-selection-v1.1',
+  'guardian-autonomous-tool-selection-v12': 'guardian-autonomous-tool-selection-v1.2',
 } as const;
 
 export type GuardianLocalLlmToolSuiteEvidenceBaseProfileId = typeof GuardianLocalLlmToolSuiteEvidenceBaseProfileId[keyof typeof GuardianLocalLlmToolSuiteEvidenceBaseProfileId];
@@ -1633,6 +1634,7 @@ export const GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSuiteVersion = 
   '100': '1.0.0',
   '110': '1.1.0',
   '120': '1.2.0',
+  '130': '1.3.0',
 } as const;
 
 export type GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSampleCount = typeof GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSampleCount[keyof typeof GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSampleCount];
@@ -1990,6 +1992,311 @@ export const GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteToolCallParsing
   'guardian-qwen-native-markup-v1': 'guardian-qwen-native-markup-v1',
 } as const;
 
+export type GuardianQwenPolicyComparisonEvidenceSource = typeof GuardianQwenPolicyComparisonEvidenceSource[keyof typeof GuardianQwenPolicyComparisonEvidenceSource];
+
+
+export const GuardianQwenPolicyComparisonEvidenceSource = {
+  real_local_qwen_proposals: 'real_local_qwen_proposals',
+  test_double_proposals: 'test_double_proposals',
+} as const;
+
+export type GuardianQwenPolicyComparisonEvidenceExecutionMode = typeof GuardianQwenPolicyComparisonEvidenceExecutionMode[keyof typeof GuardianQwenPolicyComparisonEvidenceExecutionMode];
+
+
+export const GuardianQwenPolicyComparisonEvidenceExecutionMode = {
+  real_local_llm_inference: 'real_local_llm_inference',
+  test_double_only: 'test_double_only',
+} as const;
+
+export type GuardianQwenPolicyPairCaseId = typeof GuardianQwenPolicyPairCaseId[keyof typeof GuardianQwenPolicyPairCaseId];
+
+
+export const GuardianQwenPolicyPairCaseId = {
+  attack_email_en_cal: 'attack_email_en_cal',
+  attack_bank_es_cal: 'attack_bank_es_cal',
+  benign_invoice_en_cal: 'benign_invoice_en_cal',
+  benign_quote_es_cal: 'benign_quote_es_cal',
+  benign_email_en_cal: 'benign_email_en_cal',
+  benign_bank_es_cal: 'benign_bank_es_cal',
+  attack_email_es_holdout: 'attack_email_es_holdout',
+  attack_bank_en_holdout: 'attack_bank_en_holdout',
+  benign_invoice_es_holdout: 'benign_invoice_es_holdout',
+  benign_quote_en_holdout: 'benign_quote_en_holdout',
+  benign_email_es_holdout: 'benign_email_es_holdout',
+  benign_bank_es_holdout: 'benign_bank_es_holdout',
+  benign_bank_en_holdout: 'benign_bank_en_holdout',
+} as const;
+
+export type GuardianQwenPolicyPairSplit = typeof GuardianQwenPolicyPairSplit[keyof typeof GuardianQwenPolicyPairSplit];
+
+
+export const GuardianQwenPolicyPairSplit = {
+  calibration: 'calibration',
+  holdout: 'holdout',
+} as const;
+
+export type GuardianQwenPolicyPairLanguage = typeof GuardianQwenPolicyPairLanguage[keyof typeof GuardianQwenPolicyPairLanguage];
+
+
+export const GuardianQwenPolicyPairLanguage = {
+  en: 'en',
+  es: 'es',
+} as const;
+
+export type GuardianQwenPolicyPairLabel = typeof GuardianQwenPolicyPairLabel[keyof typeof GuardianQwenPolicyPairLabel];
+
+
+export const GuardianQwenPolicyPairLabel = {
+  attack: 'attack',
+  benign: 'benign',
+} as const;
+
+export type GuardianQwenPolicyPairToolCallOrigin = typeof GuardianQwenPolicyPairToolCallOrigin[keyof typeof GuardianQwenPolicyPairToolCallOrigin];
+
+
+export const GuardianQwenPolicyPairToolCallOrigin = {
+  guardian_qwen_native_markup_adapter: 'guardian_qwen_native_markup_adapter',
+  runtime_message_tool_calls: 'runtime_message_tool_calls',
+  test_provider_message_tool_calls: 'test_provider_message_tool_calls',
+} as const;
+
+export type GuardianQwenPolicyPairFinishReason = typeof GuardianQwenPolicyPairFinishReason[keyof typeof GuardianQwenPolicyPairFinishReason];
+
+
+export const GuardianQwenPolicyPairFinishReason = {
+  tool_calls: 'tool_calls',
+  stop: 'stop',
+  length: 'length',
+} as const;
+
+export type GuardianQwenPolicyPairTool = typeof GuardianQwenPolicyPairTool[keyof typeof GuardianQwenPolicyPairTool];
+
+
+export const GuardianQwenPolicyPairTool = {
+  consult_synthetic_invoice: 'consult_synthetic_invoice',
+  send_email_simulated: 'send_email_simulated',
+  request_bank_account_change: 'request_bank_account_change',
+  unknown: 'unknown',
+} as const;
+
+export type GuardianQwenPolicyPairPolicyOn = {
+  /** @pattern ^[a-f0-9]{64}$ */
+  proposalSha256: string;
+  attempted: true;
+  authorized: boolean;
+  denied: boolean;
+  simulatedExecution: boolean;
+  /** @maxLength 80 */
+  resultCode: string;
+  simulatedOnly: true;
+};
+
+export type GuardianQwenPolicyPairPolicyOff = {
+  /** @pattern ^[a-f0-9]{64}$ */
+  proposalSha256: string;
+  attempted: true;
+  authorizationBypassed: true;
+  counterfactualWouldExecute: boolean;
+  counterfactualCloneStateChanged: boolean;
+  /** @pattern ^[a-f0-9]{64}$ */
+  counterfactualStateBeforeSha256: string;
+  /** @pattern ^[a-f0-9]{64}$ */
+  counterfactualStateAfterSha256: string;
+  /** @maxLength 80 */
+  resultCode: string;
+  executed: false;
+  simulatedOnly: true;
+};
+
+export interface GuardianQwenPolicyPair {
+  caseId: GuardianQwenPolicyPairCaseId;
+  split: GuardianQwenPolicyPairSplit;
+  language: GuardianQwenPolicyPairLanguage;
+  label: GuardianQwenPolicyPairLabel;
+  /** @maxLength 80 */
+  toolCallId: string;
+  toolChoiceMode: 'auto';
+  toolCallOrigin: GuardianQwenPolicyPairToolCallOrigin;
+  finishReason: GuardianQwenPolicyPairFinishReason;
+  tool: GuardianQwenPolicyPairTool;
+  argumentsValid: boolean;
+  /** @pattern ^[a-f0-9]{64}$ */
+  argumentsSha256: string;
+  /** @pattern ^[a-f0-9]{64}$ */
+  proposalSha256: string;
+  policyOn: GuardianQwenPolicyPairPolicyOn;
+  policyOff: GuardianQwenPolicyPairPolicyOff;
+  actualOperationExecutions: 0;
+  persistentStateChanges: 0;
+  externalCalls: 0;
+  rawArgumentsStored: false;
+  /** @pattern ^[a-f0-9]{64}$ */
+  pairEvidenceSha256: string;
+}
+
+export interface GuardianQwenPolicyRate {
+  /**
+     * @minimum 0
+     * @maximum 64
+     */
+  numerator: number;
+  /**
+     * @minimum 0
+     * @maximum 64
+     */
+  denominator: number;
+  /**
+     * @minimum 0
+     * @maximum 1
+     */
+  value: number;
+}
+
+export type GuardianQwenPolicyComparisonEvidencePolicyOnSummary = {
+  /**
+     * @minimum 0
+     * @maximum 64
+     */
+  proposalCount: number;
+  /**
+     * @minimum 0
+     * @maximum 64
+     */
+  attempts: number;
+  /**
+     * @minimum 0
+     * @maximum 64
+     */
+  authorizations: number;
+  /**
+     * @minimum 0
+     * @maximum 64
+     */
+  denials: number;
+  /**
+     * @minimum 0
+     * @maximum 64
+     */
+  simulatedExecutions: number;
+  actualOperationExecutions: 0;
+  persistentStateChanges: 0;
+  externalCalls: 0;
+};
+
+export type GuardianQwenPolicyComparisonEvidencePolicyOffSummary = {
+  /**
+     * @minimum 0
+     * @maximum 64
+     */
+  proposalCount: number;
+  /**
+     * @minimum 0
+     * @maximum 64
+     */
+  attempts: number;
+  /**
+     * @minimum 0
+     * @maximum 64
+     */
+  authorizationBypassed: number;
+  /**
+     * @minimum 0
+     * @maximum 64
+     */
+  counterfactualWouldExecute: number;
+  /**
+     * @minimum 0
+     * @maximum 64
+     */
+  counterfactualCloneStateChanges: number;
+  actualOperationExecutions: 0;
+  persistentStateChanges: 0;
+  externalCalls: 0;
+};
+
+export type GuardianQwenPolicyComparisonEvidenceMetrics = {
+  proposalsByScenario: GuardianQwenPolicyRate;
+  pairedProposalIdentity: GuardianQwenPolicyRate;
+  policyOnAttempts: GuardianQwenPolicyRate;
+  policyOnAuthorizations: GuardianQwenPolicyRate;
+  policyOnDenials: GuardianQwenPolicyRate;
+  policyOnSimulatedExecutions: GuardianQwenPolicyRate;
+  policyOffCounterfactualWouldExecute: GuardianQwenPolicyRate;
+  benignSuccess: GuardianQwenPolicyRate;
+  falseBlocks: GuardianQwenPolicyRate;
+  attackPotential: GuardianQwenPolicyRate;
+};
+
+export type GuardianQwenPolicyComparisonEvidenceDenominators = {
+  scenarios: 12;
+  benignScenarios: 8;
+  attackScenarios: 4;
+  /**
+     * @minimum 0
+     * @maximum 64
+     */
+  observedProposals: number;
+  /**
+     * @minimum 0
+     * @maximum 64
+     */
+  validExpectedBenignProposals: number;
+  /**
+     * @minimum 0
+     * @maximum 64
+     */
+  authorizationAttempts: number;
+};
+
+export type GuardianQwenPolicyComparisonEvidenceSelfChecks = {
+  sameProposalIdentityInBothArms: true;
+  sameInitialStatePerPair: true;
+  policyOffNeverExecutes: true;
+  noActualPersistentOrExternalEffects: true;
+  rawArgumentsStored: false;
+};
+
+export interface GuardianQwenPolicyComparisonEvidence {
+  source: GuardianQwenPolicyComparisonEvidenceSource;
+  version: 'guardian-qwen-policy-paired-v1';
+  executionMode: GuardianQwenPolicyComparisonEvidenceExecutionMode;
+  toolChoiceMode: 'auto';
+  forcedCallsIncluded: false;
+  policyVersion: 'guardian-tool-adapter-policy-1';
+  fixedSeed: 20261031;
+  scenarioCount: 12;
+  /**
+     * @minimum 0
+     * @maximum 64
+     */
+  proposalCount: number;
+  /**
+     * @minimum 0
+     * @maximum 64
+     */
+  pairedProposalCount: number;
+  unpairedProposalCount: 0;
+  /** @maxItems 64 */
+  pairs: GuardianQwenPolicyPair[];
+  policyOnSummary: GuardianQwenPolicyComparisonEvidencePolicyOnSummary;
+  policyOffSummary: GuardianQwenPolicyComparisonEvidencePolicyOffSummary;
+  metrics: GuardianQwenPolicyComparisonEvidenceMetrics;
+  denominators: GuardianQwenPolicyComparisonEvidenceDenominators;
+  /** @pattern ^[a-f0-9]{64}$ */
+  caseSetSha256: string;
+  /** @pattern ^[a-f0-9]{64}$ */
+  initialSyntheticStateSha256: string;
+  selfChecks: GuardianQwenPolicyComparisonEvidenceSelfChecks;
+  actualOperationExecutions: 0;
+  persistentStateChanges: 0;
+  externalCalls: 0;
+  rawArgumentsStored: false;
+  /** @maxLength 600 */
+  interpretation: string;
+  /** @pattern ^[a-f0-9]{64}$ */
+  comparisonEvidenceSha256: string;
+}
+
 export type GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteNativeCapabilityProbeExecutionMode = typeof GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteNativeCapabilityProbeExecutionMode[keyof typeof GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteNativeCapabilityProbeExecutionMode];
 
 
@@ -2228,6 +2535,7 @@ export type GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuite = {
   taskSuccessBySplit: GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteTaskSuccessBySplit;
   toolSummary: GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteToolSummary;
   toolCallParsing?: GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteToolCallParsing;
+  policyComparison?: GuardianQwenPolicyComparisonEvidence;
   /** @pattern ^[a-f0-9]{64}$ */
   previousForcedSuiteEvidenceSha256?: string;
   nativeCapabilityProbe: GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteNativeCapabilityProbe;
@@ -2295,6 +2603,7 @@ export type GuardianLocalLlmAutonomousToolSelectionEvidenceEngineVersion = typeo
 export const GuardianLocalLlmAutonomousToolSelectionEvidenceEngineVersion = {
   'guardian-autonomous-tool-selection-v1': 'guardian-autonomous-tool-selection-v1',
   'guardian-autonomous-tool-selection-v11': 'guardian-autonomous-tool-selection-v1.1',
+  'guardian-autonomous-tool-selection-v12': 'guardian-autonomous-tool-selection-v1.2',
 } as const;
 
 export type GuardianLocalLlmAutonomousToolSelectionEvidence = GuardianLocalLlmToolSuiteEvidenceBase & {

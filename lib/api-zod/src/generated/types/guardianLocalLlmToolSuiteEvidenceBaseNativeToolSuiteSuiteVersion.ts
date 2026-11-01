@@ -13,4 +13,5 @@ export const GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSuiteVersion = 
   '100': '1.0.0',
   '110': '1.1.0',
   '120': '1.2.0',
+  '130': '1.3.0',
 } as const;
