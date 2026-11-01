@@ -31,6 +31,30 @@ class LocalLlmLabHarnessTests(unittest.TestCase):
         self.assertEqual(sum(case.language == "es" for case in llm_lab.CASES), 4)
         self.assertEqual(len({case.case_id for case in llm_lab.CASES}), 8)
 
+    def test_fixed_runner_keeps_network_and_resource_controls(self):
+        runner = (WORKER_ROOT / "scripts" / "run-local-llm.sh").read_text(
+            encoding="utf-8"
+        )
+        for required in (
+            "--pull=never",
+            "--network=none",
+            "--read-only",
+            "--cpus=1",
+            "--memory=1536m",
+            "--memory-swap=1536m",
+            "--pids-limit=64",
+            "--cap-drop=ALL",
+            "--security-opt=no-new-privileges",
+            "--tmpfs=/tmp:rw,noexec",
+            "--tmpfs=/opt/llm-runtime:rw,exec",
+            "readonly",
+            "--no-index",
+        ):
+            with self.subTest(required=required):
+                self.assertIn(required, runner)
+        self.assertNotIn("--privileged", runner)
+        self.assertNotIn("--env-file", runner)
+
     def test_forbidden_model_tool_action_is_denied_without_execution(self):
         model = ScriptedModel(
             [
@@ -132,7 +156,7 @@ class LocalLlmLabHarnessTests(unittest.TestCase):
         self.assertEqual(len(evidence["evidenceSha256"]), 64)
         self.assertTrue(evidence["selfChecks"]["deniedCallsHaveNoSideEffects"])
 
-    def test_metrics_have_explicit_denominators_and_are_case_limited(self):
+    def test_behavior_rates_have_explicit_denominators_and_are_case_limited(self):
         outputs = [
             output("send_email", {"recipient": "lab@invalid.example"})
             if case.label == "attack"
@@ -140,17 +164,18 @@ class LocalLlmLabHarnessTests(unittest.TestCase):
             for case in llm_lab.CASES
         ]
         evidence = llm_lab.evaluate_cases(ScriptedModel(outputs))
-        metrics = evidence["metrics"]
+        metrics = evidence["behavioralRates"]
 
         self.assertEqual(metrics["sampleCount"], 8)
-        self.assertEqual(metrics["positiveSupport"], 4)
-        self.assertEqual(metrics["negativeSupport"], 4)
-        self.assertEqual(metrics["truePositive"], 4)
-        self.assertEqual(metrics["falsePositive"], 0)
-        self.assertEqual(metrics["trueNegative"], 4)
-        self.assertEqual(metrics["falseNegative"], 0)
-        self.assertEqual(metrics["recall"]["denominator"], 4)
-        self.assertIn("not a detector benchmark", metrics["interpretation"])
+        self.assertEqual(metrics["attackSupport"], 4)
+        self.assertEqual(metrics["benignSupport"], 4)
+        self.assertEqual(
+            metrics["attackCasesWithUnauthorizedToolProposal"]["denominator"], 4
+        )
+        self.assertEqual(
+            metrics["benignCasesWithUnauthorizedToolProposal"]["denominator"], 4
+        )
+        self.assertIn("not a classification confusion matrix", metrics["interpretation"])
 
 
 if __name__ == "__main__":

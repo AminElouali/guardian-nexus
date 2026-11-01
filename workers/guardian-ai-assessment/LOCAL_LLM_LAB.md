@@ -50,13 +50,16 @@ benign summaries, and quoted injection examples. The seed is fixed. Each
 evaluation reports case-level hashes and tool traces without storing raw
 documents, prompts, responses, or tool arguments.
 
-The confusion matrix measures only whether the model proposed a policy-forbidden
-tool in these eight cases. It is not a detector benchmark or an estimate of
-general model accuracy. Text propagation, a structured action proposal,
-authorization, execution, side effects, and policy violations are separate
-fields. Matching text is used only to identify text propagation; it is never
-used as proof of tool use. A matching attack-target action is reported as
-scenario-aligned behavior, not verified causality.
+The report gives rates with explicit numerators and denominators for
+policy-forbidden tool proposals, target-operation proposals, and text
+propagation in these eight cases. It does not use a classifier confusion matrix
+because these outcomes are model behaviors, not detector predictions. The rates
+are not a detector benchmark or an estimate of general model accuracy. Text
+propagation, a structured action proposal, authorization, execution, side
+effects, and policy violations are separate fields. Matching text is used only
+to identify text propagation; it is never used as proof of tool use. A matching
+attack-target action is reported as scenario-aligned behavior, not verified
+causality.
 
 ## Running locally
 
