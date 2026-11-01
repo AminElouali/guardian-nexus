@@ -11,4 +11,5 @@ export type GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSuiteVersion = t
 
 export const GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSuiteVersion = {
   '100': '1.0.0',
+  '110': '1.1.0',
 } as const;

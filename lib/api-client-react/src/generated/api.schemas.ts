@@ -622,6 +622,225 @@ export interface GuardianVerificationCaseEvidence {
   caseEvidenceSha256: string;
 }
 
+export type GuardianPolicyComparisonProposalCaseId = typeof GuardianPolicyComparisonProposalCaseId[keyof typeof GuardianPolicyComparisonProposalCaseId];
+
+
+export const GuardianPolicyComparisonProposalCaseId = {
+  controlled_allow_invoice_read: 'controlled_allow_invoice_read',
+  controlled_deny_bank_change: 'controlled_deny_bank_change',
+} as const;
+
+export type GuardianPolicyComparisonProposalTool = typeof GuardianPolicyComparisonProposalTool[keyof typeof GuardianPolicyComparisonProposalTool];
+
+
+export const GuardianPolicyComparisonProposalTool = {
+  consult_synthetic_invoice: 'consult_synthetic_invoice',
+  request_bank_account_change: 'request_bank_account_change',
+} as const;
+
+export type GuardianPolicyComparisonProposalExpectedDecision = typeof GuardianPolicyComparisonProposalExpectedDecision[keyof typeof GuardianPolicyComparisonProposalExpectedDecision];
+
+
+export const GuardianPolicyComparisonProposalExpectedDecision = {
+  allow: 'allow',
+  deny: 'deny',
+} as const;
+
+export interface GuardianPolicyComparisonProposal {
+  caseId: GuardianPolicyComparisonProposalCaseId;
+  tool: GuardianPolicyComparisonProposalTool;
+  /** @pattern ^[a-f0-9]{64}$ */
+  argumentsSha256: string;
+  /** @pattern ^[a-f0-9]{64}$ */
+  proposalSha256: string;
+  /** @pattern ^[a-f0-9]{64}$ */
+  stateBeforeSha256: string;
+  expectedDecision: GuardianPolicyComparisonProposalExpectedDecision;
+}
+
+export type GuardianPolicyComparisonEnforcedCaseCaseId = typeof GuardianPolicyComparisonEnforcedCaseCaseId[keyof typeof GuardianPolicyComparisonEnforcedCaseCaseId];
+
+
+export const GuardianPolicyComparisonEnforcedCaseCaseId = {
+  controlled_allow_invoice_read: 'controlled_allow_invoice_read',
+  controlled_deny_bank_change: 'controlled_deny_bank_change',
+} as const;
+
+export type GuardianPolicyComparisonEnforcedCasePolicyDecision = typeof GuardianPolicyComparisonEnforcedCasePolicyDecision[keyof typeof GuardianPolicyComparisonEnforcedCasePolicyDecision];
+
+
+export const GuardianPolicyComparisonEnforcedCasePolicyDecision = {
+  allow: 'allow',
+  deny: 'deny',
+} as const;
+
+export type GuardianPolicyComparisonEnforcedCaseEventPhasesItem = typeof GuardianPolicyComparisonEnforcedCaseEventPhasesItem[keyof typeof GuardianPolicyComparisonEnforcedCaseEventPhasesItem];
+
+
+export const GuardianPolicyComparisonEnforcedCaseEventPhasesItem = {
+  proposed: 'proposed',
+  authorization_attempt: 'authorization_attempt',
+  authorized: 'authorized',
+  denied: 'denied',
+  executed: 'executed',
+} as const;
+
+export interface GuardianPolicyComparisonEnforcedCase {
+  caseId: GuardianPolicyComparisonEnforcedCaseCaseId;
+  policyDecision: GuardianPolicyComparisonEnforcedCasePolicyDecision;
+  proposed: true;
+  attempted: true;
+  authorized: boolean;
+  executed: boolean;
+  simulatedOnly: true;
+  eventPhases: GuardianPolicyComparisonEnforcedCaseEventPhasesItem[];
+}
+
+export type GuardianPolicyComparisonEnforcedArmSummary = {
+  proposed: 2;
+  attempted: 2;
+  /**
+     * @minimum 0
+     * @maximum 2
+     */
+  allowed: number;
+  /**
+     * @minimum 0
+     * @maximum 2
+     */
+  denied: number;
+  /**
+     * @minimum 0
+     * @maximum 2
+     */
+  simulatedExecutions: number;
+  actualOperationExecutions: 0;
+  persistentStateChanges: 0;
+  externalCalls: 0;
+};
+
+export interface GuardianPolicyComparisonEnforcedArm {
+  mode: 'policy_enforced';
+  sampleCount: 2;
+  /**
+     * @minItems 2
+     * @maxItems 2
+     */
+  cases: GuardianPolicyComparisonEnforcedCase[];
+  summary: GuardianPolicyComparisonEnforcedArmSummary;
+  /** @pattern ^[a-f0-9]{64}$ */
+  armEvidenceSha256: string;
+}
+
+export type GuardianPolicyComparisonCounterfactualCaseCaseId = typeof GuardianPolicyComparisonCounterfactualCaseCaseId[keyof typeof GuardianPolicyComparisonCounterfactualCaseCaseId];
+
+
+export const GuardianPolicyComparisonCounterfactualCaseCaseId = {
+  controlled_allow_invoice_read: 'controlled_allow_invoice_read',
+  controlled_deny_bank_change: 'controlled_deny_bank_change',
+} as const;
+
+export type GuardianPolicyComparisonCounterfactualCaseEventPhasesItem = typeof GuardianPolicyComparisonCounterfactualCaseEventPhasesItem[keyof typeof GuardianPolicyComparisonCounterfactualCaseEventPhasesItem];
+
+
+export const GuardianPolicyComparisonCounterfactualCaseEventPhasesItem = {
+  proposed: 'proposed',
+  authorization_attempt: 'authorization_attempt',
+  policy_bypassed: 'policy_bypassed',
+  counterfactual_would_execute: 'counterfactual_would_execute',
+  counterfactual_rejected: 'counterfactual_rejected',
+} as const;
+
+export interface GuardianPolicyComparisonCounterfactualCase {
+  caseId: GuardianPolicyComparisonCounterfactualCaseCaseId;
+  policyDecision: 'bypassed_counterfactual';
+  proposed: true;
+  attempted: true;
+  /** @nullable */
+  authorized: null;
+  executed: false;
+  counterfactualWouldExecute: boolean;
+  counterfactualCloneStateChanged: boolean;
+  /** @pattern ^[a-f0-9]{64}$ */
+  counterfactualStateAfterSha256: string;
+  eventPhases: GuardianPolicyComparisonCounterfactualCaseEventPhasesItem[];
+  simulatedOnly: true;
+}
+
+export type GuardianPolicyComparisonCounterfactualArmSummary = {
+  proposed: 2;
+  attempted: 2;
+  authorizationBypassed: 2;
+  /**
+     * @minimum 0
+     * @maximum 2
+     */
+  counterfactualWouldExecute: number;
+  /**
+     * @minimum 0
+     * @maximum 2
+     */
+  counterfactualCloneStateChanges: number;
+  actualOperationExecutions: 0;
+  persistentStateChanges: 0;
+  externalCalls: 0;
+};
+
+export interface GuardianPolicyComparisonCounterfactualArm {
+  mode: 'counterfactual_without_enforcement';
+  sampleCount: 2;
+  /**
+     * @minItems 2
+     * @maxItems 2
+     */
+  cases: GuardianPolicyComparisonCounterfactualCase[];
+  summary: GuardianPolicyComparisonCounterfactualArmSummary;
+  /** @pattern ^[a-f0-9]{64}$ */
+  armEvidenceSha256: string;
+}
+
+export type GuardianPolicyComparisonEvidenceSelfChecks = {
+  sameCasesAndProposals: true;
+  sameInitialState: true;
+  expectedAllowAndDenyObserved: true;
+  policyOffIsCloneOnly: true;
+  noPersistentOrExternalEffects: true;
+  rawArgumentsStored: false;
+};
+
+export interface GuardianPolicyComparisonEvidence {
+  source: 'synthetic_controlled_proposals_not_llm';
+  version: 'guardian-policy-counterfactual-1';
+  fixedSeed: 20261101;
+  sampleCount: 2;
+  /**
+     * @minItems 2
+     * @maxItems 2
+     */
+  proposals: GuardianPolicyComparisonProposal[];
+  /** @pattern ^[a-f0-9]{64}$ */
+  caseSetSha256: string;
+  /** @pattern ^[a-f0-9]{64}$ */
+  initialSyntheticStateSha256: string;
+  /** @maxLength 80 */
+  policyVersion: string;
+  policyOn: GuardianPolicyComparisonEnforcedArm;
+  policyOff: GuardianPolicyComparisonCounterfactualArm;
+  selfChecks: GuardianPolicyComparisonEvidenceSelfChecks;
+  actualOperationExecutions: 0;
+  persistentStateChanges: 0;
+  externalCalls: 0;
+  rawPromptsStored: false;
+  rawResponsesStored: false;
+  rawArgumentsStored: false;
+  startedAt: string;
+  completedAt: string;
+  /** @maxLength 400 */
+  interpretation: string;
+  /** @pattern ^[a-f0-9]{64}$ */
+  evidenceSha256: string;
+}
+
 export type GuardianVerificationEvidenceScenariosItem = {
   scenarioId: GuardianVerificationEvidenceScenariosItemScenarioId;
   policyId: string;
@@ -691,6 +910,7 @@ export interface GuardianVerificationEvidence {
   anomalyCount: number;
   selfChecks: GuardianVerificationEvidenceSelfChecks;
   caseEvidence: GuardianVerificationCaseEvidence[];
+  policyComparison?: GuardianPolicyComparisonEvidence;
   /** @pattern ^[a-f0-9]{64}$ */
   suiteEvidenceSha256: string;
   startedAt: string;
@@ -1339,6 +1559,7 @@ export const GuardianNativeToolTraceEventCaseId = {
   benign_invoice_es_holdout: 'benign_invoice_es_holdout',
   benign_quote_en_holdout: 'benign_quote_en_holdout',
   benign_email_es_holdout: 'benign_email_es_holdout',
+  benign_bank_es_holdout: 'benign_bank_es_holdout',
   benign_bank_en_holdout: 'benign_bank_en_holdout',
 } as const;
 
@@ -1409,6 +1630,7 @@ export type GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSuiteVersion = t
 
 export const GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSuiteVersion = {
   '100': '1.0.0',
+  '110': '1.1.0',
 } as const;
 
 export type GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSampleCount = typeof GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSampleCount[keyof typeof GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSampleCount];
@@ -1482,6 +1704,7 @@ export const GuardianNativeToolCaseEvidenceCaseId = {
   benign_invoice_es_holdout: 'benign_invoice_es_holdout',
   benign_quote_en_holdout: 'benign_quote_en_holdout',
   benign_email_es_holdout: 'benign_email_es_holdout',
+  benign_bank_es_holdout: 'benign_bank_es_holdout',
   benign_bank_en_holdout: 'benign_bank_en_holdout',
 } as const;
 
@@ -1714,22 +1937,22 @@ export interface GuardianNativeToolMetric {
 export interface GuardianNativeToolTaskSuccess {
   /**
      * @minimum 0
-     * @maximum 6
+     * @maximum 12
      */
   succeeded: number;
   /**
      * @minimum 0
-     * @maximum 6
+     * @maximum 12
      */
   eligible: number;
   /**
      * @minimum 0
-     * @maximum 6
+     * @maximum 12
      */
   numerator: number;
   /**
      * @minimum 0
-     * @maximum 6
+     * @maximum 12
      */
   denominator: number;
   /**

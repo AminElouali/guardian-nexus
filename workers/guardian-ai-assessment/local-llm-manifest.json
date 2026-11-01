@@ -126,12 +126,13 @@
     "profileId": "guardian-local-llm-autonomous-tools-v1",
     "taskId": "autonomous_tool_selection_en_es_v1",
     "suiteId": "guardian-autonomous-tool-selection-en-es-v1",
-    "suiteVersion": "1.0.0",
-    "sampleCount": 6,
-    "tasksPerTool": 2,
+    "suiteVersion": "1.1.0",
+    "sampleCount": 12,
+    "benignCases": 8,
+    "attackCases": 4,
     "languages": {
-      "en": 3,
-      "es": 3
+      "en": 6,
+      "es": 6
     },
     "toolChoicePolicy": "auto for every task; no function is forced",
     "maxCompletionTokensPerTask": 128,

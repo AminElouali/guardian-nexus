@@ -123,6 +123,106 @@ export type GuardianVerificationEvidence = {
   externalCalls: 0;
   customerDataUsed: false;
   interpretation: string;
+  policyComparison?: GuardianPolicyComparisonEvidence;
+};
+
+type GuardianPolicyComparisonProposal = {
+  caseId: "controlled_allow_invoice_read" | "controlled_deny_bank_change";
+  tool: "consult_synthetic_invoice" | "request_bank_account_change";
+  argumentsSha256: string;
+  proposalSha256: string;
+  stateBeforeSha256: string;
+  expectedDecision: "allow" | "deny";
+};
+
+export type GuardianPolicyComparisonEvidence = {
+  source: "synthetic_controlled_proposals_not_llm";
+  version: "guardian-policy-counterfactual-1";
+  fixedSeed: 20261101;
+  sampleCount: 2;
+  proposals: GuardianPolicyComparisonProposal[];
+  caseSetSha256: string;
+  initialSyntheticStateSha256: string;
+  policyVersion: string;
+  policyOn: {
+    mode: "policy_enforced";
+    sampleCount: 2;
+    cases: Array<{
+      caseId: GuardianPolicyComparisonProposal["caseId"];
+      policyDecision: "allow" | "deny";
+      proposed: true;
+      attempted: true;
+      authorized: boolean;
+      executed: boolean;
+      simulatedOnly: true;
+      eventPhases: Array<
+        "proposed" | "authorization_attempt" | "authorized" | "denied" | "executed"
+      >;
+    }>;
+    summary: {
+      proposed: 2;
+      attempted: 2;
+      allowed: number;
+      denied: number;
+      simulatedExecutions: number;
+      actualOperationExecutions: 0;
+      persistentStateChanges: 0;
+      externalCalls: 0;
+    };
+    armEvidenceSha256: string;
+  };
+  policyOff: {
+    mode: "counterfactual_without_enforcement";
+    sampleCount: 2;
+    cases: Array<{
+      caseId: GuardianPolicyComparisonProposal["caseId"];
+      policyDecision: "bypassed_counterfactual";
+      proposed: true;
+      attempted: true;
+      authorized: null;
+      executed: false;
+      counterfactualWouldExecute: boolean;
+      counterfactualCloneStateChanged: boolean;
+      counterfactualStateAfterSha256: string;
+      simulatedOnly: true;
+      eventPhases: Array<
+        | "proposed"
+        | "authorization_attempt"
+        | "policy_bypassed"
+        | "counterfactual_would_execute"
+        | "counterfactual_rejected"
+      >;
+    }>;
+    summary: {
+      proposed: 2;
+      attempted: 2;
+      authorizationBypassed: 2;
+      counterfactualWouldExecute: number;
+      counterfactualCloneStateChanges: number;
+      actualOperationExecutions: 0;
+      persistentStateChanges: 0;
+      externalCalls: 0;
+    };
+    armEvidenceSha256: string;
+  };
+  selfChecks: {
+    sameCasesAndProposals: true;
+    sameInitialState: true;
+    expectedAllowAndDenyObserved: true;
+    policyOffIsCloneOnly: true;
+    noPersistentOrExternalEffects: true;
+    rawArgumentsStored: false;
+  };
+  actualOperationExecutions: 0;
+  persistentStateChanges: 0;
+  externalCalls: 0;
+  rawPromptsStored: false;
+  rawResponsesStored: false;
+  rawArgumentsStored: false;
+  startedAt: string;
+  completedAt: string;
+  interpretation: string;
+  evidenceSha256: string;
 };
 
 export type AiAssessmentEvidence = {
@@ -442,7 +542,7 @@ type GuardianLocalLlmToolSuiteEvidenceBase = {
   toolTrace: GuardianNativeToolTraceEvent[];
   nativeToolSuite: {
     suiteId: string;
-    suiteVersion: "1.0.0";
+    suiteVersion: "1.0.0" | "1.1.0";
     sampleCount: number;
     splitSampleCounts: { calibration: number; holdout: number };
     languageCounts: { en: number; es: number };

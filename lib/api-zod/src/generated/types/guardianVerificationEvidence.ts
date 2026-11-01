@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { GuardianPolicyComparisonEvidence } from './guardianPolicyComparisonEvidence';
 import type { GuardianVerificationCaseEvidence } from './guardianVerificationCaseEvidence';
 import type { GuardianVerificationEvidenceLimits } from './guardianVerificationEvidenceLimits';
 import type { GuardianVerificationEvidenceMode } from './guardianVerificationEvidenceMode';
@@ -36,6 +37,7 @@ export interface GuardianVerificationEvidence {
   anomalyCount: number;
   selfChecks: GuardianVerificationEvidenceSelfChecks;
   caseEvidence: GuardianVerificationCaseEvidence[];
+  policyComparison?: GuardianPolicyComparisonEvidence;
   /** @pattern ^[a-f0-9]{64}$ */
   suiteEvidenceSha256: string;
   startedAt: Date;

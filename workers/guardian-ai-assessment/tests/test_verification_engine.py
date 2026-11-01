@@ -17,7 +17,12 @@ from guardian_ai_assessment.verification import (  # noqa: E402
     _case_for,
     run_guardian_verification_suite,
 )
+from guardian_ai_assessment import verification as verification_module  # noqa: E402
 from guardian_ai_assessment import __main__ as worker_main  # noqa: E402
+from guardian_ai_assessment.tool_adapter import (  # noqa: E402
+    INVOICE_ID,
+    SYNTHETIC_IBAN,
+)
 
 
 class GuardianVerificationEngineTests(unittest.TestCase):
@@ -172,6 +177,62 @@ class GuardianVerificationEngineTests(unittest.TestCase):
         self.assertTrue(self.evidence["selfChecks"]["deniedCallsHaveNoSideEffects"])
         self.assertTrue(self.evidence["selfChecks"]["allToolCallsInstrumented"])
         self.assertEqual(self.evidence["selfChecks"]["status"], "passed")
+
+    def test_policy_comparison_pairs_allow_and_deny_without_real_effects(self):
+        call = verification_module.call_synthetic_tool
+        with patch.object(
+            verification_module, "call_synthetic_tool", wraps=call
+        ) as adapter_call:
+            comparison = verification_module.run_policy_counterfactual_comparison()
+
+        self.assertEqual(adapter_call.call_count, 2)
+        self.assertEqual(comparison["source"], "synthetic_controlled_proposals_not_llm")
+        self.assertEqual(comparison["sampleCount"], 2)
+        self.assertEqual(comparison["policyOn"]["summary"]["allowed"], 1)
+        self.assertEqual(comparison["policyOn"]["summary"]["denied"], 1)
+        self.assertEqual(comparison["policyOn"]["summary"]["simulatedExecutions"], 1)
+        self.assertEqual(
+            comparison["policyOff"]["summary"]["counterfactualWouldExecute"], 2
+        )
+        self.assertEqual(
+            comparison["policyOff"]["summary"]["counterfactualCloneStateChanges"], 1
+        )
+        self.assertEqual(comparison["actualOperationExecutions"], 0)
+        self.assertEqual(comparison["persistentStateChanges"], 0)
+        self.assertEqual(comparison["externalCalls"], 0)
+        self.assertTrue(comparison["selfChecks"]["sameCasesAndProposals"])
+        self.assertTrue(comparison["selfChecks"]["sameInitialState"])
+        self.assertTrue(comparison["selfChecks"]["policyOffIsCloneOnly"])
+        self.assertTrue(comparison["selfChecks"]["noPersistentOrExternalEffects"])
+
+        for proposal, enforced, counterfactual in zip(
+            comparison["proposals"],
+            comparison["policyOn"]["cases"],
+            comparison["policyOff"]["cases"],
+            strict=True,
+        ):
+            self.assertEqual(enforced["caseId"], counterfactual["caseId"])
+            self.assertEqual(enforced["caseId"], proposal["caseId"])
+            self.assertEqual(
+                proposal["stateBeforeSha256"],
+                comparison["initialSyntheticStateSha256"],
+            )
+            self.assertFalse(counterfactual["executed"])
+            self.assertTrue(counterfactual["simulatedOnly"])
+
+        bank_off = comparison["policyOff"]["cases"][1]
+        self.assertTrue(bank_off["counterfactualWouldExecute"])
+        self.assertTrue(bank_off["counterfactualCloneStateChanged"])
+        self.assertNotEqual(
+            comparison["initialSyntheticStateSha256"],
+            bank_off["counterfactualStateAfterSha256"],
+        )
+        serialized = json.dumps(comparison)
+        self.assertNotIn(SYNTHETIC_IBAN, serialized)
+        self.assertNotIn(INVOICE_ID, serialized)
+        self.assertNotIn("SYNTHETIC_ACCOUNT", serialized)
+        self.assertNotIn("new_iban", serialized)
+        self.assertTrue(comparison["evidenceSha256"])
         self.assertEqual(len(self.evidence["suiteEvidenceSha256"]), 64)
         self.assertTrue(
             all(len(item["caseEvidenceSha256"]) == 64
@@ -179,7 +240,7 @@ class GuardianVerificationEngineTests(unittest.TestCase):
         )
         self.assertLess(
             len(json.dumps(self.evidence, separators=(",", ":")).encode("utf-8")),
-            55_000,
+            60_000,
         )
 
     def test_unknown_tool_is_rejected_before_any_state_change(self):

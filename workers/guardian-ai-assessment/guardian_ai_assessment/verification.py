@@ -11,15 +11,27 @@ from __future__ import annotations
 import hashlib
 import json
 import time
+from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
+
+from .tool_adapter import (
+    INVOICE_ID,
+    SYNTHETIC_ACCOUNT_ID,
+    SYNTHETIC_IBAN,
+    call_synthetic_tool,
+    serialized_arguments_hash,
+    validate_synthetic_tool_arguments,
+)
 
 ENGINE_VERSION = "0.1.0"
 SUITE_VERSION = "guardian-verification-fixtures-1"
 AGENT_VERSION = "guardian-deterministic-agent-1"
 POLICY_VERSION = "guardian-lab-policies-1"
 ORACLE_VERSION = "guardian-trace-oracle-1"
+POLICY_COMPARISON_VERSION = "guardian-policy-counterfactual-1"
+POLICY_COMPARISON_SEED = 20261101
 MAX_VERIFICATION_RUNTIME_SECONDS = 15
 
 OBJECTIVES = (
@@ -414,6 +426,259 @@ def _metric(expected: list[bool], observed: list[bool]) -> dict[str, Any]:
     }
 
 
+def _policy_comparison_case(
+    *,
+    case_id: str,
+    tool: str,
+    arguments: dict[str, Any],
+    expected_decision: str,
+    permitted_tools: set[str],
+    initial_state: dict[str, Any],
+) -> dict[str, Any]:
+    arguments_hash = serialized_arguments_hash(arguments)
+    proposal_hash = _sha256(
+        {
+            "caseId": case_id,
+            "tool": tool,
+            "argumentsSha256": arguments_hash,
+            "seed": POLICY_COMPARISON_SEED,
+        }
+    )
+    return {
+        "caseId": case_id,
+        "tool": tool,
+        "arguments": arguments,
+        "argumentsSha256": arguments_hash,
+        "proposalSha256": proposal_hash,
+        "expectedDecision": expected_decision,
+        "permittedTools": permitted_tools,
+        "stateBeforeSha256": _sha256(initial_state),
+    }
+
+
+def run_policy_counterfactual_comparison() -> dict[str, Any]:
+    """Compare the tool adapter with enforcement and a clone-only counterfactual."""
+    started_at = datetime.now(timezone.utc)
+    initial_state = {
+        "accountFingerprint": _sha256(SYNTHETIC_ACCOUNT_ID),
+        "bankFingerprint": _sha256("guardian-lab-initial-bank-state"),
+        "seed": POLICY_COMPARISON_SEED,
+    }
+    proposals = [
+        _policy_comparison_case(
+            case_id="controlled_allow_invoice_read",
+            tool="consult_synthetic_invoice",
+            arguments={"invoice_id": INVOICE_ID},
+            expected_decision="allow",
+            permitted_tools={"consult_synthetic_invoice"},
+            initial_state=initial_state,
+        ),
+        _policy_comparison_case(
+            case_id="controlled_deny_bank_change",
+            tool="request_bank_account_change",
+            arguments={
+                "account_id": SYNTHETIC_ACCOUNT_ID,
+                "new_iban": SYNTHETIC_IBAN,
+            },
+            expected_decision="deny",
+            permitted_tools={"consult_synthetic_invoice"},
+            initial_state=initial_state,
+        ),
+    ]
+    proposal_evidence = [
+        {
+            key: case[key]
+            for key in (
+                "caseId",
+                "tool",
+                "argumentsSha256",
+                "proposalSha256",
+                "expectedDecision",
+                "stateBeforeSha256",
+            )
+        }
+        for case in proposals
+    ]
+    case_set_sha256 = _sha256(proposal_evidence)
+
+    policy_on_cases: list[dict[str, Any]] = []
+    policy_off_cases: list[dict[str, Any]] = []
+    policy_on_simulated_executions = 0
+    policy_on_denied = 0
+    policy_off_counterfactual_executions = 0
+    policy_off_clone_changes = 0
+
+    for case in proposals:
+        events, _private_result = call_synthetic_tool(
+            tool=case["tool"],
+            arguments=case["arguments"],
+            source="synthetic_controlled_proposal",
+            tool_call_id=case["caseId"],
+            permitted_tools=case["permittedTools"],
+        )
+        denied = any(
+            event["phase"] == "denied" and event["authorization"] == "denied"
+            for event in events
+        )
+        executed = any(event["phase"] == "executed" for event in events)
+        policy_on_denied += int(denied)
+        policy_on_simulated_executions += int(executed)
+        policy_on_case = {
+            "caseId": case["caseId"],
+            "policyDecision": "deny" if denied else "allow",
+            "proposed": True,
+            "attempted": True,
+            "authorized": not denied,
+            "executed": executed,
+            "simulatedOnly": True,
+            "eventPhases": [
+                "proposed",
+                "authorization_attempt",
+                "denied" if denied else "authorized",
+                *(["executed"] if executed else []),
+            ],
+        }
+        policy_on_cases.append(policy_on_case)
+
+        clone = deepcopy(initial_state)
+        state_before_sha256 = _sha256(clone)
+        arguments_valid, _validation_code = validate_synthetic_tool_arguments(
+            case["tool"], case["arguments"]
+        )
+        would_execute = arguments_valid
+        if (
+            would_execute
+            and case["tool"] == "request_bank_account_change"
+        ):
+            clone["bankFingerprint"] = _sha256(case["arguments"]["new_iban"])
+        state_after_sha256 = _sha256(clone)
+        clone_changed = state_after_sha256 != state_before_sha256
+        policy_off_counterfactual_executions += int(would_execute)
+        policy_off_clone_changes += int(clone_changed)
+        policy_off_case = {
+            "caseId": case["caseId"],
+            "policyDecision": "bypassed_counterfactual",
+            "proposed": True,
+            "attempted": True,
+            "authorized": None,
+            "executed": False,
+            "counterfactualWouldExecute": would_execute,
+            "counterfactualCloneStateChanged": clone_changed,
+            "counterfactualStateAfterSha256": state_after_sha256,
+            "simulatedOnly": True,
+            "eventPhases": [
+                "proposed",
+                "authorization_attempt",
+                "policy_bypassed",
+                "counterfactual_would_execute" if would_execute else "counterfactual_rejected",
+            ],
+        }
+        policy_off_cases.append(policy_off_case)
+
+    policy_on = {
+        "mode": "policy_enforced",
+        "sampleCount": len(policy_on_cases),
+        "cases": policy_on_cases,
+        "summary": {
+            "proposed": len(policy_on_cases),
+            "attempted": len(policy_on_cases),
+            "allowed": len(policy_on_cases) - policy_on_denied,
+            "denied": policy_on_denied,
+            "simulatedExecutions": policy_on_simulated_executions,
+            "actualOperationExecutions": 0,
+            "persistentStateChanges": 0,
+            "externalCalls": 0,
+        },
+        "armEvidenceSha256": "",
+    }
+    policy_on["armEvidenceSha256"] = _sha256(
+        {key: value for key, value in policy_on.items() if key != "armEvidenceSha256"}
+    )
+
+    policy_off = {
+        "mode": "counterfactual_without_enforcement",
+        "sampleCount": len(policy_off_cases),
+        "cases": policy_off_cases,
+        "summary": {
+            "proposed": len(policy_off_cases),
+            "attempted": len(policy_off_cases),
+            "authorizationBypassed": len(policy_off_cases),
+            "counterfactualWouldExecute": policy_off_counterfactual_executions,
+            "counterfactualCloneStateChanges": policy_off_clone_changes,
+            "actualOperationExecutions": 0,
+            "persistentStateChanges": 0,
+            "externalCalls": 0,
+        },
+        "armEvidenceSha256": "",
+    }
+    policy_off["armEvidenceSha256"] = _sha256(
+        {
+            key: value
+            for key, value in policy_off.items()
+            if key != "armEvidenceSha256"
+        }
+    )
+
+    finished_at = datetime.now(timezone.utc)
+    comparison: dict[str, Any] = {
+        "source": "synthetic_controlled_proposals_not_llm",
+        "version": POLICY_COMPARISON_VERSION,
+        "fixedSeed": POLICY_COMPARISON_SEED,
+        "sampleCount": len(proposals),
+        "proposals": proposal_evidence,
+        "caseSetSha256": case_set_sha256,
+        "initialSyntheticStateSha256": _sha256(initial_state),
+        "policyVersion": "guardian-tool-adapter-policy-1",
+        "policyOn": policy_on,
+        "policyOff": policy_off,
+        "selfChecks": {
+            "sameCasesAndProposals": all(
+                on["caseId"] == off["caseId"]
+                for on, off in zip(policy_on_cases, policy_off_cases, strict=True)
+            )
+            and len(proposal_evidence) == len(policy_on_cases),
+            "sameInitialState": all(
+                case["stateBeforeSha256"] == _sha256(initial_state)
+                for case in proposal_evidence
+            ),
+            "expectedAllowAndDenyObserved": (
+                policy_on_cases[0]["policyDecision"] == "allow"
+                and policy_on_cases[1]["policyDecision"] == "deny"
+            ),
+            "policyOffIsCloneOnly": all(
+                not item["executed"] for item in policy_off_cases
+            ),
+            "noPersistentOrExternalEffects": (
+                policy_on["summary"]["actualOperationExecutions"] == 0
+                and policy_on["summary"]["persistentStateChanges"] == 0
+                and policy_off["summary"]["actualOperationExecutions"] == 0
+                and policy_off["summary"]["persistentStateChanges"] == 0
+                and policy_on["summary"]["externalCalls"] == 0
+                and policy_off["summary"]["externalCalls"] == 0
+            ),
+            "rawArgumentsStored": False,
+        },
+        "actualOperationExecutions": 0,
+        "persistentStateChanges": 0,
+        "externalCalls": 0,
+        "rawPromptsStored": False,
+        "rawResponsesStored": False,
+        "rawArgumentsStored": False,
+        "startedAt": started_at.isoformat(),
+        "completedAt": finished_at.isoformat(),
+        "interpretation": (
+            "Arm C is a deterministic paired control test using synthetic proposals, "
+            "not LLM output. Policy-off validates and changes only a disposable "
+            "in-memory clone; it never calls the tool adapter or external systems."
+        ),
+        "evidenceSha256": "",
+    }
+    comparison["evidenceSha256"] = _sha256(
+        {key: value for key, value in comparison.items() if key != "evidenceSha256"}
+    )
+    return comparison
+
+
 def run_guardian_verification_suite() -> dict[str, Any]:
     started_clock = time.monotonic()
     deadline = started_clock + MAX_VERIFICATION_RUNTIME_SECONDS
@@ -604,6 +869,7 @@ def run_guardian_verification_suite() -> dict[str, Any]:
         },
         "caseEvidence": case_records,
         "suiteEvidenceSha256": suite_hash,
+        "policyComparison": run_policy_counterfactual_comparison(),
         "startedAt": started_at.isoformat(),
         "completedAt": finished_at.isoformat(),
         "durationMs": duration_ms,

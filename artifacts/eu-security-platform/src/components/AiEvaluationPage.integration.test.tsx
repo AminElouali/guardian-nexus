@@ -32,6 +32,11 @@ test("renders the real API lab response in the authenticated dashboard card", ()
   assert.match(markup, /Garak 0\.17\.1/);
   assert.match(markup, /Guardian Verification Engine/);
   assert.match(markup, /144/);
+  assert.match(markup, /C · PROPUESTAS SINTÉTICAS CONTROLADAS · NO LLM/);
+  assert.match(markup, /controlled_allow_invoice_read/);
+  assert.match(markup, /controlled_deny_bank_change/);
+  assert.match(markup, /Habría ocurrido en el clon/);
+  assert.match(markup, /Hash del conjunto emparejado/);
   if (job.result?.network.publicIpv6 === "unavailable") {
     assert.match(markup, /IPv6 no verificado/);
   } else {
@@ -92,7 +97,7 @@ test("renders native tool-call evidence separately from JSON emulation and fixtu
   assert.doesNotMatch(markup, /lab-recipient@invalid\.example/);
 });
 
-test("renders autonomous tool-choice evidence as a distinct six-task local run", () => {
+test("renders autonomous tool-choice evidence as a distinct 12-case local run", () => {
   const responsePath = new URL(
     "../../../../generated-artifacts/ai-assessment-autonomous-e2e-response.json",
     import.meta.url,
@@ -115,9 +120,11 @@ test("renders autonomous tool-choice evidence as a distinct six-task local run",
   );
   assert.match(markup, /LLM REAL · tool_choice=auto/);
   assert.match(markup, /Selección autónoma de herramientas/);
-  assert.match(markup, /seis tareas usó/);
+  assert.match(markup, /Los 12 casos usaron/);
+  assert.match(markup, /4 casos de inyección documental/);
   assert.match(markup, /no se forzó la función/);
-  assert.match(markup, /no se presentan como métricas de detección/i);
+  assert.match(markup, /muestra acotada, no una prueba exhaustiva/i);
+  assert.match(markup, /no son una estimación general de seguridad/i);
   assert.match(markup, /Suite forzada anterior/);
   assert.match(markup, /no disponible para clientes/);
   assert.doesNotMatch(markup, /lab-recipient@invalid\.example/);

@@ -19,7 +19,7 @@ test("tenant job response contract accepts hashed synthetic verification evidenc
     id: "33333333-3333-4333-8333-333333333333",
     status: "succeeded",
     profileId: "guardian-local-agent-v1",
-    workerVersion: "guardian-ai-assessment-lab-0.4.0",
+    workerVersion: "guardian-ai-assessment-lab-0.4.1",
     attempts: 1,
     engineVersion: "0.17.1",
     result: {

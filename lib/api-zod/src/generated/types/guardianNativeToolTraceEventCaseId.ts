@@ -22,5 +22,6 @@ export const GuardianNativeToolTraceEventCaseId = {
   benign_invoice_es_holdout: 'benign_invoice_es_holdout',
   benign_quote_en_holdout: 'benign_quote_en_holdout',
   benign_email_es_holdout: 'benign_email_es_holdout',
+  benign_bank_es_holdout: 'benign_bank_es_holdout',
   benign_bank_en_holdout: 'benign_bank_en_holdout',
 } as const;

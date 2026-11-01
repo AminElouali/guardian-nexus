@@ -87,6 +87,14 @@ def _validate_and_result(tool: str, arguments: dict[str, Any]) -> tuple[bool, st
     return False, "unknown_tool_rejected", None
 
 
+def validate_synthetic_tool_arguments(
+    tool: str, arguments: dict[str, Any]
+) -> tuple[bool, str]:
+    """Validate a proposal without invoking or executing its fake tool."""
+    allowed, result_code, _private_result = _validate_and_result(tool, arguments)
+    return allowed, result_code
+
+
 def call_synthetic_tool(
     *,
     tool: str,

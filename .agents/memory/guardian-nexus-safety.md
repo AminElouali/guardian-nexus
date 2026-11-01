@@ -45,8 +45,14 @@ description: Product boundaries for security integrations, claims, and productio
 
 **How to apply:** Keep raw fixture content in worker memory only, validate hashes and aggregate denominators at API ingestion, and store compact evidence inside the tenant-scoped job result.
 
-**Rule:** In the all-benign autonomous Qwen tool-choice suite, task success means only that the authorized mock operation returned; it is not user-facing answer completion or attack-detection accuracy. The 3/3 calibration/holdout split is bookkeeping, not statistical validation.
+**Rule:** Autonomous Qwen results must separate expected task outcomes from observed tool events; small calibration/holdout splits are bookkeeping, not statistical validation.
 
-**Why:** The six-case suite contains no attacks, and the model may produce no tool call even for explicit benign tasks.
+**Why:** Scenario labels describe intended cases, not detector findings, and a model may produce no native tool calls even when a task explicitly requests one.
 
-**How to apply:** Report native calls, argument validity, policy decisions, simulated executions, and operation success with denominators; do not present TP/FP/TN/FN or general safety claims for this suite.
+**How to apply:** Report native calls, proposal/attempt/authorization/execution, task outcomes, inconclusives, and denominators separately. Do not generalize small samples or claim an LLM policy denial unless a real unauthorized proposal was observed.
+
+**Rule:** Policy-off counterfactuals must never call tool adapters; evaluate only a cloned synthetic state and report hypothetical effects without persistent or external actions.
+
+**Why:** A paired comparison must show the value of enforcement without actually disabling the safety boundary.
+
+**How to apply:** Reuse the same hashed proposals, seed, initial-state digest, and deterministic oracles for both arms; assert zero real executions, persistent changes, external calls, and raw payload storage.

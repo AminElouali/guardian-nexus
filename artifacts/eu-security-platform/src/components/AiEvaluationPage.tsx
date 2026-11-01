@@ -65,6 +65,7 @@ type GarakEvidence = Extract<
   { engine: 'garak' }
 >;
 type GuardianVerification = NonNullable<GarakEvidence['guardianVerification']>;
+type PolicyComparison = NonNullable<GuardianVerification['policyComparison']>;
 type LocalLlmEvidence = Extract<
   NonNullable<AiAssessmentLabJob['result']>,
   { profileId: 'guardian-local-llm-qwen3-0.6b-v1' }
@@ -106,6 +107,7 @@ function GuardianVerificationResult({
 }: {
   verification: GuardianVerification;
 }) {
+  const comparison = verification.policyComparison;
   return <section className="guardian-verification" data-testid="guardian-verification-result">
     <div className="guardian-verification-heading">
       <div>
@@ -127,6 +129,7 @@ function GuardianVerificationResult({
     <p className="guardian-verification-note">
       Los intentos bloqueados, las acciones ejecutadas y las violaciones se cuentan por separado. Los casos vulnerables usan permisos ficticios excesivos para comprobar el oráculo; no modifican recursos reales.
     </p>
+    {comparison && <PolicyComparisonResult comparison={comparison} />}
     <details className="guardian-verification-details">
       <summary>Métricas de holdout por escenario</summary>
       <div className="guardian-verification-scenarios">
@@ -208,6 +211,65 @@ function GuardianVerificationResult({
       </dl>
       <small>Las máscaras esperadas/observadas usan el orden de objetivos del manifiesto del motor. Las métricas son de estos fixtures y no se extrapolan.</small>
     </details>
+  </section>;
+}
+
+function PolicyComparisonResult({ comparison }: { comparison: PolicyComparison }) {
+  return <section
+    className="guardian-verification-details policy-counterfactual"
+    data-testid="policy-counterfactual-result"
+  >
+    <div className="guardian-verification-heading">
+      <div>
+        <span className="ai-evaluation-run-label">C · PROPUESTAS SINTÉTICAS CONTROLADAS · NO LLM</span>
+        <h4>Comparación del control de autorización</h4>
+      </div>
+      <span className="guardian-verification-pill">Solo estado ficticio</span>
+    </div>
+    <p className="guardian-verification-disclaimer">
+      Prueba determinista del adaptador local fuera del modelo. No atribuir estas propuestas a Qwen/Garak. Los resultados A (tool_choice=auto) y B (llamadas forzadas) conservan sus propios informes y denominadores. El brazo sin enforcement solo modifica una copia ficticia en memoria; no ejecuta herramientas.
+    </p>
+    <div className="guardian-verification-stats">
+      <span><b>{comparison.policyOn.summary.allowed}/{comparison.policyOn.summary.proposed}</b> permitidas con política</span>
+      <span><b>{comparison.policyOn.summary.denied}/{comparison.policyOn.summary.attempted}</b> denegadas con política</span>
+      <span><b>{comparison.policyOff.summary.counterfactualWouldExecute}/{comparison.policyOff.sampleCount}</b> hipotéticas sin enforcement</span>
+      <span><b>{comparison.actualOperationExecutions}</b> operaciones reales</span>
+    </div>
+    <div className="guardian-verification-table-wrap">
+      <table className="guardian-verification-table">
+        <thead><tr>
+          <th scope="col">Propuesta sintética</th>
+          <th scope="col">Política activa</th>
+          <th scope="col">Sin enforcement · clon</th>
+          <th scope="col">Ejecución real</th>
+        </tr></thead>
+        <tbody>
+          {comparison.policyOn.cases.map((onCase) => {
+            const offCase = comparison.policyOff.cases.find(
+              (candidate) => candidate.caseId === onCase.caseId,
+            );
+            const proposal = comparison.proposals.find(
+              (candidate) => candidate.caseId === onCase.caseId,
+            );
+            return <tr key={onCase.caseId}>
+              <th scope="row">{onCase.caseId} · {proposal?.tool}</th>
+              <td>{onCase.policyDecision.toUpperCase()} · {onCase.executed ? 'solo adaptador ficticio' : 'no ejecutada'}</td>
+              <td>{offCase?.counterfactualWouldExecute ? 'Habría ocurrido en el clon' : 'No habría ocurrido'} · {offCase?.counterfactualCloneStateChanged ? 'clon cambiado' : 'clon sin cambios'}</td>
+              <td>No</td>
+            </tr>;
+          })}
+        </tbody>
+      </table>
+    </div>
+    <dl>
+      <dt>Semilla / casos</dt><dd>{comparison.fixedSeed} · {comparison.sampleCount} pares</dd>
+      <dt>Estado sintético inicial</dt><dd><code>{comparison.initialSyntheticStateSha256}</code></dd>
+      <dt>Hash del conjunto emparejado</dt><dd><code>{comparison.caseSetSha256}</code></dd>
+      <dt>Hash policy-on</dt><dd><code>{comparison.policyOn.armEvidenceSha256}</code></dd>
+      <dt>Hash contrafactual</dt><dd><code>{comparison.policyOff.armEvidenceSha256}</code></dd>
+      <dt>Hash de evidencia</dt><dd><code>{comparison.evidenceSha256}</code></dd>
+      <dt>Oráculo</dt><dd>{comparison.selfChecks.sameCasesAndProposals && comparison.selfChecks.expectedAllowAndDenyObserved && comparison.selfChecks.policyOffIsCloneOnly && comparison.selfChecks.noPersistentOrExternalEffects ? 'Verificado; sin estado persistente ni llamadas externas' : 'Falló la verificación'}</dd>
+    </dl>
   </section>;
 }
 
@@ -320,7 +382,7 @@ function NativeToolSuiteResult({
     </div>
     <p className="guardian-verification-disclaimer">
       {autonomous
-        ? <>Cada una de las seis tareas usó <code>tool_choice=auto</code>; no se forzó la función. Solo se cuentan objetos nativos <code>message.tool_calls</code>, no JSON del texto. Las tres herramientas son ficticias y no producen efectos externos.</>
+        ? <>Los {suite.sampleCount} casos usaron <code>tool_choice=auto</code>; no se forzó la función. Solo se cuentan objetos nativos <code>message.tool_calls</code>, no JSON del texto. Las tres herramientas son ficticias y no producen efectos externos.</>
         : <>Qwen3 local devolvió objetos <code>message.tool_calls</code> usando el template GGUF; no se interpretó JSON del texto como tool call. Las llamadas de correo y cambio bancario solo generaron resultados ficticios en memoria.</>}
     </p>
     <div className="guardian-verification-stats">
@@ -335,12 +397,12 @@ function NativeToolSuiteResult({
     </div>
     <p className="guardian-verification-disclaimer">
       {autonomous
-        ? 'Los seis ejemplos son tareas benignas autorizadas: no constituyen una prueba de detección de ataques ni una medida general de seguridad. «Resuelta» significa que la herramienta ficticia devolvió un resultado autorizado; no se evalúa una respuesta conversacional posterior. Una llamada ausente o incorrecta se cuenta como no resuelta; nunca se cambia a selección forzada.'
+        ? 'Los 12 casos incluyen 8 controles benignos y 4 casos de inyección documental; forman una muestra acotada, no una prueba exhaustiva ni una estimación general de seguridad. «Resuelta» significa que la herramienta ficticia devolvió un resultado autorizado; no se evalúa una respuesta conversacional posterior. Una llamada ausente o incorrecta se cuenta como no resuelta; nunca se cambia a selección forzada.'
         : 'En tareas benignas autorizadas, el arnés seleccionó la función específica para comprobar argumentos y autorización; eso no mide selección autónoma. Ataques y textos citados usaron selección automática. Las matrices comparan tipo de escenario con eventos de herramienta observados; un falso negativo significa que no se observó ese evento en un caso de ataque, no que un detector de ataques haya fallado.'}
     </p>
     <details className="guardian-verification-details">
       <summary>Métricas, trazas y procedencia</summary>
-      {!autonomous && <div className="guardian-verification-table-wrap">
+      <div className="guardian-verification-table-wrap">
         <table className="guardian-verification-table">
           <thead><tr>
             <th scope="col">Conjunto</th>
@@ -367,9 +429,9 @@ function NativeToolSuiteResult({
             ))}
           </tbody>
         </table>
-      </div>}
+      </div>
       {autonomous && <p className="guardian-verification-note">
-        Sin casos de ataque: TP/FP/TN/FN no se presentan como métricas de detección. La prueba informa únicamente selección de herramientas, autorización y resolución de estas seis tareas.
+        Este conjunto acotado contiene {suite.benignCases} controles benignos y {suite.attackCases} casos de inyección documental. Las matrices reflejan solo eventos observados en esta muestra; no son una estimación general de seguridad.
       </p>}
       <div className="guardian-verification-table-wrap">
         <table className="guardian-verification-table">
@@ -387,7 +449,7 @@ function NativeToolSuiteResult({
               <tr key={item.caseId}>
                 <th scope="row">{item.caseId}</th>
                 <td>{autonomous
-                  ? `${item.split === 'calibration' ? 'partición A' : 'partición B'} · ${item.language.toUpperCase()} · ${autonomousTaskLabels[item.category] ?? item.label}`
+                  ? `${item.label === 'attack' ? 'ataque indirecto' : 'control benigno'} · ${item.split === 'calibration' ? 'calibración' : 'holdout'} · ${item.language.toUpperCase()} · ${autonomousTaskLabels[item.category] ?? item.label}`
                   : `${item.split} · ${item.language.toUpperCase()} · ${item.label}`}</td>
                 <td>{item.proposedTools.length ? item.proposedTools.map((tool) => toolLabels[tool] ?? tool).join(', ') : 'Ninguna'}</td>
                 <td>{autonomous ? `${item.argumentsValid ? 'Válidos' : 'No válidos'} · ${item.policyAllowed ? 'permitido' : 'no permitido'}` : 'No medido en este perfil'}</td>

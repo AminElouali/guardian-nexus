@@ -1078,7 +1078,7 @@ components:
           additionalProperties: false
           properties:
             suiteId: { type: string, enum: [guardian-native-tool-call-en-es-v1, guardian-autonomous-tool-selection-en-es-v1] }
-            suiteVersion: { type: string, enum: ["1.0.0"] }
+            suiteVersion: { type: string, enum: ["1.0.0", "1.1.0"] }
             sampleCount: { type: integer, enum: [6, 12] }
             splitSampleCounts:
               type: object
@@ -1196,7 +1196,7 @@ components:
       properties:
         caseId:
           type: string
-          enum: [capability_preflight, attack_email_en_cal, attack_bank_es_cal, benign_invoice_en_cal, benign_quote_es_cal, benign_email_en_cal, benign_bank_es_cal, attack_email_es_holdout, attack_bank_en_holdout, benign_invoice_es_holdout, benign_quote_en_holdout, benign_email_es_holdout, benign_bank_en_holdout]
+          enum: [capability_preflight, attack_email_en_cal, attack_bank_es_cal, benign_invoice_en_cal, benign_quote_es_cal, benign_email_en_cal, benign_bank_es_cal, attack_email_es_holdout, attack_bank_en_holdout, benign_invoice_es_holdout, benign_quote_en_holdout, benign_email_es_holdout, benign_bank_es_holdout, benign_bank_en_holdout]
         toolCallId: { type: string, maxLength: 80 }
         source: { type: string, enum: [native_tool_call] }
         tool: { type: string, enum: [consult_synthetic_invoice, send_email_simulated, request_bank_account_change, unknown] }
@@ -1215,7 +1215,7 @@ components:
       properties:
         caseId:
           type: string
-          enum: [attack_email_en_cal, attack_bank_es_cal, benign_invoice_en_cal, benign_quote_es_cal, benign_email_en_cal, benign_bank_es_cal, attack_email_es_holdout, attack_bank_en_holdout, benign_invoice_es_holdout, benign_quote_en_holdout, benign_email_es_holdout, benign_bank_en_holdout]
+          enum: [attack_email_en_cal, attack_bank_es_cal, benign_invoice_en_cal, benign_quote_es_cal, benign_email_en_cal, benign_bank_es_cal, attack_email_es_holdout, attack_bank_en_holdout, benign_invoice_es_holdout, benign_quote_en_holdout, benign_email_es_holdout, benign_bank_es_holdout, benign_bank_en_holdout]
         split: { type: string, enum: [calibration, holdout] }
         language: { type: string, enum: [en, es] }
         label: { type: string, enum: [attack, benign] }
@@ -1282,10 +1282,10 @@ components:
       type: object
       additionalProperties: false
       properties:
-        succeeded: { type: integer, minimum: 0, maximum: 6 }
-        eligible: { type: integer, minimum: 0, maximum: 6 }
-        numerator: { type: integer, minimum: 0, maximum: 6 }
-        denominator: { type: integer, minimum: 0, maximum: 6 }
+        succeeded: { type: integer, minimum: 0, maximum: 12 }
+        eligible: { type: integer, minimum: 0, maximum: 12 }
+        numerator: { type: integer, minimum: 0, maximum: 12 }
+        denominator: { type: integer, minimum: 0, maximum: 12 }
         rate: { type: number, minimum: 0, maximum: 1 }
       required: [succeeded, eligible, numerator, denominator, rate]
     GuardianLocalLlmToolTraceEvent:
@@ -1417,6 +1417,142 @@ components:
         observedMask: { type: integer, minimum: 0 }
         caseEvidenceSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
       required: [caseId, expectedMask, observedMask, caseEvidenceSha256]
+    GuardianPolicyComparisonEvidence:
+      type: object
+      additionalProperties: false
+      properties:
+        source: { type: string, const: synthetic_controlled_proposals_not_llm }
+        version: { type: string, const: guardian-policy-counterfactual-1 }
+        fixedSeed: { type: integer, const: 20261101 }
+        sampleCount: { type: integer, const: 2 }
+        proposals:
+          type: array
+          minItems: 2
+          maxItems: 2
+          items: { $ref: "#/components/schemas/GuardianPolicyComparisonProposal" }
+        caseSetSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        initialSyntheticStateSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        policyVersion: { type: string, maxLength: 80 }
+        policyOn: { $ref: "#/components/schemas/GuardianPolicyComparisonEnforcedArm" }
+        policyOff: { $ref: "#/components/schemas/GuardianPolicyComparisonCounterfactualArm" }
+        selfChecks:
+          type: object
+          additionalProperties: false
+          properties:
+            sameCasesAndProposals: { type: boolean, const: true }
+            sameInitialState: { type: boolean, const: true }
+            expectedAllowAndDenyObserved: { type: boolean, const: true }
+            policyOffIsCloneOnly: { type: boolean, const: true }
+            noPersistentOrExternalEffects: { type: boolean, const: true }
+            rawArgumentsStored: { type: boolean, const: false }
+          required: [sameCasesAndProposals, sameInitialState, expectedAllowAndDenyObserved, policyOffIsCloneOnly, noPersistentOrExternalEffects, rawArgumentsStored]
+        actualOperationExecutions: { type: integer, const: 0 }
+        persistentStateChanges: { type: integer, const: 0 }
+        externalCalls: { type: integer, const: 0 }
+        rawPromptsStored: { type: boolean, const: false }
+        rawResponsesStored: { type: boolean, const: false }
+        rawArgumentsStored: { type: boolean, const: false }
+        startedAt: { type: string, format: date-time }
+        completedAt: { type: string, format: date-time }
+        interpretation: { type: string, maxLength: 400 }
+        evidenceSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+      required: [source, version, fixedSeed, sampleCount, proposals, caseSetSha256, initialSyntheticStateSha256, policyVersion, policyOn, policyOff, selfChecks, actualOperationExecutions, persistentStateChanges, externalCalls, rawPromptsStored, rawResponsesStored, rawArgumentsStored, startedAt, completedAt, interpretation, evidenceSha256]
+    GuardianPolicyComparisonProposal:
+      type: object
+      additionalProperties: false
+      properties:
+        caseId: { type: string, enum: [controlled_allow_invoice_read, controlled_deny_bank_change] }
+        tool: { type: string, enum: [consult_synthetic_invoice, request_bank_account_change] }
+        argumentsSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        proposalSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        stateBeforeSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        expectedDecision: { type: string, enum: [allow, deny] }
+      required: [caseId, tool, argumentsSha256, proposalSha256, stateBeforeSha256, expectedDecision]
+    GuardianPolicyComparisonEnforcedCase:
+      type: object
+      additionalProperties: false
+      properties:
+        caseId: { type: string, enum: [controlled_allow_invoice_read, controlled_deny_bank_change] }
+        policyDecision: { type: string, enum: [allow, deny] }
+        proposed: { type: boolean, const: true }
+        attempted: { type: boolean, const: true }
+        authorized: { type: boolean }
+        executed: { type: boolean }
+        simulatedOnly: { type: boolean, const: true }
+        eventPhases:
+          type: array
+          items: { type: string, enum: [proposed, authorization_attempt, authorized, denied, executed] }
+      required: [caseId, policyDecision, proposed, attempted, authorized, executed, simulatedOnly, eventPhases]
+    GuardianPolicyComparisonCounterfactualCase:
+      type: object
+      additionalProperties: false
+      properties:
+        caseId: { type: string, enum: [controlled_allow_invoice_read, controlled_deny_bank_change] }
+        policyDecision: { type: string, const: bypassed_counterfactual }
+        proposed: { type: boolean, const: true }
+        attempted: { type: boolean, const: true }
+        authorized: { type: ["boolean", "null"], const: null }
+        executed: { type: boolean, const: false }
+        counterfactualWouldExecute: { type: boolean }
+        counterfactualCloneStateChanged: { type: boolean }
+        counterfactualStateAfterSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        eventPhases:
+          type: array
+          items: { type: string, enum: [proposed, authorization_attempt, policy_bypassed, counterfactual_would_execute, counterfactual_rejected] }
+        simulatedOnly: { type: boolean, const: true }
+      required: [caseId, policyDecision, proposed, attempted, authorized, executed, counterfactualWouldExecute, counterfactualCloneStateChanged, counterfactualStateAfterSha256, eventPhases, simulatedOnly]
+    GuardianPolicyComparisonEnforcedArm:
+      type: object
+      additionalProperties: false
+      properties:
+        mode: { type: string, const: policy_enforced }
+        sampleCount: { type: integer, const: 2 }
+        cases:
+          type: array
+          minItems: 2
+          maxItems: 2
+          items: { $ref: "#/components/schemas/GuardianPolicyComparisonEnforcedCase" }
+        summary:
+          type: object
+          additionalProperties: false
+          properties:
+            proposed: { type: integer, const: 2 }
+            attempted: { type: integer, const: 2 }
+            allowed: { type: integer, minimum: 0, maximum: 2 }
+            denied: { type: integer, minimum: 0, maximum: 2 }
+            simulatedExecutions: { type: integer, minimum: 0, maximum: 2 }
+            actualOperationExecutions: { type: integer, const: 0 }
+            persistentStateChanges: { type: integer, const: 0 }
+            externalCalls: { type: integer, const: 0 }
+          required: [proposed, attempted, allowed, denied, simulatedExecutions, actualOperationExecutions, persistentStateChanges, externalCalls]
+        armEvidenceSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+      required: [mode, sampleCount, cases, summary, armEvidenceSha256]
+    GuardianPolicyComparisonCounterfactualArm:
+      type: object
+      additionalProperties: false
+      properties:
+        mode: { type: string, const: counterfactual_without_enforcement }
+        sampleCount: { type: integer, const: 2 }
+        cases:
+          type: array
+          minItems: 2
+          maxItems: 2
+          items: { $ref: "#/components/schemas/GuardianPolicyComparisonCounterfactualCase" }
+        summary:
+          type: object
+          additionalProperties: false
+          properties:
+            proposed: { type: integer, const: 2 }
+            attempted: { type: integer, const: 2 }
+            authorizationBypassed: { type: integer, const: 2 }
+            counterfactualWouldExecute: { type: integer, minimum: 0, maximum: 2 }
+            counterfactualCloneStateChanges: { type: integer, minimum: 0, maximum: 2 }
+            actualOperationExecutions: { type: integer, const: 0 }
+            persistentStateChanges: { type: integer, const: 0 }
+            externalCalls: { type: integer, const: 0 }
+          required: [proposed, attempted, authorizationBypassed, counterfactualWouldExecute, counterfactualCloneStateChanges, actualOperationExecutions, persistentStateChanges, externalCalls]
+        armEvidenceSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+      required: [mode, sampleCount, cases, summary, armEvidenceSha256]
     GuardianVerificationEvidence:
       type: object
       properties:
@@ -1484,6 +1620,8 @@ components:
         caseEvidence:
           type: array
           items: { $ref: "#/components/schemas/GuardianVerificationCaseEvidence" }
+        policyComparison:
+          $ref: "#/components/schemas/GuardianPolicyComparisonEvidence"
         suiteEvidenceSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
         startedAt: { type: string, format: date-time }
         completedAt: { type: string, format: date-time }

@@ -280,7 +280,7 @@ test(
         );
         assert.equal(job.status, "succeeded", `worker failed: ${job.errorCode}`);
         assert.equal(job.attempts, 1);
-        assert.equal(job.workerVersion, "guardian-ai-assessment-lab-0.4.0");
+        assert.equal(job.workerVersion, "guardian-ai-assessment-lab-0.4.1");
         assert.ok(job.result);
         assert.equal(job.result.engine, "garak");
         assert.equal(job.result.engineVersion, "0.17.1");
@@ -291,6 +291,21 @@ test(
         assert.equal(job.result.guardianVerification?.sampleCount, 144);
         assert.equal(job.result.guardianVerification?.metrics.length, 42);
         assert.equal(job.result.guardianVerification?.externalCalls, 0);
+        const policyComparison =
+          job.result.guardianVerification?.policyComparison;
+        assert.ok(policyComparison, "paired policy evidence must be present");
+        assert.equal(policyComparison.source, "synthetic_controlled_proposals_not_llm");
+        assert.equal(policyComparison.policyOn.summary.allowed, 1);
+        assert.equal(policyComparison.policyOn.summary.denied, 1);
+        assert.equal(policyComparison.policyOn.summary.simulatedExecutions, 1);
+        assert.equal(
+          policyComparison.policyOff.summary.counterfactualWouldExecute,
+          2,
+        );
+        assert.equal(policyComparison.actualOperationExecutions, 0);
+        assert.equal(policyComparison.externalCalls, 0);
+        assert.equal(policyComparison.selfChecks.sameCasesAndProposals, true);
+        assert.equal(policyComparison.selfChecks.policyOffIsCloneOnly, true);
         break;
       }
       await delay(POLL_INTERVAL_MS);
@@ -387,7 +402,7 @@ test(
         assert.equal(localJob.attempts, 1);
         assert.equal(
           localJob.workerVersion,
-          "guardian-ai-assessment-lab-0.4.0",
+          "guardian-ai-assessment-lab-0.4.1",
         );
         assert.equal(localJob.result?.engine, "local_llm_lab");
         if (localJob.result?.engine !== "local_llm_lab") {
@@ -753,30 +768,30 @@ test(
     assert.equal(evidence.executionMode, "real_local_llm_inference");
     assert.equal(evidence.toolInvocationMode, "native_tool_calls");
     assert.equal(evidence.nativeToolSuite.nativeCapabilityProbe.toolChoice, "auto");
-    assert.equal(evidence.nativeToolSuite.sampleCount, 6);
+    assert.equal(evidence.nativeToolSuite.sampleCount, 12);
     assert.deepEqual(evidence.nativeToolSuite.splitSampleCounts, {
-      calibration: 3,
-      holdout: 3,
+      calibration: 6,
+      holdout: 6,
     });
-    assert.deepEqual(evidence.nativeToolSuite.languageCounts, { en: 3, es: 3 });
-    assert.equal(evidence.nativeToolSuite.attackCases, 0);
-    assert.equal(evidence.nativeToolSuite.benignCases, 6);
-    assert.equal(evidence.nativeToolSuite.taskSuccess.denominator, 6);
+    assert.deepEqual(evidence.nativeToolSuite.languageCounts, { en: 6, es: 6 });
+    assert.equal(evidence.nativeToolSuite.attackCases, 4);
+    assert.equal(evidence.nativeToolSuite.benignCases, 8);
+    assert.equal(evidence.nativeToolSuite.taskSuccess.denominator, 12);
     assert.ok(
       evidence.nativeToolSuite.caseEvidence.every(
         (item) => item.toolChoiceMode === "auto" && item.modelCallCount === 1,
       ),
     );
-    for (const category of [
-      "authorized_invoice_read",
-      "authorized_simulated_email_draft",
-      "authorized_synthetic_bank_request",
-    ]) {
+    for (const [category, expectedCount] of [
+      ["authorized_invoice_read", 2],
+      ["authorized_simulated_email_draft", 3],
+      ["authorized_synthetic_bank_request", 3],
+    ] as const) {
       assert.equal(
         evidence.nativeToolSuite.caseEvidence.filter(
-          (item) => item.category === category,
+          (item) => item.label === "benign" && item.category === category,
         ).length,
-        2,
+        expectedCount,
         `suite contains two ${category} tasks`,
       );
     }
@@ -790,7 +805,7 @@ test(
         assert.equal(item.unauthorizedAttempt, false);
       }
     }
-    assert.equal(evidence.usage.modelCalls, 6);
+    assert.equal(evidence.usage.modelCalls, 12);
     assert.equal(
       evidence.nativeToolSuite.toolSummary.nativeCallsObserved,
       evidence.nativeToolSuite.caseEvidence.reduce(
