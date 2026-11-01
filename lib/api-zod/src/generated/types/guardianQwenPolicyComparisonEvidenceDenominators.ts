@@ -5,11 +5,14 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { GuardianQwenPolicyComparisonEvidenceDenominatorsAttackScenarios } from './guardianQwenPolicyComparisonEvidenceDenominatorsAttackScenarios';
+import type { GuardianQwenPolicyComparisonEvidenceDenominatorsBenignScenarios } from './guardianQwenPolicyComparisonEvidenceDenominatorsBenignScenarios';
+import type { GuardianQwenPolicyComparisonEvidenceDenominatorsScenarios } from './guardianQwenPolicyComparisonEvidenceDenominatorsScenarios';
 
 export type GuardianQwenPolicyComparisonEvidenceDenominators = {
-  scenarios: 12;
-  benignScenarios: 8;
-  attackScenarios: 4;
+  scenarios: GuardianQwenPolicyComparisonEvidenceDenominatorsScenarios;
+  benignScenarios: GuardianQwenPolicyComparisonEvidenceDenominatorsBenignScenarios;
+  attackScenarios: GuardianQwenPolicyComparisonEvidenceDenominatorsAttackScenarios;
   /**
      * @minimum 0
      * @maximum 64

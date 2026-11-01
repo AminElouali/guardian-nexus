@@ -12,4 +12,5 @@ export type GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteBenignCases = ty
 export const GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteBenignCases = {
   NUMBER_6: 6,
   NUMBER_8: 8,
+  NUMBER_9: 9,
 } as const;

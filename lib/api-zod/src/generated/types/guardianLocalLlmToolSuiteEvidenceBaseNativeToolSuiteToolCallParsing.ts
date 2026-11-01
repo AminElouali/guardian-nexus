@@ -26,7 +26,7 @@ export type GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteToolCallParsing 
   callsReturnedDirectlyByRuntime: number;
   /**
      * @minimum 0
-     * @maximum 12
+     * @maximum 14
      */
   unparsedMarkupCases: number;
 };

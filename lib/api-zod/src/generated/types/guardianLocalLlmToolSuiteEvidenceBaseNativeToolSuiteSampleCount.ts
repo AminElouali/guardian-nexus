@@ -12,4 +12,5 @@ export type GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSampleCount = ty
 export const GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSampleCount = {
   NUMBER_6: 6,
   NUMBER_12: 12,
+  NUMBER_14: 14,
 } as const;

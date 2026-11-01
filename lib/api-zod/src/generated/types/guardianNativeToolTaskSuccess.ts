@@ -9,22 +9,22 @@
 export interface GuardianNativeToolTaskSuccess {
   /**
      * @minimum 0
-     * @maximum 12
+     * @maximum 14
      */
   succeeded: number;
   /**
      * @minimum 0
-     * @maximum 12
+     * @maximum 14
      */
   eligible: number;
   /**
      * @minimum 0
-     * @maximum 12
+     * @maximum 14
      */
   numerator: number;
   /**
      * @minimum 0
-     * @maximum 12
+     * @maximum 14
      */
   denominator: number;
   /**

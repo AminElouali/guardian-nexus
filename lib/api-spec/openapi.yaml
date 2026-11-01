@@ -997,7 +997,7 @@ components:
         evidenceVersion: { type: integer, const: 1 }
         source: { type: string, enum: [isolated_local_lab] }
         engine: { type: string, enum: [local_llm_lab] }
-        engineVersion: { type: string, enum: [guardian-native-tool-suite-v1, guardian-autonomous-tool-selection-v1, guardian-autonomous-tool-selection-v1.1, guardian-autonomous-tool-selection-v1.2] }
+        engineVersion: { type: string, enum: [guardian-native-tool-suite-v1, guardian-autonomous-tool-selection-v1, guardian-autonomous-tool-selection-v1.1, guardian-autonomous-tool-selection-v1.2, guardian-autonomous-tool-selection-v1.3] }
         profileId: { type: string, enum: [guardian-local-llm-native-tools-v1, guardian-local-llm-autonomous-tools-v1] }
         executionMode: { type: string, enum: [real_local_llm_inference] }
         toolInvocationMode: { type: string, enum: [native_tool_calls] }
@@ -1078,28 +1078,28 @@ components:
           additionalProperties: false
           properties:
             suiteId: { type: string, enum: [guardian-native-tool-call-en-es-v1, guardian-autonomous-tool-selection-en-es-v1] }
-            suiteVersion: { type: string, enum: ["1.0.0", "1.1.0", "1.2.0", "1.3.0"] }
-            sampleCount: { type: integer, enum: [6, 12] }
+            suiteVersion: { type: string, enum: ["1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0"] }
+            sampleCount: { type: integer, enum: [6, 12, 14] }
             splitSampleCounts:
               type: object
               additionalProperties: false
               properties:
-                calibration: { type: integer, enum: [3, 6] }
-                holdout: { type: integer, enum: [3, 6] }
+                calibration: { type: integer, enum: [3, 6, 7] }
+                holdout: { type: integer, enum: [3, 6, 7] }
               required: [calibration, holdout]
             languageCounts:
               type: object
               additionalProperties: false
               properties:
-                en: { type: integer, enum: [3, 6] }
-                es: { type: integer, enum: [3, 6] }
+                en: { type: integer, enum: [3, 6, 7] }
+                es: { type: integer, enum: [3, 6, 7] }
               required: [en, es]
-            attackCases: { type: integer, enum: [0, 4] }
-            benignCases: { type: integer, enum: [6, 8] }
+            attackCases: { type: integer, enum: [0, 4, 5] }
+            benignCases: { type: integer, enum: [6, 8, 9] }
             caseEvidence:
               type: array
               minItems: 6
-              maxItems: 12
+              maxItems: 14
               items: { $ref: "#/components/schemas/GuardianNativeToolCaseEvidence" }
             metrics:
               type: array
@@ -1122,9 +1122,9 @@ components:
                 nativeCallsObserved: { type: integer, minimum: 0, maximum: 64 }
                 proposals: { type: integer, minimum: 0, maximum: 64 }
                 authorizationAttempts: { type: integer, minimum: 0, maximum: 64 }
-                authorizedExecutions: { type: integer, minimum: 0, maximum: 12 }
+                authorizedExecutions: { type: integer, minimum: 0, maximum: 14 }
                 deniedCalls: { type: integer, minimum: 0, maximum: 64 }
-                unauthorizedAttempts: { type: integer, minimum: 0, maximum: 12 }
+                unauthorizedAttempts: { type: integer, minimum: 0, maximum: 14 }
                 unauthorizedExecutions: { type: integer, const: 0 }
                 stateChanges: { type: integer, const: 0 }
                 externalCalls: { type: integer, const: 0 }
@@ -1139,7 +1139,7 @@ components:
                 strictTaggedJsonOnly: { type: boolean, const: true }
                 callsAdapted: { type: integer, minimum: 0, maximum: 64 }
                 callsReturnedDirectlyByRuntime: { type: integer, minimum: 0, maximum: 64 }
-                unparsedMarkupCases: { type: integer, minimum: 0, maximum: 12 }
+                unparsedMarkupCases: { type: integer, minimum: 0, maximum: 14 }
               required: [protocol, adapterVersion, runtime, strictTaggedJsonOnly, callsAdapted, callsReturnedDirectlyByRuntime, unparsedMarkupCases]
             policyComparison:
               $ref: "#/components/schemas/GuardianQwenPolicyComparisonEvidence"
@@ -1200,7 +1200,7 @@ components:
         - { $ref: "#/components/schemas/GuardianLocalLlmToolSuiteEvidenceBase" }
         - type: object
           properties:
-            engineVersion: { type: string, enum: [guardian-autonomous-tool-selection-v1, guardian-autonomous-tool-selection-v1.1, guardian-autonomous-tool-selection-v1.2] }
+            engineVersion: { type: string, enum: [guardian-autonomous-tool-selection-v1, guardian-autonomous-tool-selection-v1.1, guardian-autonomous-tool-selection-v1.2, guardian-autonomous-tool-selection-v1.3] }
             profileId: { type: string, const: guardian-local-llm-autonomous-tools-v1 }
             taskId: { type: string, const: autonomous_tool_selection_en_es_v1 }
           required: [engineVersion, profileId, taskId]
@@ -1210,7 +1210,7 @@ components:
       properties:
         caseId:
           type: string
-          enum: [capability_preflight, attack_email_en_cal, attack_bank_es_cal, benign_invoice_en_cal, benign_quote_es_cal, benign_email_en_cal, benign_bank_es_cal, attack_email_es_holdout, attack_bank_en_holdout, benign_invoice_es_holdout, benign_quote_en_holdout, benign_email_es_holdout, benign_bank_es_holdout, benign_bank_en_holdout]
+          enum: [capability_preflight, attack_email_en_cal, attack_bank_es_cal, benign_invoice_en_cal, benign_quote_es_cal, benign_email_en_cal, benign_bank_es_cal, attack_email_es_holdout, attack_bank_en_holdout, benign_invoice_es_holdout, benign_quote_en_holdout, benign_email_es_holdout, benign_bank_es_holdout, benign_bank_en_holdout, benign_quoted_injection_en_cal, attack_invoice_payment_override_es_holdout]
         toolCallId: { type: string, maxLength: 80 }
         source: { type: string, enum: [native_tool_call] }
         tool: { type: string, enum: [consult_synthetic_invoice, send_email_simulated, request_bank_account_change, unknown] }
@@ -1229,7 +1229,7 @@ components:
       properties:
         caseId:
           type: string
-          enum: [attack_email_en_cal, attack_bank_es_cal, benign_invoice_en_cal, benign_quote_es_cal, benign_email_en_cal, benign_bank_es_cal, attack_email_es_holdout, attack_bank_en_holdout, benign_invoice_es_holdout, benign_quote_en_holdout, benign_email_es_holdout, benign_bank_es_holdout, benign_bank_en_holdout]
+          enum: [attack_email_en_cal, attack_bank_es_cal, benign_invoice_en_cal, benign_quote_es_cal, benign_email_en_cal, benign_bank_es_cal, attack_email_es_holdout, attack_bank_en_holdout, benign_invoice_es_holdout, benign_quote_en_holdout, benign_email_es_holdout, benign_bank_es_holdout, benign_bank_en_holdout, benign_quoted_injection_en_cal, attack_invoice_payment_override_es_holdout]
         split: { type: string, enum: [calibration, holdout] }
         language: { type: string, enum: [en, es] }
         label: { type: string, enum: [attack, benign] }
@@ -1267,8 +1267,8 @@ components:
       type: object
       additionalProperties: false
       properties:
-        numerator: { type: integer, minimum: 0, maximum: 12 }
-        denominator: { type: integer, minimum: 0, maximum: 12 }
+        numerator: { type: integer, minimum: 0, maximum: 14 }
+        denominator: { type: integer, minimum: 0, maximum: 14 }
         value: { type: number, minimum: 0, maximum: 1 }
       required: [numerator, denominator, value]
     GuardianNativeToolMetric:
@@ -1277,17 +1277,17 @@ components:
       properties:
         split: { type: string, enum: [calibration, holdout, all] }
         objective: { type: string, enum: [unauthorizedProposal, unauthorizedAttempt, unauthorizedExecution] }
-        sampleCount: { type: integer, minimum: 1, maximum: 12 }
-        evaluableCount: { type: integer, minimum: 0, maximum: 12 }
-        inconclusiveCount: { type: integer, minimum: 0, maximum: 12 }
-        inconclusiveAttackCount: { type: integer, minimum: 0, maximum: 4 }
-        inconclusiveBenignCount: { type: integer, minimum: 0, maximum: 8 }
-        positiveSupport: { type: integer, minimum: 0, maximum: 4 }
-        negativeSupport: { type: integer, minimum: 0, maximum: 8 }
-        truePositive: { type: integer, minimum: 0, maximum: 4 }
-        falsePositive: { type: integer, minimum: 0, maximum: 8 }
-        trueNegative: { type: integer, minimum: 0, maximum: 8 }
-        falseNegative: { type: integer, minimum: 0, maximum: 4 }
+        sampleCount: { type: integer, minimum: 1, maximum: 14 }
+        evaluableCount: { type: integer, minimum: 0, maximum: 14 }
+        inconclusiveCount: { type: integer, minimum: 0, maximum: 14 }
+        inconclusiveAttackCount: { type: integer, minimum: 0, maximum: 5 }
+        inconclusiveBenignCount: { type: integer, minimum: 0, maximum: 9 }
+        positiveSupport: { type: integer, minimum: 0, maximum: 5 }
+        negativeSupport: { type: integer, minimum: 0, maximum: 9 }
+        truePositive: { type: integer, minimum: 0, maximum: 5 }
+        falsePositive: { type: integer, minimum: 0, maximum: 9 }
+        trueNegative: { type: integer, minimum: 0, maximum: 9 }
+        falseNegative: { type: integer, minimum: 0, maximum: 5 }
         precision: { $ref: "#/components/schemas/GuardianNativeToolRate" }
         recall: { $ref: "#/components/schemas/GuardianNativeToolRate" }
         falsePositiveRate: { $ref: "#/components/schemas/GuardianNativeToolRate" }
@@ -1307,7 +1307,7 @@ components:
       properties:
         caseId:
           type: string
-          enum: [attack_email_en_cal, attack_bank_es_cal, benign_invoice_en_cal, benign_quote_es_cal, benign_email_en_cal, benign_bank_es_cal, attack_email_es_holdout, attack_bank_en_holdout, benign_invoice_es_holdout, benign_quote_en_holdout, benign_email_es_holdout, benign_bank_es_holdout, benign_bank_en_holdout]
+          enum: [attack_email_en_cal, attack_bank_es_cal, benign_invoice_en_cal, benign_quote_es_cal, benign_email_en_cal, benign_bank_es_cal, attack_email_es_holdout, attack_bank_en_holdout, benign_invoice_es_holdout, benign_quote_en_holdout, benign_email_es_holdout, benign_bank_es_holdout, benign_bank_en_holdout, benign_quoted_injection_en_cal, attack_invoice_payment_override_es_holdout]
         split: { type: string, enum: [calibration, holdout] }
         language: { type: string, enum: [en, es] }
         label: { type: string, enum: [attack, benign] }
@@ -1363,7 +1363,7 @@ components:
         forcedCallsIncluded: { type: boolean, const: false }
         policyVersion: { type: string, const: guardian-tool-adapter-policy-1 }
         fixedSeed: { type: integer, const: 20261031 }
-        scenarioCount: { type: integer, const: 12 }
+        scenarioCount: { type: integer, enum: [12, 14] }
         proposalCount: { type: integer, minimum: 0, maximum: 64 }
         pairedProposalCount: { type: integer, minimum: 0, maximum: 64 }
         unpairedProposalCount: { type: integer, const: 0 }
@@ -1416,9 +1416,9 @@ components:
           type: object
           additionalProperties: false
           properties:
-            scenarios: { type: integer, const: 12 }
-            benignScenarios: { type: integer, const: 8 }
-            attackScenarios: { type: integer, const: 4 }
+            scenarios: { type: integer, enum: [12, 14] }
+            benignScenarios: { type: integer, enum: [8, 9] }
+            attackScenarios: { type: integer, enum: [4, 5] }
             observedProposals: { type: integer, minimum: 0, maximum: 64 }
             validExpectedBenignProposals: { type: integer, minimum: 0, maximum: 64 }
             authorizationAttempts: { type: integer, minimum: 0, maximum: 64 }
@@ -1446,10 +1446,10 @@ components:
       type: object
       additionalProperties: false
       properties:
-        succeeded: { type: integer, minimum: 0, maximum: 12 }
-        eligible: { type: integer, minimum: 0, maximum: 12 }
-        numerator: { type: integer, minimum: 0, maximum: 12 }
-        denominator: { type: integer, minimum: 0, maximum: 12 }
+        succeeded: { type: integer, minimum: 0, maximum: 14 }
+        eligible: { type: integer, minimum: 0, maximum: 14 }
+        numerator: { type: integer, minimum: 0, maximum: 14 }
+        denominator: { type: integer, minimum: 0, maximum: 14 }
         rate: { type: number, minimum: 0, maximum: 1 }
       required: [succeeded, eligible, numerator, denominator, rate]
     GuardianLocalLlmToolTraceEvent:

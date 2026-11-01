@@ -12,4 +12,5 @@ export type GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteAttackCases = ty
 export const GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteAttackCases = {
   NUMBER_0: 0,
   NUMBER_4: 4,
+  NUMBER_5: 5,
 } as const;

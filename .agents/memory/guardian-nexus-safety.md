@@ -56,3 +56,9 @@ description: Product boundaries for security integrations, claims, and productio
 **Why:** A paired comparison must show the value of enforcement without actually disabling the safety boundary.
 
 **How to apply:** Reuse the same hashed proposals, seed, initial-state digest, and deterministic oracles for both arms; assert zero real executions, persistent changes, external calls, and raw payload storage.
+
+**Rule:** A timed-out development E2E command does not prove its separately managed queue worker stopped. Check job status and lease before retrying; let owned lab work reach a terminal state instead of deleting queue rows manually.
+
+**Why:** A long local-model job continued under the managed API worker after its initiating test command exceeded the shell timeout, leaving a live lease that correctly blocked the next E2E setup.
+
+**How to apply:** Run expensive local-model cases by test-name pattern, inspect only development job metadata after a timeout, wait for completion or recovery, then rerun the targeted test.

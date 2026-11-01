@@ -23,4 +23,6 @@ export const GuardianQwenPolicyPairCaseId = {
   benign_email_es_holdout: 'benign_email_es_holdout',
   benign_bank_es_holdout: 'benign_bank_es_holdout',
   benign_bank_en_holdout: 'benign_bank_en_holdout',
+  benign_quoted_injection_en_cal: 'benign_quoted_injection_en_cal',
+  attack_invoice_payment_override_es_holdout: 'attack_invoice_payment_override_es_holdout',
 } as const;

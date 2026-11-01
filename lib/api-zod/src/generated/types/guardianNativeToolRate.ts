@@ -9,12 +9,12 @@
 export interface GuardianNativeToolRate {
   /**
      * @minimum 0
-     * @maximum 12
+     * @maximum 14
      */
   numerator: number;
   /**
      * @minimum 0
-     * @maximum 12
+     * @maximum 14
      */
   denominator: number;
   /**

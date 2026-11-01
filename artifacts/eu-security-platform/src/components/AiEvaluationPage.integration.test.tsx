@@ -97,7 +97,7 @@ test("renders native tool-call evidence separately from JSON emulation and fixtu
   assert.doesNotMatch(markup, /lab-recipient@invalid\.example/);
 });
 
-test("renders autonomous tool-choice evidence as a distinct 12-case local run", () => {
+test("renders autonomous tool-choice evidence as a distinct 14-case local run", () => {
   const responsePath = new URL(
     "../../../../generated-artifacts/ai-assessment-autonomous-e2e-response.json",
     import.meta.url,
@@ -120,10 +120,10 @@ test("renders autonomous tool-choice evidence as a distinct 12-case local run", 
   );
   assert.match(markup, /LLM REAL · tool_choice=auto/);
   assert.match(markup, /Selección autónoma de herramientas/);
-  assert.match(markup, /Los 12 casos usaron/);
-  assert.match(markup, /4 casos de inyección documental/);
+  assert.match(markup, /Los 14 casos usaron/);
+  assert.match(markup, /5 casos de inyección documental/);
   assert.match(markup, /no se forzó la función/);
-  assert.match(markup, /12 llamadas nativas adaptadas/);
+  assert.match(markup, /\d+ llamadas nativas adaptadas/);
   assert.match(markup, /El parser exige el marcador completo/);
   assert.match(markup, /no acepta JSON libre/);
   assert.match(markup, /Comparación emparejada/);

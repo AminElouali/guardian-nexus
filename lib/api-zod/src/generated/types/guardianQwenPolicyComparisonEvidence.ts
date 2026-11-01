@@ -10,6 +10,7 @@ import type { GuardianQwenPolicyComparisonEvidenceExecutionMode } from './guardi
 import type { GuardianQwenPolicyComparisonEvidenceMetrics } from './guardianQwenPolicyComparisonEvidenceMetrics';
 import type { GuardianQwenPolicyComparisonEvidencePolicyOffSummary } from './guardianQwenPolicyComparisonEvidencePolicyOffSummary';
 import type { GuardianQwenPolicyComparisonEvidencePolicyOnSummary } from './guardianQwenPolicyComparisonEvidencePolicyOnSummary';
+import type { GuardianQwenPolicyComparisonEvidenceScenarioCount } from './guardianQwenPolicyComparisonEvidenceScenarioCount';
 import type { GuardianQwenPolicyComparisonEvidenceSelfChecks } from './guardianQwenPolicyComparisonEvidenceSelfChecks';
 import type { GuardianQwenPolicyComparisonEvidenceSource } from './guardianQwenPolicyComparisonEvidenceSource';
 import type { GuardianQwenPolicyPair } from './guardianQwenPolicyPair';
@@ -22,7 +23,7 @@ export interface GuardianQwenPolicyComparisonEvidence {
   forcedCallsIncluded: false;
   policyVersion: 'guardian-tool-adapter-policy-1';
   fixedSeed: 20261031;
-  scenarioCount: 12;
+  scenarioCount: GuardianQwenPolicyComparisonEvidenceScenarioCount;
   /**
      * @minimum 0
      * @maximum 64

@@ -1374,6 +1374,7 @@ export const GuardianLocalLlmToolSuiteEvidenceBaseEngineVersion = {
   'guardian-autonomous-tool-selection-v1': 'guardian-autonomous-tool-selection-v1',
   'guardian-autonomous-tool-selection-v11': 'guardian-autonomous-tool-selection-v1.1',
   'guardian-autonomous-tool-selection-v12': 'guardian-autonomous-tool-selection-v1.2',
+  'guardian-autonomous-tool-selection-v13': 'guardian-autonomous-tool-selection-v1.3',
 } as const;
 
 export type GuardianLocalLlmToolSuiteEvidenceBaseProfileId = typeof GuardianLocalLlmToolSuiteEvidenceBaseProfileId[keyof typeof GuardianLocalLlmToolSuiteEvidenceBaseProfileId];
@@ -1563,6 +1564,8 @@ export const GuardianNativeToolTraceEventCaseId = {
   benign_email_es_holdout: 'benign_email_es_holdout',
   benign_bank_es_holdout: 'benign_bank_es_holdout',
   benign_bank_en_holdout: 'benign_bank_en_holdout',
+  benign_quoted_injection_en_cal: 'benign_quoted_injection_en_cal',
+  attack_invoice_payment_override_es_holdout: 'attack_invoice_payment_override_es_holdout',
 } as const;
 
 export type GuardianNativeToolTraceEventSource = typeof GuardianNativeToolTraceEventSource[keyof typeof GuardianNativeToolTraceEventSource];
@@ -1635,6 +1638,7 @@ export const GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSuiteVersion = 
   '110': '1.1.0',
   '120': '1.2.0',
   '130': '1.3.0',
+  '140': '1.4.0',
 } as const;
 
 export type GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSampleCount = typeof GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSampleCount[keyof typeof GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSampleCount];
@@ -1643,6 +1647,7 @@ export type GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSampleCount = ty
 export const GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSampleCount = {
   NUMBER_6: 6,
   NUMBER_12: 12,
+  NUMBER_14: 14,
 } as const;
 
 export type GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSplitSampleCountsCalibration = typeof GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSplitSampleCountsCalibration[keyof typeof GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSplitSampleCountsCalibration];
@@ -1651,6 +1656,7 @@ export type GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSplitSampleCount
 export const GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSplitSampleCountsCalibration = {
   NUMBER_3: 3,
   NUMBER_6: 6,
+  NUMBER_7: 7,
 } as const;
 
 export type GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSplitSampleCountsHoldout = typeof GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSplitSampleCountsHoldout[keyof typeof GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSplitSampleCountsHoldout];
@@ -1659,6 +1665,7 @@ export type GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSplitSampleCount
 export const GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSplitSampleCountsHoldout = {
   NUMBER_3: 3,
   NUMBER_6: 6,
+  NUMBER_7: 7,
 } as const;
 
 export type GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteLanguageCountsEn = typeof GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteLanguageCountsEn[keyof typeof GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteLanguageCountsEn];
@@ -1667,6 +1674,7 @@ export type GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteLanguageCountsEn
 export const GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteLanguageCountsEn = {
   NUMBER_3: 3,
   NUMBER_6: 6,
+  NUMBER_7: 7,
 } as const;
 
 export type GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteLanguageCountsEs = typeof GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteLanguageCountsEs[keyof typeof GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteLanguageCountsEs];
@@ -1675,6 +1683,7 @@ export type GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteLanguageCountsEs
 export const GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteLanguageCountsEs = {
   NUMBER_3: 3,
   NUMBER_6: 6,
+  NUMBER_7: 7,
 } as const;
 
 export type GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteAttackCases = typeof GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteAttackCases[keyof typeof GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteAttackCases];
@@ -1683,6 +1692,7 @@ export type GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteAttackCases = ty
 export const GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteAttackCases = {
   NUMBER_0: 0,
   NUMBER_4: 4,
+  NUMBER_5: 5,
 } as const;
 
 export type GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteBenignCases = typeof GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteBenignCases[keyof typeof GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteBenignCases];
@@ -1691,6 +1701,7 @@ export type GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteBenignCases = ty
 export const GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteBenignCases = {
   NUMBER_6: 6,
   NUMBER_8: 8,
+  NUMBER_9: 9,
 } as const;
 
 export type GuardianNativeToolCaseEvidenceCaseId = typeof GuardianNativeToolCaseEvidenceCaseId[keyof typeof GuardianNativeToolCaseEvidenceCaseId];
@@ -1710,6 +1721,8 @@ export const GuardianNativeToolCaseEvidenceCaseId = {
   benign_email_es_holdout: 'benign_email_es_holdout',
   benign_bank_es_holdout: 'benign_bank_es_holdout',
   benign_bank_en_holdout: 'benign_bank_en_holdout',
+  benign_quoted_injection_en_cal: 'benign_quoted_injection_en_cal',
+  attack_invoice_payment_override_es_holdout: 'attack_invoice_payment_override_es_holdout',
 } as const;
 
 export type GuardianNativeToolCaseEvidenceSplit = typeof GuardianNativeToolCaseEvidenceSplit[keyof typeof GuardianNativeToolCaseEvidenceSplit];
@@ -1871,12 +1884,12 @@ export const GuardianNativeToolMetricObjective = {
 export interface GuardianNativeToolRate {
   /**
      * @minimum 0
-     * @maximum 12
+     * @maximum 14
      */
   numerator: number;
   /**
      * @minimum 0
-     * @maximum 12
+     * @maximum 14
      */
   denominator: number;
   /**
@@ -1891,57 +1904,57 @@ export interface GuardianNativeToolMetric {
   objective: GuardianNativeToolMetricObjective;
   /**
      * @minimum 1
-     * @maximum 12
+     * @maximum 14
      */
   sampleCount: number;
   /**
      * @minimum 0
-     * @maximum 12
+     * @maximum 14
      */
   evaluableCount: number;
   /**
      * @minimum 0
-     * @maximum 12
+     * @maximum 14
      */
   inconclusiveCount: number;
   /**
      * @minimum 0
-     * @maximum 4
+     * @maximum 5
      */
   inconclusiveAttackCount: number;
   /**
      * @minimum 0
-     * @maximum 8
+     * @maximum 9
      */
   inconclusiveBenignCount: number;
   /**
      * @minimum 0
-     * @maximum 4
+     * @maximum 5
      */
   positiveSupport: number;
   /**
      * @minimum 0
-     * @maximum 8
+     * @maximum 9
      */
   negativeSupport: number;
   /**
      * @minimum 0
-     * @maximum 4
+     * @maximum 5
      */
   truePositive: number;
   /**
      * @minimum 0
-     * @maximum 8
+     * @maximum 9
      */
   falsePositive: number;
   /**
      * @minimum 0
-     * @maximum 8
+     * @maximum 9
      */
   trueNegative: number;
   /**
      * @minimum 0
-     * @maximum 4
+     * @maximum 5
      */
   falseNegative: number;
   precision: GuardianNativeToolRate;
@@ -1953,22 +1966,22 @@ export interface GuardianNativeToolMetric {
 export interface GuardianNativeToolTaskSuccess {
   /**
      * @minimum 0
-     * @maximum 12
+     * @maximum 14
      */
   succeeded: number;
   /**
      * @minimum 0
-     * @maximum 12
+     * @maximum 14
      */
   eligible: number;
   /**
      * @minimum 0
-     * @maximum 12
+     * @maximum 14
      */
   numerator: number;
   /**
      * @minimum 0
-     * @maximum 12
+     * @maximum 14
      */
   denominator: number;
   /**
@@ -2008,6 +2021,14 @@ export const GuardianQwenPolicyComparisonEvidenceExecutionMode = {
   test_double_only: 'test_double_only',
 } as const;
 
+export type GuardianQwenPolicyComparisonEvidenceScenarioCount = typeof GuardianQwenPolicyComparisonEvidenceScenarioCount[keyof typeof GuardianQwenPolicyComparisonEvidenceScenarioCount];
+
+
+export const GuardianQwenPolicyComparisonEvidenceScenarioCount = {
+  NUMBER_12: 12,
+  NUMBER_14: 14,
+} as const;
+
 export type GuardianQwenPolicyPairCaseId = typeof GuardianQwenPolicyPairCaseId[keyof typeof GuardianQwenPolicyPairCaseId];
 
 
@@ -2025,6 +2046,8 @@ export const GuardianQwenPolicyPairCaseId = {
   benign_email_es_holdout: 'benign_email_es_holdout',
   benign_bank_es_holdout: 'benign_bank_es_holdout',
   benign_bank_en_holdout: 'benign_bank_en_holdout',
+  benign_quoted_injection_en_cal: 'benign_quoted_injection_en_cal',
+  attack_invoice_payment_override_es_holdout: 'attack_invoice_payment_override_es_holdout',
 } as const;
 
 export type GuardianQwenPolicyPairSplit = typeof GuardianQwenPolicyPairSplit[keyof typeof GuardianQwenPolicyPairSplit];
@@ -2152,6 +2175,30 @@ export interface GuardianQwenPolicyRate {
   value: number;
 }
 
+export type GuardianQwenPolicyComparisonEvidenceDenominatorsScenarios = typeof GuardianQwenPolicyComparisonEvidenceDenominatorsScenarios[keyof typeof GuardianQwenPolicyComparisonEvidenceDenominatorsScenarios];
+
+
+export const GuardianQwenPolicyComparisonEvidenceDenominatorsScenarios = {
+  NUMBER_12: 12,
+  NUMBER_14: 14,
+} as const;
+
+export type GuardianQwenPolicyComparisonEvidenceDenominatorsBenignScenarios = typeof GuardianQwenPolicyComparisonEvidenceDenominatorsBenignScenarios[keyof typeof GuardianQwenPolicyComparisonEvidenceDenominatorsBenignScenarios];
+
+
+export const GuardianQwenPolicyComparisonEvidenceDenominatorsBenignScenarios = {
+  NUMBER_8: 8,
+  NUMBER_9: 9,
+} as const;
+
+export type GuardianQwenPolicyComparisonEvidenceDenominatorsAttackScenarios = typeof GuardianQwenPolicyComparisonEvidenceDenominatorsAttackScenarios[keyof typeof GuardianQwenPolicyComparisonEvidenceDenominatorsAttackScenarios];
+
+
+export const GuardianQwenPolicyComparisonEvidenceDenominatorsAttackScenarios = {
+  NUMBER_4: 4,
+  NUMBER_5: 5,
+} as const;
+
 export type GuardianQwenPolicyComparisonEvidencePolicyOnSummary = {
   /**
      * @minimum 0
@@ -2228,9 +2275,9 @@ export type GuardianQwenPolicyComparisonEvidenceMetrics = {
 };
 
 export type GuardianQwenPolicyComparisonEvidenceDenominators = {
-  scenarios: 12;
-  benignScenarios: 8;
-  attackScenarios: 4;
+  scenarios: GuardianQwenPolicyComparisonEvidenceDenominatorsScenarios;
+  benignScenarios: GuardianQwenPolicyComparisonEvidenceDenominatorsBenignScenarios;
+  attackScenarios: GuardianQwenPolicyComparisonEvidenceDenominatorsAttackScenarios;
   /**
      * @minimum 0
      * @maximum 64
@@ -2264,7 +2311,7 @@ export interface GuardianQwenPolicyComparisonEvidence {
   forcedCallsIncluded: false;
   policyVersion: 'guardian-tool-adapter-policy-1';
   fixedSeed: 20261031;
-  scenarioCount: 12;
+  scenarioCount: GuardianQwenPolicyComparisonEvidenceScenarioCount;
   /**
      * @minimum 0
      * @maximum 64
@@ -2449,7 +2496,7 @@ export type GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteToolSummary = {
   authorizationAttempts: number;
   /**
      * @minimum 0
-     * @maximum 12
+     * @maximum 14
      */
   authorizedExecutions: number;
   /**
@@ -2459,7 +2506,7 @@ export type GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteToolSummary = {
   deniedCalls: number;
   /**
      * @minimum 0
-     * @maximum 12
+     * @maximum 14
      */
   unauthorizedAttempts: number;
   unauthorizedExecutions: 0;
@@ -2485,7 +2532,7 @@ export type GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteToolCallParsing 
   callsReturnedDirectlyByRuntime: number;
   /**
      * @minimum 0
-     * @maximum 12
+     * @maximum 14
      */
   unparsedMarkupCases: number;
 };
@@ -2521,7 +2568,7 @@ export type GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuite = {
   benignCases: GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteBenignCases;
   /**
      * @minItems 6
-     * @maxItems 12
+     * @maxItems 14
      */
   caseEvidence: GuardianNativeToolCaseEvidence[];
   /**
@@ -2604,6 +2651,7 @@ export const GuardianLocalLlmAutonomousToolSelectionEvidenceEngineVersion = {
   'guardian-autonomous-tool-selection-v1': 'guardian-autonomous-tool-selection-v1',
   'guardian-autonomous-tool-selection-v11': 'guardian-autonomous-tool-selection-v1.1',
   'guardian-autonomous-tool-selection-v12': 'guardian-autonomous-tool-selection-v1.2',
+  'guardian-autonomous-tool-selection-v13': 'guardian-autonomous-tool-selection-v1.3',
 } as const;
 
 export type GuardianLocalLlmAutonomousToolSelectionEvidence = GuardianLocalLlmToolSuiteEvidenceBase & {

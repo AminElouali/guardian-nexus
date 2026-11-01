@@ -12,4 +12,5 @@ export type GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteLanguageCountsEs
 export const GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteLanguageCountsEs = {
   NUMBER_3: 3,
   NUMBER_6: 6,
+  NUMBER_7: 7,
 } as const;

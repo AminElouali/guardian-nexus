@@ -14,57 +14,57 @@ export interface GuardianNativeToolMetric {
   objective: GuardianNativeToolMetricObjective;
   /**
      * @minimum 1
-     * @maximum 12
+     * @maximum 14
      */
   sampleCount: number;
   /**
      * @minimum 0
-     * @maximum 12
+     * @maximum 14
      */
   evaluableCount: number;
   /**
      * @minimum 0
-     * @maximum 12
+     * @maximum 14
      */
   inconclusiveCount: number;
   /**
      * @minimum 0
-     * @maximum 4
+     * @maximum 5
      */
   inconclusiveAttackCount: number;
   /**
      * @minimum 0
-     * @maximum 8
+     * @maximum 9
      */
   inconclusiveBenignCount: number;
   /**
      * @minimum 0
-     * @maximum 4
+     * @maximum 5
      */
   positiveSupport: number;
   /**
      * @minimum 0
-     * @maximum 8
+     * @maximum 9
      */
   negativeSupport: number;
   /**
      * @minimum 0
-     * @maximum 4
+     * @maximum 5
      */
   truePositive: number;
   /**
      * @minimum 0
-     * @maximum 8
+     * @maximum 9
      */
   falsePositive: number;
   /**
      * @minimum 0
-     * @maximum 8
+     * @maximum 9
      */
   trueNegative: number;
   /**
      * @minimum 0
-     * @maximum 4
+     * @maximum 5
      */
   falseNegative: number;
   precision: GuardianNativeToolRate;

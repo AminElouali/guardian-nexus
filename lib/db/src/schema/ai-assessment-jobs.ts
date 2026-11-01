@@ -601,7 +601,8 @@ type GuardianLocalLlmToolSuiteEvidenceBase = {
     | "guardian-native-tool-suite-v1"
     | "guardian-autonomous-tool-selection-v1"
     | "guardian-autonomous-tool-selection-v1.1"
-    | "guardian-autonomous-tool-selection-v1.2";
+    | "guardian-autonomous-tool-selection-v1.2"
+    | "guardian-autonomous-tool-selection-v1.3";
   profileId:
     | "guardian-local-llm-native-tools-v1"
     | "guardian-local-llm-autonomous-tools-v1";
@@ -663,7 +664,7 @@ type GuardianLocalLlmToolSuiteEvidenceBase = {
   toolTrace: GuardianNativeToolTraceEvent[];
   nativeToolSuite: {
     suiteId: string;
-    suiteVersion: "1.0.0" | "1.1.0" | "1.2.0" | "1.3.0";
+    suiteVersion: "1.0.0" | "1.1.0" | "1.2.0" | "1.3.0" | "1.4.0";
     sampleCount: number;
     splitSampleCounts: { calibration: number; holdout: number };
     languageCounts: { en: number; es: number };
@@ -761,7 +762,8 @@ export type GuardianLocalLlmAutonomousToolSelectionEvidence = Omit<
   engineVersion:
     | "guardian-autonomous-tool-selection-v1"
     | "guardian-autonomous-tool-selection-v1.1"
-    | "guardian-autonomous-tool-selection-v1.2";
+    | "guardian-autonomous-tool-selection-v1.2"
+    | "guardian-autonomous-tool-selection-v1.3";
   profileId: "guardian-local-llm-autonomous-tools-v1";
   taskId: "autonomous_tool_selection_en_es_v1";
 };

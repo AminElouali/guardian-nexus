@@ -31,7 +31,7 @@ export type GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuite = {
   benignCases: GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteBenignCases;
   /**
      * @minItems 6
-     * @maxItems 12
+     * @maxItems 14
      */
   caseEvidence: GuardianNativeToolCaseEvidence[];
   /**

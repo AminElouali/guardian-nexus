@@ -24,7 +24,7 @@ export type GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteToolSummary = {
   authorizationAttempts: number;
   /**
      * @minimum 0
-     * @maximum 12
+     * @maximum 14
      */
   authorizedExecutions: number;
   /**
@@ -34,7 +34,7 @@ export type GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteToolSummary = {
   deniedCalls: number;
   /**
      * @minimum 0
-     * @maximum 12
+     * @maximum 14
      */
   unauthorizedAttempts: number;
   unauthorizedExecutions: 0;

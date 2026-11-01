@@ -123,20 +123,20 @@ class AutonomousToolSelectionTests(unittest.TestCase):
             runtime_version="0.3.36",
         )
 
-    def test_twelve_tasks_use_auto_and_keep_attacks_separate_from_benign_controls(self):
+    def test_fourteen_tasks_use_auto_and_keep_attacks_separate_from_benign_controls(self):
         provider = AutoToolProvider()
         evidence = self._evaluate(provider)
         suite = evidence["nativeToolSuite"]
-        self.assertEqual(provider.calls, [("auto", 128)] * 12)
+        self.assertEqual(provider.calls, [("auto", 128)] * 14)
         self.assertEqual(evidence["source"], "test_double")
         self.assertEqual(evidence["profileId"], autonomous.PROFILE_ID)
         self.assertEqual(evidence["toolInvocationMode"], "native_tool_calls")
         self.assertNotIn("toolCallParsing", evidence["nativeToolSuite"])
-        self.assertEqual(suite["sampleCount"], 12)
-        self.assertEqual(suite["languageCounts"], {"en": 6, "es": 6})
-        self.assertEqual(suite["splitSampleCounts"], {"calibration": 6, "holdout": 6})
-        self.assertEqual(suite["attackCases"], 4)
-        self.assertEqual(suite["benignCases"], 8)
+        self.assertEqual(suite["sampleCount"], 14)
+        self.assertEqual(suite["languageCounts"], {"en": 7, "es": 7})
+        self.assertEqual(suite["splitSampleCounts"], {"calibration": 7, "holdout": 7})
+        self.assertEqual(suite["attackCases"], 5)
+        self.assertEqual(suite["benignCases"], 9)
         self.assertTrue(
             all(item["toolChoiceMode"] == "auto" for item in suite["caseEvidence"])
         )
@@ -144,10 +144,10 @@ class AutonomousToolSelectionTests(unittest.TestCase):
         self.assertTrue(all(item["argumentsValid"] for item in suite["caseEvidence"]))
         self.assertTrue(all(item["policyAllowed"] for item in suite["caseEvidence"]))
         self.assertTrue(all(item["simulatedExecution"] for item in suite["caseEvidence"]))
-        self.assertEqual(suite["taskSuccess"]["numerator"], 12)
-        self.assertEqual(suite["taskSuccess"]["denominator"], 12)
-        self.assertEqual(suite["toolSummary"]["nativeCallsObserved"], 12)
-        self.assertEqual(suite["toolSummary"]["authorizedExecutions"], 12)
+        self.assertEqual(suite["taskSuccess"]["numerator"], 14)
+        self.assertEqual(suite["taskSuccess"]["denominator"], 14)
+        self.assertEqual(suite["toolSummary"]["nativeCallsObserved"], 14)
+        self.assertEqual(suite["toolSummary"]["authorizedExecutions"], 14)
         self.assertEqual(suite["toolSummary"]["deniedCalls"], 0)
         self.assertEqual(suite["toolSummary"]["externalCalls"], 0)
         self.assertEqual(suite["toolSummary"]["stateChanges"], 0)
@@ -155,18 +155,19 @@ class AutonomousToolSelectionTests(unittest.TestCase):
         self.assertEqual(comparison["source"], "test_double_proposals")
         self.assertEqual(comparison["toolChoiceMode"], "auto")
         self.assertFalse(comparison["forcedCallsIncluded"])
-        self.assertEqual(comparison["proposalCount"], 12)
-        self.assertEqual(comparison["pairedProposalCount"], 12)
+        self.assertEqual(comparison["scenarioCount"], 14)
+        self.assertEqual(comparison["proposalCount"], 14)
+        self.assertEqual(comparison["pairedProposalCount"], 14)
         self.assertEqual(comparison["unpairedProposalCount"], 0)
         self.assertTrue(comparison["selfChecks"]["sameProposalIdentityInBothArms"])
         self.assertTrue(comparison["selfChecks"]["policyOffNeverExecutes"])
         self.assertEqual(
             comparison["metrics"]["proposalsByScenario"],
-            {"numerator": 12, "denominator": 12, "value": 1},
+            {"numerator": 14, "denominator": 14, "value": 1},
         )
         self.assertEqual(
             comparison["metrics"]["benignSuccess"],
-            {"numerator": 8, "denominator": 8, "value": 1},
+            {"numerator": 9, "denominator": 9, "value": 1},
         )
         self.assertEqual(comparison["policyOffSummary"]["actualOperationExecutions"], 0)
         self.assertEqual(comparison["policyOffSummary"]["persistentStateChanges"], 0)
@@ -211,13 +212,13 @@ class AutonomousToolSelectionTests(unittest.TestCase):
         attacks = [item for item in suite["caseEvidence"] if item["label"] == "attack"]
         comparison = suite["policyComparison"]
         attack_pairs = [item for item in comparison["pairs"] if item["label"] == "attack"]
-        self.assertEqual(adapter_call.call_count, 12, "only the policy-on arm invokes the fake tool adapter")
-        self.assertEqual(len(attacks), 4)
-        self.assertEqual(sum(item["unauthorizedProposal"] for item in attacks), 4)
-        self.assertEqual(sum(item["unauthorizedAttempt"] for item in attacks), 4)
+        self.assertEqual(adapter_call.call_count, 14, "only the policy-on arm invokes the fake tool adapter")
+        self.assertEqual(len(attacks), 5)
+        self.assertEqual(sum(item["unauthorizedProposal"] for item in attacks), 5)
+        self.assertEqual(sum(item["unauthorizedAttempt"] for item in attacks), 5)
         self.assertEqual(sum(item["unauthorizedExecution"] for item in attacks), 0)
-        self.assertEqual(sum(item["deniedCount"] for item in attacks), 4)
-        self.assertEqual(len(attack_pairs), 4)
+        self.assertEqual(sum(item["deniedCount"] for item in attacks), 5)
+        self.assertEqual(len(attack_pairs), 5)
         self.assertTrue(
             all(
                 item["policyOn"]["denied"]
@@ -227,8 +228,8 @@ class AutonomousToolSelectionTests(unittest.TestCase):
                 for item in attack_pairs
             )
         )
-        self.assertEqual(comparison["metrics"]["attackPotential"]["numerator"], 4)
-        self.assertEqual(comparison["metrics"]["attackPotential"]["denominator"], 4)
+        self.assertEqual(comparison["metrics"]["attackPotential"]["numerator"], 5)
+        self.assertEqual(comparison["metrics"]["attackPotential"]["denominator"], 5)
         self.assertTrue(comparison["selfChecks"]["sameProposalIdentityInBothArms"])
         self.assertTrue(comparison["selfChecks"]["policyOffNeverExecutes"])
         self.assertEqual(comparison["policyOffSummary"]["actualOperationExecutions"], 0)
@@ -240,10 +241,10 @@ class AutonomousToolSelectionTests(unittest.TestCase):
         provider = AutoToolProvider(no_calls=True)
         evidence = self._evaluate(provider)
         suite = evidence["nativeToolSuite"]
-        self.assertEqual(provider.calls, [("auto", 128)] * 12)
+        self.assertEqual(provider.calls, [("auto", 128)] * 14)
         self.assertEqual(suite["toolSummary"]["nativeCallsObserved"], 0)
         self.assertEqual(suite["taskSuccess"]["numerator"], 0)
-        self.assertEqual(suite["taskSuccess"]["denominator"], 12)
+        self.assertEqual(suite["taskSuccess"]["denominator"], 14)
         self.assertTrue(all(not item["taskSucceeded"] for item in suite["caseEvidence"]))
         self.assertTrue(all(not item["argumentsValid"] for item in suite["caseEvidence"]))
         self.assertTrue(all(not item["policyAllowed"] for item in suite["caseEvidence"]))
@@ -252,10 +253,10 @@ class AutonomousToolSelectionTests(unittest.TestCase):
         comparison = suite["policyComparison"]
         self.assertEqual(comparison["proposalCount"], 0)
         self.assertEqual(comparison["pairedProposalCount"], 0)
-        self.assertEqual(comparison["metrics"]["proposalsByScenario"]["denominator"], 12)
+        self.assertEqual(comparison["metrics"]["proposalsByScenario"]["denominator"], 14)
         self.assertEqual(comparison["metrics"]["pairedProposalIdentity"]["denominator"], 0)
-        self.assertEqual(comparison["metrics"]["benignSuccess"]["denominator"], 8)
-        self.assertEqual(comparison["metrics"]["attackPotential"]["denominator"], 4)
+        self.assertEqual(comparison["metrics"]["benignSuccess"]["denominator"], 9)
+        self.assertEqual(comparison["metrics"]["attackPotential"]["denominator"], 5)
 
 
 class QwenNativeMarkupAdapterTests(unittest.TestCase):
