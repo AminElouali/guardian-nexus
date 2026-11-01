@@ -9,7 +9,7 @@ penetration test or legal opinion.
 
 - Final image tag: `guardian-ai-assessment:audit-final`.
 - Local image config SHA-256:  
-  `a4145db76255f13e500debf0379f72102840701e19bf49c13475c43200700eb6`
+  `8ddd216cb7511e998c4a6c6b7e38a92946e04ae231cc9826fde263b3a9ee7ebb`
 - Registry digest: none; the image was not pushed.
 - Base: official Python `3.13.18-slim-trixie`, Debian 13, pinned as
   `python:3.13-slim-trixie@sha256:2d44738ebf4ce5f63b9d9ea871e9c7cfdc0426f7b0c97cac915fd88ded1d86bb`.
@@ -20,6 +20,20 @@ penetration test or legal opinion.
   and `pip --require-hashes`. The builder network was not enforced by an
   external hostname allowlist. No dependency installation happens at worker
   execution time.
+- The separately mounted `llama-cpp-python 0.3.36` runtime was rebuilt from the
+  official PyPI sdist (76,589,250 bytes; SHA-256
+  `832db0699007f1be95a7e41ef12e88926b02ba836461e36a36372db2760c1a2e`) using
+  the isolated build recipe in `local-llm-build/`. The resulting wheel is
+  24,139,061 bytes, SHA-256
+  `a71a5a2e4b27e25b0fd783bdd5deb5a612ad950e2b0e92a0b500dee24ccb7981`;
+  its source URL, hashes, build inputs, license, and limitations are in
+  `local-llm-build/source-manifest.json`. The wheel was built outside the
+  evaluator and exercised under `--network=none`. This records provenance but
+  does not claim bit-for-bit reproducible output.
+- The source manifest pins the vendored `llama.cpp` commit
+  `0c1e57098bba43ac29e6e3b677cdceebdd22334f` and records its MIT license.
+  License obligations for every native vendored component are not yet fully
+  normalized; see the residual license notes below.
 - Dockerfile SHA-256:
   `5617c3a1e05d4287dbeda9740bdac6b7c04c6c55d67745b71366dcc02fe21972`.
 - All 36 selected runtime artifacts were downloaded into the ignored
@@ -46,7 +60,7 @@ penetration test or legal opinion.
 - CycloneDX 1.6, generated from inside the audited image:
   `generated-artifacts/guardian-ai-assessment-audit-final.sbom.cdx.json`
 - SBOM SHA-256:
-  `85603a3c4ef6323c564b1ec6d3c2716bfe6f137317545274236263e2ade4645e`
+  `41bca7bfc0d5692af3802b5dbbd493d2e584516f939cda76fad06fd9427edc91`
 - Inventory: 124 components — 37 Python distributions and 87 Debian packages.
 - Python license metadata: 12 SPDX-like expressions reported by package
   metadata, 23 unnormalized license names, and 2 `NOASSERTION`; 83 license,
@@ -69,33 +83,36 @@ penetration test or legal opinion.
   matched `osv-scanner_SHA256SUMS` from the v2.7.0 official GitHub release;
   that checksum file SHA-256 is
   `95d69019bcfe0586eb8f07aad4c56e2f734ee969e8e3e209591f259a1bfde88c`.
-- Offline OSV database archives were loaded by OSV Scanner and tested with
-  `unzip -t`:
+- OSV Scanner loaded the local offline database archives:
   - Debian `all.zip`: SHA-256
-    `4816191fe3b9edc162646d56b0f26ee417c26bacdd02d1c39a5bcfa957c53582`
+    `95c71e88a626f4ba428196019dae1658358862d45e2c769ad85b8a5e74ee6ec8`
   - PyPI `all.zip`: SHA-256
     `8fd7138ad08c733316d229a05ac5a8a9fdcba4f6439d80cdab97fe4e18445dde`
-  Local hashes make the downloaded data reproducible for this run; no separate
+  The database hashes identify the exact local scan inputs; no separate
   upstream signature verification of the database archives was performed.
-- Scan used `--offline-vulnerabilities --all-packages --all-vulns` against the
-  final local image. JSON:
-  `generated-artifacts/guardian-ai-assessment-osv-audit-final.json`
+- The rebuilt image was scanned with the official offline vulnerability
+  databases and `--all-packages --all-vulns`. JSON:
+  `generated-artifacts/guardian-ai-assessment-osv-audit-rebuilt.json`
 - Scan output SHA-256:
-  `986b815a944f4534337b259e7dd7afd3557e8c548681fd04a191327db0762dcd`
-- Results: 177 Debian package/advisory matches, 81 unique Debian advisory IDs
-  across 38 installed binary package names and 18 source packages; 0 PyPI
-  advisory matches for installed Python distributions. The scanner exited 1
-  because findings were present, not because the scan command failed.
-- Debian OSV urgency across unique IDs: 25 `unimportant`, 56 `not yet
-  assigned`. The matching records contain 139 CVSS v3 and 33 CVSS v4 vectors
-  across rows; the scanner output does not provide numeric base scores here.
-  These counts are database matches, not 177 independent confirmed exploitable
-  flaws. No unique matched advisory contained a Debian 13 fixed-version event
-  for the installed version in this database.
+  `8bfd4528ff1c503fc485e5b8bfdc1f5a85a8ac65e5326e4d1a3832216951d803`
+- Results: 186 Debian package/advisory match records across 84 unique advisory
+  IDs and 20 unique matched package/version pairs; 0 PyPI matches in the worker
+  image. The scanner exited 1 because findings were present, not because the
+  scan command failed. The earlier 177/81 count is from the prior database
+  snapshot, not this scan.
+- By the scanner's maximum severity score per unique ID: 1 critical, 25 high,
+  46 moderate, 9 low, and 3 without a numeric score. Debian urgency metadata
+  separately marks 25 IDs `unimportant` and leaves 59 unassigned; these
+  classifications can differ and are not exploitability determinations.
+- The updated OSV data contains a fixed-version event for 33 IDs and none for
+  51. A fixed event somewhere in the advisory history does not prove that a
+  fix is available in the pinned Debian 13 repository. The separate official
+  Trixie package-manager simulation found only `tzdata` upgradable and no
+  candidate updates for the matched packages.
 - Findings include core package families such as `glibc`, `zlib1g`,
   `libsqlite3-0`, and `util-linux`, as well as command-line packages. The raw
-  report retains the full 81-ID list. No claim is made that every code path is
-  reachable, or that an unassigned urgency means low risk.
+  report retains the full advisory list. A package/version match is not proof
+  that a vulnerable code path is reachable.
 
 ## Separate local-LLM wheelhouse
 
@@ -109,23 +126,19 @@ image. Therefore it is not covered by the image SBOM or image scan above.
   3.1.6`, and `MarkupSafe 3.0.4` wheel artifacts. `numpy 2.3.4` and
   `typing-extensions 4.16.0` are inherited from the image and are in its
   hash-locked runtime inventory.
-- `llama-cpp-python 0.3.36` local wheel is 27,077,498 bytes with SHA-256
-  `c8a3e98093e950d7a770f794842e36f2db82b2933e8762ed7b5ffd435011e8e4`, matching
-  the local manifest. It is **not** a file published in the official PyPI
-  release: PyPI lists only a 76,589,250-byte source archive with SHA-256
-  `832db0699007f1be95a7e41ef12e88926b02ba836461e36a36372db2760c1a2e`.
-  The local wheel metadata reports version 0.3.36 and MIT, but no verified
-  source-build record ties that binary to the official source archive. The
-  official source archive was not downloaded or rebuilt in this phase; the
-  previously validated wheel was not replaced.
+- `llama-cpp-python 0.3.36` now uses the locally built wheel whose digest and
+  source archive are recorded above and in `local-llm-manifest.json`. The source
+  wheel build and local Qwen run succeeded. This closes the earlier unknown
+  binary-provenance gap for this wheel, but does not establish byte-identical
+  rebuilds or complete licensing of every bundled native component.
 - The offline OSV scan of the six pinned local-LLM Python packages found one
   unique issue in `diskcache 5.6.3`, represented by
   `CVE-2025-69872`, `PYSEC-2026-2447`, and `GHSA-w8v5-vhqr-4h9v`. OSV describes
   unsafe pickle deserialization and arbitrary code execution if an attacker
   can write to the cache directory. Its affected range ends at 5.6.3; PyPI's
-  current release is also 5.6.3, with no fix version available. The two IDs
-  returned by the scan are aliases for the same issue. Other packages in this
-  six-package scan had no OSV match in the downloaded database.
+  recorded affected range includes 5.6.3 and has no fixed-version event. The
+  refreshed scan reports two alias records for one underlying issue. Other
+  packages in this six-package scan had no OSV match in the downloaded database.
 - In the current runner, `LocalQwenClient` creates `Llama` without a cache
   argument and does not attach a `LlamaCache`; the library initializes
   `self.cache` as `None`. This makes the vulnerable cache path unexercised in
@@ -137,9 +150,9 @@ image. Therefore it is not covered by the image SBOM or image scan above.
   (SHA-256
   `a37bca5df8b10def24fae2388a326797656c2856f85f7a19b272625a93e84b4c`);
   the separate OSV result is
-  `generated-artifacts/guardian-ai-assessment-llm-runtime-osv.json`
+  `generated-artifacts/guardian-ai-assessment-llm-runtime-osv-rebuilt.json`
   (SHA-256
-  `219722580c7c5c7b66b7de251df5d11c02293f3454f5cc2ff19ef34909b332c7`).
+  `ee20fa979f42f968ed40147dbdb64468b5948bd0f21b12b9a74760f336446911`).
   The scanned package list is
   `generated-artifacts/guardian-ai-assessment-llm-runtime-requirements.txt`
   (SHA-256
@@ -161,9 +174,10 @@ image. Therefore it is not covered by the image SBOM or image scan above.
 - IPv6 remains **unavailable/unverified**, not blocked: the host reports
   `kernel_protocol_unavailable`. No dual-stack claim is made.
 - No Debian packages were force-removed, no alternative base was substituted,
-  and no OSV finding was suppressed. The unresolved OS advisories, license
-  ambiguity, separate `diskcache` advisory, local LLM wheel provenance gap, and
-  incomplete license normalization remain blockers for customer use.
+  and no OSV finding was suppressed. Unresolved OS advisories, the separate
+  `diskcache` advisory, the `langdetect` license ambiguity, incomplete native
+  license review, and missing dual-stack verification remain blockers for
+  customer use.
 
 ## Workspace security scans
 

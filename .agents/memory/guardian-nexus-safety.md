@@ -68,3 +68,9 @@ description: Product boundaries for security integrations, claims, and productio
 **Why:** A local model wheelhouse can be outside the image inventory, and a matching version/hash in a project manifest alone does not prove the binary came from an official release. A separate scan can also find advisories omitted from the image scan.
 
 **How to apply:** Before enabling a worker for customers, keep a separate hash, license, provenance, and advisory inventory for every mounted runtime artifact; require an official release match or a reproducible source build.
+
+**Rule:** An OSV fixed-version event does not prove a patch is available in the pinned distribution; refresh and hash the advisory database, then check package-manager candidates separately.
+
+**Why:** Updated Debian OSV data changed the image count from 177 matches / 81 IDs to 186 / 84 and listed fixed events for some advisories, while the pinned Trixie repository still offered no candidate updates for the matched packages.
+
+**How to apply:** Report package-match counts separately from unique advisory IDs, distinguish CVSS severity from distro urgency, record the database hash, and simulate upgrades against the exact pinned distro before claiming remediation.

@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "package": "llama-cpp-python",
+  "version": "0.3.36",
+  "source": {
+    "registry": "PyPI",
+    "releaseMetadataUrl": "https://pypi.org/pypi/llama-cpp-python/0.3.36/json",
+    "archiveUrl": "https://files.pythonhosted.org/packages/ec/e9/e7de2b0463ea3ffbf0ede6cb21b58c1258a8f6521aae45ca773a59fe7cf3/llama_cpp_python-0.3.36.tar.gz",
+    "filename": "llama_cpp_python-0.3.36.tar.gz",
+    "sizeBytes": 76589250,
+    "sha256": "832db0699007f1be95a7e41ef12e88926b02ba836461e36a36372db2760c1a2e",
+    "declaredLicense": "MIT",
+    "licenseFileSha256": "c479fb11a66a85fed2004a17dd1b3e44a1858c564b167aecb20ff66cb422ed75"
+  },
+  "vendoredNativeLibrary": {
+    "name": "llama.cpp",
+    "sourceCommit": "0c1e57098bba43ac29e6e3b677cdceebdd22334f",
+    "license": "MIT",
+    "licenseFileSha256": "94f29bbed6a22c35b992c5c6ebf0e7c92f13b836b90f36f461c9cf2f0f1d010d"
+  },
+  "builder": {
+    "dockerfile": "Dockerfile",
+    "baseImage": "python:3.13-slim-trixie@sha256:2d44738ebf4ce5f63b9d9ea871e9c7cfdc0426f7b0c97cac915fd88ded1d86bb",
+    "debianSnapshot": "https://snapshot.debian.org/archive/debian/20261027T000000Z/",
+    "buildRequirements": "requirements-build.txt",
+    "compiler": "GCC/G++ 14.2.0-19",
+    "cmake": "3.31.6",
+    "ninja": "1.11.1",
+    "networkDuringCompilation": "none",
+    "limits": {
+      "cpuCores": 2,
+      "memoryMiB": 3072,
+      "pids": 128,
+      "user": "65532:65532",
+      "capabilities": "all dropped",
+      "noNewPrivileges": true
+    },
+    "cmakeArgs": [
+      "-DGGML_NATIVE=OFF",
+      "-DGGML_AVX=ON",
+      "-DGGML_AVX2=ON",
+      "-DGGML_FMA=ON",
+      "-DGGML_AVX512=OFF",
+      "-DGGML_OPENMP=OFF"
+    ]
+  },
+  "output": {
+    "filename": "llama_cpp_python-0.3.36-py3-none-linux_x86_64.whl",
+    "sizeBytes": 24139061,
+    "sha256": "a71a5a2e4b27e25b0fd783bdd5deb5a612ad950e2b0e92a0b500dee24ccb7981",
+    "runtimeLicense": "MIT"
+  },
+  "repeatability": "Inputs, base image, Debian snapshot, resource limits, and compiler flags are recorded and pinned. A second independent build was not performed; bit-for-bit reproducibility is therefore not claimed."
+}

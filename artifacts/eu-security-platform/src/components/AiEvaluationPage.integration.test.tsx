@@ -5,6 +5,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { AiAssessmentLabJob } from "@workspace/api-client-react";
 import { LabJobCard } from "./AiEvaluationPage";
+import { buildQwenExecutiveReport } from "./qwenExecutiveReport";
 
 test("renders the real API lab response in the authenticated dashboard card", () => {
   const responsePath = new URL(
@@ -124,7 +125,7 @@ test("renders the Qwen run as an honest Spanish executive report with bounded ev
   assert.match(markup, /Hubo inferencia local real en 14 casos mixtos/);
   assert.match(markup, /Intento de modificación bancaria no autorizada bloqueado/);
   assert.match(markup, /el intento observado fue denegado por la política/);
-  assert.match(markup, /sin una tasa general de seguridad/);
+  assert.match(markup, /no permite estimar una tasa general de seguridad/);
   assert.match(markup, /5 casos de inyección documental/);
   assert.match(markup, /no se forzó la función/);
   assert.match(markup, /13\/14<\/b> casos con propuesta/);
@@ -132,13 +133,13 @@ test("renders the Qwen run as an honest Spanish executive report with bounded ev
   assert.match(markup, /12\/13<\/b> autorizadas y simuladas/);
   assert.match(markup, /1\/13<\/b> denegadas/);
   assert.match(markup, /0\/1<\/b> intentos no autorizados ejecutados/);
-  assert.match(markup, /13 marcadores Qwen adaptados por Guardian/);
-  assert.match(markup, /0 message\.tool_calls directos del runtime/);
+  assert.match(markup, /13<\/b> marcadores(?: de plantilla)? Qwen adaptados por Guardian/);
+  assert.match(markup, /<b>0<\/b> message\.tool_calls directos del runtime/);
   assert.match(markup, /no son llamadas nativas directas/);
   assert.match(markup, /Marcador Qwen adaptado/);
   assert.match(markup, /Policy OFF omite esa comprobación únicamente sobre una copia desechable en memoria/);
   assert.match(markup, /Habría ocurrido en el clon · estado del clon cambiaría · nunca ejecutado/);
-  assert.match(markup, /sin una tasa general de seguridad/);
+  assert.match(markup, /no permite estimar una tasa general de seguridad/);
   assert.match(markup, /no acepta JSON libre/);
   assert.match(markup, /Comparación emparejada/);
   assert.match(markup, /PROPUESTAS DEL QWEN LOCAL/);
@@ -151,9 +152,23 @@ test("renders the Qwen run as an honest Spanish executive report with bounded ev
   assert.match(markup, /no son una estimación general de seguridad/i);
   assert.match(markup, /Suite forzada anterior/);
   assert.match(markup, /no disponible para clientes/);
+  assert.match(markup, /Descargar informe JSON redactado/);
   assert.doesNotMatch(markup, /lab-recipient@invalid\.example/);
   assert.doesNotMatch(markup, /DE00LAB000000000000000000/);
   assert.doesNotMatch(markup, /GN-EMAIL-EN-CAL/);
   assert.doesNotMatch(markup, /rawPrompt|rawResponse|rawArguments/i);
   assert.doesNotMatch(markup, /<tool_call>.*?<\/tool_call>/s);
+
+  const report = buildQwenExecutiveReport(job);
+  assert.ok(report);
+  const exported = JSON.stringify(report);
+  assert.match(exported, /Guardian Nexus/);
+  assert.match(exported, /Intento de modificación bancaria no autorizada bloqueado/);
+  assert.match(exported, /"directRuntimeMessageToolCalls":0/);
+  assert.match(exported, /"counterfactualOnly":true/);
+  assert.match(exported, /"actualOperationExecutions":0/);
+  assert.doesNotMatch(exported, /lab-recipient@invalid\.example/);
+  assert.doesNotMatch(exported, /DE00LAB000000000000000000/);
+  assert.doesNotMatch(exported, /rawPrompt|rawResponse|rawArguments/i);
+  assert.doesNotMatch(exported, /<tool_call>|GN-EMAIL-EN-CAL/);
 });

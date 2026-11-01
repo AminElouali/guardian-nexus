@@ -21,6 +21,8 @@ The separate development-only local LLM laboratory uses:
 
 - Qwen3-0.6B-GGUF, distributed under Apache License 2.0.
 - `llama-cpp-python` 0.3.36, distributed under the MIT License.
+- Vendored `llama.cpp` source at commit
+  `0c1e57098bba43ac29e6e3b677cdceebdd22334f`, distributed under the MIT License.
 - `diskcache` 5.6.3, distributed under Apache License 2.0.
 - Jinja2 3.1.6 and MarkupSafe 3.0.4, distributed under BSD licenses.
 

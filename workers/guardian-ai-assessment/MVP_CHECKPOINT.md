@@ -6,8 +6,9 @@ paid services, production database, remote deployment, or publishing.
 
 ## Latest verified end-to-end laboratory evidence
 
-- Job `10a2a7b3-de10-4883-9c8a-172b22050c5d` succeeded on 2026-11-01 using
-  Qwen3-0.6B-GGUF Q8_0, `llama-cpp-python 0.3.36`, and `tool_choice=auto`.
+- Latest API job `44bc6698-b334-41ef-8707-2a1be6f27ad0` succeeded on
+  2026-11-01 using Qwen3-0.6B-GGUF Q8_0, the source-built
+  `llama-cpp-python 0.3.36` wheel, and `tool_choice=auto`.
 - Model revision `23749fefcc72300e3a2ad315e1317431b06b590a`; GGUF SHA-256
   `9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031`;
   Apache-2.0. Suite v1.4.0 / engine v1.3, fixed seed 20261031.
@@ -27,15 +28,17 @@ paid services, production database, remote deployment, or publishing.
   override case produced no tool proposal; this is not evidence that the model
   detected or blocked that instruction. These small lab counts are not general
   accuracy, safety, or customer-service claims.
-- Runtime was 144.582 seconds. Docker verified network `none`, IPv4 and DNS
+- API job runtime was 148.082 seconds. Docker verified network `none`, IPv4 and DNS
   blocked, loopback only, 1 CPU, 1536 MiB, 64 PIDs, concurrency 1, hard timeout
   180 seconds. IPv6 remained unavailable, not verified blocked.
 - Evidence SHA-256:
-  `2f2b04ae7b6b97c85d9c020df082df3230c0dcd196c5387db6e4867340be43fb`
+  `c1e5b2b3f18f1339fcabedc3bc246b64b9fe8495dfe7ce4cc1c5e2b170c5d68f`
 - Paired-policy evidence SHA-256:
   `9c462e76b9126c3a5a7d6ab5685d3b042c58e801d120cf64191bed52cbeba87b`
 - Case-set SHA-256:
   `0980d82cbdc03e11b2ab164a64091e14a6e77ad386cd95deb7de856fe6fb28d0`
+- The completed run's raw prompts, model responses, and tool arguments were not
+  persisted. No real operation, persistent mutation, or external call occurred.
 - Raw prompts, model responses, and tool arguments are not persisted. A
   sanitized tracked run summary is in `reports/autonomous-tool-selection-v1.4.0.md`.
 
@@ -55,10 +58,13 @@ paid services, production database, remote deployment, or publishing.
 
 ## Last verified checks
 
-- Worker suite: 43/43 passed in a read-only, network-disabled container.
 - API suite: 34/34 passed, including tenant/RLS/RBAC/idempotency/recovery cases.
-- Targeted real Qwen API E2E: 1/1 passed (144.582 seconds of worker runtime).
+- Worker suite is now 44/44 passed in the clean rebuilt image.
+- Targeted real Qwen API E2E: 1/1 passed after source-wheel integration
+  (148.082 seconds of worker runtime).
 - Authenticated dashboard component suite: 3/3 passed.
+- The dashboard report is now Spanish executive copy with a redacted JSON
+  download; component tests reject raw prompt/response/argument leakage.
 - Typecheck and workspace build passed with `PORT=18753`, `BASE_PATH=/`, and
   `NODE_ENV=production`. The frontend build reported a large-bundle warning;
   no build errors.
@@ -68,6 +74,10 @@ paid services, production database, remote deployment, or publishing.
   the API contract still capped suite denominators at 12/8/4. The OpenAPI
   contract was extended additively to accept both legacy 12-case and new
   14-case evidence; codegen/typecheck passed, then the targeted E2E succeeded.
+- Replacing the local LLM wheel also exposed a stale wheel filename in the API
+  installer. The API allowlist/installer was aligned with the source-built
+  manifest, local readiness returned `ready`, and the real queued E2E then
+  passed.
 - The combined E2E command exceeded its 300-second shell limit once. It was
   rerun by test name after the queue drained; the autonomous E2E passed.
 
@@ -75,7 +85,7 @@ paid services, production database, remote deployment, or publishing.
 
 - Clean no-cache candidate image built from the pinned official base:
   `guardian-ai-assessment:audit-final`, config ID
-  `sha256:a4145db76255f13e500debf0379f72102840701e19bf49c13475c43200700eb6`.
+  `sha256:8ddd216cb7511e998c4a6c6b7e38a92946e04ae231cc9826fde263b3a9ee7ebb`.
   It has no registry digest and was not pushed. Base is Python 3.13.18 /
   Debian 13, `python:3.13-slim-trixie@sha256:2d44738ebf4ce5f63b9d9ea871e9c7cfdc0426f7b0c97cac915fd88ded1d86bb`.
 - The 36 runtime distributions are now pinned by version and SHA-256 in
@@ -93,7 +103,7 @@ paid services, production database, remote deployment, or publishing.
   absent from the runtime image.
 - Final CycloneDX 1.6 SBOM, generated inside the audited image: 124 components
   (37 Python distributions, 87 Debian packages), SHA-256
-  `85603a3c4ef6323c564b1ec6d3c2716bfe6f137317545274236263e2ade4645e`.
+  `41bca7bfc0d5692af3802b5dbbd493d2e584516f939cda76fad06fd9427edc91`.
   License evidence: 12 reported expressions, 23 unnormalized names, 2
   `NOASSERTION`; 83 Python license files listed and copyright files present for
   all 87 Debian packages. Debian expressions remain unnormalized.
@@ -101,17 +111,20 @@ paid services, production database, remote deployment, or publishing.
   release checksum (`160c6253e2922e9e0a6a9771c5c4c40a4b3c6090b34a3cdd5e80c96cc2e4218b`).
   Official offline Debian and PyPI databases were downloaded and archive-tested;
   their local SHA-256 values are recorded in `DEPENDENCY_AUDIT.md`.
-- Current OSV scan: exit status 1 because findings exist; 177 Debian package
-  matches across 81 unique advisory IDs in the image and 0 PyPI matches within
-  that image. Debian urgency is `unimportant` for 25 unique IDs and `not yet
-  assigned` for 56. The database lists no fixed-version event for these matched
-  Debian advisories. This is not an exploitability verdict or a clean scan.
+- Current OSV scan: exit status 1 because findings exist; 186 Debian
+  package/advisory match records across 84 unique IDs and 0 PyPI matches in the
+  image. By scanner max severity: 1 critical, 25 high, 46 moderate, 9 low, and
+  3 unscored. Debian urgency separately marks 25 `unimportant` and 59
+  unassigned. OSV records fixed-version events for 33 IDs, but the Trixie
+  package-manager simulation found no candidate updates for matched packages.
+  This is not an exploitability verdict or a clean scan.
 - A separate offline OSV scan of the mounted local-LLM runtime found one
   `diskcache 5.6.3` issue (`CVE-2025-69872`, `PYSEC-2026-2447`,
   `GHSA-w8v5-vhqr-4h9v` aliases). The current runner does not attach a cache,
-  but the package remains installed and has no fixed PyPI release. The local
-  `llama-cpp-python 0.3.36` wheel hash matches its manifest but is not an
-  official PyPI wheel; its source-build provenance remains unverified.
+  but the package remains installed and has no fixed version in the refreshed
+  OSV record. `llama-cpp-python` now has a verified PyPI sdist input and local
+  source-build manifest; exact byte-for-byte reproducibility and complete
+  native license review are still open.
 - A simulation using current official Debian Trixie package indexes showed only
   `tzdata` upgradable; no candidate updates were available for the affected
   packages. No packages were installed or changed by that simulation.
@@ -130,10 +143,12 @@ paid services, production database, remote deployment, or publishing.
   policy decision, paired counterfactual, persisted redacted evidence, API
   retrieval, and dashboard rendering are verified.
 - This is not a customer-ready or remotely hosted service. The current image has
-  unresolved Debian OSV matches with no available package upgrades, a
-  separate `diskcache` advisory in the local-LLM wheelhouse, unverified
-  `llama-cpp-python` wheel provenance, a `langdetect` license conflict,
-  unnormalized license records, and no verified IPv6 egress test.
+  unresolved Debian OSV matches with no candidate upgrades in the pinned
+  repository, a separate `diskcache` advisory in the local-LLM wheelhouse,
+  unresolved `langdetect` and native-component license review, and no verified
+  IPv6 egress test. A live Clerk browser sign-in and signed-in screenshot remain
+  unverified; E2E uses a development-only identity and the dashboard component
+  tests render authenticated state.
 - No production database, customer systems, cloud worker, or publishing action
   was used. See `DEPENDENCY_AUDIT.md` for hashes, scope, and remaining
   limitations. Do not enable customer evaluations until the open dependency,

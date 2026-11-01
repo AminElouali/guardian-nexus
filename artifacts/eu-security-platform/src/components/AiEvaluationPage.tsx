@@ -16,6 +16,7 @@ import {
   type Workspace,
 } from '@workspace/api-client-react';
 import { Button } from '@/components/ui/button';
+import { downloadQwenExecutiveReport } from './qwenExecutiveReport';
 
 const reasonLabels: Record<string, string> = {
   mock_refused_untrusted_instruction: 'El fixture rechazó una instrucción no confiable',
@@ -468,8 +469,10 @@ function QwenPolicyComparisonResult({
 
 function NativeToolSuiteResult({
   evidence,
+  job,
 }: {
   evidence: NativeToolSuiteEvidence | AutonomousToolSelectionEvidence;
+  job: AiAssessmentLabJob;
 }) {
   const suite = evidence.nativeToolSuite;
   const autonomous =
@@ -509,7 +512,7 @@ function NativeToolSuiteResult({
     </div>
     {autonomous && <div className="qwen-executive-summary" data-testid="qwen-executive-summary">
       <div className="qwen-summary-mark">LECTURA EJECUTIVA <span>· {suite.sampleCount} CASOS</span></div>
-      <h5>Una muestra local con controles y ataques sintéticos; no una tasa general de seguridad.</h5>
+      <h5>Una muestra local con controles y ataques sintéticos; no permite estimar una tasa general de seguridad.</h5>
       <p>El laboratorio usó datos ficticios y herramientas simuladas. {bankAttackCase
         ? <>En el caso bancario en español, el contenido planteó una modificación no autorizada: {bankAttackCase.policyObservationComplete
           ? bankAttackCase.unauthorizedAttempt
@@ -533,6 +536,14 @@ function NativeToolSuiteResult({
         <span><b>Recomendación</b> Mantener autorización explícita por operación y revisar cada caso inconcluso antes de ampliar pruebas.</span>
         <span><b>Alcance</b> Agente local de laboratorio; no evalúa disponibilidad ni sistemas de clientes.</span>
       </div>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => downloadQwenExecutiveReport(job)}
+        data-testid="download-qwen-report"
+      >
+        Descargar informe JSON redactado
+      </Button>
       <p className="qwen-limitations">Límites: muestra pequeña de {suite.sampleCount} casos, sin tasa general de seguridad; IPv6 {networkStatusLabel(evidence.network.publicIpv6)} (no equivale a bloqueo verificado); servicio para clientes no disponible. No se conservan prompts, respuestas ni argumentos.</p>
     </div>}
     <p className="guardian-verification-disclaimer">
@@ -684,7 +695,7 @@ export function LabJobCard({
       {garakEvidence.guardianVerification && <GuardianVerificationResult verification={garakEvidence.guardianVerification} />}
     </div>}
     {localLlmEvidence && <LocalLlmResult evidence={localLlmEvidence} />}
-    {nativeToolEvidence && <NativeToolSuiteResult evidence={nativeToolEvidence} />}
+    {nativeToolEvidence && <NativeToolSuiteResult evidence={nativeToolEvidence} job={job} />}
     {job.status === 'failed' && <p className="ai-lab-error">No se completó la evaluación. Código: {job.errorCode ?? 'worker_failed'}. No se guardaron salidas del agente.</p>}
     {canRun && job.status === 'failed' && job.attempts < 2 && <Button variant="outline" onClick={() => onRetry(job.id)} disabled={retryPending} data-testid="button-retry-ai-lab">
       {retryPending ? 'Reintentando…' : 'Reintentar una vez'}

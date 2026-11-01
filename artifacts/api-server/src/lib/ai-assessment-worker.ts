@@ -56,7 +56,7 @@ const LLM_ARTIFACT_ROOT = resolve(
 );
 const LOCAL_LLM_MODEL_FILE = "Qwen3-0.6B-Q8_0.gguf";
 const LOCAL_LLM_WHEELS = [
-  "llama_cpp_python-0.3.36-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl",
+  "llama_cpp_python-0.3.36-py3-none-linux_x86_64.whl",
   "diskcache-5.6.3-py3-none-any.whl",
   "jinja2-3.1.6-py3-none-any.whl",
   "markupsafe-3.0.4-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
@@ -507,7 +507,7 @@ function dockerRunArgs(
     "--entrypoint=/bin/sh",
     IMAGE,
     "-ceu",
-    `python -m pip install --no-index --no-deps --disable-pip-version-check --no-cache-dir --target=/opt/llm-runtime /wheelhouse/llama_cpp_python-0.3.36-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl /wheelhouse/diskcache-5.6.3-py3-none-any.whl /wheelhouse/jinja2-3.1.6-py3-none-any.whl /wheelhouse/markupsafe-3.0.4-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl >&2; export PYTHONPATH=/opt/llm-runtime:/opt/guardian-assessment; exec python -m guardian_ai_assessment.llm_lab ${profileId === NATIVE_TOOL_PROFILE_ID ? "--native-tool-suite-job" : profileId === AUTONOMOUS_TOOL_PROFILE_ID ? "--autonomous-tool-selection-job" : "--integration-job"}`,
+    `python -m pip install --no-index --no-deps --disable-pip-version-check --no-cache-dir --target=/opt/llm-runtime ${LOCAL_LLM_WHEELS.map((name) => `/wheelhouse/${name}`).join(" ")} >&2; export PYTHONPATH=/opt/llm-runtime:/opt/guardian-assessment; exec python -m guardian_ai_assessment.llm_lab ${profileId === NATIVE_TOOL_PROFILE_ID ? "--native-tool-suite-job" : profileId === AUTONOMOUS_TOOL_PROFILE_ID ? "--autonomous-tool-selection-job" : "--integration-job"}`,
   ];
 }
 

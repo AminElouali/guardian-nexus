@@ -5,7 +5,11 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1 \
     CMAKE_BUILD_PARALLEL_LEVEL=2
 
-RUN apt-get update \
+RUN sed -i \
+        -e 's|URIs: http://deb.debian.org/debian$|URIs: http://snapshot.debian.org/archive/debian/20261027T000000Z|' \
+        -e 's|URIs: http://deb.debian.org/debian-security$|URIs: http://snapshot.debian.org/archive/debian-security/20261027T000000Z|' \
+        /etc/apt/sources.list.d/debian.sources \
+    && apt-get -o Acquire::Check-Valid-Until=false update \
     && apt-get install -y --no-install-recommends build-essential \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
