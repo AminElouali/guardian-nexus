@@ -27,3 +27,21 @@ The separate development-only local LLM laboratory uses:
 Exact source revisions, wheel hashes, and model-weight hashes are recorded in
 `local-llm-manifest.json`. These notices do not imply Guardian Nexus authors or
 owns the model or runtime.
+
+## Python runtime dependency licensing
+
+Runtime package versions and the selected PyPI artifact SHA-256 values are
+locked in `requirements-runtime.txt`. The clean image build verifies these
+hashes before installation. Build-only `setuptools` and `wheel` are pinned
+separately and removed before the image is used.
+
+`langdetect` 1.0.9 has conflicting upstream license signals: its PyPI metadata
+and `setup.py` state MIT, while the source archive's `LICENSE`, `NOTICE`, and
+PyPI classifier identify Apache-2.0. The package is therefore treated as
+license-ambiguous pending legal review; this notice does not resolve the
+conflict or assert that either license is definitive.
+
+The generated SBOM preserves unnormalized package license strings and
+`NOASSERTION` where evidence is insufficient. Debian copyright files are
+inventoried but their expressions are not normalized. This inventory is not
+legal clearance; see `DEPENDENCY_AUDIT.md` in the project workspace.

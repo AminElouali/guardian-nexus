@@ -2,3 +2,4 @@
 - [PostgreSQL RLS workflow](postgres-rls-workflow.md) — Verify live predicates and ensure queue SELECT policies expose permitted terminal transitions without exposing results.
 - [Native worker runtime isolation](native-worker-runtime-isolation.md) — Keep `/tmp` noexec; mount a narrow ephemeral exec tmpfs for verified native shared libraries.
 - [Qwen native tool calls](qwen-native-tool-calling.md) — llama-cpp-python 0.3.36 returns Qwen auto `<tool_call>` markup as content; normalize only complete tagged JSON, never free JSON.
+- [Mounted worker artifacts](guardian-nexus-safety.md) — Image SBOMs do not cover mounted model wheels or weights; audit their hashes, provenance, licenses, and advisories separately.

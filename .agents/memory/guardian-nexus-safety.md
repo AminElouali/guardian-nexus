@@ -62,3 +62,9 @@ description: Product boundaries for security integrations, claims, and productio
 **Why:** A long local-model job continued under the managed API worker after its initiating test command exceeded the shell timeout, leaving a live lease that correctly blocked the next E2E setup.
 
 **How to apply:** Run expensive local-model cases by test-name pattern, inspect only development job metadata after a timeout, wait for completion or recovery, then rerun the targeted test.
+
+**Rule:** Audit mounted model wheels and weights separately from the worker image; an image SBOM does not establish their provenance or risk.
+
+**Why:** A local model wheelhouse can be outside the image inventory, and a matching version/hash in a project manifest alone does not prove the binary came from an official release. A separate scan can also find advisories omitted from the image scan.
+
+**How to apply:** Before enabling a worker for customers, keep a separate hash, license, provenance, and advisory inventory for every mounted runtime artifact; require an official release match or a reproducible source build.

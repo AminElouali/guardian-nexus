@@ -73,29 +73,55 @@ paid services, production database, remote deployment, or publishing.
 
 ## Supply-chain audit state
 
-- The stored OSV report dated 2026-10-30 applies to image digest
-  `sha256:fd765c4022e48f9d07ed2a93c750c075cc29095acc837581797da3eef8d15f25`,
-  not the current local image. It reported 164 Debian matches / 69 advisory IDs
-  and must not be treated as the current image's result.
-- Current local image config ID (no registry manifest digest):
-  `sha256:1b0ad8e7def008ae65687dd5e7d4f5b52e7dac1150db273d92b6a8935d818a6c`.
-  It has no registry digest. Base image remains digest-pinned.
-- A generated offline CycloneDX inventory contains 124 components: 37 PyPI
-  distributions and 87 Debian packages. SHA-256:
-  `0bfaf1fe236bb0f3e5c1abec18482010429037b21032325234731528208be0c8`.
-  Python license data: 12 reported expressions, 23 unnormalized names, 2
-  `NOASSERTION`; 34 license files listed. All 87 Debian entries have copyright
-  files, but license expressions are not normalized. This is inventory, not
-  legal clearance.
-- OSV Scanner 2.7.0 / SCALIBR 0.5.3 could not scan vulnerabilities because no
-  local OSV database was cached. The partial scan is not a clean verdict.
-  No database or package download was attempted.
-- A clean rebuild using `--no-cache --pull=false --network=none` failed because
-  pinned Python wheels are not in the local cache; pip could not resolve
-  `pypi.org`. No egress was enabled and no clean image was produced.
-- Host IPv6 socket creation failed with errno 97 (`Address family not
-  supported by protocol`); the worker also reports
-  `kernel_protocol_unavailable`. IPv6 egress remains unverified.
+- Clean no-cache candidate image built from the pinned official base:
+  `guardian-ai-assessment:audit-final`, config ID
+  `sha256:a4145db76255f13e500debf0379f72102840701e19bf49c13475c43200700eb6`.
+  It has no registry digest and was not pushed. Base is Python 3.13.18 /
+  Debian 13, `python:3.13-slim-trixie@sha256:2d44738ebf4ce5f63b9d9ea871e9c7cfdc0426f7b0c97cac915fd88ded1d86bb`.
+- The 36 runtime distributions are now pinned by version and SHA-256 in
+  `requirements-runtime.txt`; all selected filenames, sizes, and hashes matched
+  official PyPI release metadata. The 2 build-only tools (`setuptools 84.2.1`,
+  `wheel 0.48.0`) are separately hash-locked, installed to a temporary prefix,
+  and removed before runtime. Their absence was checked in the final image.
+- Build verification: `docker build --no-cache --pull=false --network=default`
+  succeeded. Build-time package retrieval used the official PyPI index and
+  hash-checked locks; the build network itself was not constrained by a host
+  allowlist. Evaluation runs remain `--network=none`.
+- Worker tests: 44/44 passed in the final image using read-only filesystem,
+  `--network=none`, 0.5 CPU, 768 MiB, and 64 PIDs. The self-test passed:
+  public IPv4/DNS blocked, loopback only, IPv6 unavailable. Build tools are
+  absent from the runtime image.
+- Final CycloneDX 1.6 SBOM, generated inside the audited image: 124 components
+  (37 Python distributions, 87 Debian packages), SHA-256
+  `85603a3c4ef6323c564b1ec6d3c2716bfe6f137317545274236263e2ade4645e`.
+  License evidence: 12 reported expressions, 23 unnormalized names, 2
+  `NOASSERTION`; 83 Python license files listed and copyright files present for
+  all 87 Debian packages. Debian expressions remain unnormalized.
+- OSV Scanner 2.7.0 / SCALIBR 0.5.3 was verified against Google's official
+  release checksum (`160c6253e2922e9e0a6a9771c5c4c40a4b3c6090b34a3cdd5e80c96cc2e4218b`).
+  Official offline Debian and PyPI databases were downloaded and archive-tested;
+  their local SHA-256 values are recorded in `DEPENDENCY_AUDIT.md`.
+- Current OSV scan: exit status 1 because findings exist; 177 Debian package
+  matches across 81 unique advisory IDs in the image and 0 PyPI matches within
+  that image. Debian urgency is `unimportant` for 25 unique IDs and `not yet
+  assigned` for 56. The database lists no fixed-version event for these matched
+  Debian advisories. This is not an exploitability verdict or a clean scan.
+- A separate offline OSV scan of the mounted local-LLM runtime found one
+  `diskcache 5.6.3` issue (`CVE-2025-69872`, `PYSEC-2026-2447`,
+  `GHSA-w8v5-vhqr-4h9v` aliases). The current runner does not attach a cache,
+  but the package remains installed and has no fixed PyPI release. The local
+  `llama-cpp-python 0.3.36` wheel hash matches its manifest but is not an
+  official PyPI wheel; its source-build provenance remains unverified.
+- A simulation using current official Debian Trixie package indexes showed only
+  `tzdata` upgradable; no candidate updates were available for the affected
+  packages. No packages were installed or changed by that simulation.
+- `langdetect 1.0.9` has conflicting license metadata: PyPI/setup metadata says
+  MIT, while the sdist `LICENSE`, `NOTICE`, and PyPI classifier say Apache-2.0.
+  It remains license-ambiguous pending legal review. The SBOM is not legal
+  clearance.
+- The older 164-match / 69-advisory report is historical and not the result for
+  this image. IPv6 remains unavailable/unverified because the host kernel
+  rejects IPv6 sockets (`kernel_protocol_unavailable`).
 
 ## MVP decision and blockers
 
@@ -103,11 +129,12 @@ paid services, production database, remote deployment, or publishing.
   request, durable tenant queue, local model execution, external deterministic
   policy decision, paired counterfactual, persisted redacted evidence, API
   retrieval, and dashboard rendering are verified.
-- This is not a customer-ready or remotely hosted service. Container
-  vulnerability status, normalized legal license review, clean offline rebuild,
-  and dual-stack IPv6 egress verification remain open.
-- Next supply-chain step requires an approved way to obtain OSV data and missing
-  pinned wheels, or equivalent locally supplied artifacts. Do not enable
-  external access or deploy a worker without explicit authorization. For any
-  remote worker, first require a dual-stack environment that proves public
-  IPv4, IPv6, and DNS fail closed.
+- This is not a customer-ready or remotely hosted service. The current image has
+  unresolved Debian OSV matches with no available package upgrades, a
+  separate `diskcache` advisory in the local-LLM wheelhouse, unverified
+  `llama-cpp-python` wheel provenance, a `langdetect` license conflict,
+  unnormalized license records, and no verified IPv6 egress test.
+- No production database, customer systems, cloud worker, or publishing action
+  was used. See `DEPENDENCY_AUDIT.md` for hashes, scope, and remaining
+  limitations. Do not enable customer evaluations until the open dependency,
+  legal, and dual-stack controls are resolved or formally accepted.
