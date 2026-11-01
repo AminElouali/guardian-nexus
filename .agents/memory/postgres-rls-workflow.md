@@ -18,3 +18,9 @@ description: Non-obvious behavior to verify when changing or publishing tenant R
 **Why:** Row-level visibility can hide an allowed state transition when the updated row no longer satisfies the role's SELECT policy, even if the UPDATE check itself permits the new state.
 
 **How to apply:** Test queued-to-running, running-to-failed, expired-lease recovery, and terminal visibility with the actual worker role after applying RLS policies.
+
+**Additional rule:** Do not assume `drizzle-kit push` widened an existing PostgreSQL `CHECK` constraint just because it reports that changes were applied; verify the live definition and keep an idempotent guarded SQL update.
+
+**Why:** During the local LLM job-profile change, push reported success while the live profile constraint still rejected the new profile.
+
+**How to apply:** After changing allowed queue/profile values, inspect `pg_constraint` in development, apply the guarded SQL if stale, then verify the actual worker can claim and persist that job before considering the migration complete.

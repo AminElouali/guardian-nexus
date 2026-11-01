@@ -167,12 +167,13 @@ test("tenant job response contract accepts hashed synthetic verification evidenc
     completedAt: timestamp,
   });
 
+  const parsedVerification =
+    parsed.result?.engine === "garak"
+      ? parsed.result.guardianVerification
+      : undefined;
+  assert.equal(parsedVerification?.engine, "guardian_verification");
   assert.equal(
-    parsed.result?.guardianVerification?.engine,
-    "guardian_verification",
-  );
-  assert.equal(
-    parsed.result?.guardianVerification?.caseEvidence[0]?.caseEvidenceSha256,
+    parsedVerification?.caseEvidence[0]?.caseEvidenceSha256,
     "d".repeat(64),
   );
 });

@@ -253,6 +253,12 @@ def sha256_json(value: Any) -> str:
     return sha256_text(canonical_json(value))
 
 
+def _iso_utc_millis(value: datetime) -> str:
+    return value.astimezone(timezone.utc).isoformat(timespec="milliseconds").replace(
+        "+00:00", "Z"
+    )
+
+
 def _decision_from_response(text: str) -> tuple[dict[str, Any] | None, str]:
     try:
         parsed = json.loads(text)
@@ -856,8 +862,8 @@ o una propuesta:
         },
         "inputSha256": sha256_text(task_request),
         "invoiceSha256": sha256_json(invoice),
-        "startedAt": run_started.isoformat(),
-        "completedAt": completed.isoformat(),
+        "startedAt": _iso_utc_millis(run_started),
+        "completedAt": _iso_utc_millis(completed),
         "durationSeconds": elapsed,
         "rawPromptsStored": False,
         "rawResponsesStored": False,

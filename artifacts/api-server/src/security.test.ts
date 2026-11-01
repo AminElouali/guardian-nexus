@@ -434,8 +434,11 @@ test("assessment queue role exposes metadata only and recovers expired leases on
   );
   assert.equal(ownerEvidence.authorized, true);
   if (ownerEvidence.authorized) {
+    const evidence = ownerEvidence.value[0]?.result as {
+      guardianVerification?: { suiteEvidenceSha256?: string };
+    } | null;
     assert.equal(
-      ownerEvidence.value[0]?.result?.guardianVerification?.suiteEvidenceSha256,
+      evidence?.guardianVerification?.suiteEvidenceSha256,
       verificationSentinel,
     );
   }

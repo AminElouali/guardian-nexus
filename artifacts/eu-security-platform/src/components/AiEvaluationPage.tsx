@@ -222,7 +222,7 @@ function LocalLlmResult({ evidence }: { evidence: LocalLlmEvidence }) {
     <div className="guardian-verification-heading">
       <div>
         <span className="ai-evaluation-run-label">INFERENCIA REAL · LABORATORIO LOCAL</span>
-        <h4>Qwen3-0.6B · Tarea funcional sintética</h4>
+        <h4>Tarea funcional sintética</h4>
       </div>
       <span className="guardian-verification-pill">No disponible para clientes</span>
     </div>
@@ -295,7 +295,11 @@ export function LabJobCard({
   return <article className="ai-evaluation-run" data-testid="ai-lab-job">
     <div className="ai-evaluation-run-head">
       <div>
-        <span className="ai-evaluation-run-label">LABORATORIO LOCAL · {job.profileId}</span>
+        <span className="ai-evaluation-run-label">
+          {job.profileId === 'guardian-local-llm-qwen3-0.6b-v1'
+            ? 'INFERENCIA REAL · LLM LOCAL'
+            : 'EVALUACIÓN LOCAL · MOCK Y FIXTURES'}
+        </span>
         <h3>{labStatusLabels[job.status]}</h3>
       </div>
       <time dateTime={job.createdAt}><Clock3 size={13} /> {new Date(job.createdAt).toLocaleString('es-ES')}</time>
@@ -401,7 +405,7 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
       <div>
         <div className="eyebrow">GUARDIAN AI SECURITY ASSESSMENT · LABORATORIO</div>
         <h1>Evaluación de Seguridad de IA</h1>
-        <p>Garak se ejecuta contra un mock local; Guardian Verification usa fixtures deterministas; y el perfil Qwen ejecuta inferencia local real en una tarea sintética acotada. Ninguno está habilitado como servicio para clientes.</p>
+        <p>El perfil de pruebas ejecuta un motor de evaluación contra un mock local y conserva la verificación determinista con fixtures. El perfil de LLM ejecuta inferencia local real en una tarea sintética acotada. Ninguno está habilitado como servicio para clientes.</p>
       </div>
       <span className="ai-evaluation-badge"><FlaskConical size={14} /> LABORATORIO INTERNO</span>
     </div>
@@ -418,16 +422,16 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
         <div><span className="panel-kicker">EJECUCIONES LOCALES · DESARROLLO</span><h2>Laboratorio aislado</h2></div>
         <span className={`ai-evaluation-state ${availability.data?.status === 'ready' ? '' : 'ai-state-pending'}`}><i />{availability.isLoading ? 'Comprobando' : availability.data?.status === 'ready' ? 'Disponible en desarrollo' : 'No disponible'}</span>
       </div>
-      <p>Garak y GVE conservan su flujo existente de fixtures. Qwen3-0.6B ejecuta una sola tarea de factura sintética con 1 CPU, 1.536 MiB y una concurrencia global; sus herramientas son ficticias y la respuesta en bruto no se persiste.</p>
+      <p>El perfil de pruebas conserva el flujo existente con fixtures. El perfil de LLM ejecuta una sola tarea de factura sintética con 1 CPU, 1.536 MiB y una concurrencia global; sus herramientas son ficticias y la respuesta en bruto no se persiste.</p>
       {availability.data?.status !== 'ready' && <div className="ai-lab-unavailable"><LockKeyhole size={15} />{availability.data?.reasonCode === 'development_only' ? 'Deshabilitado fuera del entorno de desarrollo.' : 'El worker local no está preparado. No se iniciará ni simulará una evaluación.'}</div>}
       <div className="ai-evaluation-actions">
         <Button onClick={() => void requestLabAssessment('guardian-local-agent-v1')} disabled={!canRun || !garakAvailable || createLabJob.isPending} data-testid="button-run-ai-lab">
           {createLabJob.isPending ? <Activity className="spin" size={15} /> : <ShieldCheck size={15} />}
-          {createLabJob.isPending ? 'Encolando…' : 'Solicitar Garak + GVE'}
+          {createLabJob.isPending ? 'Encolando…' : 'Solicitar evaluación local'}
         </Button>
         <Button variant="outline" onClick={() => void requestLabAssessment('guardian-local-llm-qwen3-0.6b-v1')} disabled={!canRun || !qwenAvailable || createLabJob.isPending} data-testid="button-run-local-llm">
           {createLabJob.isPending ? <Activity className="spin" size={15} /> : <FlaskConical size={15} />}
-          {createLabJob.isPending ? 'Encolando…' : 'Solicitar tarea con Qwen local'}
+          {createLabJob.isPending ? 'Encolando…' : 'Solicitar tarea con LLM local'}
         </Button>
         {!canRun && <small>Solo owner/admin puede iniciar o reintentar.</small>}
         {canRun && !qwenAvailable && <small>Qwen local no disponible: {availability.data?.profiles.find((profile) => profile.profileId === 'guardian-local-llm-qwen3-0.6b-v1')?.reasonCode ?? 'worker_unavailable'}.</small>}

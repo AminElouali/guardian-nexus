@@ -146,7 +146,7 @@ function getLocalLlmArtifactReason(): string | null {
 }
 
 export function getLocalWorkerAvailability(): LocalWorkerAvailability {
-  const disabled = (reasonCode: string) => ({
+  const disabled = (reasonCode: string): LocalWorkerAvailability => ({
     status: "disabled" as const,
     workerVersion: AI_ASSESSMENT_WORKER_VERSION,
     reasonCode,

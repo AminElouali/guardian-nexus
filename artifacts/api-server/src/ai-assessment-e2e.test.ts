@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { once } from "node:events";
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -158,8 +158,22 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolveDelay) => setTimeout(resolveDelay, ms));
 }
 
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(canonicalJson).join(",")}]`;
+  }
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
+
 test(
-  "authenticated request runs Garak and Guardian Verification through queue, tenant persistence, API, and UI contract",
+  "authenticated requests run existing fixtures and real local LLM through tenant queue, persistence, API, and UI",
   { timeout: TIMEOUT_MS },
   async () => {
     const pathA = `/api/workspaces/${workspaceA}/ai-security-assessments/lab/jobs`;
@@ -283,8 +297,10 @@ test(
     assert.equal(persisted.value[0]?.attempts, 1);
     assert.equal(persisted.value[0]?.leaseOwnerId, null);
     assert.equal(persisted.value[0]?.workerSlot, null);
+    const persistedEvidence = persisted.value[0]?.result;
+    assert.ok(persistedEvidence?.engine === "garak");
     assert.equal(
-      persisted.value[0]?.result?.guardianVerification?.suiteEvidenceSha256,
+      persistedEvidence.guardianVerification?.suiteEvidenceSha256,
       (completedRawJob.result as { guardianVerification: { suiteEvidenceSha256: string } })
         .guardianVerification.suiteEvidenceSha256,
     );
@@ -376,6 +392,15 @@ test(
         assert.equal(localJob.result.secretsMounted, false);
         assert.equal(localJob.result.network.networkMode, "docker-network-none");
         assert.ok(/^[a-f0-9]{64}$/.test(localJob.result.evidenceSha256));
+        const rawEvidence = completedLocalRawJob!.result as Record<string, unknown>;
+        const { evidenceSha256, ...unsignedEvidence } = rawEvidence;
+        assert.equal(
+          createHash("sha256")
+            .update(canonicalJson(unsignedEvidence), "utf8")
+            .digest("hex"),
+          evidenceSha256,
+          "persisted local evidence digest is verifiable after API serialization",
+        );
         assert.equal(
           JSON.stringify(localJob.result).includes("Synthetic Vendor"),
           false,

@@ -335,6 +335,34 @@ ALTER POLICY ai_assessment_jobs_update_owner ON public.ai_assessment_jobs
     )
   );
 
+-- Keep the versioned worker profile constraint in sync with the queue policy.
+DO $guardian_profile_migration$
+DECLARE
+  existing_definition text;
+BEGIN
+  SELECT pg_get_constraintdef(oid)
+    INTO existing_definition
+    FROM pg_constraint
+   WHERE conrelid = 'public.ai_assessment_jobs'::regclass
+     AND conname = 'ai_assessment_jobs_profile_check';
+
+  IF existing_definition IS NULL
+     OR position('guardian-local-llm-qwen3-0.6b-v1' IN existing_definition) = 0
+  THEN
+    ALTER TABLE public.ai_assessment_jobs
+      DROP CONSTRAINT IF EXISTS ai_assessment_jobs_profile_check;
+    ALTER TABLE public.ai_assessment_jobs
+      ADD CONSTRAINT ai_assessment_jobs_profile_check
+      CHECK (
+        profile_id IN (
+          'guardian-local-agent-v1',
+          'guardian-local-llm-qwen3-0.6b-v1'
+        )
+      );
+  END IF;
+END
+$guardian_profile_migration$;
+
 ALTER POLICY ai_assessment_jobs_worker_select_queue
   ON public.ai_assessment_jobs
   USING (status IN ('queued', 'running', 'failed'));

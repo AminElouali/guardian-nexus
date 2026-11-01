@@ -28,7 +28,7 @@ test("renders the real API lab response in the authenticated dashboard card", ()
   );
 
   assert.match(markup, /data-testid="ai-lab-real-result"/);
-  assert.match(markup, /LABORATORIO LOCAL/);
+  assert.match(markup, /EVALUACIÓN LOCAL · MOCK Y FIXTURES/);
   assert.match(markup, /Garak 0\.17\.1/);
   assert.match(markup, /Guardian Verification Engine/);
   assert.match(markup, /144/);
@@ -54,7 +54,7 @@ test("renders the real API lab response in the authenticated dashboard card", ()
   );
   assert.match(localMarkup, /data-testid="local-llm-result"/);
   assert.match(localMarkup, /INFERENCIA REAL/);
-  assert.match(localMarkup, /No es function calling nativo/);
+  assert.match(localMarkup, /no es function calling nativo/);
   assert.match(localMarkup, /No disponible para clientes/);
   assert.match(localMarkup, /Qwen\/Qwen3-0\.6B-GGUF/);
 });
