@@ -45,6 +45,48 @@ es una remediación. Son coincidencias de inventario, no prueba de explotación 
 de que cada ruta sea alcanzable. No se aplicaron actualizaciones. La simulación
 local de paquetes no encontró candidatos Trixie para los paquetes afectados.
 
+## Cotejo de los 81 advisories con Debian — 2 de noviembre de 2026
+
+Las 81 coincidencias únicas del escaneo OSV se cotejaron con 81 páginas
+individuales del Debian Security Tracker. El estado del paquete fuente en
+Trixie es `vulnerable` para 79, `undetermined` para una (PAM) y `not affected`
+para una (SQLite). El grupo separado de 26 avisos críticos/altos mantiene 25
+`vulnerable` y uno `undetermined`; no se encontró parche Debian 13/Trixie para
+ese grupo en la captura.
+
+La página de SQLite dice que el código vulnerable nunca estuvo en una versión
+Debian publicada, aunque OSV aún enumera la versión instalada
+`3.46.1-7+deb13u2` explícitamente dentro de sus versiones afectadas. El aviso se mantiene visible como discrepancia de datos:
+no lo contamos como explotación, pero tampoco se borra del resultado OSV sin
+reconciliar su rango de versiones. Los estados del tracker no prueban si la
+función vulnerable es alcanzable desde el worker. De las 81 filas, el nombre de
+paquete fuente coincide entre fuentes en 81/81; la trazabilidad está en la
+matriz JSON, que incluye vectores, versiones, páginas y hashes. Los extracts
+son Markdown recuperado de páginas oficiales, no respuestas firmadas ni bytes
+HTTP originales. La unión valida además el manifiesto del escaneo OSV 2.7.0,
+`XDG_CACHE_HOME`, las opciones offline completas, hashes de bases y códigos de
+salida: scanner 1 por hallazgos, wrapper 0 por ejecución/procedencia verificadas.
+Se reutilizó el escaneo existente; no se volvió a ejecutar OSV porque la imagen
+no cambió.
+
+Artefactos: captura del Tracker
+`generated-artifacts/guardian-ai-assessment-offline/debian-tracker-pages-20261102.json`
+(SHA-256 `60ce709a3cbc27a034c5b03871d112037b8f44c70455f99f2236c4e26f347ed3`);
+matriz OSV/Tracker
+`generated-artifacts/guardian-ai-assessment-offline/debian-tracker-review-20261102.json`
+(SHA-256 `437919d7fe7d26b8246e58b5e21e5d8326d83800a9147c09c72642ad61db2af2`);
+composición CycloneDX
+`generated-artifacts/guardian-ai-assessment-offline/guardian-deployment-composition-sbom.cdx.json`
+(SHA-256 `2602cdf1fcff5a059e49086bf9c2251c536bcef80977faf9b22df7e07852331c`).
+
+Se añadió una composición CycloneDX 1.6 con 139 registros de componentes: 124
+del worker, 13 del runtime Qwen y dos raíces de alcance. No se fusionan
+inventarios ni vulnerabilidades: OSV solo escaneó la imagen worker; el runtime
+Qwen continúa sin escaneo. La composición no es una declaración de imagen
+limpia ni una aprobación legal. La discrepancia de licencia de `langdetect`,
+la revisión de licencias nativas y la reproducibilidad bit-a-bit permanecen
+pendientes.
+
 ## Comparación de base Trixie slim — 2 de noviembre de 2026
 
 Se comprobó una imagen temporal basada en Debian 13 Trixie slim, copiando el

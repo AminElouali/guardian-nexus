@@ -1031,3 +1031,62 @@ passed. The failure was in the inventory verifier, not in the wheel or runtime.
   cambiaron. La SBOM del worker no sustituye al inventario nativo local adjunto.
   Las condiciones de compatibilidad fuera del hardware x86_64 configurado
   tampoco se probaron.
+
+## Cotejo de los 81 IDs con Debian y SBOM de composición — 2026-11-02
+
+Se añadió un generador offline reproducible que coteja el JSON OSV ya guardado
+con una captura de páginas individuales del Debian Security Tracker. No descarga
+datos al worker ni usa la red del contenedor. Las páginas fueron obtenidas del
+dominio oficial; el bundle conserva Markdown extraído, no bytes HTTP originales
+ni respuestas firmadas. El hash corresponde exactamente a esos extracts.
+
+Resultados verificados:
+
+- Los 81 IDs del escaneo tienen página Tracker individual con fila explícita
+  Trixie; los nombres de paquete fuente OSV y Debian coinciden en 81/81.
+- El estado Trixie por advisory es: 79 `vulnerable`, uno `undetermined`
+  (`CVE-2025-8941`, PAM) y uno `not affected` (`CVE-2026-39113`, SQLite).
+  El Tracker dice que el código vulnerable de SQLite nunca estuvo en una
+  versión Debian publicada. OSV lista explícitamente `3.46.1-7+deb13u2` entre
+  las versiones afectadas de `sqlite3`, y la imagen contiene esa misma versión.
+  Esto se registra como discrepancia
+  OSV/Tracker que requiere reconciliación; el ID permanece en el resultado OSV,
+  no se suprime ni se cuenta como explotación confirmada.
+- Dentro del conjunto crítico/alto de 26 IDs, el Tracker muestra 25 `vulnerable`
+  y uno `undetermined`; no se encontró parche de Debian 13/Trixie para ese grupo
+  al momento de la captura. Los fixes de unstable/forky/sid no son parches
+  aplicables a esta imagen Trixie.
+- Estos estados describen el estado de paquetes por suite. No prueban
+  explotabilidad, entrada controlable ni alcanzabilidad de código. La matriz de
+  llamadas para 26 críticos/altos sigue siendo estática; las otras 55 rutas no
+  se trazaron individualmente. No se aplicó corrección ni se reconstruyó la
+  imagen.
+
+Artefactos nuevos en
+`generated-artifacts/guardian-ai-assessment-offline/`:
+
+- `debian-tracker-pages-20261102.json`: 81 extractos y URL oficial por CVE;
+  SHA-256 `60ce709a3cbc27a034c5b03871d112037b8f44c70455f99f2236c4e26f347ed3`.
+- `debian-tracker-review-20261102.json`: unión OSV/Tracker con paquetes y
+  versiones observadas, vectores CVSS disponibles, estado Trixie, filas de fix,
+  hashes de página y límites de alcance; también valida manifest OSV 2.7.0,
+  `XDG_CACHE_HOME`, opciones completas, image ID, hashes DB y códigos scanner 1 /
+  wrapper 0; SHA-256
+  `437919d7fe7d26b8246e58b5e21e5d8326d83800a9147c09c72642ad61db2af2`.
+- `guardian-deployment-composition-sbom.cdx.json`: composición CycloneDX 1.6
+  de los 124 componentes del worker y los 13 componentes del runtime Qwen, más
+  las dos raíces de alcance (139 registros de componentes en total). El grafo
+  tiene 140 referencias únicas contando la raíz de la composición y ninguna
+  referencia sin resolver; SHA-256
+  `2602cdf1fcff5a059e49086bf9c2251c536bcef80977faf9b22df7e07852331c`.
+  Se conservan los componentes duplicados por alcance en vez de aplanar
+  inventarios. La propiedad de alcance indica que el escaneo OSV cubre solo la
+  imagen worker; el runtime Qwen sigue sin escanear. La composición no declara
+  que el conjunto esté libre de vulnerabilidades ni tiene aprobación legal.
+  La prueba comprueba conteos y resolución de referencias, pero no se ejecutó un
+  validador externo del esquema CycloneDX.
+
+Pruebas nuevas: parser/procedencia Debian 7/7, composición SBOM 2/2,
+procedencia OSV 8/8 y SBOM local Qwen 2/2. El generador produjo 81/81 registros y 81/81 cruces de
+paquete fuente. Ver `MVP_CHECKPOINT.md` para el estado del producto y límites de
+login, licencias y aislamiento de red.

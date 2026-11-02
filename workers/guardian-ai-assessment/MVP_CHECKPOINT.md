@@ -1,8 +1,72 @@
 # Guardian Nexus MVP checkpoint
 
-Updated: 2026-11-02 — provenance verifier, mounted-runtime SBOM, egress and report checks
+Updated: 2026-11-02 — 81-ID Debian reconciliation, composed inventory and regression checks
 Scope: development/local laboratory only. No customer systems, external model APIs,
 paid services, production database, remote deployment, or publishing.
+
+## Revisión incremental de los 81 advisories y SBOM de composición — 2026-11-02
+
+- Inicio en `f1c79cad1901d93876cc62d645fddcd7cc9a2eda`, árbol limpio. Se
+  añadieron generadores y pruebas locales; el trabajo no modificó la API, la
+  base de datos, RBAC/RLS, Clerk, el worker ejecutable ni la imagen.
+  HEAD permanece en ese commit; los tres documentos de auditoría/checkpoint y
+  los dos scripts y dos tests listados abajo quedan como cambios sin commit.
+- Se cotejaron los 81 IDs del JSON OSV offline con páginas individuales del
+  Debian Security Tracker. Las 81 páginas contienen una fila Trixie y los 81
+  nombres de paquete fuente coinciden entre OSV y Tracker. El estado del
+  Tracker a 2026-11-02 queda: 79 `vulnerable`, 1 `undetermined`
+  (`CVE-2025-8941`) y 1 `not affected` (`CVE-2026-39113`). La página de este
+  último indica que el código vulnerable nunca estuvo en una versión Debian
+  publicada; el JSON OSV lista explícitamente `sqlite3 3.46.1-7+deb13u2` entre
+  las versiones afectadas y la imagen tiene esa versión. Se conserva el match y
+  se marca la discrepancia para reconciliación; no se borra como falso positivo
+  ni se declara explotación.
+- Para el conjunto crítico/alto ya triageado, las páginas oficiales siguen
+  indicando 25 Trixie `vulnerable` y una `undetermined` (PAM); no se halló un
+  parche Trixie para esos 26. Tracker y versión no demuestran alcanzabilidad:
+  la matriz de rutas sigue siendo análisis estático y no una prueba de exploit.
+- Captura de extracts Markdown de `webFetch` (no bytes HTTP originales ni
+  respuesta firmada): 81 páginas. Bundle SHA-256
+  `60ce709a3cbc27a034c5b03871d112037b8f44c70455f99f2236c4e26f347ed3`.
+  Matriz JSON offline SHA-256
+  `437919d7fe7d26b8246e58b5e21e5d8326d83800a9147c09c72642ad61db2af2`.
+  La matriz vuelve a validar el manifiesto OSV (2.7.0, `XDG_CACHE_HOME`,
+  hashes de ambas DB, imagen, opciones completas y exit codes scanner 1 /
+  wrapper 0), además de los hashes de páginas. El generador falla ante
+  procedencia incorrecta, hash de página inválido, página/ID faltante, falta
+  de fila Trixie o conjunto de IDs diferente del escaneo local.
+- SBOM de composición CycloneDX 1.6: 139 registros en `components` (124 del
+  worker + 13 del runtime Qwen + 2 raíces de alcance), referencias únicas y
+  grafo de dependencias resuelto. Hash
+  `2602cdf1fcff5a059e49086bf9c2251c536bcef80977faf9b22df7e07852331c`.
+  Conserva los inventarios separados: OSV cubre el worker solamente; el runtime
+  Qwen no tiene escaneo de vulnerabilidades. No es un SBOM de análisis único ni
+  aprobación legal. El generador valida conteos y referencias del grafo; no se
+  ejecutó un validador externo del esquema CycloneDX.
+- Verificación local: tests Debian Tracker 7/7, composición SBOM 2/2,
+  procedencia OSV 8/8 y SBOM Qwen 2/2 (19/19). La primera ejecución de la prueba
+  de composición falló por una expectativa de conteo incorrecta (4 en lugar de
+  139); corregido el test y repetido, pasó. Los comandos exactos están en
+  `generated-artifacts/guardian-ai-assessment-offline/commands-20261102.txt`;
+  los logs, comandos y manifiesto SHA-256 de esta ampliación están en
+  `generated-artifacts/guardian-ai-assessment-offline/supply-chain-extension-20261102/`;
+  los nuevos JSON están en el directorio de artefactos ignorado por Git.
+- Regresión tras los cambios: suite worker en la imagen vigente con
+  `--network=none`, límites y filesystem de solo lectura: 64/64; API 34/34
+  (incluye pruebas tenant/RLS/RBAC/idempotencia); componente de informe v3 5/5;
+  typecheck frontend pasó; build Vite pasó con el aviso ya conocido de
+  sourcemap de `tooltip.tsx` y chunk JS de 649 kB. No se ejecutó E2E con
+  PostgreSQL: no hubo cambios de API/DB y la prueba crea tenants/jobs de
+  desarrollo. No se hizo validación visual ni login Clerk en navegador.
+- No se reconstruyó ni escaneó otra vez la imagen: no cambiaron sus paquetes.
+  Se conservan los resultados previos OSV 177/81, 1 crítico/25 altos, sin
+  remediación. No se alteraron las pruebas egress ya registradas: IPv4 TCP/UDP
+  y DNS bloqueados, loopback IPv4 alcanzable; IPv6 sigue
+  `kernel_protocol_unavailable` / **NO VERIFICADO**.
+- La licencia `langdetect` continúa ambigua. No se probó una sesión Clerk real
+  en navegador ni descarga autenticada en este hito; los tests previos de
+  componente no reemplazan esa validación. No se hizo login, no se usaron
+  credenciales y no hubo cambios en producción.
 
 ## Verificación incremental de supply chain, egress y reporte v3 — 2026-11-02
 
