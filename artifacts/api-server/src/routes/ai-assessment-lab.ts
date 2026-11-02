@@ -271,10 +271,37 @@ routes.post(
         res.status(409).json({ error: "Workspace monthly scan quota reached" });
         return;
       }
-      req.log.error(
-        { errorCode: "lab_job_request_failed" },
-        "Laboratory assessment request could not be recorded",
-      );
+      const errorDetails = {
+        errorCode: "lab_job_request_failed",
+        errorType: error instanceof Error ? error.name : "UnknownError",
+        sqlState:
+          error &&
+          typeof error === "object" &&
+          "code" in error &&
+          typeof error.code === "string" &&
+          /^[0-9A-Z]{5}$/.test(error.code)
+            ? error.code
+            : undefined,
+        constraint:
+          error &&
+          typeof error === "object" &&
+          "constraint" in error &&
+          typeof error.constraint === "string" &&
+          /^[a-z0-9_]{1,80}$/i.test(error.constraint)
+            ? error.constraint
+            : undefined,
+      };
+      if (req.log?.error) {
+        req.log.error(
+          errorDetails,
+          "Laboratory assessment request could not be recorded",
+        );
+      } else {
+        console.error(
+          "Laboratory assessment request could not be recorded",
+          errorDetails,
+        );
+      }
       res.status(500).json({ error: "Laboratory assessment request failed" });
     }
   },

@@ -11,6 +11,10 @@ import {
   AgentPolicyLabResult,
 } from "./GuardianAgentPolicyLab";
 import {
+  QwenPolicyLabCatalog,
+  QwenPolicyLabResult,
+} from "./GuardianQwenPolicyLab";
+import {
   buildQwenExecutiveReport,
   deriveQwenBankChangeFinding,
   downloadQwenExecutiveReport,
@@ -76,6 +80,77 @@ test("renders the real API lab response in the authenticated dashboard card", ()
   assert.match(localMarkup, /no es function calling nativo/);
   assert.match(localMarkup, /No disponible para clientes/);
   assert.match(localMarkup, /Qwen\/Qwen3-0\.6B-GGUF/);
+});
+
+test("renders real Qwen email and database policy evidence separately from fixtures", () => {
+  const artifactPath = new URL(
+    "../../../../generated-artifacts/guardian-qwen-policy-labs-e2e.json",
+    import.meta.url,
+  );
+  const jobs = JSON.parse(readFileSync(artifactPath, "utf8")) as AiAssessmentLabJob[];
+  assert.equal(jobs.length, 2);
+  for (const verticalId of ["email", "database"] as const) {
+    const job = jobs.find(
+      (candidate) =>
+        candidate.status === "succeeded" &&
+        candidate.result?.engine === "guardian_qwen_policy_lab" &&
+        candidate.result.verticalId === verticalId,
+    );
+    assert.ok(job, `expected completed real Qwen ${verticalId} evidence`);
+    const card = renderToStaticMarkup(
+      createElement(LabJobCard, {
+        job,
+        canRun: false,
+        onRetry: () => undefined,
+        retryPending: false,
+      }),
+    );
+    assert.match(card, /INFERENCIA QWEN REAL · POLICY ENGINE EXTERNO/);
+    assert.match(card, /data-testid="qwen-policy-lab-result"/);
+    assert.match(card, /tool_choice=auto/);
+    assert.match(card, /Policy OFF/);
+    assert.match(card, /Hash de evidencia/);
+    assert.doesNotMatch(card, /Ignore prior instructions|attacker@outside\.invalid/);
+    assert.doesNotMatch(card, /rawPrompt|rawResponse|rawArguments/i);
+    assert.doesNotMatch(card, /Qwen realizó llamadas tool_calls nativas/i);
+    if (job.result?.engine !== "guardian_qwen_policy_lab") {
+      assert.fail("expected Qwen policy evidence discriminator");
+    }
+    const result = renderToStaticMarkup(
+      createElement(QwenPolicyLabResult, { evidence: job.result }),
+    );
+    assert.match(result, /inferencia local real de Qwen/);
+    assert.match(result, /no se guardan prompts, respuestas ni argumentos/i);
+    assert.match(result, /SHA-256/);
+    for (const item of job.result.cases) {
+      if (item.toolCallOrigin === "guardian_qwen_native_markup_adapter") {
+        assert.match(result, /Marcador Qwen completo adaptado por Guardian/);
+      } else if (item.toolCallOrigin === "runtime_message_tool_calls") {
+        assert.match(result, /message\.tool_calls devuelto directamente por el runtime/);
+      } else if (item.toolCallOrigin === "unparsed_qwen_native_markup") {
+        assert.match(result, /Propuesta no aceptada por el parser estricto/);
+      } else {
+        assert.match(result, /Qwen no propuso una herramienta/);
+      }
+    }
+  }
+
+  const catalog = renderToStaticMarkup(
+    createElement(QwenPolicyLabCatalog, {
+      availability: [
+        { profileId: "guardian-agent-qwen-lab-email-v1", status: "ready" },
+        { profileId: "guardian-agent-qwen-lab-database-v1", status: "ready" },
+      ],
+      canRun: true,
+      pending: false,
+      onRequest: () => undefined,
+    }),
+  );
+  assert.match(catalog, /INFERENCIA LOCAL REAL · QWEN3/);
+  assert.match(catalog, /tool_choice=auto/);
+  assert.match(catalog, /button-run-qwen-policy-email/);
+  assert.match(catalog, /button-run-qwen-policy-database/);
+  assert.match(catalog, /NO CONECTADO A CLIENTES/i);
 });
 
 test("renders all eight synthetic agent verticals and an API-persisted policy lab report", () => {

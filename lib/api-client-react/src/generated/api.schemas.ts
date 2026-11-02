@@ -351,6 +351,8 @@ export const AiAssessmentLabProfileAvailabilityProfileId = {
   'guardian-agent-lab-browser-v1': 'guardian-agent-lab-browser-v1',
   'guardian-agent-lab-infrastructure-v1': 'guardian-agent-lab-infrastructure-v1',
   'guardian-agent-lab-multiagent-v1': 'guardian-agent-lab-multiagent-v1',
+  'guardian-agent-qwen-lab-email-v1': 'guardian-agent-qwen-lab-email-v1',
+  'guardian-agent-qwen-lab-database-v1': 'guardian-agent-qwen-lab-database-v1',
 } as const;
 
 export type AiAssessmentLabProfileAvailabilityEngine = typeof AiAssessmentLabProfileAvailabilityEngine[keyof typeof AiAssessmentLabProfileAvailabilityEngine];
@@ -360,6 +362,7 @@ export const AiAssessmentLabProfileAvailabilityEngine = {
   garak: 'garak',
   local_llm_lab: 'local_llm_lab',
   guardian_policy_lab: 'guardian_policy_lab',
+  guardian_qwen_policy_lab: 'guardian_qwen_policy_lab',
 } as const;
 
 export type AiAssessmentLabProfileAvailabilityStatus = typeof AiAssessmentLabProfileAvailabilityStatus[keyof typeof AiAssessmentLabProfileAvailabilityStatus];
@@ -403,6 +406,8 @@ export const AiAssessmentLabJobRequestProfileId = {
   'guardian-agent-lab-browser-v1': 'guardian-agent-lab-browser-v1',
   'guardian-agent-lab-infrastructure-v1': 'guardian-agent-lab-infrastructure-v1',
   'guardian-agent-lab-multiagent-v1': 'guardian-agent-lab-multiagent-v1',
+  'guardian-agent-qwen-lab-email-v1': 'guardian-agent-qwen-lab-email-v1',
+  'guardian-agent-qwen-lab-database-v1': 'guardian-agent-qwen-lab-database-v1',
 } as const;
 
 export interface AiAssessmentLabJobRequest {
@@ -440,6 +445,8 @@ export const AiAssessmentLabJobProfileId = {
   'guardian-agent-lab-browser-v1': 'guardian-agent-lab-browser-v1',
   'guardian-agent-lab-infrastructure-v1': 'guardian-agent-lab-infrastructure-v1',
   'guardian-agent-lab-multiagent-v1': 'guardian-agent-lab-multiagent-v1',
+  'guardian-agent-qwen-lab-email-v1': 'guardian-agent-qwen-lab-email-v1',
+  'guardian-agent-qwen-lab-database-v1': 'guardian-agent-qwen-lab-database-v1',
 } as const;
 
 export type AiAssessmentEvidenceSource = typeof AiAssessmentEvidenceSource[keyof typeof AiAssessmentEvidenceSource];
@@ -3184,6 +3191,248 @@ export interface GuardianAgentPolicyLabEvidence {
   evidenceSha256: string;
 }
 
+export type GuardianQwenPolicyLabEvidenceProfileId = typeof GuardianQwenPolicyLabEvidenceProfileId[keyof typeof GuardianQwenPolicyLabEvidenceProfileId];
+
+
+export const GuardianQwenPolicyLabEvidenceProfileId = {
+  'guardian-agent-qwen-lab-email-v1': 'guardian-agent-qwen-lab-email-v1',
+  'guardian-agent-qwen-lab-database-v1': 'guardian-agent-qwen-lab-database-v1',
+} as const;
+
+export type GuardianQwenPolicyLabEvidenceVerticalId = typeof GuardianQwenPolicyLabEvidenceVerticalId[keyof typeof GuardianQwenPolicyLabEvidenceVerticalId];
+
+
+export const GuardianQwenPolicyLabEvidenceVerticalId = {
+  email: 'email',
+  database: 'database',
+} as const;
+
+export type GuardianQwenPolicyLabEvidenceCasesItemLabel = typeof GuardianQwenPolicyLabEvidenceCasesItemLabel[keyof typeof GuardianQwenPolicyLabEvidenceCasesItemLabel];
+
+
+export const GuardianQwenPolicyLabEvidenceCasesItemLabel = {
+  benign: 'benign',
+  adversarial: 'adversarial',
+} as const;
+
+export type GuardianQwenPolicyLabEvidenceCasesItemLanguage = typeof GuardianQwenPolicyLabEvidenceCasesItemLanguage[keyof typeof GuardianQwenPolicyLabEvidenceCasesItemLanguage];
+
+
+export const GuardianQwenPolicyLabEvidenceCasesItemLanguage = {
+  en: 'en',
+  es: 'es',
+} as const;
+
+export type GuardianQwenPolicyLabEvidenceCasesItemToolCallOrigin = typeof GuardianQwenPolicyLabEvidenceCasesItemToolCallOrigin[keyof typeof GuardianQwenPolicyLabEvidenceCasesItemToolCallOrigin];
+
+
+export const GuardianQwenPolicyLabEvidenceCasesItemToolCallOrigin = {
+  guardian_qwen_native_markup_adapter: 'guardian_qwen_native_markup_adapter',
+  unparsed_qwen_native_markup: 'unparsed_qwen_native_markup',
+  runtime_message_tool_calls: 'runtime_message_tool_calls',
+  no_tool_call: 'no_tool_call',
+} as const;
+
+export type GuardianQwenPolicyLabEvidenceCasesItemDecision = typeof GuardianQwenPolicyLabEvidenceCasesItemDecision[keyof typeof GuardianQwenPolicyLabEvidenceCasesItemDecision];
+
+
+export const GuardianQwenPolicyLabEvidenceCasesItemDecision = {
+  allow: 'allow',
+  deny: 'deny',
+  require_approval: 'require_approval',
+  no_proposal: 'no_proposal',
+} as const;
+
+export type GuardianQwenPolicyLabEvidenceCasesItemDispatchStatus = typeof GuardianQwenPolicyLabEvidenceCasesItemDispatchStatus[keyof typeof GuardianQwenPolicyLabEvidenceCasesItemDispatchStatus];
+
+
+export const GuardianQwenPolicyLabEvidenceCasesItemDispatchStatus = {
+  not_invoked: 'not_invoked',
+  simulated_execution: 'simulated_execution',
+  blocked_by_policy_before_dispatch: 'blocked_by_policy_before_dispatch',
+  approval_required_before_dispatch: 'approval_required_before_dispatch',
+  blocked_by_adapter_validation: 'blocked_by_adapter_validation',
+  blocked_by_parser: 'blocked_by_parser',
+} as const;
+
+export type GuardianQwenPolicyLabEvidenceCasesItemToolEventsItemPhase = typeof GuardianQwenPolicyLabEvidenceCasesItemToolEventsItemPhase[keyof typeof GuardianQwenPolicyLabEvidenceCasesItemToolEventsItemPhase];
+
+
+export const GuardianQwenPolicyLabEvidenceCasesItemToolEventsItemPhase = {
+  authorization_attempt: 'authorization_attempt',
+  denied: 'denied',
+  executed: 'executed',
+} as const;
+
+export type GuardianQwenPolicyLabEvidenceCasesItemToolEventsItemAuthorization = typeof GuardianQwenPolicyLabEvidenceCasesItemToolEventsItemAuthorization[keyof typeof GuardianQwenPolicyLabEvidenceCasesItemToolEventsItemAuthorization];
+
+
+export const GuardianQwenPolicyLabEvidenceCasesItemToolEventsItemAuthorization = {
+  not_checked: 'not_checked',
+  allowed: 'allowed',
+  denied: 'denied',
+} as const;
+
+export type GuardianQwenPolicyLabEvidenceAgentIdentity = {
+  /** @maxLength 100 */
+  agentId: string;
+  agentType: 'local_qwen_agent';
+  actorId: 'SYNTHETIC-LAB-OPERATOR';
+  tenantContext: 'SYNTHETIC-WORKSPACE';
+  /**
+     * @maxItems 8
+     * @items.maxLength 80
+     */
+  permissions: string[];
+};
+
+export type GuardianQwenPolicyLabEvidenceVersions = {
+  policy: 'guardian-policy-engine-synthetic-v2';
+  toolAdapter: 'guardian-synthetic-tool-adapter-v1';
+  corpus: 'guardian-qwen-policy-lab-en-es-v1';
+  /** @maxLength 100 */
+  modelRuntime: string;
+  toolMarkupAdapter: 'guardian-qwen-native-markup-v1';
+};
+
+export type GuardianQwenPolicyLabEvidenceProvider = {
+  id: 'local_qwen_gguf';
+  /** @maxLength 160 */
+  modelId: string;
+  /** @maxLength 80 */
+  revision: string;
+  /** @maxLength 120 */
+  file: string;
+  /** @pattern ^[a-f0-9]{64}$ */
+  sha256: string;
+  /** @maxLength 40 */
+  quantization: string;
+  /** @maxLength 100 */
+  runtime: string;
+  /** @maxLength 40 */
+  runtimeVersion: string;
+  /** @pattern ^[a-f0-9]{64}$ */
+  chatTemplateSha256: string;
+  toolChoice: 'auto';
+};
+
+export type GuardianQwenPolicyLabEvidenceNetwork = { [key: string]: unknown };
+
+export type GuardianQwenPolicyLabEvidenceLimits = { [key: string]: unknown };
+
+export type GuardianQwenPolicyLabEvidenceCasesItemToolEventsItem = {
+  phase: GuardianQwenPolicyLabEvidenceCasesItemToolEventsItemPhase;
+  authorization: GuardianQwenPolicyLabEvidenceCasesItemToolEventsItemAuthorization;
+  executed: boolean;
+  simulatedOnly: true;
+  externalSideEffect: false;
+  /** @pattern ^[a-f0-9]{64}$ */
+  argumentsSha256: string;
+  /** @maxLength 100 */
+  resultCode: string;
+};
+
+export type GuardianQwenPolicyLabEvidenceCasesItemPolicyOff = {
+  mode: 'counterfactual_clone_only';
+  wouldExecute: boolean;
+  executed: false;
+  /** @pattern ^[a-f0-9]{64}$ */
+  stateBeforeSha256: string;
+  /** @pattern ^[a-f0-9]{64}$ */
+  stateAfterSha256: string;
+};
+
+export type GuardianQwenPolicyLabEvidenceCasesItem = {
+  /** @maxLength 100 */
+  caseId: string;
+  label: GuardianQwenPolicyLabEvidenceCasesItemLabel;
+  language: GuardianQwenPolicyLabEvidenceCasesItemLanguage;
+  /** @pattern ^[a-f0-9]{64}$ */
+  promptSha256: string;
+  toolChoice: 'auto';
+  /** @maxLength 32 */
+  finishReason: string;
+  toolCallOrigin: GuardianQwenPolicyLabEvidenceCasesItemToolCallOrigin;
+  /**
+     * @minimum 0
+     * @maximum 16
+     */
+  toolCallCount: number;
+  /**
+     * @maxLength 100
+     * @nullable
+     */
+  proposedTool: string | null;
+  /**
+     * @nullable
+     * @pattern ^[a-f0-9]{64}$
+     */
+  proposalSha256: string | null;
+  decision: GuardianQwenPolicyLabEvidenceCasesItemDecision;
+  /** @maxLength 80 */
+  reasonCode: string;
+  dispatchStatus: GuardianQwenPolicyLabEvidenceCasesItemDispatchStatus;
+  /** @maxItems 2 */
+  toolEvents: GuardianQwenPolicyLabEvidenceCasesItemToolEventsItem[];
+  /** @pattern ^[a-f0-9]{64}$ */
+  policyOnStateBeforeSha256: string;
+  /** @pattern ^[a-f0-9]{64}$ */
+  policyOnStateAfterSha256: string;
+  policyOff: GuardianQwenPolicyLabEvidenceCasesItemPolicyOff;
+  unauthorizedActionExecuted: false;
+  rawPromptStored: false;
+  rawResponseStored: false;
+  rawArgumentsStored: false;
+  /** @pattern ^[a-f0-9]{64}$ */
+  caseEvidenceSha256: string;
+};
+
+export type GuardianQwenPolicyLabEvidenceSummary = {[key: string]: number};
+
+export type GuardianQwenPolicyLabEvidenceSelfChecks = {
+  allCallsUsedAuto: true;
+  noForcedToolSelection: true;
+  onlyRealLocalQwenInference: true;
+  policyBeforeDispatch: true;
+  deniedCallsNeverDispatched: true;
+  policyOffCloneOnly: true;
+  noRawPromptsResponsesOrArguments: true;
+};
+
+export interface GuardianQwenPolicyLabEvidence {
+  evidenceVersion: 1;
+  source: 'qwen_local_policy_lab';
+  engine: 'guardian_qwen_policy_lab';
+  engineVersion: 'guardian-agent-qwen-policy-lab-v1';
+  profileId: GuardianQwenPolicyLabEvidenceProfileId;
+  verticalId: GuardianQwenPolicyLabEvidenceVerticalId;
+  executionMode: 'real_local_qwen_inference';
+  proposalOriginScope: 'qwen_marker_adapter_or_runtime_tool_calls_only';
+  agentIdentity: GuardianQwenPolicyLabEvidenceAgentIdentity;
+  versions: GuardianQwenPolicyLabEvidenceVersions;
+  provider: GuardianQwenPolicyLabEvidenceProvider;
+  network: GuardianQwenPolicyLabEvidenceNetwork;
+  limits: GuardianQwenPolicyLabEvidenceLimits;
+  /**
+     * @minItems 2
+     * @maxItems 2
+     */
+  cases: GuardianQwenPolicyLabEvidenceCasesItem[];
+  summary: GuardianQwenPolicyLabEvidenceSummary;
+  selfChecks: GuardianQwenPolicyLabEvidenceSelfChecks;
+  startedAt: string;
+  completedAt: string;
+  /**
+     * @minimum 0
+     * @maximum 180
+     */
+  durationSeconds: number;
+  /** @maxLength 1000 */
+  interpretation: string;
+  /** @pattern ^[a-f0-9]{64}$ */
+  evidenceSha256: string;
+}
+
 export interface AiAssessmentLabJob {
   id: string;
   status: AiAssessmentLabJobStatus;
@@ -3192,7 +3441,7 @@ export interface AiAssessmentLabJob {
   attempts: number;
   /** @nullable */
   engineVersion: string | null;
-  result: AiAssessmentEvidence | GuardianLocalLlmEvidence | GuardianLocalLlmNativeToolSuiteEvidence | GuardianLocalLlmAutonomousToolSelectionEvidence | GuardianAgentPolicyLabEvidence | null;
+  result: AiAssessmentEvidence | GuardianLocalLlmEvidence | GuardianLocalLlmNativeToolSuiteEvidence | GuardianLocalLlmAutonomousToolSelectionEvidence | GuardianAgentPolicyLabEvidence | GuardianQwenPolicyLabEvidence | null;
   /** @nullable */
   errorCode: string | null;
   createdAt: string;

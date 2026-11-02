@@ -12,6 +12,7 @@ import type { GuardianAgentPolicyLabEvidence } from './guardianAgentPolicyLabEvi
 import type { GuardianLocalLlmAutonomousToolSelectionEvidence } from './guardianLocalLlmAutonomousToolSelectionEvidence';
 import type { GuardianLocalLlmEvidence } from './guardianLocalLlmEvidence';
 import type { GuardianLocalLlmNativeToolSuiteEvidence } from './guardianLocalLlmNativeToolSuiteEvidence';
+import type { GuardianQwenPolicyLabEvidence } from './guardianQwenPolicyLabEvidence';
 
 export interface AiAssessmentLabJob {
   id: string;
@@ -21,7 +22,7 @@ export interface AiAssessmentLabJob {
   attempts: number;
   /** @nullable */
   engineVersion: string | null;
-  result: AiAssessmentEvidence | GuardianLocalLlmEvidence | GuardianLocalLlmNativeToolSuiteEvidence | GuardianLocalLlmAutonomousToolSelectionEvidence | GuardianAgentPolicyLabEvidence | null;
+  result: AiAssessmentEvidence | GuardianLocalLlmEvidence | GuardianLocalLlmNativeToolSuiteEvidence | GuardianLocalLlmAutonomousToolSelectionEvidence | GuardianAgentPolicyLabEvidence | GuardianQwenPolicyLabEvidence | null;
   /** @nullable */
   errorCode: string | null;
   createdAt: Date;

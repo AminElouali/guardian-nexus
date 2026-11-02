@@ -1029,7 +1029,7 @@ export type GuardianQwenPolicyLabEvidence = {
       | "unparsed_qwen_native_markup"
       | "runtime_message_tool_calls"
       | "no_tool_call";
-    toolCallCount: 0 | 1;
+    toolCallCount: number;
     proposedTool: string | null;
     proposalSha256: string | null;
     decision: "allow" | "deny" | "require_approval" | "no_proposal";

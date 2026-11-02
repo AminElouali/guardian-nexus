@@ -276,6 +276,7 @@ def _one_case(
         if not valid_arguments:
             origin = "unparsed_qwen_native_markup"
             reason = "tool_arguments_invalid"
+            dispatch = "blocked_by_parser"
         else:
             proposal_hash = _digest(
                 {"caseId": case["caseId"], "tool": tool_name, "argumentsSha256": argument_hash}

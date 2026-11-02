@@ -1519,7 +1519,7 @@ components:
               toolChoice: { type: string, const: auto }
               finishReason: { type: string, maxLength: 32 }
               toolCallOrigin: { type: string, enum: [guardian_qwen_native_markup_adapter, unparsed_qwen_native_markup, runtime_message_tool_calls, no_tool_call] }
-              toolCallCount: { type: integer, minimum: 0, maximum: 1 }
+              toolCallCount: { type: integer, minimum: 0, maximum: 16 }
               proposedTool: { type: ["string", "null"], maxLength: 100 }
               proposalSha256: { type: ["string", "null"], pattern: "^[a-f0-9]{64}$" }
               decision: { type: string, enum: [allow, deny, require_approval, no_proposal] }

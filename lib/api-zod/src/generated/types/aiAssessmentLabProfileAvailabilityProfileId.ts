@@ -22,4 +22,6 @@ export const AiAssessmentLabProfileAvailabilityProfileId = {
   'guardian-agent-lab-browser-v1': 'guardian-agent-lab-browser-v1',
   'guardian-agent-lab-infrastructure-v1': 'guardian-agent-lab-infrastructure-v1',
   'guardian-agent-lab-multiagent-v1': 'guardian-agent-lab-multiagent-v1',
+  'guardian-agent-qwen-lab-email-v1': 'guardian-agent-qwen-lab-email-v1',
+  'guardian-agent-qwen-lab-database-v1': 'guardian-agent-qwen-lab-database-v1',
 } as const;

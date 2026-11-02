@@ -24,6 +24,10 @@ import {
   AgentPolicyLabCatalog,
   AgentPolicyLabResult,
 } from './GuardianAgentPolicyLab';
+import {
+  QwenPolicyLabCatalog,
+  QwenPolicyLabResult,
+} from './GuardianQwenPolicyLab';
 
 const reasonLabels: Record<string, string> = {
   mock_refused_untrusted_instruction: 'El fixture rechazó una instrucción no confiable',
@@ -713,6 +717,8 @@ export function LabJobCard({
       : null;
   const policyLabEvidence =
     evidence?.engine === 'guardian_policy_lab' ? evidence : null;
+  const qwenPolicyLabEvidence =
+    evidence?.engine === 'guardian_qwen_policy_lab' ? evidence : null;
   return <article className="ai-evaluation-run" data-testid="ai-lab-job">
     <div className="ai-evaluation-run-head">
       <div>
@@ -725,6 +731,8 @@ export function LabJobCard({
             ? 'LLM REAL · TOOL CALLS NATIVAS'
             : job.profileId === 'guardian-local-llm-qwen3-0.6b-v1'
             ? 'INFERENCIA REAL · LLM LOCAL'
+            : job.profileId.startsWith('guardian-agent-qwen-lab-')
+            ? 'INFERENCIA QWEN REAL · POLICY ENGINE EXTERNO'
             : 'EVALUACIÓN LOCAL · MOCK Y FIXTURES'}
         </span>
         <h3>{labStatusLabels[job.status]}</h3>
@@ -755,6 +763,7 @@ export function LabJobCard({
     {localLlmEvidence && <LocalLlmResult evidence={localLlmEvidence} />}
     {nativeToolEvidence && <NativeToolSuiteResult evidence={nativeToolEvidence} job={job} />}
     {policyLabEvidence && <AgentPolicyLabResult evidence={policyLabEvidence} />}
+    {qwenPolicyLabEvidence && <QwenPolicyLabResult evidence={qwenPolicyLabEvidence} />}
     {job.status === 'failed' && <p className="ai-lab-error">No se completó la evaluación. Código: {job.errorCode ?? 'worker_failed'}. No se guardaron salidas del agente.</p>}
     {canRun && job.status === 'failed' && job.attempts < 2 && <Button variant="outline" onClick={() => onRetry(job.id)} disabled={retryPending} data-testid="button-retry-ai-lab">
       {retryPending ? 'Reintentando…' : 'Reintentar una vez'}
@@ -840,7 +849,7 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
       <div>
         <div className="eyebrow">GUARDIAN AI SECURITY ASSESSMENT · LABORATORIO</div>
         <h1>Evaluación de Seguridad de IA</h1>
-        <p>Los ocho laboratorios de verticales usan propuestas fixture y un Policy Engine determinista, separados de la inferencia real de Qwen y Garak. Ninguno está habilitado como servicio para clientes.</p>
+        <p>Los ocho perfiles de verticales conservan su baseline de fixtures deterministas. Correo y bases de datos tienen además perfiles separados con inferencia local real de Qwen y Policy Engine; ninguno está conectado a sistemas empresariales ni habilitado como servicio para clientes.</p>
       </div>
       <span className="ai-evaluation-badge"><FlaskConical size={14} /> LABORATORIO INTERNO</span>
     </div>
@@ -857,9 +866,15 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
         <div><span className="panel-kicker">EJECUCIONES LOCALES · DESARROLLO</span><h2>Laboratorio aislado</h2></div>
         <span className={`ai-evaluation-state ${availability.data?.status === 'ready' ? '' : 'ai-state-pending'}`}><i />{availability.isLoading ? 'Comprobando' : availability.data?.status === 'ready' ? 'Disponible en desarrollo' : 'No disponible'}</span>
       </div>
-       <p>Garak/GVE conserva el flujo local existente con fixtures. Qwen ejecuta una tarea sintética; la suite nativa anterior mantiene su evidencia separada. La evidencia guardada del perfil autónomo contiene 14 casos mixtos (controles benignos e inyección documental), con selección automática y sin forzar funciones. Los trabajos usan 1 CPU, 1.536 MiB, concurrencia global 1 y red deshabilitada. Ningún perfil está habilitado para clientes.</p>
+       <p>Garak/GVE y los ocho Policy Labs deterministas se mantienen como líneas de evidencia separadas. Los dos perfiles Qwen siguientes ejecutan inferencia local sobre dos casos sintéticos, uno benigno y uno adversarial, con selección automática de herramienta; no usan selección forzada. Cualquier llamada pasa por política antes del simulador. Los trabajos usan 1 CPU, 1.536 MiB, concurrencia global 1 y red deshabilitada. Ningún perfil está habilitado para clientes.</p>
        <AgentPolicyLabCatalog
          profiles={availability.data?.profiles ?? []}
+         canRun={canRun}
+         pending={createLabJob.isPending}
+         onRequest={(profileId) => void requestLabAssessment(profileId)}
+       />
+       <QwenPolicyLabCatalog
+         availability={availability.data?.profiles ?? []}
          canRun={canRun}
          pending={createLabJob.isPending}
          onRequest={(profileId) => void requestLabAssessment(profileId)}

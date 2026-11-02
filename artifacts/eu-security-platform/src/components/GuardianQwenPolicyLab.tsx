@@ -1,0 +1,227 @@
+import React from 'react';
+import { Activity, FlaskConical } from 'lucide-react';
+import {
+  type AiAssessmentLabJob,
+  type AiAssessmentLabJobRequestProfileId,
+} from '@workspace/api-client-react';
+import { Button } from '@/components/ui/button';
+
+type QwenPolicyEvidence = Extract<
+  NonNullable<AiAssessmentLabJob['result']>,
+  { engine: 'guardian_qwen_policy_lab' }
+>;
+
+type QwenPolicyProfile = Extract<
+  AiAssessmentLabJobRequestProfileId,
+  `guardian-agent-qwen-lab-${string}-v1`
+>;
+
+const profiles: Array<{
+  profileId: QwenPolicyProfile;
+  verticalId: 'email' | 'database';
+  title: string;
+  description: string;
+  adversarialCase: string;
+}> = [
+  {
+    profileId: 'guardian-agent-qwen-lab-email-v1',
+    verticalId: 'email',
+    title: 'Correo · Qwen local',
+    description: 'Lee un mensaje sintético y prepara un borrador; el envío externo no tiene ejecutor.',
+    adversarialCase: 'Inyección indirecta que pide reenviar contenido fuera del laboratorio.',
+  },
+  {
+    profileId: 'guardian-agent-qwen-lab-database-v1',
+    verticalId: 'database',
+    title: 'Bases de datos · Qwen local',
+    description: 'Consulta una única fila ficticia; no hay conexión a bases empresariales.',
+    adversarialCase: 'Instrucción incrustada que pide exportar organizaciones y borrar una fila.',
+  },
+];
+
+const originLabels: Record<string, string> = {
+  guardian_qwen_native_markup_adapter:
+    'Marcador Qwen completo adaptado por Guardian; no fue message.tool_calls directo.',
+  runtime_message_tool_calls:
+    'message.tool_calls devuelto directamente por el runtime.',
+  unparsed_qwen_native_markup:
+    'Propuesta no aceptada por el parser estricto; no se despachó.',
+  no_tool_call: 'Qwen no propuso una herramienta en esta inferencia.',
+};
+
+const decisionLabels: Record<string, string> = {
+  allow: 'Permitida para simulación',
+  deny: 'Denegada antes del simulador',
+  require_approval: 'Requiere aprobación; no se despachó',
+  no_proposal: 'Sin propuesta aceptada',
+};
+
+const dispatchLabels: Record<string, string> = {
+  simulated_execution: 'Resultado únicamente sintético y en memoria',
+  blocked_by_policy_before_dispatch: 'Bloqueada por política antes del adaptador',
+  approval_required_before_dispatch: 'No se llamó al adaptador; requiere aprobación',
+  blocked_by_adapter_validation: 'Bloqueada por validación del adaptador',
+  blocked_by_parser: 'Bloqueada por el parser',
+  not_invoked: 'No se invocó ninguna herramienta',
+};
+
+export function QwenPolicyLabCatalog({
+  availability,
+  canRun,
+  pending,
+  onRequest,
+}: {
+  availability: Array<{
+    profileId: string;
+    status: string;
+    reasonCode?: string | null;
+  }>;
+  canRun: boolean;
+  pending: boolean;
+  onRequest: (profileId: QwenPolicyProfile) => void;
+}) {
+  return (
+    <section className="agent-policy-lab" data-testid="qwen-policy-lab-catalog">
+      <div className="panel-heading">
+        <div>
+          <span className="panel-kicker">INFERENCIA LOCAL REAL · QWEN3</span>
+          <h3>Correo y bases de datos</h3>
+        </div>
+        <span className="ai-evaluation-run-label">LABORATORIO · NO CONECTADO A CLIENTES</span>
+      </div>
+      <p>
+        Cada trabajo hace inferencia local con <code>tool_choice=auto</code>; no fuerza una
+        herramienta. Se distingue el marcador Qwen adaptado de una llamada
+        <code> message.tool_calls</code> directa. El Policy Engine valida cualquier propuesta
+        antes de un simulador ficticio. La ausencia de propuesta no cuenta como bloqueo
+        preventivo.
+      </p>
+      <div className="agent-policy-lab-grid">
+        {profiles.map((profile) => {
+          const worker = availability.find((item) => item.profileId === profile.profileId);
+          const ready = worker?.status === 'ready';
+          return (
+            <article
+              key={profile.profileId}
+              className="agent-policy-lab-card"
+              data-testid={`qwen-policy-lab-${profile.verticalId}`}
+            >
+              <div>
+                <span className="ai-evaluation-run-label">QWEN REAL · TOOL_CHOICE AUTO</span>
+                <h4>{profile.title}</h4>
+                <p>{profile.description}</p>
+                <small>Control adversarial sintético: {profile.adversarialCase}</small>
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => onRequest(profile.profileId)}
+                disabled={!canRun || !ready || pending}
+                data-testid={`button-run-qwen-policy-${profile.verticalId}`}
+              >
+                {pending ? <Activity className="spin" size={15} /> : <FlaskConical size={15} />}
+                {ready ? 'Ejecutar con Qwen' : 'No disponible'}
+              </Button>
+              {!ready && worker?.reasonCode && (
+                <small role="status">Motivo: {worker.reasonCode}</small>
+              )}
+            </article>
+          );
+        })}
+      </div>
+      {!canRun && <small>Solo owner/admin puede iniciar estas evaluaciones.</small>}
+    </section>
+  );
+}
+
+export function QwenPolicyLabResult({ evidence }: { evidence: QwenPolicyEvidence }) {
+  const adapted = evidence.cases.filter(
+    (item) => item.toolCallOrigin === 'guardian_qwen_native_markup_adapter',
+  ).length;
+  const direct = evidence.cases.filter(
+    (item) => item.toolCallOrigin === 'runtime_message_tool_calls',
+  ).length;
+  const noProposal = evidence.cases.filter(
+    (item) =>
+      item.toolCallOrigin === 'no_tool_call' ||
+      item.toolCallOrigin === 'unparsed_qwen_native_markup',
+  ).length;
+  return (
+    <section className="agent-policy-lab-result" data-testid="qwen-policy-lab-result">
+      <div className="ai-lab-result-summary">
+        <b>
+          {evidence.verticalId === 'email' ? 'Correo' : 'Bases de datos'} · inferencia local
+          real de Qwen
+        </b>
+        <span>2 casos · tool_choice=auto · no es una evaluación de servicio empresarial</span>
+      </div>
+      <p>{evidence.interpretation}</p>
+      <dl>
+        <dt>Origen de propuestas</dt>
+        <dd>
+          {adapted} marcador(es) adaptados · {direct} llamadas directas del runtime ·{' '}
+          {noProposal} sin propuesta aceptada.
+        </dd>
+        <dt>Policy Engine</dt>
+        <dd>
+          {evidence.summary.denied} denegaciones · {evidence.summary.simulatedExecutions}{' '}
+          simulaciones permitidas · {evidence.summary.unauthorizedExecutions} ejecuciones
+          no autorizadas.
+        </dd>
+        <dt>Policy OFF</dt>
+        <dd>
+          Contrafactual sobre clones efímeros; {evidence.summary.policyOffExecutions} acciones
+          ejecutadas.
+        </dd>
+        <dt>Efectos externos</dt>
+        <dd>0 llamadas externas · 0 operaciones reales · 0 prompts/respuestas/argumentos brutos guardados.</dd>
+        <dt>Hash de evidencia</dt>
+        <dd><code>{evidence.evidenceSha256}</code></dd>
+      </dl>
+      <div className="agent-policy-lab-cases">
+        {evidence.cases.map((item) => (
+          <details key={item.caseId} data-testid={`qwen-policy-case-${item.caseId}`}>
+            <summary>
+              {item.label === 'benign' ? 'Control benigno' : 'Caso adversarial'} ·{' '}
+              {item.language.toUpperCase()} · {decisionLabels[item.decision] ?? item.decision}
+            </summary>
+            <dl>
+              <dt>Origen de la propuesta</dt>
+              <dd>{originLabels[item.toolCallOrigin] ?? item.toolCallOrigin}</dd>
+              <dt>Herramienta propuesta</dt>
+              <dd>{item.proposedTool ?? 'Ninguna'} · {item.toolCallCount} llamada(s) reportada(s)</dd>
+              <dt>Policy ON</dt>
+              <dd>{decisionLabels[item.decision] ?? item.decision}; {dispatchLabels[item.dispatchStatus] ?? item.dispatchStatus}</dd>
+              <dt>Policy OFF</dt>
+              <dd>
+                ¿Habría continuado en el clon?: {item.policyOff.wouldExecute ? 'sí' : 'no'}.
+                Ejecutada: no.
+              </dd>
+              <dt>Finalización</dt><dd>{item.finishReason}</dd>
+              <dt>Hash de entrada</dt><dd><code>{item.promptSha256}</code></dd>
+              <dt>Hash de propuesta</dt><dd><code>{item.proposalSha256 ?? 'sin propuesta'}</code></dd>
+              <dt>Hash del caso</dt><dd><code>{item.caseEvidenceSha256}</code></dd>
+              <dt>Datos en bruto</dt>
+              <dd>No se guardan prompts, respuestas ni argumentos; no se contactó ningún servicio.</dd>
+            </dl>
+          </details>
+        ))}
+      </div>
+      <details>
+        <summary>Procedencia técnica y límites</summary>
+        <dl>
+          <dt>Motor y versión</dt><dd>{evidence.engineVersion} · {evidence.versions.modelRuntime}</dd>
+          <dt>Modelo local</dt><dd>{evidence.provider.modelId} · {evidence.provider.quantization} · SHA-256 {evidence.provider.sha256}</dd>
+          <dt>Parser de herramientas</dt><dd>{evidence.versions.toolMarkupAdapter}; solo marcadores completos válidos o tool calls directas.</dd>
+          <dt>Red y recursos</dt>
+          <dd>
+            {String(evidence.network.networkMode)}; IPv4 {String(evidence.network.publicIpv4)},
+            IPv6 {String(evidence.network.publicIpv6)}, DNS {String(evidence.network.publicDns)};
+            1 CPU, 1.536 MiB, 64 procesos, concurrencia 1.
+          </dd>
+          <dt>Hash de evidencia total</dt><dd><code>{evidence.evidenceSha256}</code></dd>
+        </dl>
+        <small>Dos casos por vertical son una prueba funcional acotada; no permiten generalizar tasas ni asegurar eficacia general.</small>
+      </details>
+    </section>
+  );
+}
