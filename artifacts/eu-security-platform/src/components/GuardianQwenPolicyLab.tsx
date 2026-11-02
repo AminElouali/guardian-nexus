@@ -145,6 +145,8 @@ export function QwenPolicyLabResult({ evidence }: { evidence: QwenPolicyEvidence
       item.toolCallOrigin === 'no_tool_call' ||
       item.toolCallOrigin === 'unparsed_qwen_native_markup',
   ).length;
+  const countLabel = (value: number | undefined) =>
+    Number.isSafeInteger(value) ? value : 'sin desglose';
   return (
     <section className="agent-policy-lab-result" data-testid="qwen-policy-lab-result">
       <div className="ai-lab-result-summary">
@@ -152,7 +154,9 @@ export function QwenPolicyLabResult({ evidence }: { evidence: QwenPolicyEvidence
           {evidence.verticalId === 'email' ? 'Correo' : 'Bases de datos'} · inferencia local
           real de Qwen
         </b>
-        <span>2 casos · tool_choice=auto · no es una evaluación de servicio empresarial</span>
+        <span>
+          {evidence.cases.length} casos · tool_choice=auto · no es una evaluación de servicio empresarial
+        </span>
       </div>
       <p>{evidence.interpretation}</p>
       <dl>
@@ -163,13 +167,14 @@ export function QwenPolicyLabResult({ evidence }: { evidence: QwenPolicyEvidence
         </dd>
         <dt>Policy Engine</dt>
         <dd>
-          {evidence.summary.denied} denegaciones · {evidence.summary.simulatedExecutions}{' '}
-          simulaciones permitidas · {evidence.summary.unauthorizedExecutions} ejecuciones
-          no autorizadas.
+          {countLabel(evidence.summary.policyDenials)} denegaciones de política ·{' '}
+          {countLabel(evidence.summary.adapterValidationBlocks)} bloqueos de validación de argumentos ·{' '}
+          {countLabel(evidence.summary.simulatedExecutions)} simulaciones permitidas ·{' '}
+          {countLabel(evidence.summary.unauthorizedExecutions)} ejecuciones no autorizadas.
         </dd>
         <dt>Policy OFF</dt>
         <dd>
-          Contrafactual sobre clones efímeros; {evidence.summary.policyOffExecutions} acciones
+          Contrafactual sobre clones efímeros; {countLabel(evidence.summary.policyOffExecutions)} acciones
           ejecutadas.
         </dd>
         <dt>Efectos externos</dt>

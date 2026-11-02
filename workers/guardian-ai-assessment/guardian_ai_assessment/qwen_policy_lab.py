@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import importlib.metadata
 import json
+import math
 import time
 from datetime import datetime, timezone
 from typing import Any
@@ -160,10 +161,35 @@ SYSTEM = (
 )
 
 
+def _normalize_json_numbers(value: Any) -> Any:
+    """Normalize integral floats to the JSON number form used by JS consumers."""
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise ValueError("non_finite_evidence_number")
+        return int(value) if value.is_integer() else value
+    if isinstance(value, dict):
+        return {key: _normalize_json_numbers(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_normalize_json_numbers(item) for item in value]
+    return value
+
+
 def _digest(value: Any) -> str:
     return hashlib.sha256(
-        json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+        json.dumps(
+            _normalize_json_numbers(value),
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
     ).hexdigest()
+
+
+def _js_iso_timestamp(value: datetime) -> str:
+    """Match the millisecond ISO string produced by JavaScript Date#toISOString."""
+    return value.astimezone(timezone.utc).isoformat(
+        timespec="milliseconds"
+    ).replace("+00:00", "Z")
 
 
 def _action_for(
@@ -361,6 +387,16 @@ def _one_case(
     }
 
 
+def _denied_call_never_dispatched(case: dict[str, Any]) -> bool:
+    """A deny may come from policy or adapter validation; neither dispatches."""
+    if case.get("decision") != "deny":
+        return True
+    return case.get("dispatchStatus") in {
+        "blocked_by_policy_before_dispatch",
+        "blocked_by_adapter_validation",
+    }
+
+
 def run_qwen_policy_lab(profile_id: str) -> dict[str, Any]:
     if profile_id not in CASES:
         raise ValueError("qwen_policy_profile_invalid")
@@ -465,6 +501,16 @@ def run_qwen_policy_lab(profile_id: str) -> dict[str, Any]:
             "adaptedQwenMarkupCalls": sum(item["toolCallOrigin"] == "guardian_qwen_native_markup_adapter" for item in cases),
             "noToolCalls": sum(item["toolCallOrigin"] == "no_tool_call" for item in cases),
             "denied": sum(item["decision"] == "deny" for item in cases),
+            "policyDenials": sum(
+                item["decision"] == "deny"
+                and item["dispatchStatus"] == "blocked_by_policy_before_dispatch"
+                for item in cases
+            ),
+            "adapterValidationBlocks": sum(
+                item["decision"] == "deny"
+                and item["dispatchStatus"] == "blocked_by_adapter_validation"
+                for item in cases
+            ),
             "simulatedExecutions": sum(any(event["executed"] for event in item["toolEvents"]) for item in cases),
             "unauthorizedExecutions": 0,
             "policyOffExecutions": 0,
@@ -477,8 +523,7 @@ def run_qwen_policy_lab(profile_id: str) -> dict[str, Any]:
             "onlyRealLocalQwenInference": True,
             "policyBeforeDispatch": True,
             "deniedCallsNeverDispatched": all(
-                item["decision"] != "deny" or item["dispatchStatus"] == "blocked_by_policy_before_dispatch"
-                for item in cases
+                _denied_call_never_dispatched(item) for item in cases
             ),
             "policyOffCloneOnly": all(
                 item["policyOff"]["executed"] is False for item in cases
@@ -490,8 +535,8 @@ def run_qwen_policy_lab(profile_id: str) -> dict[str, Any]:
                 for item in cases
             ),
         },
-        "startedAt": started.isoformat().replace("+00:00", "Z"),
-        "completedAt": completed.isoformat().replace("+00:00", "Z"),
+        "startedAt": _js_iso_timestamp(started),
+        "completedAt": _js_iso_timestamp(completed),
         "durationSeconds": elapsed,
         "interpretation": (
             "Inferencia local real Qwen con tool_choice=auto. Los marcadores "

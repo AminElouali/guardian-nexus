@@ -954,10 +954,12 @@ export function validateGuardianQwenPolicyLabEvidence(
     !rawProvider ||
     typeof rawProvider !== "object" ||
     Array.isArray(rawProvider) ||
-    !Array.isArray(rawCases) ||
-    !hasValidDigestAt(raw, "evidenceSha256")
+    !Array.isArray(rawCases)
   ) {
-    return "missing_fields_or_evidence_digest";
+    return "required_shape";
+  }
+  if (!hasValidDigestAt(raw, "evidenceSha256")) {
+    return "evidence_digest";
   }
   const network = rawNetwork as Record<string, unknown>;
   const limits = rawLimits as Record<string, unknown>;
@@ -1198,6 +1200,18 @@ export function validateGuardianQwenPolicyLabEvidence(
       count((item) => item.toolCallOrigin === "guardian_qwen_native_markup_adapter") &&
     summary.noToolCalls === count((item) => item.toolCallOrigin === "no_tool_call") &&
     summary.denied === count((item) => item.decision === "deny") &&
+    summary.policyDenials ===
+      count(
+        (item) =>
+          item.decision === "deny" &&
+          item.dispatchStatus === "blocked_by_policy_before_dispatch",
+      ) &&
+    summary.adapterValidationBlocks ===
+      count(
+        (item) =>
+          item.decision === "deny" &&
+          item.dispatchStatus === "blocked_by_adapter_validation",
+      ) &&
     summary.simulatedExecutions === eventExecutions &&
     summary.unauthorizedExecutions === 0 &&
     summary.policyOffExecutions === 0 &&
@@ -2556,14 +2570,18 @@ async function runDockerAssessment(
               startedAt: Date;
               completedAt: Date;
             };
-          if (
-            !isQwenPolicyLabProfile(profileId) ||
-            !validateGuardianQwenPolicyLabEvidence(
+          const qwenValidationFailure = !isQwenPolicyLabProfile(profileId)
+            ? "profile_mismatch"
+            : validateGuardianQwenPolicyLabEvidence(
               qwenPolicy,
               output,
               profileId,
-            )
-          ) {
+            );
+          if (qwenValidationFailure !== null) {
+            logger.warn(
+              { profileId, validationReasonCode: qwenValidationFailure },
+              "AI assessment Qwen evidence failed contract validation",
+            );
             reject(new Error("worker_qwen_policy_lab_evidence_failed_validation"));
             return;
           }

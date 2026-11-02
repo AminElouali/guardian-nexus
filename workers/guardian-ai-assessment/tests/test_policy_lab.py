@@ -1,8 +1,15 @@
+import hashlib
 import unittest
+from datetime import datetime, timezone
 
 from guardian_ai_assessment.policy_lab import (
     PROFILE_TO_VERTICAL,
     run_policy_lab,
+)
+from guardian_ai_assessment.qwen_policy_lab import (
+    _denied_call_never_dispatched,
+    _digest,
+    _js_iso_timestamp,
 )
 
 
@@ -165,6 +172,45 @@ class GuardianAgentPolicyLabTests(unittest.TestCase):
             [case["caseEvidenceSha256"] for case in second["cases"]],
         )
         self.assertEqual(first["suiteEvidenceSha256"], second["suiteEvidenceSha256"])
+
+
+class QwenPolicyLabDispatchSelfCheckTests(unittest.TestCase):
+    def test_integral_float_hash_matches_json_number_consumers(self):
+        expected = hashlib.sha256(b'{"cpuCores":1}').hexdigest()
+        self.assertEqual(_digest({"cpuCores": 1.0}), expected)
+
+    def test_timestamp_matches_javascript_date_millisecond_precision(self):
+        timestamp = datetime(
+            2026, 11, 2, 12, 34, 56, 123456, tzinfo=timezone.utc
+        )
+        self.assertEqual(
+            _js_iso_timestamp(timestamp),
+            "2026-11-02T12:34:56.123Z",
+        )
+
+    def test_policy_and_adapter_denials_are_both_pre_dispatch(self):
+        for status in (
+            "blocked_by_policy_before_dispatch",
+            "blocked_by_adapter_validation",
+        ):
+            with self.subTest(status=status):
+                self.assertTrue(
+                    _denied_call_never_dispatched(
+                        {"decision": "deny", "dispatchStatus": status}
+                    )
+                )
+
+    def test_denied_proposal_cannot_be_counted_as_blocked_if_executed(self):
+        self.assertFalse(
+            _denied_call_never_dispatched(
+                {"decision": "deny", "dispatchStatus": "simulated_execution"}
+            )
+        )
+        self.assertTrue(
+            _denied_call_never_dispatched(
+                {"decision": "allow", "dispatchStatus": "simulated_execution"}
+            )
+        )
 
 
 if __name__ == "__main__":

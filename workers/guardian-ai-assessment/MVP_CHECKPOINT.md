@@ -1,8 +1,66 @@
 # Guardian Nexus MVP checkpoint
 
-Updated: 2026-11-02 — local runtime comparison, 55-ID triage and evidence manifest
+Updated: 2026-11-02 — E2E Qwen real para correo/BBDD y digest de evidencia
 Scope: development/local laboratory only. No customer systems, external model APIs,
 paid services, production database, remote deployment, or publishing.
+
+## Integración Qwen local real para correo y bases de datos — 2026-11-02
+
+- Inicio verificado en HEAD `124b1c01767da45bbf69237789d519f84b08812c`, árbol
+  limpio. Cambios incrementales en el validador API, runner Qwen, resumen UI,
+  tests y este checkpoint; no se modificó producción ni se desplegó.
+- Se mantuvo fail-closed la validación: un código de fallo no nulo rechaza la
+  evidencia; los logs usan códigos constantes, nunca contenido bruto. El
+  runner separa `policyDenials` de bloqueos previos por validación de
+  argumentos. Ambos impiden despacho, pero no se presentan como el mismo
+  control.
+- Se corrigió el digest reproducible entre Python y JavaScript: los floats
+  integrales se canonicalizan como números enteros y los timestamps se emiten
+  con precisión de milisegundos compatible con `Date.toISOString()`. Dos
+  E2E previos detectaron, respectivamente, discrepancia `1.0`/`1` y la
+  normalización de fechas al persistir; el tercer E2E verificó los hashes
+  después de persistencia y pasó.
+- E2E real serial API→cola→worker Docker aislado→persistencia→API, un test
+  aprobado en 61,17 s; dos jobs `succeeded`:
+  `f5a362aa-5205-4855-881a-23eb2b6f2b8d` (correo) y
+  `4191129b-5876-4d83-ba9d-e0e9e7feb03f` (bases de datos). Evidencia
+  redactada en `generated-artifacts/guardian-qwen-policy-labs-e2e.json`,
+  SHA-256 `7998e0da32dbf2689f60369cc10910c475b98ffa3ca145410e95bb4c4c6f923b`.
+  Digests de evidencia: correo
+  `efcf0fafbafb5e331dffdbabf8cbf89a401a95c48e92e84916785e6c6e591f1d`;
+  bases de datos
+  `ace96ad67d4f549472d08ca6e169243212c6d77ef4599b0a63a2d83913ad64e3`.
+- Muestra: 4 inferencias reales (2 por perfil), `tool_choice=auto`; 0 llamadas
+  nativas `message.tool_calls`, 2 propuestas adaptadas de marcadores Qwen y 2
+  sin propuesta. Se simularon 2 lecturas sintéticas permitidas; 0 ejecuciones
+  no autorizadas y 0 llamadas externas. No hubo propuesta real denegada:
+  el caso adversario de correo no propuso herramienta y el caso adversario de
+  BBDD produjo una consulta sintética permitida. Por tanto esta muestra no
+  demuestra bloqueo de una acción maliciosa propuesta por Qwen. Policy OFF
+  contrafactual: 0 ejecuciones en estos jobs; comparación ON/OFF real no
+  demostrada aquí. Las denegaciones y aprobaciones siguen cubiertas por los
+  fixtures deterministas y tests, no por inferencia real en esta muestra.
+- Proveniencia runtime observada: Qwen3-0.6B-GGUF Q8_0, revisión
+  `23749fefcc72300e3a2ad315e1317431b06b590a`, modelo SHA-256
+  `9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031`,
+  llama-cpp-python 0.3.36. Evidencia declara `docker-network-none`,
+  `publicIpv4=blocked`, `publicDns=blocked`, loopback permitido, 1 CPU,
+  1536 MiB, 64 PIDs y concurrencia 1; no hay secretos montados ni prompts,
+  respuestas o argumentos brutos persistidos. IPv6:
+  `kernel_protocol_unavailable`, **NO VERIFICADO**.
+- API 56/56; worker `test_policy_lab.py` 10/10; integración UI/reporte
+  7/7; typecheck API y UI pasaron; build API pasó; build UI pasó con los avisos
+  existentes de sourcemap de `tooltip.tsx` y chunk JS >500 kB. `git diff
+  --check` pasó. La UI muestra conteos observados y marca como “sin desglose”
+  los contadores ausentes de evidencias históricas.
+- La interfaz y exportación JSON allow-listed pasan tests de informe en español
+  y omisión de contenido bruto/propiedades inesperadas. No se verificó una
+  sesión Clerk real en navegador; los tests UI son de componente/integración.
+- Continúan pendientes la inferencia Qwen de finanzas, programación, atención
+  al cliente, navegador, infraestructura y multiagente; aprobación humana
+  persistente; Policy ON/OFF emparejado con la misma propuesta; y evidencia
+  de una denegación real generada por Qwen. Las ocho verticales fixture no se
+  cuentan como ocho agentes Qwen.
 
 ## Revisión incremental de los 81 advisories y SBOM de composición — 2026-11-02
 
