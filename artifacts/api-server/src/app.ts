@@ -5,6 +5,11 @@ import { publishableKeyFromHost } from "@clerk/shared/keys";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import {
+  AI_ASSESSMENT_LAB_JOB_ROUTE,
+  aiAssessmentLabBodySizeErrorHandler,
+  aiAssessmentLabJsonParser,
+} from "./middlewares/ai-assessment-json";
+import {
   CLERK_PROXY_PATH,
   clerkProxyMiddleware,
   getClerkProxyHost,
@@ -32,6 +37,7 @@ app.use(
   }),
 );
 app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
+app.use(AI_ASSESSMENT_LAB_JOB_ROUTE, aiAssessmentLabJsonParser);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(
@@ -44,5 +50,6 @@ app.use(
 );
 
 app.use("/api", router);
+app.use(aiAssessmentLabBodySizeErrorHandler);
 
 export default app;

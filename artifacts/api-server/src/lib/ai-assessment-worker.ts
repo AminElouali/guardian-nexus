@@ -1,7 +1,16 @@
 import { spawn, spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import {
+  chmodSync,
+  createReadStream,
+  existsSync,
+  mkdtempSync,
+  rmSync,
+  readFileSync,
+  statSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { sql } from "drizzle-orm";
 import { CreateWorkspaceAiAssessmentLabJobResponse } from "@workspace/api-zod";
@@ -16,27 +25,60 @@ import {
   type GuardianLocalLlmNativeToolSuiteEvidence,
   type GuardianPolicyComparisonEvidence,
 } from "@workspace/db";
+import {
+  ASSESSMENT_EXECUTION_LIMITS,
+  getAssessmentImageReference,
+  hasExpectedAssessmentImageLabel as hasExpectedProfileLabel,
+  launchWithPinnedAssessmentImage,
+  readAssessmentImageLock,
+  validateAssessmentImageInspection,
+  verifyAssessmentImageLockSources,
+  type AssessmentProfileId,
+  type DockerImageInspection,
+} from "./ai-assessment-sandbox";
 import { withWorkspaceUserTransaction } from "./tenant-db";
 import { logger } from "./logger";
 
-const GARAK_IMAGE = "guardian-ai-assessment:garak-gve-profile-candidate";
-const LOCAL_LLM_IMAGE = "guardian-ai-assessment:qwen-gve-profile-candidate";
-const PROFILE_LABEL_KEY = "org.guardian.profile";
-const GARAK_PROFILE_LABEL = "garak-gve-v1";
-const LOCAL_LLM_PROFILE_LABEL = "qwen-gve-v1";
 export const AI_ASSESSMENT_WORKER_VERSION = "guardian-ai-assessment-lab-0.4.1";
 export const GARAK_PROFILE_ID = "guardian-local-agent-v1";
 export const LOCAL_LLM_PROFILE_ID = "guardian-local-llm-qwen3-0.6b-v1";
 export const NATIVE_TOOL_PROFILE_ID = "guardian-local-llm-native-tools-v1";
 export const AUTONOMOUS_TOOL_PROFILE_ID =
   "guardian-local-llm-autonomous-tools-v1";
-const GARAK_MAX_RUNTIME_MS = 135_000;
-const LOCAL_LLM_MAX_RUNTIME_MS = 180_000;
-const MAX_STDOUT_BYTES = 64 * 1024;
+const GARAK_MAX_RUNTIME_MS = ASSESSMENT_EXECUTION_LIMITS.garak.timeoutMs;
+const LOCAL_LLM_MAX_RUNTIME_MS = ASSESSMENT_EXECUTION_LIMITS.qwen.timeoutMs;
+const MAX_STDOUT_BYTES = ASSESSMENT_EXECUTION_LIMITS.maxStdoutBytes;
 const MAX_ATTEMPTS = 2;
 const LEASE_DURATION_MS = 45_000;
 const HEARTBEAT_INTERVAL_MS = 10_000;
 const QUEUE_POLL_INTERVAL_MS = 2_000;
+const DOCKER_CLI_CONFIG_DIR = mkdtempSync(
+  join(tmpdir(), "guardian-ai-assessment-docker-config-"),
+);
+chmodSync(DOCKER_CLI_CONFIG_DIR, 0o700);
+const dockerConfigStat = statSync(DOCKER_CLI_CONFIG_DIR);
+if (
+  (dockerConfigStat.mode & 0o077) !== 0 ||
+  (process.getuid && dockerConfigStat.uid !== process.getuid())
+) {
+  throw new Error("docker_cli_config_directory_not_private");
+}
+process.once("exit", () => {
+  try {
+    rmSync(DOCKER_CLI_CONFIG_DIR, { recursive: true, force: true });
+  } catch {
+    // Temporary CLI configuration contains no credentials.
+  }
+});
+
+function dockerCliEnvironment(): NodeJS.ProcessEnv {
+  return {
+    PATH: process.env.PATH ?? "/usr/bin:/bin",
+    HOME: "/tmp",
+    DOCKER_CONFIG: DOCKER_CLI_CONFIG_DIR,
+  };
+}
+
 const JOB_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 function findWorkspaceRoot(): string {
@@ -65,26 +107,23 @@ const LOCAL_LLM_WHEELS = [
   "markupsafe-3.0.4-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
 ];
 
-export type AssessmentProfileId =
-  | typeof GARAK_PROFILE_ID
-  | typeof LOCAL_LLM_PROFILE_ID
-  | typeof NATIVE_TOOL_PROFILE_ID
-  | typeof AUTONOMOUS_TOOL_PROFILE_ID;
+export type { AssessmentProfileId } from "./ai-assessment-sandbox";
+
+const PROFILE_IMAGE_LOCK = readAssessmentImageLock(
+  resolve(WORKER_ROOT, "profile-image-lock.json"),
+);
 
 export function getAssessmentImageForProfile(
   profileId: AssessmentProfileId,
 ): string {
-  return isLocalLlmProfile(profileId) ? LOCAL_LLM_IMAGE : GARAK_IMAGE;
+  return getAssessmentImageReference(profileId, PROFILE_IMAGE_LOCK);
 }
 
 export function hasExpectedAssessmentImageLabel(
   profileId: AssessmentProfileId,
   labels: Record<string, string> | null | undefined,
 ): boolean {
-  const expectedLabel = isLocalLlmProfile(profileId)
-    ? LOCAL_LLM_PROFILE_LABEL
-    : GARAK_PROFILE_LABEL;
-  return labels?.[PROFILE_LABEL_KEY] === expectedLabel;
+  return hasExpectedProfileLabel(profileId, labels, PROFILE_IMAGE_LOCK);
 }
 
 function isLocalLlmProfile(profileId: AssessmentProfileId): boolean {
@@ -261,6 +300,48 @@ function getLocalLlmArtifactReason(): string | null {
   }
 }
 
+function inspectAssessmentDockerImage(profileId: AssessmentProfileId): {
+  inspection: DockerImageInspection | null;
+  reasonCode: string | null;
+} {
+  if (!verifyAssessmentImageLockSources(PROFILE_IMAGE_LOCK, WORKER_ROOT)) {
+    return { inspection: null, reasonCode: "worker_image_lock_source_mismatch" };
+  }
+  const reference = getAssessmentImageForProfile(profileId);
+  const result = spawnSync(
+    "docker",
+    ["image", "inspect", "--format", "{{json .}}", reference],
+    {
+      encoding: "utf8",
+      timeout: 2_000,
+      maxBuffer: 64 * 1024,
+      env: dockerCliEnvironment(),
+    },
+  );
+  if (result.error?.message.includes("ENOENT")) {
+    return { inspection: null, reasonCode: "docker_not_available" };
+  }
+  if (result.error) {
+    return { inspection: null, reasonCode: "docker_readiness_check_failed" };
+  }
+  if (result.status !== 0) {
+    return { inspection: null, reasonCode: "worker_image_not_built" };
+  }
+  try {
+    const inspection = JSON.parse(result.stdout.trim()) as DockerImageInspection;
+    const validation = validateAssessmentImageInspection(
+      profileId,
+      inspection,
+      PROFILE_IMAGE_LOCK,
+    );
+    return validation.ok
+      ? { inspection, reasonCode: null }
+      : { inspection: null, reasonCode: validation.reasonCode };
+  } catch {
+    return { inspection: null, reasonCode: "worker_image_profile_mismatch" };
+  }
+}
+
 export function getLocalWorkerAvailability(): LocalWorkerAvailability {
   const disabled = (reasonCode: string): LocalWorkerAvailability => ({
     status: "disabled" as const,
@@ -300,36 +381,9 @@ export function getLocalWorkerAvailability(): LocalWorkerAvailability {
     return disabled("development_only");
   }
 
-  const inspectProfileImage = (profileId: AssessmentProfileId): string | null => {
-    const image = getAssessmentImageForProfile(profileId);
-    const result = spawnSync(
-      "docker",
-      [
-        "image",
-        "inspect",
-        "--format",
-        `{{json .Config.Labels}}`,
-        image,
-      ],
-      { encoding: "utf8", timeout: 2_000, maxBuffer: 8_192 },
-    );
-    if (result.error?.message.includes("ENOENT")) return "docker_not_available";
-    if (result.error) return "docker_readiness_check_failed";
-    if (result.status !== 0) return "worker_image_not_built";
-    try {
-      const labels = JSON.parse(result.stdout.trim()) as
-        | Record<string, string>
-        | null;
-      return hasExpectedAssessmentImageLabel(profileId, labels)
-        ? null
-        : "worker_image_profile_mismatch";
-    } catch {
-      return "worker_image_profile_mismatch";
-    }
-  };
-
-  const garakReason = inspectProfileImage(GARAK_PROFILE_ID);
-  const qwenImageReason = inspectProfileImage(LOCAL_LLM_PROFILE_ID);
+  const garakReason = inspectAssessmentDockerImage(GARAK_PROFILE_ID).reasonCode;
+  const qwenImageReason =
+    inspectAssessmentDockerImage(LOCAL_LLM_PROFILE_ID).reasonCode;
   const qwenReason = qwenImageReason ?? getLocalLlmArtifactReason();
   const profiles: LocalWorkerAvailability["profiles"] = [
     {
@@ -419,54 +473,6 @@ export function isAiAssessmentJobRetryable(
   return status === "failed" && attempts < MAX_ATTEMPTS;
 }
 
-function dockerRunArgs(
-  containerName: string,
-  profileId: AssessmentProfileId,
-): string[] {
-  const image = getAssessmentImageForProfile(profileId);
-  const common = [
-    "run",
-    "--rm",
-    "--init",
-    "--pull=never",
-    `--name=${containerName}`,
-    "--network=none",
-    "--read-only",
-    "--pids-limit=64",
-    "--cap-drop=ALL",
-    "--security-opt=no-new-privileges",
-    "--user=65532:65532",
-    "--log-driver=none",
-  ];
-  if (profileId === GARAK_PROFILE_ID) {
-    return [
-      ...common,
-      "--cpus=0.5",
-      "--memory=768m",
-      "--memory-swap=768m",
-      "--tmpfs=/tmp:rw,noexec,nosuid,nodev,size=64m",
-      image,
-    ];
-  }
-  return [
-    ...common,
-    "--cpus=1",
-    "--memory=1536m",
-    "--memory-swap=1536m",
-    "--tmpfs=/tmp:rw,noexec,nosuid,nodev,size=128m,mode=1777",
-    "--tmpfs=/opt/llm-runtime:rw,exec,nosuid,nodev,size=128m,mode=1777",
-    `--mount=type=bind,src=${resolve(LLM_ARTIFACT_ROOT, LOCAL_LLM_MODEL_FILE)},dst=/models/${LOCAL_LLM_MODEL_FILE},readonly`,
-    `--mount=type=bind,src=${resolve(LLM_ARTIFACT_ROOT, "wheelhouse")},dst=/wheelhouse,readonly`,
-    `--mount=type=bind,src=${resolve(WORKER_ROOT, "local-llm-manifest.json")},dst=/opt/guardian-assessment/local-llm-manifest.json,readonly`,
-    `--mount=type=bind,src=${resolve(WORKER_ROOT, "guardian_ai_assessment")},dst=/opt/guardian-assessment/guardian_ai_assessment,readonly`,
-    "--workdir=/opt/guardian-assessment",
-    "--entrypoint=/bin/sh",
-    image,
-    "-ceu",
-    `python -m pip install --no-index --no-deps --disable-pip-version-check --no-cache-dir --target=/opt/llm-runtime ${LOCAL_LLM_WHEELS.map((name) => `/wheelhouse/${name}`).join(" ")} >&2; export PYTHONPATH=/opt/llm-runtime:/opt/guardian-assessment; exec python -m guardian_ai_assessment.llm_lab ${profileId === NATIVE_TOOL_PROFILE_ID ? "--native-tool-suite-job" : profileId === AUTONOMOUS_TOOL_PROFILE_ID ? "--autonomous-tool-selection-job" : "--integration-job"}`,
-  ];
-}
-
 function getContainerName(jobId: string): string {
   if (!JOB_ID_PATTERN.test(jobId)) {
     throw new Error("invalid_assessment_job_id");
@@ -528,10 +534,7 @@ function killDockerContainer(jobId: string): void {
     ["kill", "--signal=KILL", getContainerName(jobId)],
     {
       stdio: "ignore",
-      env: {
-        PATH: process.env.PATH ?? "/usr/bin:/bin",
-        HOME: process.env.HOME ?? "/tmp",
-      },
+      env: dockerCliEnvironment(),
     },
   );
   killer.on("error", () => undefined);
@@ -1781,10 +1784,7 @@ async function runDockerAssessment(
     {
       stdio: "ignore",
       timeout: 3_000,
-      env: {
-        PATH: process.env.PATH ?? "/usr/bin:/bin",
-        HOME: process.env.HOME ?? "/tmp",
-      },
+      env: dockerCliEnvironment(),
     },
   );
   if (staleContainerCleanup.error) {
@@ -1796,17 +1796,34 @@ async function runDockerAssessment(
       ),
     );
   }
+  const imageCheck = inspectAssessmentDockerImage(profileId);
+  if (imageCheck.reasonCode || !imageCheck.inspection) {
+    return Promise.reject(
+      new Error(imageCheck.reasonCode ?? "worker_image_profile_mismatch"),
+    );
+  }
+  const mounts = {
+    modelPath: resolve(LLM_ARTIFACT_ROOT, LOCAL_LLM_MODEL_FILE),
+    wheelhousePath: resolve(LLM_ARTIFACT_ROOT, "wheelhouse"),
+    manifestPath: resolve(WORKER_ROOT, "local-llm-manifest.json"),
+    sourcePath: resolve(WORKER_ROOT, "guardian_ai_assessment"),
+  };
   return new Promise((resolve, reject) => {
     let stdout = "";
     let stdoutBytes = 0;
     let timedOut = false;
-    const child = spawn("docker", dockerRunArgs(containerName, profileId), {
-      stdio: ["ignore", "pipe", "ignore"],
-      env: {
-        PATH: process.env.PATH ?? "/usr/bin:/bin",
-        HOME: process.env.HOME ?? "/tmp",
-      },
-    });
+    const child = launchWithPinnedAssessmentImage(
+      profileId,
+      containerName,
+      imageCheck.inspection,
+      PROFILE_IMAGE_LOCK,
+      mounts,
+      (args) =>
+        spawn("docker", args, {
+          stdio: ["ignore", "pipe", "ignore"],
+          env: dockerCliEnvironment(),
+        }),
+    );
 
     const timeout = setTimeout(() => {
       timedOut = true;

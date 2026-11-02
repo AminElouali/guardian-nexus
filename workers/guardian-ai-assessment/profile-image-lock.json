@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "provenance": {
+    "scope": "development",
+    "method": "local_docker_inspect",
+    "signedAttestation": false
+  },
+  "images": {
+    "garak": {
+      "reference": "guardian-ai-assessment:garak-gve-profile-candidate",
+      "imageId": "sha256:88df6b6808fd6169ece85d229cfffeb366c0f4356bad4d5c626efa3b8885511d",
+      "labels": {
+        "org.guardian.profile": "garak-gve-v1",
+        "org.guardian.engine": "garak-0.17.1+guardian-verification"
+      },
+      "sourceDockerfile": "Dockerfile.offline",
+      "sourceDockerfileSha256": "2af214022f54dd9896ce2dbe6787941f1b4fdd610621bc9e7132a28ab04295ef"
+    },
+    "qwen": {
+      "reference": "guardian-ai-assessment:qwen-gve-profile-candidate",
+      "imageId": "sha256:884d4f7bc6c11e03f6ced5cfcc9e88e7a8043d85923429f1a3a181953f07830f",
+      "labels": {
+        "org.guardian.profile": "qwen-gve-v1",
+        "org.guardian.engine": "local-llm-lab+guardian-verification",
+        "org.guardian.separation": "garak-langdetect-nltk-excluded"
+      },
+      "sourceDockerfile": "Dockerfile.qwen.offline",
+      "sourceDockerfileSha256": "7e57aca56509e08a486389e16782135faf27b08a13a88a6fd245c675f38e39be"
+    }
+  }
+}

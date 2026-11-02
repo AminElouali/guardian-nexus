@@ -24,6 +24,12 @@ import {
   stopLocalAssessmentQueueWorker,
 } from "./lib/ai-assessment-worker";
 import { createAiAssessmentLabRouter } from "./routes/ai-assessment-lab";
+import {
+  AI_ASSESSMENT_LAB_JOB_ROUTE,
+  AI_ASSESSMENT_LAB_JSON_LIMIT_BYTES,
+  aiAssessmentLabBodySizeErrorHandler,
+  aiAssessmentLabJsonParser,
+} from "./middlewares/ai-assessment-json";
 
 const TIMEOUT_MS = 480_000;
 const POLL_INTERVAL_MS = 500;
@@ -47,8 +53,10 @@ if (!databaseUrl) {
 }
 const fixturePool = new pg.Pool({ connectionString: databaseUrl });
 const app = express();
+app.use(AI_ASSESSMENT_LAB_JOB_ROUTE, aiAssessmentLabJsonParser);
 app.use(express.json());
 app.use("/api", createAiAssessmentLabRouter(testAuth));
+app.use(aiAssessmentLabBodySizeErrorHandler);
 
 let workspaceA = "";
 let workspaceB = "";
@@ -230,6 +238,22 @@ test(
       )?.status,
       "ready",
     );
+
+    const oversizedKey = `oversized-${randomUUID()}`;
+    const oversizedResponse = await apiRequest(userA, pathA, "POST", {
+      idempotencyKey: oversizedKey,
+      padding: "x".repeat(AI_ASSESSMENT_LAB_JSON_LIMIT_BYTES + 1),
+    });
+    assert.equal(oversizedResponse.status, 413);
+    assert.deepEqual(await oversizedResponse.json(), {
+      error: "AI assessment request body too large",
+    });
+    const oversizedJob = await fixturePool.query(
+      `SELECT id FROM public.ai_assessment_jobs
+       WHERE workspace_id = $1 AND idempotency_key = $2`,
+      [workspaceA, oversizedKey],
+    );
+    assert.equal(oversizedJob.rowCount, 0, "413 body was not enqueued");
 
     const idempotencyKey = `assessment-e2e-${randomUUID()}`;
     const created = await apiRequest(userA, pathA, "POST", { idempotencyKey });

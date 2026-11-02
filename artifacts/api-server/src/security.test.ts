@@ -59,18 +59,22 @@ test("assessment profiles use separate, profile-labeled images", () => {
   assert.equal(
     hasExpectedAssessmentImageLabel(GARAK_PROFILE_ID, {
       "org.guardian.profile": "garak-gve-v1",
+      "org.guardian.engine": "garak-0.17.1+guardian-verification",
     }),
     true,
   );
   assert.equal(
     hasExpectedAssessmentImageLabel(GARAK_PROFILE_ID, {
       "org.guardian.profile": "qwen-gve-v1",
+      "org.guardian.engine": "local-llm-lab+guardian-verification",
     }),
     false,
   );
   assert.equal(
     hasExpectedAssessmentImageLabel(LOCAL_LLM_PROFILE_ID, {
       "org.guardian.profile": "qwen-gve-v1",
+      "org.guardian.engine": "local-llm-lab+guardian-verification",
+      "org.guardian.separation": "garak-langdetect-nltk-excluded",
     }),
     true,
   );

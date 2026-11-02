@@ -918,3 +918,96 @@ This update supersedes the older diskcache status, worker-test count, and OSV
   `.../osv-qwen-mounted-enriched-final/` y el archivo de composición indicado
   arriba, todos bajo
   `generated-artifacts/guardian-ai-assessment-offline/profile-segregation-20261102/`.
+
+## Control de identidad de imágenes Docker y límites de solicitud — 2026-11-02
+
+- Inicio: HEAD `758d3948ca557f1d3c2a94a96b2b93dd297d931d`, árbol limpio. No había
+  proceso de implementación previo activo. El cambio es solo de desarrollo;
+  no se modificó producción, despliegue, clientes, secretos, DB schema ni
+  imágenes.
+- Se añadió `workers/guardian-ai-assessment/profile-image-lock.json`, que fija
+  los IDs locales y etiquetas esperadas:
+  - Garak/GVE:
+    `sha256:88df6b6808fd6169ece85d229cfffeb366c0f4356bad4d5c626efa3b8885511d`,
+    `garak-gve-v1`.
+  - Qwen/GVE:
+    `sha256:884d4f7bc6c11e03f6ced5cfcc9e88e7a8043d85923429f1a3a181953f07830f`,
+    `qwen-gve-v1`.
+  - Dockerfile Garak SHA-256
+    `2af214022f54dd9896ce2dbe6787941f1b4fdd610621bc9e7132a28ab04295ef`;
+    Dockerfile Qwen SHA-256
+    `7e57aca56509e08a486389e16782135faf27b08a13a88a6fd245c675f38e39be`.
+    El lock declara `signedAttestation:false`; las imágenes son locales sin
+    `RepoDigest`, no una procedencia firmada.
+- El worker verifica el lock y hashes fuente, inspecciona imagen/etiquetas al
+  comprobar disponibilidad y otra vez justo antes del lanzamiento, y ejecuta
+  el image ID validado, no la etiqueta mutable. `--pull=never`; perfil, imagen,
+  entrypoint y comando son fijos, no seleccionables por la solicitud. Cambios,
+  ausencia o mismatch de ID/etiqueta fallan cerrados.
+- Las invocaciones del cliente Docker de la API pasan solo `PATH`, `HOME` y un
+  directorio `DOCKER_CONFIG` temporal, único, propiedad del proceso y modo
+  `0700`, limpiado al salir. Se omiten variables de contexto/endpoint heredadas
+  y configuración Docker personal. Esto no elimina la autoridad del proceso
+  API sobre el daemon del host; para ello se necesita un broker o daemon
+  rootless separado, no disponible en este hito. No hay `docker.sock` montado en
+  los workers.
+- Contratos de argumentos verificados en ambos perfiles: `network=none`,
+  `--pull=never`, `--user=65532:65532`, rootfs read-only, `cap-drop=ALL`,
+  `no-new-privileges`, PIDs 64, CPU/memoria/swap limitados, `/tmp` `noexec`,
+  mounts modelo/wheels/manifest/código solo-lectura para Qwen, límites de
+  salida 64 KiB y timeout Garak 135 s/Qwen 180 s. Se añadió un comprobador que
+  arranca cada ID exacto y lee `/proc/self/status`: ambos dieron `Seccomp:2` y
+  `NoNewPrivs:1`; `docker info` reportó `seccomp,profile=builtin`. No se añadió
+  un perfil seccomp personalizado ni se afirma que otro host tenga el mismo
+  estado.
+- La ruta POST de solicitud limita JSON a 8192 bytes. Exceso devuelve `413` con
+  JSON fijo y no llega al handler de creación; el E2E consultó DB de desarrollo
+  y obtuvo cero filas para esa idempotency key. La prueba aislada también
+  confirma que el handler no se invoca.
+- Verificaciones:
+  - `pnpm --filter @workspace/api-server test`: **41/41**.
+  - `pnpm --filter @workspace/api-server run typecheck`: pasó.
+  - `pnpm --filter @workspace/api-server run build`: pasó.
+  - Worker Python dentro de la imagen Garak por ID exacto, con `network=none`,
+    rootfs read-only y límites: **87/87** en esta ejecución.
+  - E2E API/worker completo antes del último ajuste del directorio Docker:
+    **3/3**; UI de informe/exportación **5/5**.
+  - E2E dirigido con el entorno Docker privado final: **1/1**, autenticación de
+    prueba local, cola/persistencia/tenant, body limit y evaluación Garak más
+    inferencia local Qwen real.
+  - `python3 workers/guardian-ai-assessment/tests/verify_docker_seccomp.py`:
+    pasó para Garak y Qwen con los IDs fijados.
+  - `PORT=8081 BASE_PATH=/__mockup pnpm run build`: typecheck y builds de API,
+    web y mockup pasaron. Aviso Vite no bloqueante: chunk web 649,34 kB.
+  - `py_compile` del verificador y `git diff --check`: pasaron.
+  - El workflow API reinició y registró `Server listening` en 8080. Captura de
+    la home pública de desarrollo cargó; no se hizo una nueva sesión Clerk
+    autenticada en navegador.
+- Una corrida de API coincidió con el E2E nativo Qwen que reclamaba la misma
+  cola PostgreSQL y falló una aserción de lease `0 !== 1`; el contenedor Qwen
+  estaba activo. Tras terminar E2E, la repetición serial pasó 41/41 sin cambiar
+  la aserción. Se registra como interferencia de test concurrente, no se oculta.
+- Egress del worker no se habilitó. Este hito no repitió pruebas IPv4/DNS ni
+  verifica IPv6: conservar la evidencia previa IPv4 TCP/UDP/DNS bloqueados y
+  `kernel_protocol_unavailable` para IPv6, **NO VERIFICADO**. No se reconstruyó
+  ni escaneó de nuevo OSV, ni se remediaron los avisos históricos.
+- Evidencias JSON redactadas generadas por los E2E (fuera de Git bajo
+  `generated-artifacts/`):
+  - `ai-assessment-e2e-response.json`:
+    `2d8dfb734c2ebdbe809e11b08cd60e482b1a712b2e49950ea2bc08f0366e7e2e`.
+  - `ai-assessment-native-e2e-response.json`:
+    `ca075b063ca17e82a87544a124cefdc8b4b564ae610fd40e6ec8838316930ab1`.
+  - `ai-assessment-autonomous-e2e-response.json`:
+    `af2bec158920e1553f597cf0581a9fd93b6c514b2749cef85cb98a770aa1ed3c`.
+- Informe detallado:
+  `workers/guardian-ai-assessment/reports/worker-launch-hardening-2026-11-02.md`,
+  SHA-256 `e37b1b15f22c8b64ea8acd4f66795392e846c6a38f3c2b19293320244ea0243a`.
+  Imagen lock SHA-256 `65abf26937994966353494e1dde87cae42cbf82246282b072c5554e907dcde6c`;
+  test seccomp SHA-256
+  `baa3746338e04b4d26d434f25ef4838732d72610829e9a3ec2d50cddfe8ef2ff`.
+- Límites restantes: daemon Docker disponible al proceso API; sin attestation
+  firmada; no se probó retag concurrente real del daemon (gate unitario y
+  ejecución por ID sí verificados); no se simuló overrun real de stdout/timeout;
+  IPv6, advisories OSV, licencias/procedencia legal y Clerk autenticado en
+  navegador siguen pendientes. El informe no declara remediación de
+  vulnerabilidades ni disponibilidad para clientes.
