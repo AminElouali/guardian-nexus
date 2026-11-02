@@ -1204,3 +1204,72 @@ manifiesto es
 `a18104cd726600a0376e8aa3295323d1b34eed2c4ca688edbd1990c022639089`. El árbol
 de trabajo empezó en `23c2a55e11c4ed72c85410e49ac399f9caecc98f`; no hubo cambio
 de paquetes, Dockerfile o imagen.
+
+## Runtime Qwen montado: inventario y cobertura OSV ampliados — 2026-11-02
+
+- Se añadió una generación suplementaria del CycloneDX 1.6 que conserva por
+  separado el SBOM de la imagen Qwen/GVE candidata (90 componentes) y describe
+  el runtime montado. El resultado del runtime contiene 39 componentes:
+  cinco wheels identificadas por PURL y SHA-256, 29 payloads ELF únicos
+  (6 objetos del wheel llama.cpp, 22 de NumPy y 1 de MarkupSafe), cuatro
+  paquetes Debian dueños de dependencias dinámicas y un fichero de pesos del
+  modelo. Se verificaron 87 aristas `DT_NEEDED`; los siete SONAME externos se
+  resolvieron mediante `ldconfig`, `realpath` y `dpkg-query` a `libc6`,
+  `libgcc-s1`, `libstdc++6` y `zlib1g`. Ningún paquete se eliminó ni actualizó.
+- Este enriquecimiento usa solo SBOM, wheels, manifiestos e imagen locales. La
+  inspección de la imagen fue con `--pull=never --network=none --read-only`,
+  usuario 65532, capacidades eliminadas, `no-new-privileges`, 0.5 CPU,
+  128 MiB y 32 procesos. Versiones, hashes de ruedas, metadatos de licencia,
+  `readelf` 2.46, IDs de imagen, dependencias y límites quedan en
+  `generated-artifacts/guardian-ai-assessment-offline/profile-segregation-20261102/qwen-mounted-runtime-enriched-final/`;
+  el scan separado está en
+  `generated-artifacts/guardian-ai-assessment-offline/profile-segregation-20261102/osv-qwen-mounted-enriched-final/`.
+- OSV Scanner 2.7.0 fue ejecutado offline sobre ese SBOM, con
+  `XDG_CACHE_HOME` explícito, `--all-packages --all-vulns` y las bases locales
+  verificadas: Debian
+  `4816191fe3b9edc162646d56b0f26ee417c26bacdd02d1c39a5bcfa957c53582`,
+  PyPI
+  `8fd7138ad08c733316d229a05ac5a8a9fdcba4f6439d80cdab97fe4e18445dde`.
+  El scanner salió 0 y reportó 0 hallazgos en los nueve componentes con PURL.
+  La cobertura de identidad es parcial: 30 componentes (archivos ELF y pesos)
+  no tienen PURL/CPE; el escáner no puede clasificar esos objetos por separado.
+  Esto **no** es un resultado limpio del runtime ni reemplaza los escaneos de
+  imagen. Los directorios de caché XDG apuntan mediante symlinks a las mismas
+  bases locales: el manifiesto preserva ruta configurada, ruta reportada y
+  destino resuelto además del hash.
+- Los cinco wheels quedan identificados con hashes de archivo. En el wheel
+  activo llama-cpp-python 0.3.36, METADATA declara MIT y se verificó el hash de
+  `LICENSE.md`; MarkupSafe declara BSD-3-Clause; typing-extensions declara
+  PSF-2.0. Jinja2 conserva `NOASSERTION` y el hash del fichero de licencia.
+  NumPy contiene texto de licencia heredado extenso: ya no se presenta como un
+  nombre/SPDX; se registra como `NOASSERTION` con hash de ese texto. Esto no es
+  una revisión jurídica. langdetect 1.0.9 no está en el perfil Qwen, pero sigue
+  siendo requisito del perfil Garak y su discrepancia MIT/Apache-2.0 queda
+  pendiente. No hay atestación firmada ni reproducción bit a bit demostrada.
+- La imagen candidata completa no cambió: sus 177 coincidencias / 81 IDs
+  (1 crítico, 25 altos) siguen siendo el resultado separado vigente. Esta
+  ejecución no volvió a escanear imágenes ni remedia esos avisos. La SBOM
+  compuesta es únicamente un inventario combinado; el informe declara que el
+  escaneo del runtime se realiza por separado.
+- El informe Qwen por tenant ahora explicita que la auditoría global de la
+  cadena de suministro no forma parte de su evidencia. No se copian avisos
+  globales entre tenants ni se almacenan prompts, respuestas o argumentos.
+- La verificación final está en los manifiestos locales. CycloneDX montado:
+  SHA-256
+  `83aa381f67dc7ceace16533636fb150d7277bceef194ce40b625463f4d44168d`;
+  verificación
+  `be6eacc908cd1166f580ed8c9a4ca6a2d93843f50e110893358b683d0c9ee6c4`;
+  `SHA256SUMS.txt`
+  `993634adaf39cb5270360a5ad8111bc353bdd2ef9dcf43c3937c504e167dae0c`.
+  OSV JSON `8c8fddd946f1068e43866fb0c3c00d51ee915f4421d5af2ed245b923289c20c0`;
+  manifiesto
+  `8edc4bd7c965117cf126c882ab319352ab1fc9329e3aba2d1c85a0c1e358cd68`;
+  `SHA256SUMS.txt`
+  `52c57030b7719edd068d9955e6ca499b3c176d714a4bb5932db681236abf8435`.
+  `sha256sum -c` pasó para ambos conjuntos y para `manifest.sha256`.
+- La composición de inventario de los 124 componentes del worker Garak/GVE y
+  los 39 del runtime Qwen da 165 registros/34 dependencias; SHA-256
+  `48788dc1e9581bfc2acf6d2abea18877d68666f9522851038c7f01d4e914fc34`.
+  Su propiedad `qwenRuntimeVulnerabilityScan` dice
+  `separate-scan-not-embedded-in-composed-sbom`: no se interpreta como un
+  escaneo nuevo ni como consolidación de resultados de imagen y runtime.

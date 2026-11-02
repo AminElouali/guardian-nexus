@@ -220,7 +220,7 @@ def main() -> int:
                 "componentRecords": len(bom["components"]),
                 "dependencyRecords": len(bom["dependencies"]),
                 "workerImageVulnerabilityScanOnly": True,
-                "qwenRuntimeVulnerabilityScan": "not-performed",
+                "qwenRuntimeVulnerabilityScan": "separate-scan-not-embedded-in-composed-sbom",
             },
             sort_keys=True,
         )

@@ -820,3 +820,101 @@ This update supersedes the older diskcache status, worker-test count, and OSV
   `reports/worker-profile-separation-2026-11-02.md`. Artefactos y manifiesto
   SHA-256:
   `generated-artifacts/guardian-ai-assessment-offline/profile-segregation-20261102/`.
+
+## 2026-11-02 — inventario montado Qwen y cobertura OSV reproducible
+
+- Se partió de `2e721902b48f9a25dba86536af20edd3e52179d1`, árbol limpio.
+  Se enriqueció solo el SBOM del runtime Qwen montado; no se reconstruyeron,
+  modificaron ni promovieron imágenes, no se descargaron paquetes y no se
+  tocaron producción, esquemas, secretos ni credenciales.
+- El CycloneDX 1.6 final identifica 39 componentes: 9 con PURL y 0 con CPE;
+  29 payloads ELF únicos, 6 objetos nativos de llama.cpp, 22 de NumPy y 1 de
+  MarkupSafe; 87 aristas `DT_NEEDED`; 7 SONAME externos resueltos a cuatro
+  paquetes Debian exactos (`libc6 2.41-12+deb13u4`, `libgcc-s1 14.2.0-19`,
+  `libstdc++6 14.2.0-19`, `zlib1g 1:1.3.dfsg+really1.3.1-1+b1`); 0
+  dependencias Python/sistema sin resolver. Los archivos ELF y los pesos
+  tienen hashes, pero no identidad PURL/CPE justificada; por tanto la cobertura
+  no es total.
+- OSV Scanner 2.7.0 se ejecutó offline sobre ese SBOM con
+  `--offline --offline-vulnerabilities --all-packages --all-vulns`,
+  `XDG_CACHE_HOME` explícito y `HOME` retirado. Scanner SHA-256
+  `73cc8c323f04d4dbc39a861033819624524f3a7908be730f92d3f076fda0f087`;
+  base Debian
+  `4816191fe3b9edc162646d56b0f26ee417c26bacdd02d1c39a5bcfa957c53582`;
+  PyPI `8fd7138ad08c733316d229a05ac5a8a9fdcba4f6439d80cdab97fe4e18445dde`.
+  Salidas del wrapper/scanner: 0/0; 0 registros/IDs en las 9 identidades
+  reconocidas. Estado explícito `partial_identity_coverage` por 30/39
+  componentes sin PURL/CPE. Esto no demuestra ausencia de vulnerabilidades en
+  los binarios o pesos ni reemplaza las imágenes.
+- El manifiesto reconcilia las rutas XDG configuradas/reportadas con el destino
+  del symlink de la base local e incluye hashes. SBOM montado SHA-256
+  `83aa381f67dc7ceace16533636fb150d7277bceef194ce40b625463f4d44168d`;
+  verificación `be6eacc908cd1166f580ed8c9a4ca6a2d93843f50e110893358b683d0c9ee6c4`;
+  `SHA256SUMS.txt`
+  `993634adaf39cb5270360a5ad8111bc353bdd2ef9dcf43c3937c504e167dae0c`.
+  OSV JSON `8c8fddd946f1068e43866fb0c3c00d51ee915f4421d5af2ed245b923289c20c0`;
+  manifiesto `8edc4bd7c965117cf126c882ab319352ab1fc9329e3aba2d1c85a0c1e358cd68`;
+  `SHA256SUMS.txt`
+  `52c57030b7719edd068d9955e6ca499b3c176d714a4bb5932db681236abf8435`.
+  `manifest.sha256`
+  `58ea04cf998e46b0a392ca6869cfcc141c4fc15155139bdeee35544b05aaeca1`.
+  `sha256sum -c` pasó para ambos directorios y `manifest.sha256`.
+- La composición de inventario worker Garak/GVE (124 componentes) + runtime
+  Qwen (39) tiene 165 registros/34 dependencias, SHA-256
+  `48788dc1e9581bfc2acf6d2abea18877d68666f9522851038c7f01d4e914fc34`.
+  La composición declara que el scan Qwen está separado y no suma resultados
+  de OSV. Archivo:
+  `generated-artifacts/guardian-ai-assessment-offline/profile-segregation-20261102/qwen-deployment-composition-enriched-final.cdx.json`.
+- Evidencia local de cinco wheels fijadas y verificadas:
+  Jinja2 3.1.6 `85ece4451f492d0c13c5dd7c13a64681a86afae63a5f347908daf103ce6d2f67`;
+  llama-cpp-python 0.3.36 `5e50c8f09c0ed78512bfb16adb32be9e0c65b8ced7c1efcfc200c38782141e96`;
+  MarkupSafe 3.0.4 `434139499bb20b502ed3baa1f169e618f924a97e7a777fea1a49446d80106cf6`;
+  NumPy 2.3.4 `fc8a63918b04b8571789688b2780ab2b4a33ab44bfe8ccea36d3eba51228c953`;
+  typing-extensions 4.16.0 `481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8`.
+  La evidencia distingue licencia declarada y fichero con hash; NumPy queda
+  `NOASSERTION` con texto legado hasheado
+  `9f0870f097ebf8c12d0e7f88927897203599d161f1191e8b8cb687b355abe0b1`;
+  Jinja2 también queda `NOASSERTION`. MIT/Apache de langdetect 1.0.9 sigue
+  ambiguo en perfil Garak. No se declara conformidad legal ni atestación
+  firmada/reproducción bit a bit.
+- La imagen Garak/GVE conserva el resultado previo de 177 coincidencias/81 IDs
+  (1 crítico y 25 altos); la imagen Qwen conserva su scan independiente de
+  177/81. No hubo rescan de imágenes ni remediación de esos 26 IDs en este
+  hito. El estado anterior de egress también se conserva: IPv4 TCP/UDP y
+  DNS/UDP bloqueados bajo `--network=none`, loopback IPv4 disponible;
+  IPv6 `kernel_protocol_unavailable`, **NO VERIFICADO**. No hay host dual-stack
+  autorizado disponible y no se creó infraestructura.
+- El JSON ejecutivo/UI por tenant declara que el análisis global de supply
+  chain no forma parte de la evidencia del tenant. No se añadieron avisos
+  globales al informe de cliente.
+- Pruebas del estado final:
+  - Python dirigido (SBOM, licencias, OSV offline, composición y provenance):
+    23/23; `py_compile` pasó.
+  - Suite worker con código actual montado en solo lectura en la imagen Garak,
+    `--network=none`, rootfs read-only, `noexec` para `/tmp`, límites de CPU/
+    memoria/PIDs y capacidades eliminadas: 98/98.
+  - API/security: 35/35, incluidas RLS/RBAC, tenant boundaries, leases,
+    idempotencia y retry limits.
+  - E2E API/cola/Qwen local: 3/3; integración de componentes UI/JSON: 5/5.
+    La ruta de selección autónoma usó Qwen local; la distinción entre
+    `message.tool_calls` directos y marcadores adaptados sigue visible, y estos
+    tests no alteran los resultados históricos.
+  - `PORT=8081 BASE_PATH=/__mockup pnpm run build`: typecheck y builds de
+    mockup, API y web pasaron. Aviso no bloqueante de chunk web de 649.34 kB.
+    El preview público carga. No se inició una sesión Clerk en el navegador;
+    la captura no autenticada no verifica el dashboard firmado. Consola:
+    advertencia esperada de claves Clerk de desarrollo y falta de contexto
+    WebGPU en el navegador de captura.
+  - `git diff --check` pasó. No se actualizó el deployment.
+- Archivos de código/documentación de este hito: scripts de enriquecimiento
+  SBOM y OSV offline, normalización de licencias en el generador local,
+  estado explícito del scan separado en composición, pruebas Python, una nota
+  de alcance del informe Qwen tenant-safe, `DEPENDENCY_AUDIT.md`, este
+  checkpoint y memoria técnica sobre rutas XDG symlink. Sigue bloqueado el
+  cierre total por identidad de los 30 objetos sin PURL/CPE, 26 IDs Debian
+  críticos/altos sin remediación de imagen, ambigüedad legal, falta de
+  atestación reproducible, IPv6 dual-stack y prueba visual autenticada Clerk.
+- Directorios de evidencia final: `.../qwen-mounted-runtime-enriched-final/`,
+  `.../osv-qwen-mounted-enriched-final/` y el archivo de composición indicado
+  arriba, todos bajo
+  `generated-artifacts/guardian-ai-assessment-offline/profile-segregation-20261102/`.

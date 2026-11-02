@@ -259,6 +259,7 @@ test("renders the Qwen run as an honest Spanish executive report with bounded ev
   assert.match(markup, /Suite forzada anterior/);
   assert.match(markup, /no disponible para clientes/);
   assert.match(markup, /Descargar informe JSON redactado/);
+  assert.match(markup, /auditoría global de dependencias del worker se informa por separado/);
   assert.doesNotMatch(markup, /lab-recipient@invalid\.example/);
   assert.doesNotMatch(markup, /DE00LAB000000000000000000/);
   assert.doesNotMatch(markup, /GN-EMAIL-EN-CAL/);
@@ -272,7 +273,13 @@ test("renders the Qwen run as an honest Spanish executive report with bounded ev
   assert.match(exported, /Guardian Nexus/);
   const reportData = JSON.parse(exported) as {
     scope: { activeDomains: string[]; domainsNotIncluded: string[] };
+    supplyChainAssessment: { status: string; tenantEvidence: boolean };
   };
+  assert.deepEqual(reportData.supplyChainAssessment, {
+    status: "NOT_INCLUDED_IN_TENANT_ASSESSMENT",
+    scope: "La imagen y dependencias del worker se evalúan en una auditoría interna separada.",
+    tenantEvidence: false,
+  });
   assert.deepEqual(
     [...reportData.scope.activeDomains].sort(),
     ["documents", "email", "finance"],

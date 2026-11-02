@@ -6,6 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from compose_deployment_sbom import compose
+from compose_deployment_sbom import main as compose_main
 
 
 def bom(name: str, component_name: str, component_ref: str, count: int = 1) -> dict:
@@ -51,6 +52,37 @@ def bom(name: str, component_name: str, component_ref: str, count: int = 1) -> d
 
 
 class ComposeDeploymentSbomTests(unittest.TestCase):
+    def test_cli_does_not_mislabel_separate_runtime_scan_as_not_performed(self) -> None:
+        import contextlib
+        import io
+        import json
+        import tempfile
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            worker_path = root / "worker.json"
+            qwen_path = root / "qwen.json"
+            output_path = root / "combined.json"
+            worker_path.write_text(json.dumps(bom("worker", "worker", "pkg:pypi/worker@1.0", 124)))
+            qwen_path.write_text(json.dumps(bom("qwen", "qwen", "pkg:pypi/qwen@1.0", 13)))
+            stdout = io.StringIO()
+            with patch(
+                "sys.argv",
+                [
+                    "compose_deployment_sbom.py",
+                    "--worker-sbom", str(worker_path),
+                    "--qwen-sbom", str(qwen_path),
+                    "--output", str(output_path),
+                ],
+            ), contextlib.redirect_stdout(stdout):
+                self.assertEqual(compose_main(), 0)
+            result = json.loads(stdout.getvalue())
+            self.assertEqual(
+                result["qwenRuntimeVulnerabilityScan"],
+                "separate-scan-not-embedded-in-composed-sbom",
+            )
+
     def test_composes_distinct_scopes_without_claiming_full_scan(self) -> None:
         import json
         import tempfile

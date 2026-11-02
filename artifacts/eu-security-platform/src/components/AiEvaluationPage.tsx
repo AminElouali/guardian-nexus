@@ -594,7 +594,7 @@ function NativeToolSuiteResult({
       >
         Descargar informe JSON redactado
       </Button>
-      <p className="qwen-limitations">Límites: muestra pequeña de {suite.sampleCount} casos, sin tasa general de seguridad; IPv6 {networkStatusLabel(evidence.network.publicIpv6)} (no equivale a bloqueo verificado); servicio para clientes no disponible. No se conservan prompts, respuestas ni argumentos.</p>
+      <p className="qwen-limitations">Límites: muestra pequeña de {suite.sampleCount} casos, sin tasa general de seguridad; IPv6 {networkStatusLabel(evidence.network.publicIpv6)} (no equivale a bloqueo verificado); la auditoría global de dependencias del worker se informa por separado y no forma parte de esta evidencia de tenant; servicio para clientes no disponible. No se conservan prompts, respuestas ni argumentos.</p>
     </div>}
     <p className="guardian-verification-disclaimer">
       {autonomous

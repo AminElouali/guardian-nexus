@@ -31,6 +31,36 @@ class LocalLlmSbomTests(unittest.TestCase):
             self.assertEqual(licenses[0]["path"], "demo_pkg-1.2.3.dist-info/licenses/LICENSE.txt")
             self.assertEqual(component["hashes"][0]["content"], digest)
 
+    def test_long_legacy_license_text_is_hashed_not_misrepresented_as_a_license_name(self):
+        import hashlib
+
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "legacy_pkg-1.0-py3-none-any.whl"
+            legacy_text = ("Copyright and license terms " * 40).encode()
+            metadata = (
+                b"Metadata-Version: 2.1\nName: legacy-pkg\nVersion: 1.0\nLicense: "
+                + legacy_text
+            )
+            with zipfile.ZipFile(path, "w") as archive:
+                archive.writestr("legacy_pkg-1.0.dist-info/METADATA", metadata)
+            component, _ = _wheel_metadata(
+                path,
+                expected_hash=hashlib.sha256(path.read_bytes()).hexdigest(),
+                expected_name="legacy-pkg",
+                expected_version="1.0",
+            )
+            self.assertEqual(component["licenses"], [{"license": {"name": "NOASSERTION"}}])
+            properties = {item["name"]: item["value"] for item in component["properties"]}
+            self.assertEqual(
+                properties["guardian:license-evidence"],
+                "metadata-license-free-text-hashed-review-required",
+            )
+            self.assertEqual(
+                properties["guardian:declared-license-text-sha256"],
+                hashlib.sha256(legacy_text).hexdigest(),
+            )
+            self.assertNotIn(legacy_text.decode(), json.dumps(component))
+
     def test_artifact_hash_mismatch_fails_closed(self):
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "model.bin"

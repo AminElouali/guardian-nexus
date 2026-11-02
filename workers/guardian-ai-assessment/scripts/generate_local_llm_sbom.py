@@ -88,11 +88,24 @@ def _wheel_metadata(
 
         license_expression = metadata.get("License-Expression")
         license_name = metadata.get("License")
+        declared_license_text_hash = (
+            sha256_bytes(license_name.encode("utf-8"))
+            if license_name and license_name.strip().upper() not in {"UNKNOWN", "NONE"}
+            else None
+        )
+        short_license_name = bool(
+            license_name
+            and license_name.strip().upper() not in {"UNKNOWN", "NONE"}
+            and len(license_name.strip()) <= 160
+            and not any(character in license_name for character in "\r\n")
+        )
         license_evidence = (
             "metadata-license-expression"
             if license_expression
             else "metadata-license-name"
-            if license_name and license_name.strip().upper() not in {"UNKNOWN", "NONE"}
+            if short_license_name
+            else "metadata-license-free-text-hashed-review-required"
+            if declared_license_text_hash
             else "NOASSERTION"
         )
         license_entries = (
@@ -129,7 +142,9 @@ def _wheel_metadata(
                 _property("guardian:wheel-filename", wheel_path.name),
                 _property("guardian:license-files", json.dumps(license_files, sort_keys=True)),
                 _property("guardian:wheel-metadata-sha256", sha256_bytes(archive.read(metadata_names[0]))),
-            ],
+            ] + ([
+                _property("guardian:declared-license-text-sha256", declared_license_text_hash)
+            ] if declared_license_text_hash else []),
         }
         return component, license_files
 

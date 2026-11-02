@@ -89,9 +89,9 @@ description: Product boundaries for security integrations, claims, and productio
 
 **Rule:** In this Replit environment, OSV Scanner honors the inherited `XDG_CACHE_HOME` before a custom `HOME`; setting only `HOME` can silently select the wrong local advisory database.
 
-**Why:** A Trixie scan intended to use the refreshed database instead loaded the workspace default cache, so its result counts were valid but the recorded database provenance was wrong.
+**Why:** A Trixie scan intended to use the refreshed database instead loaded the workspace default cache, so its result counts were valid but the recorded database provenance was wrong. A later isolated cache path used symlinks to shared local archives, so the scanner-reported canonical file path differed from the configured XDG path despite matching content hashes.
 
-**How to apply:** Set `XDG_CACHE_HOME` explicitly to the intended cache and verify the scanner's `Loaded ... local db from` stderr lines and the loaded archive hashes before comparing results. Preserve prior logs and add a correction record rather than rewriting evidence.
+**How to apply:** Set `XDG_CACHE_HOME` explicitly and record the configured database path, scanner-reported path, resolved symlink target, archive hashes, and loaded `stderr` lines. Validate hashes and target identity before comparing results; preserve prior logs and add correction records rather than rewriting evidence.
 
 **Rule:** A scanner exit code indicating findings is not an execution failure when valid output and database provenance are verified; record scanner and wrapper exit codes separately.
 

@@ -85,14 +85,19 @@ def verify_loaded_databases(
     matches = LOADED_DB.findall(stderr)
     if len(matches) != len(DB_NAMES) or {name for name, _ in matches} != set(DB_NAMES):
         raise AuditError("scanner_did_not_report_exactly_one_path_per_local_database")
-    loaded = {
-        name: Path(path.strip()).expanduser().resolve(strict=True)
+    reported = {
+        name: Path(path.strip()).expanduser()
         for name, path in matches
+    }
+    loaded = {
+        name: path.resolve(strict=True)
+        for name, path in reported.items()
     }
 
     verified: dict[str, dict[str, str]] = {}
     for name in DB_NAMES:
-        expected_path = (cache_home / "osv-scalibr" / name / "all.zip").resolve(strict=True)
+        configured_path = cache_home / "osv-scalibr" / name / "all.zip"
+        expected_path = configured_path.resolve(strict=True)
         actual_path = loaded[name]
         if actual_path != expected_path:
             raise AuditError(f"{name}_database_path_mismatch")
@@ -104,6 +109,9 @@ def verify_loaded_databases(
             raise AuditError(f"{name}_database_hash_mismatch")
         verified[name] = {
             "path": str(actual_path),
+            "configuredPath": str(configured_path),
+            "scannerReportedPath": str(reported[name]),
+            "resolvedPath": str(actual_path),
             "sha256": actual_hash,
             "status": "verified",
         }

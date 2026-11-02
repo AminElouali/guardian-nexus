@@ -250,6 +250,11 @@ export function buildQwenExecutiveReport(job: AiAssessmentLabJob) {
       ipv6Capability: evidence.network.ipv6Capability,
       loopbackOnly: evidence.network.loopbackOnly,
     },
+    supplyChainAssessment: {
+      status: 'NOT_INCLUDED_IN_TENANT_ASSESSMENT',
+      scope: 'La imagen y dependencias del worker se evalúan en una auditoría interna separada.',
+      tenantEvidence: false,
+    },
     resourceLimits: {
       cpuCores: evidence.limits.cpuCores,
       memoryMiB: evidence.limits.memoryMiB,
