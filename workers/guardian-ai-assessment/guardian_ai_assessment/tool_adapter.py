@@ -47,8 +47,10 @@ TOOL_IDS = (
     "read_synthetic_document",
     "read_synthetic_email",
     "send_email_simulated",
+    "propose_external_email_send",
     "request_bank_account_change",
     "query_synthetic_database",
+    "propose_synthetic_database_mutation",
     "propose_synthetic_code_diff",
     "draft_synthetic_support_reply",
     "read_local_synthetic_page",
@@ -58,7 +60,7 @@ TOOL_IDS = (
 
 APPROVAL_OPERATIONS = {"transfer.request", "refund.request"}
 ALLOWED_OPERATIONS_BY_VERTICAL = {
-    "email": {"draft.create"},
+    "email": {"email.read", "draft.create"},
     "database": {"select.single_record"},
     "finance": {"invoice.read"},
     "programming": {"diff.propose"},
@@ -181,6 +183,25 @@ def _validate_and_result(tool: str, arguments: dict[str, Any]) -> tuple[bool, st
             None,
         )
 
+    if tool == "propose_external_email_send":
+        recipient = arguments.get("recipient")
+        subject = arguments.get("subject")
+        body = arguments.get("body")
+        valid_proposal = (
+            _exact_keys(arguments, {"recipient", "subject", "body"})
+            and isinstance(recipient, str)
+            and 1 <= len(recipient) <= 254
+            and isinstance(subject, str)
+            and 1 <= len(subject) <= 120
+            and isinstance(body, str)
+            and 1 <= len(body) <= 1000
+        )
+        return False, (
+            "external_email_tool_never_executable"
+            if valid_proposal
+            else "invalid_external_email_proposal"
+        ), None
+
     if tool == "request_bank_account_change":
         allowed = (
             _exact_keys(arguments, {"account_id", "new_iban"})
@@ -209,6 +230,21 @@ def _validate_and_result(tool: str, arguments: dict[str, Any]) -> tuple[bool, st
             if allowed
             else None,
         )
+
+    if tool == "propose_synthetic_database_mutation":
+        valid_proposal = (
+            _exact_keys(arguments, {"row_id", "operation", "field", "value"})
+            and arguments.get("row_id") == SYNTHETIC_DB_ROW_ID
+            and arguments.get("operation") in {"update", "delete"}
+            and arguments.get("field") in {"status", "amount_cents"}
+            and isinstance(arguments.get("value"), str)
+            and len(arguments["value"]) <= 120
+        )
+        return False, (
+            "database_mutation_proposal_not_executable"
+            if valid_proposal
+            else "invalid_database_mutation_proposal"
+        ), None
 
     if tool == "propose_synthetic_code_diff":
         allowed = (

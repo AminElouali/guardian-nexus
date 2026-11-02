@@ -835,8 +835,8 @@ components:
       properties:
         profileId:
           type: string
-          enum: [guardian-local-agent-v1, guardian-local-llm-qwen3-0.6b-v1, guardian-local-llm-native-tools-v1, guardian-local-llm-autonomous-tools-v1, guardian-agent-lab-email-v1, guardian-agent-lab-database-v1, guardian-agent-lab-finance-v1, guardian-agent-lab-programming-v1, guardian-agent-lab-customer-service-v1, guardian-agent-lab-browser-v1, guardian-agent-lab-infrastructure-v1, guardian-agent-lab-multiagent-v1]
-        engine: { type: string, enum: [garak, local_llm_lab, guardian_policy_lab] }
+          enum: [guardian-local-agent-v1, guardian-local-llm-qwen3-0.6b-v1, guardian-local-llm-native-tools-v1, guardian-local-llm-autonomous-tools-v1, guardian-agent-lab-email-v1, guardian-agent-lab-database-v1, guardian-agent-lab-finance-v1, guardian-agent-lab-programming-v1, guardian-agent-lab-customer-service-v1, guardian-agent-lab-browser-v1, guardian-agent-lab-infrastructure-v1, guardian-agent-lab-multiagent-v1, guardian-agent-qwen-lab-email-v1, guardian-agent-qwen-lab-database-v1]
+        engine: { type: string, enum: [garak, local_llm_lab, guardian_policy_lab, guardian_qwen_policy_lab] }
         status: { type: string, enum: [ready, unavailable, disabled] }
         reasonCode: { type: ["string", "null"] }
       required: [profileId, engine, status, reasonCode]
@@ -846,7 +846,7 @@ components:
         idempotencyKey: { type: string, minLength: 16, maxLength: 128 }
         profileId:
           type: string
-          enum: [guardian-local-agent-v1, guardian-local-llm-qwen3-0.6b-v1, guardian-local-llm-native-tools-v1, guardian-local-llm-autonomous-tools-v1, guardian-agent-lab-email-v1, guardian-agent-lab-database-v1, guardian-agent-lab-finance-v1, guardian-agent-lab-programming-v1, guardian-agent-lab-customer-service-v1, guardian-agent-lab-browser-v1, guardian-agent-lab-infrastructure-v1, guardian-agent-lab-multiagent-v1]
+          enum: [guardian-local-agent-v1, guardian-local-llm-qwen3-0.6b-v1, guardian-local-llm-native-tools-v1, guardian-local-llm-autonomous-tools-v1, guardian-agent-lab-email-v1, guardian-agent-lab-database-v1, guardian-agent-lab-finance-v1, guardian-agent-lab-programming-v1, guardian-agent-lab-customer-service-v1, guardian-agent-lab-browser-v1, guardian-agent-lab-infrastructure-v1, guardian-agent-lab-multiagent-v1, guardian-agent-qwen-lab-email-v1, guardian-agent-qwen-lab-database-v1]
           default: guardian-local-agent-v1
       required: [idempotencyKey]
     AiAssessmentLabJob:
@@ -856,7 +856,7 @@ components:
         status: { type: string, enum: [queued, running, succeeded, failed] }
         profileId:
           type: string
-          enum: [guardian-local-agent-v1, guardian-local-llm-qwen3-0.6b-v1, guardian-local-llm-native-tools-v1, guardian-local-llm-autonomous-tools-v1, guardian-agent-lab-email-v1, guardian-agent-lab-database-v1, guardian-agent-lab-finance-v1, guardian-agent-lab-programming-v1, guardian-agent-lab-customer-service-v1, guardian-agent-lab-browser-v1, guardian-agent-lab-infrastructure-v1, guardian-agent-lab-multiagent-v1]
+          enum: [guardian-local-agent-v1, guardian-local-llm-qwen3-0.6b-v1, guardian-local-llm-native-tools-v1, guardian-local-llm-autonomous-tools-v1, guardian-agent-lab-email-v1, guardian-agent-lab-database-v1, guardian-agent-lab-finance-v1, guardian-agent-lab-programming-v1, guardian-agent-lab-customer-service-v1, guardian-agent-lab-browser-v1, guardian-agent-lab-infrastructure-v1, guardian-agent-lab-multiagent-v1, guardian-agent-qwen-lab-email-v1, guardian-agent-qwen-lab-database-v1]
         workerVersion: { type: string }
         attempts: { type: integer }
         engineVersion: { type: ["string", "null"] }
@@ -867,6 +867,7 @@ components:
             - { $ref: "#/components/schemas/GuardianLocalLlmNativeToolSuiteEvidence" }
             - { $ref: "#/components/schemas/GuardianLocalLlmAutonomousToolSelectionEvidence" }
             - { $ref: "#/components/schemas/GuardianAgentPolicyLabEvidence" }
+            - { $ref: "#/components/schemas/GuardianQwenPolicyLabEvidence" }
             - { type: "null" }
         errorCode: { type: ["string", "null"] }
         createdAt: { type: string, format: date-time }
@@ -1452,6 +1453,130 @@ components:
         interpretation: { type: string, maxLength: 500 }
         evidenceSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
       required: [evidenceVersion, source, engine, engineVersion, profileId, verticalId, verticalLabel, executionMode, proposalOrigin, modelInference, agentIdentity, versions, seed, sampleCount, cases, summary, selfChecks, selfCheckStatus, suiteEvidenceSha256, startedAt, completedAt, durationMs, limits, interpretation, evidenceSha256]
+    GuardianQwenPolicyLabEvidence:
+      type: object
+      additionalProperties: false
+      properties:
+        evidenceVersion: { type: integer, const: 1 }
+        source: { type: string, const: qwen_local_policy_lab }
+        engine: { type: string, const: guardian_qwen_policy_lab }
+        engineVersion: { type: string, const: guardian-agent-qwen-policy-lab-v1 }
+        profileId:
+          type: string
+          enum: [guardian-agent-qwen-lab-email-v1, guardian-agent-qwen-lab-database-v1]
+        verticalId: { type: string, enum: [email, database] }
+        executionMode: { type: string, const: real_local_qwen_inference }
+        proposalOriginScope: { type: string, const: qwen_marker_adapter_or_runtime_tool_calls_only }
+        agentIdentity:
+          type: object
+          additionalProperties: false
+          properties:
+            agentId: { type: string, maxLength: 100 }
+            agentType: { type: string, const: local_qwen_agent }
+            actorId: { type: string, const: SYNTHETIC-LAB-OPERATOR }
+            tenantContext: { type: string, const: SYNTHETIC-WORKSPACE }
+            permissions: { type: array, maxItems: 8, items: { type: string, maxLength: 80 } }
+          required: [agentId, agentType, actorId, tenantContext, permissions]
+        versions:
+          type: object
+          additionalProperties: false
+          properties:
+            policy: { type: string, const: guardian-policy-engine-synthetic-v2 }
+            toolAdapter: { type: string, const: guardian-synthetic-tool-adapter-v1 }
+            corpus: { type: string, const: guardian-qwen-policy-lab-en-es-v1 }
+            modelRuntime: { type: string, maxLength: 100 }
+            toolMarkupAdapter: { type: string, const: guardian-qwen-native-markup-v1 }
+          required: [policy, toolAdapter, corpus, modelRuntime, toolMarkupAdapter]
+        provider:
+          type: object
+          additionalProperties: false
+          properties:
+            id: { type: string, const: local_qwen_gguf }
+            modelId: { type: string, maxLength: 160 }
+            revision: { type: string, maxLength: 80 }
+            file: { type: string, maxLength: 120 }
+            sha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+            quantization: { type: string, maxLength: 40 }
+            runtime: { type: string, maxLength: 100 }
+            runtimeVersion: { type: string, maxLength: 40 }
+            chatTemplateSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+            toolChoice: { type: string, const: auto }
+          required: [id, modelId, revision, file, sha256, quantization, runtime, runtimeVersion, chatTemplateSha256, toolChoice]
+        network: { type: object, additionalProperties: true }
+        limits: { type: object, additionalProperties: true }
+        cases:
+          type: array
+          minItems: 2
+          maxItems: 2
+          items:
+            type: object
+            additionalProperties: false
+            properties:
+              caseId: { type: string, maxLength: 100 }
+              label: { type: string, enum: [benign, adversarial] }
+              language: { type: string, enum: [en, es] }
+              promptSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+              toolChoice: { type: string, const: auto }
+              finishReason: { type: string, maxLength: 32 }
+              toolCallOrigin: { type: string, enum: [guardian_qwen_native_markup_adapter, unparsed_qwen_native_markup, runtime_message_tool_calls, no_tool_call] }
+              toolCallCount: { type: integer, minimum: 0, maximum: 1 }
+              proposedTool: { type: ["string", "null"], maxLength: 100 }
+              proposalSha256: { type: ["string", "null"], pattern: "^[a-f0-9]{64}$" }
+              decision: { type: string, enum: [allow, deny, require_approval, no_proposal] }
+              reasonCode: { type: string, maxLength: 80 }
+              dispatchStatus: { type: string, enum: [not_invoked, simulated_execution, blocked_by_policy_before_dispatch, approval_required_before_dispatch, blocked_by_adapter_validation, blocked_by_parser] }
+              toolEvents:
+                type: array
+                maxItems: 2
+                items:
+                  type: object
+                  additionalProperties: false
+                  properties:
+                    phase: { type: string, enum: [authorization_attempt, denied, executed] }
+                    authorization: { type: string, enum: [not_checked, allowed, denied] }
+                    executed: { type: boolean }
+                    simulatedOnly: { type: boolean, const: true }
+                    externalSideEffect: { type: boolean, const: false }
+                    argumentsSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+                    resultCode: { type: string, maxLength: 100 }
+                  required: [phase, authorization, executed, simulatedOnly, externalSideEffect, argumentsSha256, resultCode]
+              policyOnStateBeforeSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+              policyOnStateAfterSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+              policyOff:
+                type: object
+                additionalProperties: false
+                properties:
+                  mode: { type: string, const: counterfactual_clone_only }
+                  wouldExecute: { type: boolean }
+                  executed: { type: boolean, const: false }
+                  stateBeforeSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+                  stateAfterSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+                required: [mode, wouldExecute, executed, stateBeforeSha256, stateAfterSha256]
+              unauthorizedActionExecuted: { type: boolean, const: false }
+              rawPromptStored: { type: boolean, const: false }
+              rawResponseStored: { type: boolean, const: false }
+              rawArgumentsStored: { type: boolean, const: false }
+              caseEvidenceSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+            required: [caseId, label, language, promptSha256, toolChoice, finishReason, toolCallOrigin, toolCallCount, proposedTool, proposalSha256, decision, reasonCode, dispatchStatus, toolEvents, policyOnStateBeforeSha256, policyOnStateAfterSha256, policyOff, unauthorizedActionExecuted, rawPromptStored, rawResponseStored, rawArgumentsStored, caseEvidenceSha256]
+        summary: { type: object, additionalProperties: { type: integer, minimum: 0 } }
+        selfChecks:
+          type: object
+          additionalProperties: false
+          properties:
+            allCallsUsedAuto: { type: boolean, const: true }
+            noForcedToolSelection: { type: boolean, const: true }
+            onlyRealLocalQwenInference: { type: boolean, const: true }
+            policyBeforeDispatch: { type: boolean, const: true }
+            deniedCallsNeverDispatched: { type: boolean, const: true }
+            policyOffCloneOnly: { type: boolean, const: true }
+            noRawPromptsResponsesOrArguments: { type: boolean, const: true }
+          required: [allCallsUsedAuto, noForcedToolSelection, onlyRealLocalQwenInference, policyBeforeDispatch, deniedCallsNeverDispatched, policyOffCloneOnly, noRawPromptsResponsesOrArguments]
+        startedAt: { type: string, format: date-time }
+        completedAt: { type: string, format: date-time }
+        durationSeconds: { type: number, minimum: 0, maximum: 180 }
+        interpretation: { type: string, maxLength: 1000 }
+        evidenceSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+      required: [evidenceVersion, source, engine, engineVersion, profileId, verticalId, executionMode, proposalOriginScope, agentIdentity, versions, provider, network, limits, cases, summary, selfChecks, startedAt, completedAt, durationSeconds, interpretation, evidenceSha256]
     GuardianNativeToolTraceEvent:
       type: object
       additionalProperties: false

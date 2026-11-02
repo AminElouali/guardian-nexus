@@ -978,12 +978,103 @@ export type GuardianAgentPolicyLabEvidence = {
   evidenceSha256: string;
 };
 
+export type GuardianQwenPolicyLabEvidence = {
+  evidenceVersion: 1;
+  source: "qwen_local_policy_lab";
+  engine: "guardian_qwen_policy_lab";
+  engineVersion: "guardian-agent-qwen-policy-lab-v1";
+  profileId:
+    | "guardian-agent-qwen-lab-email-v1"
+    | "guardian-agent-qwen-lab-database-v1";
+  verticalId: "email" | "database";
+  executionMode: "real_local_qwen_inference";
+  proposalOriginScope: "qwen_marker_adapter_or_runtime_tool_calls_only";
+  agentIdentity: {
+    agentId: string;
+    agentType: "local_qwen_agent";
+    actorId: "SYNTHETIC-LAB-OPERATOR";
+    tenantContext: "SYNTHETIC-WORKSPACE";
+    permissions: string[];
+  };
+  versions: {
+    policy: "guardian-policy-engine-synthetic-v2";
+    toolAdapter: "guardian-synthetic-tool-adapter-v1";
+    corpus: "guardian-qwen-policy-lab-en-es-v1";
+    modelRuntime: string;
+    toolMarkupAdapter: "guardian-qwen-native-markup-v1";
+  };
+  provider: {
+    id: "local_qwen_gguf";
+    modelId: string;
+    revision: string;
+    file: string;
+    sha256: string;
+    quantization: string;
+    runtime: string;
+    runtimeVersion: string;
+    chatTemplateSha256: string;
+    toolChoice: "auto";
+  };
+  network: Record<string, unknown>;
+  limits: Record<string, unknown>;
+  cases: Array<{
+    caseId: string;
+    label: "benign" | "adversarial";
+    language: "en" | "es";
+    promptSha256: string;
+    toolChoice: "auto";
+    finishReason: string;
+    toolCallOrigin:
+      | "guardian_qwen_native_markup_adapter"
+      | "unparsed_qwen_native_markup"
+      | "runtime_message_tool_calls"
+      | "no_tool_call";
+    toolCallCount: 0 | 1;
+    proposedTool: string | null;
+    proposalSha256: string | null;
+    decision: "allow" | "deny" | "require_approval" | "no_proposal";
+    reasonCode: string;
+    dispatchStatus: string;
+    toolEvents: Array<{
+      phase: string;
+      authorization: string;
+      executed: boolean;
+      simulatedOnly: true;
+      externalSideEffect: false;
+      argumentsSha256: string;
+      resultCode: string;
+    }>;
+    policyOnStateBeforeSha256: string;
+    policyOnStateAfterSha256: string;
+    policyOff: {
+      mode: "counterfactual_clone_only";
+      wouldExecute: boolean;
+      executed: false;
+      stateBeforeSha256: string;
+      stateAfterSha256: string;
+    };
+    unauthorizedActionExecuted: false;
+    rawPromptStored: false;
+    rawResponseStored: false;
+    rawArgumentsStored: false;
+    caseEvidenceSha256: string;
+  }>;
+  summary: Record<string, number>;
+  selfChecks: Record<string, boolean>;
+  startedAt: Date | string;
+  completedAt: Date | string;
+  durationSeconds: number;
+  interpretation: string;
+  evidenceSha256: string;
+};
+
 export type AiAssessmentJobEvidence =
   | AiAssessmentEvidence
   | GuardianLocalLlmEvidence
   | GuardianLocalLlmNativeToolSuiteEvidence
   | GuardianLocalLlmAutonomousToolSelectionEvidence
-  | GuardianAgentPolicyLabEvidence;
+  | GuardianAgentPolicyLabEvidence
+  | GuardianQwenPolicyLabEvidence;
 
 const memberScope = (workspaceId: SQLWrapper) => sql`
   ${workspaceId}::text = NULLIF(current_setting('app.workspace_id', true), '')
@@ -1060,7 +1151,7 @@ export const aiAssessmentJobsTable = pgTable(
     ),
     check(
       "ai_assessment_jobs_profile_check",
-      sql`${table.profileId} IN ('guardian-local-agent-v1', 'guardian-local-llm-qwen3-0.6b-v1', 'guardian-local-llm-native-tools-v1', 'guardian-local-llm-autonomous-tools-v1', 'guardian-agent-lab-email-v1', 'guardian-agent-lab-database-v1', 'guardian-agent-lab-finance-v1', 'guardian-agent-lab-programming-v1', 'guardian-agent-lab-customer-service-v1', 'guardian-agent-lab-browser-v1', 'guardian-agent-lab-infrastructure-v1', 'guardian-agent-lab-multiagent-v1')`,
+      sql`${table.profileId} IN ('guardian-local-agent-v1', 'guardian-local-llm-qwen3-0.6b-v1', 'guardian-local-llm-native-tools-v1', 'guardian-local-llm-autonomous-tools-v1', 'guardian-agent-lab-email-v1', 'guardian-agent-lab-database-v1', 'guardian-agent-lab-finance-v1', 'guardian-agent-lab-programming-v1', 'guardian-agent-lab-customer-service-v1', 'guardian-agent-lab-browser-v1', 'guardian-agent-lab-infrastructure-v1', 'guardian-agent-lab-multiagent-v1', 'guardian-agent-qwen-lab-email-v1', 'guardian-agent-qwen-lab-database-v1')`,
     ),
     check(
       "ai_assessment_jobs_attempts_check",
@@ -1110,7 +1201,7 @@ export const aiAssessmentJobsTable = pgTable(
         )
       `,
       withCheck: sql`
-        ${table.profileId} IN ('guardian-local-agent-v1', 'guardian-local-llm-qwen3-0.6b-v1', 'guardian-local-llm-native-tools-v1', 'guardian-local-llm-autonomous-tools-v1', 'guardian-agent-lab-email-v1', 'guardian-agent-lab-database-v1', 'guardian-agent-lab-finance-v1', 'guardian-agent-lab-programming-v1', 'guardian-agent-lab-customer-service-v1', 'guardian-agent-lab-browser-v1', 'guardian-agent-lab-infrastructure-v1', 'guardian-agent-lab-multiagent-v1')
+        ${table.profileId} IN ('guardian-local-agent-v1', 'guardian-local-llm-qwen3-0.6b-v1', 'guardian-local-llm-native-tools-v1', 'guardian-local-llm-autonomous-tools-v1', 'guardian-agent-lab-email-v1', 'guardian-agent-lab-database-v1', 'guardian-agent-lab-finance-v1', 'guardian-agent-lab-programming-v1', 'guardian-agent-lab-customer-service-v1', 'guardian-agent-lab-browser-v1', 'guardian-agent-lab-infrastructure-v1', 'guardian-agent-lab-multiagent-v1', 'guardian-agent-qwen-lab-email-v1', 'guardian-agent-qwen-lab-database-v1')
         AND ${table.status} IN ('running', 'failed')
         AND (
           ${table.status} = 'failed'

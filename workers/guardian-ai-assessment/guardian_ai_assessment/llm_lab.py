@@ -422,6 +422,7 @@ class NativeToolProvider(Protocol):
         seed: int,
         tool_choice: Any,
         max_tokens: int = MAX_COMPLETION_TOKENS,
+        tools: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         """Return the runtime's parsed chat-completion tool-call structure."""
 
@@ -527,11 +528,12 @@ class LocalQwenClient:
         seed: int,
         tool_choice: Any,
         max_tokens: int = MAX_COMPLETION_TOKENS,
+        tools: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         _assert_llama_disk_cache_disabled(self._model)
         completion = self._model.create_chat_completion(
             messages=messages,
-            tools=NATIVE_TOOL_SCHEMAS,
+            tools=NATIVE_TOOL_SCHEMAS if tools is None else tools,
             tool_choice=tool_choice,
             temperature=0.0,
             top_p=0.9,

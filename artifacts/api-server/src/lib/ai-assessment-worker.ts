@@ -31,6 +31,7 @@ import {
   getAssessmentImageReference,
   hasExpectedAssessmentImageLabel as hasExpectedProfileLabel,
   isPolicyLabProfile,
+  isQwenPolicyLabProfile,
   launchWithPinnedAssessmentImage,
   readAssessmentImageLock,
   validateAssessmentImageInspection,
@@ -54,6 +55,9 @@ export const LOCAL_LLM_PROFILE_ID = "guardian-local-llm-qwen3-0.6b-v1";
 export const NATIVE_TOOL_PROFILE_ID = "guardian-local-llm-native-tools-v1";
 export const AUTONOMOUS_TOOL_PROFILE_ID =
   "guardian-local-llm-autonomous-tools-v1";
+export const QWEN_EMAIL_POLICY_PROFILE_ID = "guardian-agent-qwen-lab-email-v1";
+export const QWEN_DATABASE_POLICY_PROFILE_ID =
+  "guardian-agent-qwen-lab-database-v1";
 export const EMAIL_POLICY_LAB_PROFILE_ID = "guardian-agent-lab-email-v1";
 export const DATABASE_POLICY_LAB_PROFILE_ID = "guardian-agent-lab-database-v1";
 export const FINANCE_POLICY_LAB_PROFILE_ID = "guardian-agent-lab-finance-v1";
@@ -161,7 +165,8 @@ function isLocalLlmProfile(profileId: AssessmentProfileId): boolean {
   return (
     profileId === LOCAL_LLM_PROFILE_ID ||
     profileId === NATIVE_TOOL_PROFILE_ID ||
-    profileId === AUTONOMOUS_TOOL_PROFILE_ID
+    profileId === AUTONOMOUS_TOOL_PROFILE_ID ||
+    isQwenPolicyLabProfile(profileId)
   );
 }
 
@@ -214,7 +219,11 @@ export type LocalWorkerAvailability = {
   reasonCode: string | null;
   profiles: Array<{
     profileId: AssessmentProfileId;
-    engine: "garak" | "local_llm_lab" | "guardian_policy_lab";
+    engine:
+      | "garak"
+      | "local_llm_lab"
+      | "guardian_policy_lab"
+      | "guardian_qwen_policy_lab";
     status: "ready" | "unavailable" | "disabled";
     reasonCode: string | null;
   }>;
@@ -419,6 +428,14 @@ export function getLocalWorkerAvailability(): LocalWorkerAvailability {
         status: "disabled" as const,
         reasonCode,
       })),
+      ...[QWEN_EMAIL_POLICY_PROFILE_ID, QWEN_DATABASE_POLICY_PROFILE_ID].map(
+        (profileId) => ({
+          profileId: profileId as AssessmentProfileId,
+          engine: "guardian_qwen_policy_lab" as const,
+          status: "disabled" as const,
+          reasonCode,
+        }),
+      ),
     ],
   });
   if (
@@ -463,6 +480,14 @@ export function getLocalWorkerAvailability(): LocalWorkerAvailability {
       status: qwenImageReason ? ("unavailable" as const) : ("ready" as const),
       reasonCode: qwenImageReason,
     })),
+    ...[QWEN_EMAIL_POLICY_PROFILE_ID, QWEN_DATABASE_POLICY_PROFILE_ID].map(
+      (profileId) => ({
+        profileId: profileId as AssessmentProfileId,
+        engine: "guardian_qwen_policy_lab" as const,
+        status: qwenReason ? ("unavailable" as const) : ("ready" as const),
+        reasonCode: qwenReason,
+      }),
+    ),
   ];
   const ready = profiles.some((profile) => profile.status === "ready");
   return {

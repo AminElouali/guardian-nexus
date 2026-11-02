@@ -7,7 +7,15 @@ export type AssessmentProfileId =
   | "guardian-local-llm-qwen3-0.6b-v1"
   | "guardian-local-llm-native-tools-v1"
   | "guardian-local-llm-autonomous-tools-v1"
+  | QwenPolicyLabProfileId
   | PolicyLabProfileId;
+
+export const QWEN_POLICY_LAB_PROFILE_IDS = [
+  "guardian-agent-qwen-lab-email-v1",
+  "guardian-agent-qwen-lab-database-v1",
+] as const;
+
+export type QwenPolicyLabProfileId = (typeof QWEN_POLICY_LAB_PROFILE_IDS)[number];
 
 export const POLICY_LAB_PROFILE_IDS = [
   "guardian-agent-lab-email-v1",
@@ -95,6 +103,7 @@ const PROFILE_IDS: Record<AssessmentImageKey, readonly AssessmentProfileId[]> = 
     "guardian-local-llm-qwen3-0.6b-v1",
     "guardian-local-llm-native-tools-v1",
     "guardian-local-llm-autonomous-tools-v1",
+    ...QWEN_POLICY_LAB_PROFILE_IDS,
     ...POLICY_LAB_PROFILE_IDS,
   ],
 };
@@ -122,6 +131,12 @@ export function isPolicyLabProfile(
   profileId: AssessmentProfileId,
 ): profileId is PolicyLabProfileId {
   return (POLICY_LAB_PROFILE_IDS as readonly string[]).includes(profileId);
+}
+
+export function isQwenPolicyLabProfile(
+  profileId: AssessmentProfileId,
+): profileId is QwenPolicyLabProfileId {
+  return (QWEN_POLICY_LAB_PROFILE_IDS as readonly string[]).includes(profileId);
 }
 
 export function parseAssessmentImageLock(value: unknown): AssessmentImageLock {
@@ -303,6 +318,17 @@ export function buildAssessmentDockerRunArgs(
       profileId,
     ];
   }
+  const command =
+    profileId === "guardian-agent-qwen-lab-email-v1" ||
+    profileId === "guardian-agent-qwen-lab-database-v1"
+      ? `python -m guardian_ai_assessment.qwen_policy_lab --profile-id '${profileId}'`
+      : `python -m guardian_ai_assessment.llm_lab ${
+          profileId === "guardian-local-llm-native-tools-v1"
+            ? "--native-tool-suite-job"
+            : profileId === "guardian-local-llm-autonomous-tools-v1"
+              ? "--autonomous-tool-selection-job"
+              : "--integration-job"
+        }`;
   return [
     ...common,
     `--cpus=${ASSESSMENT_EXECUTION_LIMITS.qwen.cpus}`,
@@ -318,13 +344,7 @@ export function buildAssessmentDockerRunArgs(
     "--entrypoint=/bin/sh",
     imageId,
     "-ceu",
-    `python -m pip install --no-index --no-deps --disable-pip-version-check --no-cache-dir --target=/opt/llm-runtime /wheelhouse/llama_cpp_python-0.3.36-py3-none-linux_x86_64.whl /wheelhouse/jinja2-3.1.6-py3-none-any.whl /wheelhouse/markupsafe-3.0.4-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl >&2; export PYTHONPATH=/opt/llm-runtime:/opt/guardian-assessment; exec python -m guardian_ai_assessment.llm_lab ${
-      profileId === "guardian-local-llm-native-tools-v1"
-        ? "--native-tool-suite-job"
-        : profileId === "guardian-local-llm-autonomous-tools-v1"
-          ? "--autonomous-tool-selection-job"
-          : "--integration-job"
-    }`,
+    `python -m pip install --no-index --no-deps --disable-pip-version-check --no-cache-dir --target=/opt/llm-runtime /wheelhouse/llama_cpp_python-0.3.36-py3-none-linux_x86_64.whl /wheelhouse/jinja2-3.1.6-py3-none-any.whl /wheelhouse/markupsafe-3.0.4-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl >&2; export PYTHONPATH=/opt/llm-runtime:/opt/guardian-assessment; exec ${command}`,
   ];
 }
 
