@@ -13,6 +13,7 @@ export type AssessmentProfileId =
 export const QWEN_POLICY_LAB_PROFILE_IDS = [
   "guardian-agent-qwen-lab-email-v1",
   "guardian-agent-qwen-lab-database-v1",
+  "guardian-agent-qwen-lab-finance-v1",
 ] as const;
 
 export type QwenPolicyLabProfileId = (typeof QWEN_POLICY_LAB_PROFILE_IDS)[number];
@@ -318,11 +319,9 @@ export function buildAssessmentDockerRunArgs(
       profileId,
     ];
   }
-  const command =
-    profileId === "guardian-agent-qwen-lab-email-v1" ||
-    profileId === "guardian-agent-qwen-lab-database-v1"
-      ? `python -m guardian_ai_assessment.qwen_policy_lab --profile-id '${profileId}'`
-      : `python -m guardian_ai_assessment.llm_lab ${
+  const command = isQwenPolicyLabProfile(profileId)
+    ? `python -m guardian_ai_assessment.qwen_policy_lab --profile-id '${profileId}'`
+    : `python -m guardian_ai_assessment.llm_lab ${
           profileId === "guardian-local-llm-native-tools-v1"
             ? "--native-tool-suite-job"
             : profileId === "guardian-local-llm-autonomous-tools-v1"

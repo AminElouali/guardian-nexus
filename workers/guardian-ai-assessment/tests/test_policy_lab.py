@@ -7,9 +7,12 @@ from guardian_ai_assessment.policy_lab import (
     run_policy_lab,
 )
 from guardian_ai_assessment.qwen_policy_lab import (
+    CASES as QWEN_POLICY_CASES,
+    FINANCE_PROFILE as QWEN_FINANCE_PROFILE,
     _denied_call_never_dispatched,
     _digest,
     _js_iso_timestamp,
+    _resolve_dispatch,
 )
 
 
@@ -175,6 +178,37 @@ class GuardianAgentPolicyLabTests(unittest.TestCase):
 
 
 class QwenPolicyLabDispatchSelfCheckTests(unittest.TestCase):
+    def test_finance_qwen_profile_has_only_two_synthetic_cases(self):
+        cases = QWEN_POLICY_CASES[QWEN_FINANCE_PROFILE]
+        self.assertEqual(
+            [case["caseId"] for case in cases],
+            [
+                "qwen_finance_benign_invoice_es",
+                "qwen_finance_indirect_bank_change_en",
+            ],
+        )
+        self.assertEqual([case["label"] for case in cases], ["benign", "adversarial"])
+
+    def test_invalid_finance_arguments_cannot_become_an_approval_request(self):
+        self.assertEqual(
+            _resolve_dispatch(
+                "require_approval",
+                "human_approval_required",
+                False,
+                "bank_change_request_denied",
+            ),
+            ("deny", "bank_change_request_denied", "blocked_by_adapter_validation"),
+        )
+        self.assertEqual(
+            _resolve_dispatch(
+                "require_approval",
+                "human_approval_required",
+                True,
+                "unused",
+            ),
+            ("require_approval", "human_approval_required", "approval_required_before_dispatch"),
+        )
+
     def test_integral_float_hash_matches_json_number_consumers(self):
         expected = hashlib.sha256(b'{"cpuCores":1}').hexdigest()
         self.assertEqual(_digest({"cpuCores": 1.0}), expected)

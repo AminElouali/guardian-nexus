@@ -835,7 +835,7 @@ components:
       properties:
         profileId:
           type: string
-          enum: [guardian-local-agent-v1, guardian-local-llm-qwen3-0.6b-v1, guardian-local-llm-native-tools-v1, guardian-local-llm-autonomous-tools-v1, guardian-agent-lab-email-v1, guardian-agent-lab-database-v1, guardian-agent-lab-finance-v1, guardian-agent-lab-programming-v1, guardian-agent-lab-customer-service-v1, guardian-agent-lab-browser-v1, guardian-agent-lab-infrastructure-v1, guardian-agent-lab-multiagent-v1, guardian-agent-qwen-lab-email-v1, guardian-agent-qwen-lab-database-v1]
+          enum: [guardian-local-agent-v1, guardian-local-llm-qwen3-0.6b-v1, guardian-local-llm-native-tools-v1, guardian-local-llm-autonomous-tools-v1, guardian-agent-lab-email-v1, guardian-agent-lab-database-v1, guardian-agent-lab-finance-v1, guardian-agent-lab-programming-v1, guardian-agent-lab-customer-service-v1, guardian-agent-lab-browser-v1, guardian-agent-lab-infrastructure-v1, guardian-agent-lab-multiagent-v1, guardian-agent-qwen-lab-email-v1, guardian-agent-qwen-lab-database-v1, guardian-agent-qwen-lab-finance-v1]
         engine: { type: string, enum: [garak, local_llm_lab, guardian_policy_lab, guardian_qwen_policy_lab] }
         status: { type: string, enum: [ready, unavailable, disabled] }
         reasonCode: { type: ["string", "null"] }
@@ -846,7 +846,7 @@ components:
         idempotencyKey: { type: string, minLength: 16, maxLength: 128 }
         profileId:
           type: string
-          enum: [guardian-local-agent-v1, guardian-local-llm-qwen3-0.6b-v1, guardian-local-llm-native-tools-v1, guardian-local-llm-autonomous-tools-v1, guardian-agent-lab-email-v1, guardian-agent-lab-database-v1, guardian-agent-lab-finance-v1, guardian-agent-lab-programming-v1, guardian-agent-lab-customer-service-v1, guardian-agent-lab-browser-v1, guardian-agent-lab-infrastructure-v1, guardian-agent-lab-multiagent-v1, guardian-agent-qwen-lab-email-v1, guardian-agent-qwen-lab-database-v1]
+          enum: [guardian-local-agent-v1, guardian-local-llm-qwen3-0.6b-v1, guardian-local-llm-native-tools-v1, guardian-local-llm-autonomous-tools-v1, guardian-agent-lab-email-v1, guardian-agent-lab-database-v1, guardian-agent-lab-finance-v1, guardian-agent-lab-programming-v1, guardian-agent-lab-customer-service-v1, guardian-agent-lab-browser-v1, guardian-agent-lab-infrastructure-v1, guardian-agent-lab-multiagent-v1, guardian-agent-qwen-lab-email-v1, guardian-agent-qwen-lab-database-v1, guardian-agent-qwen-lab-finance-v1]
           default: guardian-local-agent-v1
       required: [idempotencyKey]
     AiAssessmentLabJob:
@@ -856,7 +856,7 @@ components:
         status: { type: string, enum: [queued, running, succeeded, failed] }
         profileId:
           type: string
-          enum: [guardian-local-agent-v1, guardian-local-llm-qwen3-0.6b-v1, guardian-local-llm-native-tools-v1, guardian-local-llm-autonomous-tools-v1, guardian-agent-lab-email-v1, guardian-agent-lab-database-v1, guardian-agent-lab-finance-v1, guardian-agent-lab-programming-v1, guardian-agent-lab-customer-service-v1, guardian-agent-lab-browser-v1, guardian-agent-lab-infrastructure-v1, guardian-agent-lab-multiagent-v1, guardian-agent-qwen-lab-email-v1, guardian-agent-qwen-lab-database-v1]
+          enum: [guardian-local-agent-v1, guardian-local-llm-qwen3-0.6b-v1, guardian-local-llm-native-tools-v1, guardian-local-llm-autonomous-tools-v1, guardian-agent-lab-email-v1, guardian-agent-lab-database-v1, guardian-agent-lab-finance-v1, guardian-agent-lab-programming-v1, guardian-agent-lab-customer-service-v1, guardian-agent-lab-browser-v1, guardian-agent-lab-infrastructure-v1, guardian-agent-lab-multiagent-v1, guardian-agent-qwen-lab-email-v1, guardian-agent-qwen-lab-database-v1, guardian-agent-qwen-lab-finance-v1]
         workerVersion: { type: string }
         attempts: { type: integer }
         engineVersion: { type: ["string", "null"] }
@@ -1460,11 +1460,13 @@ components:
         evidenceVersion: { type: integer, const: 1 }
         source: { type: string, const: qwen_local_policy_lab }
         engine: { type: string, const: guardian_qwen_policy_lab }
-        engineVersion: { type: string, const: guardian-agent-qwen-policy-lab-v1 }
+        engineVersion:
+          type: string
+          enum: [guardian-agent-qwen-policy-lab-v1, guardian-agent-qwen-policy-lab-v1.1.0]
         profileId:
           type: string
-          enum: [guardian-agent-qwen-lab-email-v1, guardian-agent-qwen-lab-database-v1]
-        verticalId: { type: string, enum: [email, database] }
+          enum: [guardian-agent-qwen-lab-email-v1, guardian-agent-qwen-lab-database-v1, guardian-agent-qwen-lab-finance-v1]
+        verticalId: { type: string, enum: [email, database, finance] }
         executionMode: { type: string, const: real_local_qwen_inference }
         proposalOriginScope: { type: string, const: qwen_marker_adapter_or_runtime_tool_calls_only }
         agentIdentity:
@@ -1483,7 +1485,9 @@ components:
           properties:
             policy: { type: string, const: guardian-policy-engine-synthetic-v2 }
             toolAdapter: { type: string, const: guardian-synthetic-tool-adapter-v1 }
-            corpus: { type: string, const: guardian-qwen-policy-lab-en-es-v1 }
+            corpus:
+              type: string
+              enum: [guardian-qwen-policy-lab-en-es-v1, guardian-qwen-policy-lab-en-es-v1.1.0]
             modelRuntime: { type: string, maxLength: 100 }
             toolMarkupAdapter: { type: string, const: guardian-qwen-native-markup-v1 }
           required: [policy, toolAdapter, corpus, modelRuntime, toolMarkupAdapter]

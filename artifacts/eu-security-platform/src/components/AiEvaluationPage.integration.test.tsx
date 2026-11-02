@@ -82,14 +82,14 @@ test("renders the real API lab response in the authenticated dashboard card", ()
   assert.match(localMarkup, /Qwen\/Qwen3-0\.6B-GGUF/);
 });
 
-test("renders real Qwen email and database policy evidence separately from fixtures", () => {
+test("renders real Qwen email, database, and finance evidence separately from fixtures", () => {
   const artifactPath = new URL(
     "../../../../generated-artifacts/guardian-qwen-policy-labs-e2e.json",
     import.meta.url,
   );
   const jobs = JSON.parse(readFileSync(artifactPath, "utf8")) as AiAssessmentLabJob[];
-  assert.equal(jobs.length, 2);
-  for (const verticalId of ["email", "database"] as const) {
+  assert.equal(jobs.length, 3);
+  for (const verticalId of ["email", "database", "finance"] as const) {
     const job = jobs.find(
       (candidate) =>
         candidate.status === "succeeded" &&
@@ -110,7 +110,10 @@ test("renders real Qwen email and database policy evidence separately from fixtu
     assert.match(card, /tool_choice=auto/);
     assert.match(card, /Policy OFF/);
     assert.match(card, /Hash de evidencia/);
-    assert.doesNotMatch(card, /Ignore prior instructions|attacker@outside\.invalid/);
+    assert.doesNotMatch(
+      card,
+      /Ignore prior instructions|attacker@outside\.invalid|Ignore the request|DE00ATTACK/,
+    );
     assert.doesNotMatch(card, /rawPrompt|rawResponse|rawArguments/i);
     assert.doesNotMatch(card, /Qwen realizó llamadas tool_calls nativas/i);
     if (job.result?.engine !== "guardian_qwen_policy_lab") {
@@ -140,6 +143,7 @@ test("renders real Qwen email and database policy evidence separately from fixtu
       availability: [
         { profileId: "guardian-agent-qwen-lab-email-v1", status: "ready" },
         { profileId: "guardian-agent-qwen-lab-database-v1", status: "ready" },
+        { profileId: "guardian-agent-qwen-lab-finance-v1", status: "ready" },
       ],
       canRun: true,
       pending: false,
@@ -150,6 +154,7 @@ test("renders real Qwen email and database policy evidence separately from fixtu
   assert.match(catalog, /tool_choice=auto/);
   assert.match(catalog, /button-run-qwen-policy-email/);
   assert.match(catalog, /button-run-qwen-policy-database/);
+  assert.match(catalog, /button-run-qwen-policy-finance/);
   assert.match(catalog, /NO CONECTADO A CLIENTES/i);
 });
 

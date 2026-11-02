@@ -7,6 +7,7 @@
  */
 import type { GuardianQwenPolicyLabEvidenceAgentIdentity } from './guardianQwenPolicyLabEvidenceAgentIdentity';
 import type { GuardianQwenPolicyLabEvidenceCasesItem } from './guardianQwenPolicyLabEvidenceCasesItem';
+import type { GuardianQwenPolicyLabEvidenceEngineVersion } from './guardianQwenPolicyLabEvidenceEngineVersion';
 import type { GuardianQwenPolicyLabEvidenceLimits } from './guardianQwenPolicyLabEvidenceLimits';
 import type { GuardianQwenPolicyLabEvidenceNetwork } from './guardianQwenPolicyLabEvidenceNetwork';
 import type { GuardianQwenPolicyLabEvidenceProfileId } from './guardianQwenPolicyLabEvidenceProfileId';
@@ -20,7 +21,7 @@ export interface GuardianQwenPolicyLabEvidence {
   evidenceVersion: 1;
   source: 'qwen_local_policy_lab';
   engine: 'guardian_qwen_policy_lab';
-  engineVersion: 'guardian-agent-qwen-policy-lab-v1';
+  engineVersion: GuardianQwenPolicyLabEvidenceEngineVersion;
   profileId: GuardianQwenPolicyLabEvidenceProfileId;
   verticalId: GuardianQwenPolicyLabEvidenceVerticalId;
   executionMode: 'real_local_qwen_inference';

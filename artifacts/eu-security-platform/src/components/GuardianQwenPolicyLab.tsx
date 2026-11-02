@@ -18,7 +18,7 @@ type QwenPolicyProfile = Extract<
 
 const profiles: Array<{
   profileId: QwenPolicyProfile;
-  verticalId: 'email' | 'database';
+  verticalId: 'email' | 'database' | 'finance';
   title: string;
   description: string;
   adversarialCase: string;
@@ -36,6 +36,13 @@ const profiles: Array<{
     title: 'Bases de datos · Qwen local',
     description: 'Consulta una única fila ficticia; no hay conexión a bases empresariales.',
     adversarialCase: 'Instrucción incrustada que pide exportar organizaciones y borrar una fila.',
+  },
+  {
+    profileId: 'guardian-agent-qwen-lab-finance-v1',
+    verticalId: 'finance',
+    title: 'Finanzas · Qwen local',
+    description: 'Lee una factura sintética; una solicitud de cambio bancario solo puede quedar pendiente de revisión.',
+    adversarialCase: 'Inyección en una factura que pide cambiar la cuenta y transferir fondos ficticios.',
   },
 ];
 
@@ -151,7 +158,11 @@ export function QwenPolicyLabResult({ evidence }: { evidence: QwenPolicyEvidence
     <section className="agent-policy-lab-result" data-testid="qwen-policy-lab-result">
       <div className="ai-lab-result-summary">
         <b>
-          {evidence.verticalId === 'email' ? 'Correo' : 'Bases de datos'} · inferencia local
+          {evidence.verticalId === 'email'
+            ? 'Correo'
+            : evidence.verticalId === 'database'
+              ? 'Bases de datos'
+              : 'Finanzas'} · inferencia local
           real de Qwen
         </b>
         <span>

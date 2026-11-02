@@ -905,7 +905,7 @@ test(
 );
 
 test(
-  "real Qwen email and database profiles apply policy before simulated tool dispatch",
+  "real Qwen email, database, and finance profiles apply policy before simulated tool dispatch",
   { timeout: TIMEOUT_MS },
   async () => {
     const pathA = `/api/workspaces/${workspaceA}/ai-security-assessments/lab/jobs`;
@@ -913,6 +913,7 @@ test(
     const profiles = [
       "guardian-agent-qwen-lab-email-v1",
       "guardian-agent-qwen-lab-database-v1",
+      "guardian-agent-qwen-lab-finance-v1",
     ] as const;
     const artifactJobs: Record<string, unknown>[] = [];
 
@@ -967,7 +968,7 @@ test(
       );
 
       let rawJob: Record<string, unknown> | undefined;
-      let evidence: GuardianQwenPolicyLabEvidence | undefined;
+      let hasEvidence = false;
       const deadline = Date.now() + 220_000;
       while (Date.now() < deadline) {
         const response = await apiRequest(userA, pathA);
@@ -986,7 +987,7 @@ test(
           if (!qwenResult || qwenResult.engine !== "guardian_qwen_policy_lab") {
             assert.fail("result must be identified as the real Qwen policy lab");
           }
-          evidence = qwenResult;
+          hasEvidence = true;
           assert.equal(qwenResult.executionMode, "real_local_qwen_inference");
           assert.equal(qwenResult.provider.toolChoice, "auto");
           assert.equal(qwenResult.provider.sha256, "9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031");
@@ -1061,7 +1062,7 @@ test(
         }
         await delay(POLL_INTERVAL_MS);
       }
-      if (!rawJob || !evidence) assert.fail(`${profileId} did not persist Qwen evidence`);
+      if (!rawJob || !hasEvidence) assert.fail(`${profileId} did not persist Qwen evidence`);
 
       const rawEvidence = rawJob.result as Record<string, unknown>;
       const evidenceDigest = rawEvidence.evidenceSha256;

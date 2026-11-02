@@ -12,4 +12,5 @@ export type GuardianQwenPolicyLabEvidenceProfileId = typeof GuardianQwenPolicyLa
 export const GuardianQwenPolicyLabEvidenceProfileId = {
   'guardian-agent-qwen-lab-email-v1': 'guardian-agent-qwen-lab-email-v1',
   'guardian-agent-qwen-lab-database-v1': 'guardian-agent-qwen-lab-database-v1',
+  'guardian-agent-qwen-lab-finance-v1': 'guardian-agent-qwen-lab-finance-v1',
 } as const;

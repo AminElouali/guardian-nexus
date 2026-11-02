@@ -5,11 +5,12 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { GuardianQwenPolicyLabEvidenceVersionsCorpus } from './guardianQwenPolicyLabEvidenceVersionsCorpus';
 
 export type GuardianQwenPolicyLabEvidenceVersions = {
   policy: 'guardian-policy-engine-synthetic-v2';
   toolAdapter: 'guardian-synthetic-tool-adapter-v1';
-  corpus: 'guardian-qwen-policy-lab-en-es-v1';
+  corpus: GuardianQwenPolicyLabEvidenceVersionsCorpus;
   /** @maxLength 100 */
   modelRuntime: string;
   toolMarkupAdapter: 'guardian-qwen-native-markup-v1';

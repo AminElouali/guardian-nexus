@@ -470,7 +470,7 @@ export const GetWorkspaceAiAssessmentLabAvailabilityResponse = zod.object({
   "workerVersion": zod.string(),
   "reasonCode": zod.string().nullable(),
   "profiles": zod.array(zod.object({
-  "profileId": zod.enum(['guardian-local-agent-v1', 'guardian-local-llm-qwen3-0.6b-v1', 'guardian-local-llm-native-tools-v1', 'guardian-local-llm-autonomous-tools-v1', 'guardian-agent-lab-email-v1', 'guardian-agent-lab-database-v1', 'guardian-agent-lab-finance-v1', 'guardian-agent-lab-programming-v1', 'guardian-agent-lab-customer-service-v1', 'guardian-agent-lab-browser-v1', 'guardian-agent-lab-infrastructure-v1', 'guardian-agent-lab-multiagent-v1', 'guardian-agent-qwen-lab-email-v1', 'guardian-agent-qwen-lab-database-v1']),
+  "profileId": zod.enum(['guardian-local-agent-v1', 'guardian-local-llm-qwen3-0.6b-v1', 'guardian-local-llm-native-tools-v1', 'guardian-local-llm-autonomous-tools-v1', 'guardian-agent-lab-email-v1', 'guardian-agent-lab-database-v1', 'guardian-agent-lab-finance-v1', 'guardian-agent-lab-programming-v1', 'guardian-agent-lab-customer-service-v1', 'guardian-agent-lab-browser-v1', 'guardian-agent-lab-infrastructure-v1', 'guardian-agent-lab-multiagent-v1', 'guardian-agent-qwen-lab-email-v1', 'guardian-agent-qwen-lab-database-v1', 'guardian-agent-qwen-lab-finance-v1']),
   "engine": zod.enum(['garak', 'local_llm_lab', 'guardian_policy_lab', 'guardian_qwen_policy_lab']),
   "status": zod.enum(['ready', 'unavailable', 'disabled']),
   "reasonCode": zod.string().nullable()
@@ -1531,7 +1531,7 @@ export const listWorkspaceAiAssessmentLabJobsResponseResultSixEvidenceSha256RegE
 export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "id": zod.uuid(),
   "status": zod.enum(['queued', 'running', 'succeeded', 'failed']),
-  "profileId": zod.enum(['guardian-local-agent-v1', 'guardian-local-llm-qwen3-0.6b-v1', 'guardian-local-llm-native-tools-v1', 'guardian-local-llm-autonomous-tools-v1', 'guardian-agent-lab-email-v1', 'guardian-agent-lab-database-v1', 'guardian-agent-lab-finance-v1', 'guardian-agent-lab-programming-v1', 'guardian-agent-lab-customer-service-v1', 'guardian-agent-lab-browser-v1', 'guardian-agent-lab-infrastructure-v1', 'guardian-agent-lab-multiagent-v1', 'guardian-agent-qwen-lab-email-v1', 'guardian-agent-qwen-lab-database-v1']),
+  "profileId": zod.enum(['guardian-local-agent-v1', 'guardian-local-llm-qwen3-0.6b-v1', 'guardian-local-llm-native-tools-v1', 'guardian-local-llm-autonomous-tools-v1', 'guardian-agent-lab-email-v1', 'guardian-agent-lab-database-v1', 'guardian-agent-lab-finance-v1', 'guardian-agent-lab-programming-v1', 'guardian-agent-lab-customer-service-v1', 'guardian-agent-lab-browser-v1', 'guardian-agent-lab-infrastructure-v1', 'guardian-agent-lab-multiagent-v1', 'guardian-agent-qwen-lab-email-v1', 'guardian-agent-qwen-lab-database-v1', 'guardian-agent-qwen-lab-finance-v1']),
   "workerVersion": zod.string(),
   "attempts": zod.int(),
   "engineVersion": zod.string().nullable(),
@@ -2814,9 +2814,9 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "evidenceVersion": zod.literal(1),
   "source": zod.literal("qwen_local_policy_lab"),
   "engine": zod.literal("guardian_qwen_policy_lab"),
-  "engineVersion": zod.literal("guardian-agent-qwen-policy-lab-v1"),
-  "profileId": zod.enum(['guardian-agent-qwen-lab-email-v1', 'guardian-agent-qwen-lab-database-v1']),
-  "verticalId": zod.enum(['email', 'database']),
+  "engineVersion": zod.enum(['guardian-agent-qwen-policy-lab-v1', 'guardian-agent-qwen-policy-lab-v1.1.0']),
+  "profileId": zod.enum(['guardian-agent-qwen-lab-email-v1', 'guardian-agent-qwen-lab-database-v1', 'guardian-agent-qwen-lab-finance-v1']),
+  "verticalId": zod.enum(['email', 'database', 'finance']),
   "executionMode": zod.literal("real_local_qwen_inference"),
   "proposalOriginScope": zod.literal("qwen_marker_adapter_or_runtime_tool_calls_only"),
   "agentIdentity": zod.object({
@@ -2829,7 +2829,7 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "versions": zod.object({
   "policy": zod.literal("guardian-policy-engine-synthetic-v2"),
   "toolAdapter": zod.literal("guardian-synthetic-tool-adapter-v1"),
-  "corpus": zod.literal("guardian-qwen-policy-lab-en-es-v1"),
+  "corpus": zod.enum(['guardian-qwen-policy-lab-en-es-v1', 'guardian-qwen-policy-lab-en-es-v1.1.0']),
   "modelRuntime": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultSixVersionsModelRuntimeMax),
   "toolMarkupAdapter": zod.literal("guardian-qwen-native-markup-v1")
 }),
@@ -2924,7 +2924,7 @@ export const createWorkspaceAiAssessmentLabJobBodyProfileIdDefault = `guardian-l
 
 export const CreateWorkspaceAiAssessmentLabJobBody = zod.object({
   "idempotencyKey": zod.string().min(createWorkspaceAiAssessmentLabJobBodyIdempotencyKeyMin).max(createWorkspaceAiAssessmentLabJobBodyIdempotencyKeyMax),
-  "profileId": zod.enum(['guardian-local-agent-v1', 'guardian-local-llm-qwen3-0.6b-v1', 'guardian-local-llm-native-tools-v1', 'guardian-local-llm-autonomous-tools-v1', 'guardian-agent-lab-email-v1', 'guardian-agent-lab-database-v1', 'guardian-agent-lab-finance-v1', 'guardian-agent-lab-programming-v1', 'guardian-agent-lab-customer-service-v1', 'guardian-agent-lab-browser-v1', 'guardian-agent-lab-infrastructure-v1', 'guardian-agent-lab-multiagent-v1', 'guardian-agent-qwen-lab-email-v1', 'guardian-agent-qwen-lab-database-v1']).default(createWorkspaceAiAssessmentLabJobBodyProfileIdDefault)
+  "profileId": zod.enum(['guardian-local-agent-v1', 'guardian-local-llm-qwen3-0.6b-v1', 'guardian-local-llm-native-tools-v1', 'guardian-local-llm-autonomous-tools-v1', 'guardian-agent-lab-email-v1', 'guardian-agent-lab-database-v1', 'guardian-agent-lab-finance-v1', 'guardian-agent-lab-programming-v1', 'guardian-agent-lab-customer-service-v1', 'guardian-agent-lab-browser-v1', 'guardian-agent-lab-infrastructure-v1', 'guardian-agent-lab-multiagent-v1', 'guardian-agent-qwen-lab-email-v1', 'guardian-agent-qwen-lab-database-v1', 'guardian-agent-qwen-lab-finance-v1']).default(createWorkspaceAiAssessmentLabJobBodyProfileIdDefault)
 })
 
 export const createWorkspaceAiAssessmentLabJobResponseResultOneReportSha256RegExp = new RegExp('^[a-f0-9]{64}$');
@@ -3973,7 +3973,7 @@ export const createWorkspaceAiAssessmentLabJobResponseResultSixEvidenceSha256Reg
 export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "id": zod.uuid(),
   "status": zod.enum(['queued', 'running', 'succeeded', 'failed']),
-  "profileId": zod.enum(['guardian-local-agent-v1', 'guardian-local-llm-qwen3-0.6b-v1', 'guardian-local-llm-native-tools-v1', 'guardian-local-llm-autonomous-tools-v1', 'guardian-agent-lab-email-v1', 'guardian-agent-lab-database-v1', 'guardian-agent-lab-finance-v1', 'guardian-agent-lab-programming-v1', 'guardian-agent-lab-customer-service-v1', 'guardian-agent-lab-browser-v1', 'guardian-agent-lab-infrastructure-v1', 'guardian-agent-lab-multiagent-v1', 'guardian-agent-qwen-lab-email-v1', 'guardian-agent-qwen-lab-database-v1']),
+  "profileId": zod.enum(['guardian-local-agent-v1', 'guardian-local-llm-qwen3-0.6b-v1', 'guardian-local-llm-native-tools-v1', 'guardian-local-llm-autonomous-tools-v1', 'guardian-agent-lab-email-v1', 'guardian-agent-lab-database-v1', 'guardian-agent-lab-finance-v1', 'guardian-agent-lab-programming-v1', 'guardian-agent-lab-customer-service-v1', 'guardian-agent-lab-browser-v1', 'guardian-agent-lab-infrastructure-v1', 'guardian-agent-lab-multiagent-v1', 'guardian-agent-qwen-lab-email-v1', 'guardian-agent-qwen-lab-database-v1', 'guardian-agent-qwen-lab-finance-v1']),
   "workerVersion": zod.string(),
   "attempts": zod.int(),
   "engineVersion": zod.string().nullable(),
@@ -5256,9 +5256,9 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "evidenceVersion": zod.literal(1),
   "source": zod.literal("qwen_local_policy_lab"),
   "engine": zod.literal("guardian_qwen_policy_lab"),
-  "engineVersion": zod.literal("guardian-agent-qwen-policy-lab-v1"),
-  "profileId": zod.enum(['guardian-agent-qwen-lab-email-v1', 'guardian-agent-qwen-lab-database-v1']),
-  "verticalId": zod.enum(['email', 'database']),
+  "engineVersion": zod.enum(['guardian-agent-qwen-policy-lab-v1', 'guardian-agent-qwen-policy-lab-v1.1.0']),
+  "profileId": zod.enum(['guardian-agent-qwen-lab-email-v1', 'guardian-agent-qwen-lab-database-v1', 'guardian-agent-qwen-lab-finance-v1']),
+  "verticalId": zod.enum(['email', 'database', 'finance']),
   "executionMode": zod.literal("real_local_qwen_inference"),
   "proposalOriginScope": zod.literal("qwen_marker_adapter_or_runtime_tool_calls_only"),
   "agentIdentity": zod.object({
@@ -5271,7 +5271,7 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "versions": zod.object({
   "policy": zod.literal("guardian-policy-engine-synthetic-v2"),
   "toolAdapter": zod.literal("guardian-synthetic-tool-adapter-v1"),
-  "corpus": zod.literal("guardian-qwen-policy-lab-en-es-v1"),
+  "corpus": zod.enum(['guardian-qwen-policy-lab-en-es-v1', 'guardian-qwen-policy-lab-en-es-v1.1.0']),
   "modelRuntime": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultSixVersionsModelRuntimeMax),
   "toolMarkupAdapter": zod.literal("guardian-qwen-native-markup-v1")
 }),
@@ -6404,7 +6404,7 @@ export const retryWorkspaceAiAssessmentLabJobResponseResultSixEvidenceSha256RegE
 export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "id": zod.uuid(),
   "status": zod.enum(['queued', 'running', 'succeeded', 'failed']),
-  "profileId": zod.enum(['guardian-local-agent-v1', 'guardian-local-llm-qwen3-0.6b-v1', 'guardian-local-llm-native-tools-v1', 'guardian-local-llm-autonomous-tools-v1', 'guardian-agent-lab-email-v1', 'guardian-agent-lab-database-v1', 'guardian-agent-lab-finance-v1', 'guardian-agent-lab-programming-v1', 'guardian-agent-lab-customer-service-v1', 'guardian-agent-lab-browser-v1', 'guardian-agent-lab-infrastructure-v1', 'guardian-agent-lab-multiagent-v1', 'guardian-agent-qwen-lab-email-v1', 'guardian-agent-qwen-lab-database-v1']),
+  "profileId": zod.enum(['guardian-local-agent-v1', 'guardian-local-llm-qwen3-0.6b-v1', 'guardian-local-llm-native-tools-v1', 'guardian-local-llm-autonomous-tools-v1', 'guardian-agent-lab-email-v1', 'guardian-agent-lab-database-v1', 'guardian-agent-lab-finance-v1', 'guardian-agent-lab-programming-v1', 'guardian-agent-lab-customer-service-v1', 'guardian-agent-lab-browser-v1', 'guardian-agent-lab-infrastructure-v1', 'guardian-agent-lab-multiagent-v1', 'guardian-agent-qwen-lab-email-v1', 'guardian-agent-qwen-lab-database-v1', 'guardian-agent-qwen-lab-finance-v1']),
   "workerVersion": zod.string(),
   "attempts": zod.int(),
   "engineVersion": zod.string().nullable(),
@@ -7687,9 +7687,9 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "evidenceVersion": zod.literal(1),
   "source": zod.literal("qwen_local_policy_lab"),
   "engine": zod.literal("guardian_qwen_policy_lab"),
-  "engineVersion": zod.literal("guardian-agent-qwen-policy-lab-v1"),
-  "profileId": zod.enum(['guardian-agent-qwen-lab-email-v1', 'guardian-agent-qwen-lab-database-v1']),
-  "verticalId": zod.enum(['email', 'database']),
+  "engineVersion": zod.enum(['guardian-agent-qwen-policy-lab-v1', 'guardian-agent-qwen-policy-lab-v1.1.0']),
+  "profileId": zod.enum(['guardian-agent-qwen-lab-email-v1', 'guardian-agent-qwen-lab-database-v1', 'guardian-agent-qwen-lab-finance-v1']),
+  "verticalId": zod.enum(['email', 'database', 'finance']),
   "executionMode": zod.literal("real_local_qwen_inference"),
   "proposalOriginScope": zod.literal("qwen_marker_adapter_or_runtime_tool_calls_only"),
   "agentIdentity": zod.object({
@@ -7702,7 +7702,7 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "versions": zod.object({
   "policy": zod.literal("guardian-policy-engine-synthetic-v2"),
   "toolAdapter": zod.literal("guardian-synthetic-tool-adapter-v1"),
-  "corpus": zod.literal("guardian-qwen-policy-lab-en-es-v1"),
+  "corpus": zod.enum(['guardian-qwen-policy-lab-en-es-v1', 'guardian-qwen-policy-lab-en-es-v1.1.0']),
   "modelRuntime": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultSixVersionsModelRuntimeMax),
   "toolMarkupAdapter": zod.literal("guardian-qwen-native-markup-v1")
 }),

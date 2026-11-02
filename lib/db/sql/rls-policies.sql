@@ -360,6 +360,7 @@ BEGIN
      OR position('guardian-agent-lab-multiagent-v1' IN existing_definition) = 0
      OR position('guardian-agent-qwen-lab-email-v1' IN existing_definition) = 0
      OR position('guardian-agent-qwen-lab-database-v1' IN existing_definition) = 0
+      OR position('guardian-agent-qwen-lab-finance-v1' IN existing_definition) = 0
   THEN
     ALTER TABLE public.ai_assessment_jobs
       DROP CONSTRAINT IF EXISTS ai_assessment_jobs_profile_check;
@@ -380,7 +381,8 @@ BEGIN
           'guardian-agent-lab-infrastructure-v1',
           'guardian-agent-lab-multiagent-v1',
           'guardian-agent-qwen-lab-email-v1',
-          'guardian-agent-qwen-lab-database-v1'
+          'guardian-agent-qwen-lab-database-v1',
+          'guardian-agent-qwen-lab-finance-v1'
         )
       );
   END IF;
@@ -420,7 +422,8 @@ ALTER POLICY ai_assessment_jobs_worker_update_queue
       'guardian-agent-lab-infrastructure-v1',
       'guardian-agent-lab-multiagent-v1',
       'guardian-agent-qwen-lab-email-v1',
-      'guardian-agent-qwen-lab-database-v1'
+      'guardian-agent-qwen-lab-database-v1',
+      'guardian-agent-qwen-lab-finance-v1'
     )
     AND status IN ('running', 'failed')
     AND (

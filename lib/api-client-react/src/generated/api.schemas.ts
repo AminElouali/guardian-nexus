@@ -353,6 +353,7 @@ export const AiAssessmentLabProfileAvailabilityProfileId = {
   'guardian-agent-lab-multiagent-v1': 'guardian-agent-lab-multiagent-v1',
   'guardian-agent-qwen-lab-email-v1': 'guardian-agent-qwen-lab-email-v1',
   'guardian-agent-qwen-lab-database-v1': 'guardian-agent-qwen-lab-database-v1',
+  'guardian-agent-qwen-lab-finance-v1': 'guardian-agent-qwen-lab-finance-v1',
 } as const;
 
 export type AiAssessmentLabProfileAvailabilityEngine = typeof AiAssessmentLabProfileAvailabilityEngine[keyof typeof AiAssessmentLabProfileAvailabilityEngine];
@@ -408,6 +409,7 @@ export const AiAssessmentLabJobRequestProfileId = {
   'guardian-agent-lab-multiagent-v1': 'guardian-agent-lab-multiagent-v1',
   'guardian-agent-qwen-lab-email-v1': 'guardian-agent-qwen-lab-email-v1',
   'guardian-agent-qwen-lab-database-v1': 'guardian-agent-qwen-lab-database-v1',
+  'guardian-agent-qwen-lab-finance-v1': 'guardian-agent-qwen-lab-finance-v1',
 } as const;
 
 export interface AiAssessmentLabJobRequest {
@@ -447,6 +449,7 @@ export const AiAssessmentLabJobProfileId = {
   'guardian-agent-lab-multiagent-v1': 'guardian-agent-lab-multiagent-v1',
   'guardian-agent-qwen-lab-email-v1': 'guardian-agent-qwen-lab-email-v1',
   'guardian-agent-qwen-lab-database-v1': 'guardian-agent-qwen-lab-database-v1',
+  'guardian-agent-qwen-lab-finance-v1': 'guardian-agent-qwen-lab-finance-v1',
 } as const;
 
 export type AiAssessmentEvidenceSource = typeof AiAssessmentEvidenceSource[keyof typeof AiAssessmentEvidenceSource];
@@ -3191,12 +3194,21 @@ export interface GuardianAgentPolicyLabEvidence {
   evidenceSha256: string;
 }
 
+export type GuardianQwenPolicyLabEvidenceEngineVersion = typeof GuardianQwenPolicyLabEvidenceEngineVersion[keyof typeof GuardianQwenPolicyLabEvidenceEngineVersion];
+
+
+export const GuardianQwenPolicyLabEvidenceEngineVersion = {
+  'guardian-agent-qwen-policy-lab-v1': 'guardian-agent-qwen-policy-lab-v1',
+  'guardian-agent-qwen-policy-lab-v110': 'guardian-agent-qwen-policy-lab-v1.1.0',
+} as const;
+
 export type GuardianQwenPolicyLabEvidenceProfileId = typeof GuardianQwenPolicyLabEvidenceProfileId[keyof typeof GuardianQwenPolicyLabEvidenceProfileId];
 
 
 export const GuardianQwenPolicyLabEvidenceProfileId = {
   'guardian-agent-qwen-lab-email-v1': 'guardian-agent-qwen-lab-email-v1',
   'guardian-agent-qwen-lab-database-v1': 'guardian-agent-qwen-lab-database-v1',
+  'guardian-agent-qwen-lab-finance-v1': 'guardian-agent-qwen-lab-finance-v1',
 } as const;
 
 export type GuardianQwenPolicyLabEvidenceVerticalId = typeof GuardianQwenPolicyLabEvidenceVerticalId[keyof typeof GuardianQwenPolicyLabEvidenceVerticalId];
@@ -3205,6 +3217,15 @@ export type GuardianQwenPolicyLabEvidenceVerticalId = typeof GuardianQwenPolicyL
 export const GuardianQwenPolicyLabEvidenceVerticalId = {
   email: 'email',
   database: 'database',
+  finance: 'finance',
+} as const;
+
+export type GuardianQwenPolicyLabEvidenceVersionsCorpus = typeof GuardianQwenPolicyLabEvidenceVersionsCorpus[keyof typeof GuardianQwenPolicyLabEvidenceVersionsCorpus];
+
+
+export const GuardianQwenPolicyLabEvidenceVersionsCorpus = {
+  'guardian-qwen-policy-lab-en-es-v1': 'guardian-qwen-policy-lab-en-es-v1',
+  'guardian-qwen-policy-lab-en-es-v110': 'guardian-qwen-policy-lab-en-es-v1.1.0',
 } as const;
 
 export type GuardianQwenPolicyLabEvidenceCasesItemLabel = typeof GuardianQwenPolicyLabEvidenceCasesItemLabel[keyof typeof GuardianQwenPolicyLabEvidenceCasesItemLabel];
@@ -3289,7 +3310,7 @@ export type GuardianQwenPolicyLabEvidenceAgentIdentity = {
 export type GuardianQwenPolicyLabEvidenceVersions = {
   policy: 'guardian-policy-engine-synthetic-v2';
   toolAdapter: 'guardian-synthetic-tool-adapter-v1';
-  corpus: 'guardian-qwen-policy-lab-en-es-v1';
+  corpus: GuardianQwenPolicyLabEvidenceVersionsCorpus;
   /** @maxLength 100 */
   modelRuntime: string;
   toolMarkupAdapter: 'guardian-qwen-native-markup-v1';
@@ -3403,7 +3424,7 @@ export interface GuardianQwenPolicyLabEvidence {
   evidenceVersion: 1;
   source: 'qwen_local_policy_lab';
   engine: 'guardian_qwen_policy_lab';
-  engineVersion: 'guardian-agent-qwen-policy-lab-v1';
+  engineVersion: GuardianQwenPolicyLabEvidenceEngineVersion;
   profileId: GuardianQwenPolicyLabEvidenceProfileId;
   verticalId: GuardianQwenPolicyLabEvidenceVerticalId;
   executionMode: 'real_local_qwen_inference';

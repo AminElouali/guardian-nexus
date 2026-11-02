@@ -12,4 +12,5 @@ export type GuardianQwenPolicyLabEvidenceVerticalId = typeof GuardianQwenPolicyL
 export const GuardianQwenPolicyLabEvidenceVerticalId = {
   email: 'email',
   database: 'database',
+  finance: 'finance',
 } as const;
