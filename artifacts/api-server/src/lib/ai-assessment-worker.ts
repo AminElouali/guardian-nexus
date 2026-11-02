@@ -36,7 +36,13 @@ import {
   type AssessmentProfileId,
   type DockerImageInspection,
 } from "./ai-assessment-sandbox";
-import { createAssessmentOutputLimit } from "./assessment-output-limit";
+import { classifyDockerImageInspectResult } from "./assessment-docker-inspection";
+import { stopAndVerifyAssessmentContainer } from "./assessment-container-control";
+import {
+  classifyAssessmentExecutionFailure,
+  createAssessmentOutputCapture,
+  createAssessmentTimeout,
+} from "./assessment-output-limit";
 import { withWorkspaceUserTransaction } from "./tenant-db";
 import { logger } from "./logger";
 
@@ -319,28 +325,15 @@ function inspectAssessmentDockerImage(profileId: AssessmentProfileId): {
       env: dockerCliEnvironment(),
     },
   );
-  if (result.error?.message.includes("ENOENT")) {
-    return { inspection: null, reasonCode: "docker_not_available" };
-  }
-  if (result.error) {
-    return { inspection: null, reasonCode: "docker_readiness_check_failed" };
-  }
-  if (result.status !== 0) {
-    return { inspection: null, reasonCode: "worker_image_not_built" };
-  }
-  try {
-    const inspection = JSON.parse(result.stdout.trim()) as DockerImageInspection;
-    const validation = validateAssessmentImageInspection(
-      profileId,
-      inspection,
-      PROFILE_IMAGE_LOCK,
-    );
-    return validation.ok
-      ? { inspection, reasonCode: null }
-      : { inspection: null, reasonCode: validation.reasonCode };
-  } catch {
-    return { inspection: null, reasonCode: "worker_image_profile_mismatch" };
-  }
+  return classifyDockerImageInspectResult(
+    profileId,
+    {
+      error: result.error,
+      status: result.status,
+      stdout: result.stdout,
+    },
+    PROFILE_IMAGE_LOCK,
+  );
 }
 
 export function getLocalWorkerAvailability(): LocalWorkerAvailability {
@@ -530,20 +523,36 @@ async function verifyLocalLlmRuntimeWheels(): Promise<void> {
 }
 
 function killDockerContainer(jobId: string): void {
-  const killer = spawn(
-    "docker",
-    ["kill", "--signal=KILL", getContainerName(jobId)],
-    {
-      stdio: "ignore",
-      env: dockerCliEnvironment(),
-    },
-  );
-  const deadline = setTimeout(() => {
-    killer.kill("SIGKILL");
-  }, 3_000);
-  deadline.unref();
-  killer.once("close", () => clearTimeout(deadline));
-  killer.once("error", () => clearTimeout(deadline));
+  void stopAssessmentContainerForJob(jobId);
+}
+
+function stopAssessmentContainerForJob(jobId: string): Promise<boolean> {
+  return stopAndVerifyAssessmentContainer(
+    getContainerName(jobId),
+    (args) =>
+      spawn("docker", args, {
+        stdio: ["ignore", "pipe", "ignore"],
+        env: dockerCliEnvironment(),
+      }),
+  )
+    .then((result) => {
+      if (!result.verifiedRemoved) {
+        logger.error(
+          {
+            jobId,
+            killExitCode: result.killExitCode,
+            removeExitCode: result.removeExitCode,
+            residualContainerPresent: result.residualContainerPresent,
+          },
+          "assessment_container_cleanup_failed",
+        );
+      }
+      return result.verifiedRemoved;
+    })
+    .catch(() => {
+      logger.error({ jobId }, "assessment_container_cleanup_failed");
+      return false;
+    });
 }
 
 function canonicalJson(value: unknown): string {
@@ -1815,9 +1824,8 @@ async function runDockerAssessment(
     sourcePath: resolve(WORKER_ROOT, "guardian_ai_assessment"),
   };
   return new Promise((resolve, reject) => {
-    let stdout = "";
-    let stdoutBytes = 0;
-    let timedOut = false;
+    let processError = false;
+    let stopPromise: Promise<boolean> | undefined;
     const child = launchWithPinnedAssessmentImage(
       profileId,
       containerName,
@@ -1830,51 +1838,67 @@ async function runDockerAssessment(
           env: dockerCliEnvironment(),
         }),
     );
-    const outputLimit = createAssessmentOutputLimit(
+    const requestStop = () => {
+      stopPromise ??= stopAssessmentContainerForJob(jobId);
+      child.kill("SIGKILL");
+    };
+    const outputCapture = createAssessmentOutputCapture(
       MAX_STDOUT_BYTES,
-      () => {
-        try {
-          killDockerContainer(jobId);
-        } catch {
-          // The run process is still stopped; the next attempt reaps stale names.
-        } finally {
-          child.kill("SIGKILL");
-        }
-      },
+      requestStop,
     );
 
-    const timeout = setTimeout(() => {
-      timedOut = true;
-      killDockerContainer(jobId);
-      child.kill("SIGKILL");
-    }, isLocalLlmProfile(profileId)
-      ? LOCAL_LLM_MAX_RUNTIME_MS
-      : GARAK_MAX_RUNTIME_MS);
+    const timeout = createAssessmentTimeout(
+      isLocalLlmProfile(profileId)
+        ? LOCAL_LLM_MAX_RUNTIME_MS
+        : GARAK_MAX_RUNTIME_MS,
+      requestStop,
+    );
 
     child.stdout.on("data", (chunk: Buffer) => {
-      const state = outputLimit.recordChunk(chunk.length);
-      stdoutBytes = state.bytesReceived;
-      if (state.exceeded) return;
-      stdout += chunk.toString("utf8");
+      outputCapture.recordChunk(chunk);
     });
     child.on("error", () => {
-      clearTimeout(timeout);
+      processError = true;
+      timeout.cancel();
       reject(new Error("docker_not_available"));
     });
-    child.on("close", (code) => {
-      clearTimeout(timeout);
-      if (timedOut) {
-        reject(new Error("worker_timeout"));
-        return;
-      }
-      if (stdoutBytes > MAX_STDOUT_BYTES) {
-        reject(new Error("worker_output_limit_exceeded"));
+    child.on("close", async (code) => {
+      if (processError) return;
+      timeout.cancel();
+      const executionFailure = classifyAssessmentExecutionFailure({
+        timedOut: timeout.timedOut,
+        outputExceeded: outputCapture.exceeded,
+        exitCode: code,
+      });
+      if (
+        executionFailure === "worker_timeout" ||
+        executionFailure === "worker_output_limit_exceeded"
+      ) {
+        const cleanupVerified =
+          stopPromise !== undefined
+            ? await stopPromise
+            : await stopAssessmentContainerForJob(jobId);
+        reject(
+          new Error(
+            cleanupVerified
+              ? executionFailure
+              : `${executionFailure}_cleanup_failed`,
+          ),
+        );
         return;
       }
       if (code !== 0) {
+        const cleanupVerified =
+          stopPromise !== undefined
+            ? await stopPromise
+            : await stopAssessmentContainerForJob(jobId);
+        if (!cleanupVerified) {
+          reject(new Error("container_execution_cleanup_failed"));
+          return;
+        }
         let workerErrorCode = "container_execution_failed";
         try {
-          const lastLine = stdout.trim().split("\n").at(-1);
+          const lastLine = outputCapture.output.trim().split("\n").at(-1);
           const parsed = lastLine ? JSON.parse(lastLine) as { errorCode?: unknown } : {};
           if (
             typeof parsed.errorCode === "string" &&
@@ -1890,7 +1914,7 @@ async function runDockerAssessment(
       }
 
       try {
-        const output = JSON.parse(stdout.trim()) as unknown;
+        const output = JSON.parse(outputCapture.output.trim()) as unknown;
         const isLocalLlm = isLocalLlmProfile(profileId);
         const parsedResult =
           CreateWorkspaceAiAssessmentLabJobResponse.shape.result.safeParse(
