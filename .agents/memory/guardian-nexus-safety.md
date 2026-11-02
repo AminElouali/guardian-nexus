@@ -86,3 +86,9 @@ description: Product boundaries for security integrations, claims, and productio
 **Why:** The same refreshed local database produced a filtered 18-ID result and a full 81-ID result with `--all-vulns`; an earlier comparison wrongly attributed the difference to database content. A logging wrapper can also fail after the scanner has already saved its result.
 
 **How to apply:** Save exact argv, database hashes, scanner version/binary hash, JSON hash, scanner exit status, and wrapper status. Treat a failed database load as invalid—not a zero-finding scan—and never infer a fix from absence across different filtering modes or database snapshots.
+
+**Rule:** In this Replit environment, OSV Scanner honors the inherited `XDG_CACHE_HOME` before a custom `HOME`; setting only `HOME` can silently select the wrong local advisory database.
+
+**Why:** A Trixie scan intended to use the refreshed database instead loaded the workspace default cache, so its result counts were valid but the recorded database provenance was wrong.
+
+**How to apply:** Set `XDG_CACHE_HOME` explicitly to the intended cache and verify the scanner's `Loaded ... local db from` stderr lines and the loaded archive hashes before comparing results. Preserve prior logs and add a correction record rather than rewriting evidence.

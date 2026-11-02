@@ -22,6 +22,40 @@ es una remediación. Son coincidencias de inventario, no prueba de explotación 
 de que cada ruta sea alcanzable. No se aplicaron actualizaciones. La simulación
 local de paquetes no encontró candidatos Trixie para los paquetes afectados.
 
+## Comparación de base Trixie slim — 2 de noviembre de 2026
+
+Se comprobó una imagen temporal basada en Debian 13 Trixie slim, copiando el
+runtime CPython 3.13.18 desde la imagen Python oficial ya almacenada localmente.
+El build no usó red, no instaló paquetes y no sustituyó la imagen existente.
+La comparación corregida, con las mismas bases OSV locales y opciones completas,
+encontró 177 coincidencias/81 IDs en la imagen worker actual y 175/81 en la
+temporal. Los 81 IDs son iguales, incluidos los 1 críticos y 25 altos: la
+diferencia de dos registros no elimina avisos ni es una remediación. La temporal
+quita nueve componentes Debian del SBOM y reduce el tamaño de imagen en unos
+7,1 MB, pero no ofrece una reducción material de riesgo.
+
+La prueba de 64/64 tests del worker y el self-test aislado pasaron. Sin embargo,
+la imagen temporal no conserva toda la funcionalidad estándar de Python:
+`ctypes` falla por ausencia de `libffi.so.8` y `readline` por ausencia de
+`libreadline.so.8`. No se copiaron bibliotecas ni se instalaron paquetes para
+sortearlo. La imagen no está promovida y no debe sustituir al worker actual.
+
+Corrección de procedencia de escaneo: dos resultados preliminares 186/84 y
+184/84 se habían etiquetado como si usaran la base Debian OSV más reciente
+(`481619…`). Los stderr muestran que heredaron `XDG_CACHE_HOME` y cargaron la
+base anterior `95c71e…`. Los recuentos son válidos para esa base antigua; sus
+contextos estaban mal etiquetados. Con `XDG_CACHE_HOME` fijado explícitamente,
+la imagen Python/Trixie base devuelve 177/81 y Debian Trixie slim 175/81. La
+corrección completa, comandos y hashes están en `DEPENDENCY_AUDIT.md` y en el
+artefacto local de corrección; no se presentan los 186/84 como una nueva
+medición de la imagen candidata.
+
+Una segunda reconstrucción local generó las mismas cinco capas del sistema de
+archivos, pero otro ID de imagen porque cambió la metadata de creación. Esto
+apoya la repetibilidad local de esas capas, no una reproducibilidad completa
+entre equipos. El intento de fijar la imagen de entrada por su ID falló en la
+resolución de origen de BuildKit; no se hizo una alternativa con red.
+
 ## Riesgos principales y controles actuales
 
 - Las coincidencias incluyen `glibc`, SQLite, `util-linux`, ACL/attr, zlib,

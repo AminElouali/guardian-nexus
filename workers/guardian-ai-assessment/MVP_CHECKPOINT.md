@@ -1,8 +1,82 @@
 # Guardian Nexus MVP checkpoint
 
-Updated: 2026-11-02 — offline OSV reconciliation and supply-chain summary
+Updated: 2026-11-02 — Trixie slim experiment and OSV cache correction
 Scope: development/local laboratory only. No customer systems, external model APIs,
 paid services, production database, remote deployment, or publishing.
+
+## Temporary Debian Trixie slim experiment — 2026-11-02
+
+- Verified starting HEAD `5cb1d85678a59cb86b4c814481244a84af19b404`, clean tree.
+  No production, customer, secret, deployment, or publication access.
+- Corrected a cache-resolution error in the preliminary base scans: they set
+  `HOME` but inherited `XDG_CACHE_HOME=/home/runner/workspace/.cache`, so stderr
+  shows OSV Scanner actually loaded Debian DB `95c71e88…6ec8`, not the
+  `4816191f…3582` recorded in those preliminary contexts. The 186/84 Python
+  Trixie and 184/84 Debian slim results are valid for the older DB, not the
+  newer one. Correction record:
+  `generated-artifacts/guardian-ai-assessment-offline/cache-resolution-correction-20261102.md`,
+  SHA-256 `6000e994caab601abb2697c9b379d9cbe9ac0f2978b3803b753fa1630fe7d6b0`.
+- Re-ran four comparable local archive scans with `XDG_CACHE_HOME` explicitly
+  set to the local Debian DB `4816191fe3b9edc162646d56b0f26ee417c26bacdd02d1c39a5bcfa957c53582`,
+  PyPI DB `8fd7138ad08c733316d229a05ac5a8a9fdcba4f6439d80cdab97fe4e18445dde`,
+  OSV Scanner 2.7.0, and
+  `--offline --offline-vulnerabilities --all-packages --all-vulns`.
+  Python/Trixie base: 177/81, SHA `ee78363466ca653b77a959afa14ccdf456034a82482a2ef6c92a685709a709f5`;
+  Debian Trixie slim base: 175/81, SHA `3248d60b119fbfbda7e5c688d03bd44bb1af7bb7a41a8b33bdb102bdb1b52790`;
+  existing worker control: 177/81, SHA `292c48b7a65092730f080cb737e72e8e29a1610cbd3e304e1d9b6a87d18c59ca`;
+  temporary candidate: 175/81, SHA `f8cd3aadf85312e156afc017b0002afc408520e499a9a2d6de90896e34dbcbd5`.
+  All scans exited 1 for findings and all four have the same 81 IDs; the
+  candidate keeps the existing 1 critical and 25 high IDs. The older 186/84
+  counts are a DB-version result, not package remediation.
+- Built local, temporary tag
+  `guardian-ai-assessment:trixie-slim-python-experiment-20261102` from cached
+  official Debian Trixie slim plus `/usr/local` from the digest-pinned official
+  Python Trixie image. The successful build used `--pull=false --network=none`;
+  no package downloads or installs occurred.
+  Image ID `sha256:0d8d329e431b885225a7988e700c6e3ded9557786f39580a0be17d7e367e3e34`.
+  Candidate CycloneDX 1.6 SBOM has 116 components and SHA-256
+  `33b2ba7ed3a403a5e6aac88bfeb00beea1d8ca8925b28f4f99634e4e2a35bf3e`.
+  It removes nine Debian package PURLs and is about 7.1 MB smaller, but does not
+  remove any unique advisory ID.
+- A second no-cache, no-pull, `--network=none` build from the same local source
+  tag produced image ID `sha256:90ac12b3a3c1a4f078242dc7c4dafb7a90b86cd797c17f39c7212da792c68a80`;
+  all five rootfs layer DiffIDs matched the first build, but the `Created`
+  timestamp and image config ID differed. This is local filesystem-layer
+  repeatability evidence, not a bit-for-bit image guarantee. Trying to pin that
+  local source with `FROM sha256:<config-id>` failed because BuildKit treated it
+  as `docker.io/library/sha256:<config-id>` and returned `pull access denied`;
+  no image was created, no credentials were used, and no network-enabled
+  workaround was attempted.
+- Worker suite: **64/64 passed** under `--network=none`; candidate self-test
+  exited 0; the worker-required import smoke passed. Promotion is blocked:
+  Python `ctypes` fails because `libffi.so.8` is absent, and `readline` fails
+  because `libreadline.so.8` is absent. No manual library copy was attempted.
+  Candidate remains separate from both `:local` and `:offline-rebuilt`.
+- Worker unit context SHA-256
+  `347a7af25bb6f6c69d76fa224d25ba922d22c7e457158cb8b77c6936e4ac3a50`,
+  captured test output SHA-256
+  `91b379e122ec1cd79d5f8a02583a7493d6f858e7fa407db381636123b7020cad`,
+  self-test result SHA-256
+  `7a4d288d8139e43f86d4d38881fbf482929e399607695530ff089edc8109da90`.
+- Existing report v3 was audited without code changes; component test passed
+  **4/4**. It clearly labels adapted template markers vs 0 direct runtime tool
+  calls, lab-only synthetic evidence, Policy OFF as an unexecuted counterfactual,
+  risk, mitigation, hashes, zero real effects, and sample limits.
+- Saved report-component test output SHA-256
+  `4f276cbaff951def3dc187a5cb23593200bc52b804331b73bafc25e689835aef`.
+- Consolidated generated-evidence manifest:
+  `generated-artifacts/guardian-ai-assessment-offline/EVIDENCE-MANIFEST-SHA256SUMS-20261102.txt`,
+  SHA-256 `1351838cc646fbd2087bc688c9138d2c136c44ac0557e97c429030e641dc0bdb`.
+- Mounted runtime provenance remains bounded to local evidence: active Qwen
+  wheel, llama.cpp source commit and native ELF hashes are recorded in
+  `DEPENDENCY_AUDIT.md`; full native license review and a complete mounted-runtime
+  CycloneDX SBOM remain pending. `langdetect` remains license-ambiguous.
+  IPv4 TCP/UDP/DNS remain as previously verified blocked; IPv6 remains
+  `kernel_protocol_unavailable`, **NO VERIFICADO**.
+- No app, API, database, RLS/RBAC, Clerk, Qwen/Garak/GVE or Policy Engine code
+  changed. No new full API/E2E/typecheck/build run was needed for documentation
+  and a separate candidate image; the report test above and candidate worker
+  tests are the checks performed in this hito.
 
 ## Official Debian and provenance follow-up — 2026-11-02
 

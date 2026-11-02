@@ -1,5 +1,139 @@
 # Guardian Nexus worker dependency audit
 
+## Trixie slim experiment and OSV cache correction — 2026-11-02
+
+### Cache-resolution correction and comparable scans
+
+- The preliminary Trixie base-image runs recorded Debian DB SHA-256
+  `4816191fe3b9edc162646d56b0f26ee417c26bacdd02d1c39a5bcfa957c53582`, but
+  set only `HOME` while inheriting `XDG_CACHE_HOME=/home/runner/workspace/.cache`.
+  OSV Scanner preferred the inherited cache. The captured stderr confirms that
+  those scans loaded `/home/runner/workspace/.cache/osv-scalibr/Debian/all.zip`,
+  whose actual SHA-256 is
+  `95c71e88a626f4ba428196019dae1658358862d45e2c769ad85b8a5e74ee6ec8`.
+  Thus the preliminary 186/84 and 184/84 results are valid for the older DB,
+  but their context files misidentified the DB. Original JSON and stderr remain
+  preserved; correction details and hashes are in
+  `generated-artifacts/guardian-ai-assessment-offline/cache-resolution-correction-20261102.md`
+  (SHA-256 `6000e994caab601abb2697c9b379d9cbe9ac0f2978b3803b753fa1630fe7d6b0`).
+- The authoritative comparable bundle is
+  `generated-artifacts/guardian-ai-assessment-offline/osv-cache-corrected-20261102/`.
+  It explicitly sets `XDG_CACHE_HOME` to the local DB directory, scans local
+  `docker save` archives with
+  `--offline --offline-vulnerabilities --all-packages --all-vulns`, and retains
+  stderr lines showing both DB paths. OSV Scanner is 2.7.0, binary SHA-256
+  `73cc8c323f04d4dbc39a861033819624524f3a7908be730f92d3f076fda0f087`;
+  Debian DB SHA-256 `4816191fe3b9edc162646d56b0f26ee417c26bacdd02d1c39a5bcfa957c53582`;
+  PyPI DB SHA-256
+  `8fd7138ad08c733316d229a05ac5a8a9fdcba4f6439d80cdab97fe4e18445dde`.
+- Corrected full scans all exited 1, meaning valid scans with findings:
+  Python/Trixie base **177 match records / 81 IDs** (JSON SHA-256
+  `ee78363466ca653b77a959afa14ccdf456034a82482a2ef6c92a685709a709f5`);
+  Debian Trixie slim base **175 / 81** (SHA-256
+  `3248d60b119fbfbda7e5c688d03bd44bb1af7bb7a41a8b33bdb102bdb1b52790`);
+  current worker control **177 / 81** (SHA-256
+  `292c48b7a65092730f080cb737e72e8e29a1610cbd3e304e1d9b6a87d18c59ca`);
+  temporary slim-based worker **175 / 81** (SHA-256
+  `f8cd3aadf85312e156afc017b0002afc408520e499a9a2d6de90896e34dbcbd5`).
+  All four scans have the same 81 advisory IDs; the current worker and the
+  temporary candidate retain the same critical/high IDs (1 critical, 25 high).
+  PyPI match records are zero. The previous 177/81 scan of the candidate is
+  consistent with the corrected control; the earlier 186/84 results use the
+  older database and must not be described as scans against DB `481619…`.
+
+### Temporary image candidate (not promoted)
+
+- Built local tag
+  `guardian-ai-assessment:trixie-slim-python-experiment-20261102`, image ID
+  `sha256:0d8d329e431b885225a7988e700c6e3ded9557786f39580a0be17d7e367e3e34`.
+  It uses the cached official Debian 13 `debian:trixie-slim` image and copies
+  `/usr/local` CPython 3.13.18 from the cached, digest-pinned official
+  `python:3.13-slim-trixie` image, plus the existing worker site-packages and
+  source. `docker build --no-cache --pull=false --network=none` succeeded;
+  no package downloads or installs occurred. The candidate was not promoted
+  over `:local` or `:offline-rebuilt`.
+- A second `--no-cache --pull=false --network=none` build from the same local
+  input tag produced image ID
+  `sha256:90ac12b3a3c1a4f078242dc7c4dafb7a90b86cd797c17f39c7212da792c68a80`.
+  Its five rootfs layer DiffIDs exactly match the first build, but the image
+  config/image ID differs (the `Created` metadata differs). This verifies the
+  same filesystem layers in this workspace, not bit-for-bit image reproducibility
+  across builders or hosts. A follow-up attempt to pin the local worker source
+  using `FROM sha256:<image-config-id>` failed during BuildKit source metadata
+  resolution: BuildKit interpreted it as
+  `docker.io/library/sha256:<image-config-id>` and returned `pull access denied`.
+  It produced no image; no credentials were used. No network-enabled workaround
+  was attempted.
+- Candidate CycloneDX 1.6 SBOM: **116 components** (78 Debian packages,
+  37 Python distributions, plus an explicit CPython runtime component), SHA-256
+  `33b2ba7ed3a403a5e6aac88bfeb00beea1d8ca8925b28f4f99634e4e2a35bf3e`.
+  Its 115 PURLs shared with the previous 124-component inventory; nine Debian
+  package PURLs were absent and the CPython component was added with its source
+  image digest and a file-manifest reference. The local bundled Python license
+  text identifies Python Software Foundation License Version 2 (file SHA-256
+  `78b12c3a81360b357002334f0e70ea0e92eebf7a9b358805c03c48484945f3bb`).
+  SBOM inclusion is inventory evidence, not vulnerability assessment or legal
+  clearance.
+- Image size fell from 247,459,678 to 240,379,047 bytes. The worker unit suite
+  passed **64/64** and the isolated self-test exited 0 under `--network=none`;
+  worker-required import smoke also passed. However, standard-library imports
+  `ctypes` and `readline` fail because this base does not contain `libffi.so.8`
+  and `libreadline.so.8`. No libraries were copied manually or installed.
+  Therefore this is not a drop-in-compatible worker image and remains
+  unpromoted.
+- Worker test context records `network=none`, read-only root, UID 65532,
+  0.5 CPU, 768 MiB RAM, 64 PIDs, concurrency 1, image ID and exit 0; context
+  SHA-256 `347a7af25bb6f6c69d76fa224d25ba922d22c7e457158cb8b77c6936e4ac3a50`,
+  stderr/test output SHA-256
+  `91b379e122ec1cd79d5f8a02583a7493d6f858e7fa407db381636123b7020cad`.
+  Self-test result SHA-256
+  `7a4d288d8139e43f86d4d38881fbf482929e399607695530ff089edc8109da90`.
+- Although the candidate has nine fewer Debian package records and two fewer
+  package/advisory match records, **all 81 advisory IDs remain**, including the
+  same critical/high set. This is not a material vulnerability reduction or
+  remediation. No advisories were suppressed and no cross-suite packages or
+  ad hoc patches were used. Build logs, test outputs, image archive hashes,
+  scan outputs and SBOM are retained under
+  `generated-artifacts/guardian-ai-assessment-offline/trixie-slim-python-experiment-20261102/`
+  and `.../osv-cache-corrected-20261102/`.
+- Consolidated file manifest for the corrected scans, candidate builds and
+  tests, SBOM, native-runtime inventories, and report test:
+  `generated-artifacts/guardian-ai-assessment-offline/EVIDENCE-MANIFEST-SHA256SUMS-20261102.txt`,
+  SHA-256 `1351838cc646fbd2087bc688c9138d2c136c44ac0557e97c429030e641dc0bdb`.
+
+### Report and mounted native runtime evidence
+
+- The tenant report v3 code and its component assertions were audited; no
+  demonstrable copy or data-leakage gap was found. The report separates adapted
+  Qwen template markers from direct `message.tool_calls`, identifies the
+  synthetic case and counterfactual-only Policy OFF arm, explains the risk,
+  independent denial, no-real-effects status, hashes and sample limitations.
+  The targeted component suite passed **4/4** on 2026-11-02. The report remains
+  tenant-scoped; global worker-image findings stay in the separate internal
+  supply-chain report. Saved test output SHA-256
+  `4f276cbaff951def3dc187a5cb23593200bc52b804331b73bafc25e689835aef` (4 pass,
+  0 fail); test context is in
+  `generated-artifacts/guardian-ai-assessment-report-v3-20261102/`.
+- Existing native runtime evidence was rechecked locally, not rebuilt:
+  active `llama-cpp-python 0.3.36` wheel SHA-256
+  `5e50c8f09c0ed78512bfb16adb32be9e0c65b8ced7c1efcfc200c38782141e96`;
+  PyPI sdist SHA-256
+  `832db0699007f1be95a7e41ef12e88926b02ba836461e36a36372db2760c1a2e`;
+  source manifest SHA-256
+  `8fb7551d2fee1d4e8bb81e2d5e1eaabc4ba6dc776c92662ac61bc0e0132a529b`;
+  vendored llama.cpp commit `0c1e57098bba43ac29e6e3b677cdceebdd22334f`,
+  declared MIT. The mounted-runtime license inventory SHA-256 is
+  `2fafa80a397f89ccae66fcab113b94cd6475db627e4dc3f6f58f5ca528197873`;
+  native ELF inventory SHA-256 is
+  `5dfe95f9cc8e1a7876e43a3aee6a8d8e305a53508b19f23540b14d9fdea968f2`.
+  The mounted wheel remains locally built without a signed build attestation or
+  bit-for-bit repeatability. `numpy` and `typing-extensions` are inherited from
+  the worker image without separate wheel archives in this inventory.
+- `langdetect 1.0.9` remains ambiguous (MIT metadata versus Apache-2.0 packaged
+  license evidence). Native dependency notice completeness and legal review
+  remain open; no legal conclusion is made. The Qwen-mounted runtime still does
+  not have a complete independent CycloneDX SBOM.
+
 **Date:** 2026-11-01  
 **Scope:** local development worker image only; no production, customers, cloud
 workers, or published image. This is an inventory and advisory triage, not a
