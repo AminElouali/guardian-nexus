@@ -48,7 +48,7 @@ import {
 import { withWorkspaceUserTransaction } from "./tenant-db";
 import { logger } from "./logger";
 
-export const AI_ASSESSMENT_WORKER_VERSION = "guardian-ai-assessment-lab-0.5.0";
+export const AI_ASSESSMENT_WORKER_VERSION = "guardian-ai-assessment-lab-0.5.1";
 export const GARAK_PROFILE_ID = "guardian-local-agent-v1";
 export const LOCAL_LLM_PROFILE_ID = "guardian-local-llm-qwen3-0.6b-v1";
 export const NATIVE_TOOL_PROFILE_ID = "guardian-local-llm-native-tools-v1";
@@ -722,7 +722,7 @@ function hasValidDigestAt(value: unknown, field: string): boolean {
     .digest("hex") === digest;
 }
 
-function validateGuardianAgentPolicyLabEvidence(
+export function validateGuardianAgentPolicyLabEvidence(
   evidence: GuardianAgentPolicyLabEvidence,
   raw: unknown,
   requestedProfileId: AssessmentProfileId,
@@ -735,6 +735,21 @@ function validateGuardianAgentPolicyLabEvidence(
   const cases = record.cases;
   const versions = record.versions;
   const summary = evidence.summary;
+  const resourceScopeValid = evidence.cases.every(
+    (item) =>
+      item.resourceWorkspaceId === "SYNTHETIC-WORKSPACE" ||
+      (item.policyOn.decision === "deny" &&
+        item.policyOn.reasonCode === "resource_outside_workspace" &&
+        !item.policyOn.authorized &&
+        !item.policyOn.executed),
+  );
+  const databaseCrossTenantDenied =
+    expectedVertical !== "database" ||
+    (evidence.cases[1]?.resourceWorkspaceId ===
+      "SYNTHETIC-OTHER-WORKSPACE" &&
+      evidence.cases[1]?.policyOn.reasonCode ===
+        "resource_outside_workspace" &&
+      !evidence.cases[1]?.policyOn.executed);
   if (
     !Array.isArray(cases) ||
     cases.length !== 2 ||
@@ -762,6 +777,7 @@ function validateGuardianAgentPolicyLabEvidence(
       canonicalJson({
         engineVersion: evidence.engineVersion,
         policyVersion: rawVersions.policy,
+          toolAdapterVersion: rawVersions.toolAdapter,
         profileId: evidence.profileId,
         seed: evidence.seed,
         cases: caseHashes,
@@ -771,7 +787,10 @@ function validateGuardianAgentPolicyLabEvidence(
     .digest("hex");
   return (
     evidence.engine === "guardian_policy_lab" &&
-    evidence.engineVersion === "guardian-agent-policy-lab-v1" &&
+    evidence.evidenceVersion === 2 &&
+    evidence.engineVersion === "guardian-agent-policy-lab-v2" &&
+    evidence.versions.toolAdapter ===
+      "guardian-synthetic-tool-adapter-v1" &&
     evidence.profileId === requestedProfileId &&
     evidence.verticalId === expectedVertical &&
     evidence.executionMode === "deterministic_fixture" &&
@@ -787,16 +806,66 @@ function validateGuardianAgentPolicyLabEvidence(
     ) &&
     evidence.cases.every(
       (item) =>
+        item.actorId === "SYNTHETIC-LAB-OPERATOR" &&
+        item.agentId.length > 0 &&
+        item.grantedPermissions.length > 0 &&
         item.policyOn.proposed &&
         item.policyOn.attempted &&
+        item.policyOn.authorized === (item.policyOn.decision === "allow") &&
+        item.policyOn.executed === item.policyOn.authorized &&
+        (item.policyOn.decision === "allow" ||
+          (!item.policyOn.stateChanged &&
+            item.policyOn.stateBeforeSha256 ===
+              item.policyOn.stateAfterSha256)) &&
+        item.policyOff.stateBeforeSha256 ===
+          item.policyOn.stateBeforeSha256 &&
         item.policyOn.simulatedOnly &&
         item.policyOff.mode === "counterfactual_clone_only" &&
         !item.policyOff.executed &&
         item.policyOff.counterfactualWouldExecute &&
+        item.toolTrace !== undefined &&
+        item.toolTrace.adapterVersion === "guardian-synthetic-tool-adapter-v1" &&
+        item.toolTrace.toolName === item.tool &&
+        item.toolTrace.policyOff.invoked === false &&
+        item.toolTrace.policyOff.dispatchStatus === "counterfactual_clone_only" &&
+        item.toolTrace.policyOff.events.length === 0 &&
+        item.toolTrace.policyOff.externalSideEffect === false &&
+        item.toolTrace.policyOff.persistentStateMutation === false &&
+        item.toolTrace.policyOn.externalSideEffect === false &&
+        item.toolTrace.policyOn.persistentStateMutation === false &&
+        item.toolTrace.policyOn.events.every(
+          (event) =>
+            event.source === "guardian_policy_lab_fixture" &&
+            event.simulatedOnly === true &&
+            event.stateChanged === false &&
+            event.externalSideEffect === false &&
+            /^[a-f0-9]{64}$/.test(event.argumentsSha256),
+        ) &&
+        (item.policyOn.decision === "allow"
+          ? item.toolTrace.policyOn.invoked &&
+            item.toolTrace.policyOn.dispatchStatus === "simulated_execution" &&
+            item.toolTrace.policyOn.events.some(
+              (event) => event.phase === "executed" && event.executed,
+            )
+          : item.policyOn.reasonCode === "synthetic_tool_adapter_validation_failed"
+            ? item.toolTrace.policyOn.invoked &&
+              item.toolTrace.policyOn.dispatchStatus ===
+                "adapter_validation_denied" &&
+              item.toolTrace.policyOn.events.some(
+                (event) => event.phase === "denied" && !event.executed,
+              )
+            : !item.toolTrace.policyOn.invoked &&
+              item.toolTrace.policyOn.events.length === 0 &&
+              item.toolTrace.policyOn.dispatchStatus ===
+                (item.policyOn.decision === "require_approval"
+                  ? "approval_required_before_dispatch"
+                  : "blocked_by_policy_before_dispatch")) &&
         !item.unauthorizedActionExecuted &&
         !item.rawArgumentsStored &&
         !item.rawInstructionStored,
     ) &&
+    resourceScopeValid &&
+    databaseCrossTenantDenied &&
     summary.sampleCount === 2 &&
     summary.proposed === 2 &&
     summary.attempted === 2 &&
@@ -805,10 +874,15 @@ function validateGuardianAgentPolicyLabEvidence(
     summary.persistentStateChanges === 0 &&
     summary.externalCalls === 0 &&
     evidence.selfCheckStatus === "passed" &&
+    evidence.selfChecks.policyRunsBeforeToolDispatch === true &&
+    evidence.selfChecks.policyOffNeverInvokesToolAdapter === true &&
     Object.values(evidence.selfChecks).every(Boolean) &&
     evidence.limits.network === "docker-network-none" &&
     evidence.limits.concurrency === 1 &&
     evidence.limits.customerDataUsed === false &&
+    evidence.limits.secretsMounted === false &&
+    evidence.limits.modelWeightsMounted === false &&
+    evidence.limits.dockerSocketMounted === false &&
     evidence.limits.actualOperations === 0 &&
     evidence.limits.externalCalls === 0 &&
     evidence.suiteEvidenceSha256 === expectedSuiteDigest &&

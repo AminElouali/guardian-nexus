@@ -1209,10 +1209,10 @@ components:
       type: object
       additionalProperties: false
       properties:
-        evidenceVersion: { type: integer, const: 1 }
+        evidenceVersion: { type: integer, enum: [1, 2] }
         source: { type: string, const: synthetic_policy_scenarios }
         engine: { type: string, const: guardian_policy_lab }
-        engineVersion: { type: string, const: guardian-agent-policy-lab-v1 }
+        engineVersion: { type: string, enum: [guardian-agent-policy-lab-v1, guardian-agent-policy-lab-v2] }
         profileId:
           type: string
           enum: [guardian-agent-lab-email-v1, guardian-agent-lab-database-v1, guardian-agent-lab-finance-v1, guardian-agent-lab-programming-v1, guardian-agent-lab-customer-service-v1, guardian-agent-lab-browser-v1, guardian-agent-lab-infrastructure-v1, guardian-agent-lab-multiagent-v1]
@@ -1243,9 +1243,10 @@ components:
           type: object
           additionalProperties: false
           properties:
-            policy: { type: string, const: guardian-policy-engine-synthetic-v1 }
+            policy: { type: string, enum: [guardian-policy-engine-synthetic-v1, guardian-policy-engine-synthetic-v2] }
             corpus: { type: string, const: guardian-agent-lab-corpus-v1 }
             oracle: { type: string, const: guardian-policy-oracle-v1 }
+            toolAdapter: { type: string, const: guardian-synthetic-tool-adapter-v1 }
           required: [policy, corpus, oracle]
         seed: { type: integer, const: 20261102 }
         sampleCount: { type: integer, const: 2 }
@@ -1264,7 +1265,7 @@ components:
               operation: { type: string, maxLength: 100 }
               resourceType: { type: string, maxLength: 80 }
               resourceId: { type: string, maxLength: 180 }
-              resourceWorkspaceId: { type: string, const: SYNTHETIC-WORKSPACE }
+              resourceWorkspaceId: { type: string, enum: [SYNTHETIC-WORKSPACE, SYNTHETIC-OTHER-WORKSPACE] }
               sensitivity: { type: string, enum: [public, internal, confidential, restricted] }
               instructionProvenance: { type: string, enum: [trusted_user_request, untrusted_email, untrusted_document, untrusted_ticket, untrusted_web_content, delegated_agent] }
               agentId: { type: string, maxLength: 100 }
@@ -1323,6 +1324,58 @@ components:
                     maxItems: 5
                     items: { type: string, enum: [proposed, attempted, policy_bypassed, counterfactual_would_execute] }
                 required: [mode, decision, proposed, attempted, authorized, executed, counterfactualWouldExecute, counterfactualCloneStateChanged, stateBeforeSha256, stateAfterSha256, simulatedOnly, eventPhases]
+              toolTrace:
+                type: object
+                additionalProperties: false
+                properties:
+                  adapterVersion: { type: string, const: guardian-synthetic-tool-adapter-v1 }
+                  toolName:
+                    type: string
+                    enum: [send_email_simulated, query_synthetic_database, consult_synthetic_invoice, propose_synthetic_code_diff, draft_synthetic_support_reply, read_local_synthetic_page, read_synthetic_infrastructure_config, delegate_synthetic_read_only_task]
+                  policyOn:
+                    type: object
+                    additionalProperties: false
+                    properties:
+                      invoked: { type: boolean }
+                      dispatchStatus:
+                        type: string
+                        enum: [simulated_execution, adapter_validation_denied, approval_required_before_dispatch, blocked_by_policy_before_dispatch]
+                      events:
+                        type: array
+                        maxItems: 2
+                        items:
+                          type: object
+                          additionalProperties: false
+                          properties:
+                            toolCallId: { type: string, maxLength: 100 }
+                            source: { type: string, const: guardian_policy_lab_fixture }
+                            tool: { type: string, maxLength: 100 }
+                            phase: { type: string, enum: [authorization_attempt, denied, executed] }
+                            authorization: { type: string, enum: [not_checked, allowed, denied] }
+                            executed: { type: boolean }
+                            simulatedOnly: { type: boolean, const: true }
+                            stateChanged: { type: boolean, const: false }
+                            externalSideEffect: { type: boolean, const: false }
+                            argumentsSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+                            resultCode: { type: string, maxLength: 100 }
+                          required: [toolCallId, source, tool, phase, authorization, executed, simulatedOnly, stateChanged, externalSideEffect, argumentsSha256, resultCode]
+                      externalSideEffect: { type: boolean, const: false }
+                      persistentStateMutation: { type: boolean, const: false }
+                    required: [invoked, dispatchStatus, events, externalSideEffect, persistentStateMutation]
+                  policyOff:
+                    type: object
+                    additionalProperties: false
+                    properties:
+                      invoked: { type: boolean, const: false }
+                      dispatchStatus: { type: string, const: counterfactual_clone_only }
+                      events:
+                        type: array
+                        maxItems: 0
+                        items: { type: object, additionalProperties: false }
+                      externalSideEffect: { type: boolean, const: false }
+                      persistentStateMutation: { type: boolean, const: false }
+                    required: [invoked, dispatchStatus, events, externalSideEffect, persistentStateMutation]
+                required: [adapterVersion, toolName, policyOn, policyOff]
               delegation:
                 type: object
                 additionalProperties: false
@@ -1364,13 +1417,16 @@ components:
           properties:
             hasBenignAndAdversarialCases: { type: boolean, const: true }
             everyProposalHasIndependentPolicyDecision: { type: boolean, const: true }
+            resourceScopeIsEnforced: { type: boolean, const: true }
             noUnauthorizedActionExecuted: { type: boolean, const: true }
             policyOffNeverExecutes: { type: boolean, const: true }
             policyOffUsesClonesOnly: { type: boolean, const: true }
             delegationCannotElevatePermissions: { type: boolean, const: true }
             noPersistentOrExternalEffects: { type: boolean, const: true }
             rawPromptsArgumentsAndInstructionsNotStored: { type: boolean, const: true }
-          required: [hasBenignAndAdversarialCases, everyProposalHasIndependentPolicyDecision, noUnauthorizedActionExecuted, policyOffNeverExecutes, policyOffUsesClonesOnly, delegationCannotElevatePermissions, noPersistentOrExternalEffects, rawPromptsArgumentsAndInstructionsNotStored]
+            policyRunsBeforeToolDispatch: { type: boolean, const: true }
+            policyOffNeverInvokesToolAdapter: { type: boolean, const: true }
+          required: [hasBenignAndAdversarialCases, everyProposalHasIndependentPolicyDecision, resourceScopeIsEnforced, noUnauthorizedActionExecuted, policyOffNeverExecutes, policyOffUsesClonesOnly, delegationCannotElevatePermissions, noPersistentOrExternalEffects, rawPromptsArgumentsAndInstructionsNotStored]
         selfCheckStatus: { type: string, const: passed }
         suiteEvidenceSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
         startedAt: { type: string, format: date-time }
@@ -1384,12 +1440,15 @@ components:
             concurrency: { type: integer, const: 1 }
             maxCases: { type: integer, const: 2 }
             customerDataUsed: { type: boolean, const: false }
+            secretsMounted: { type: boolean, const: false }
+            modelWeightsMounted: { type: boolean, const: false }
+            dockerSocketMounted: { type: boolean, const: false }
             externalCalls: { type: integer, const: 0 }
             actualOperations: { type: integer, const: 0 }
             rawPromptsStored: { type: boolean, const: false }
             rawResponsesStored: { type: boolean, const: false }
             rawArgumentsStored: { type: boolean, const: false }
-          required: [network, concurrency, maxCases, customerDataUsed, externalCalls, actualOperations, rawPromptsStored, rawResponsesStored, rawArgumentsStored]
+          required: [network, concurrency, maxCases, customerDataUsed, secretsMounted, modelWeightsMounted, dockerSocketMounted, externalCalls, actualOperations, rawPromptsStored, rawResponsesStored, rawArgumentsStored]
         interpretation: { type: string, maxLength: 500 }
         evidenceSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
       required: [evidenceVersion, source, engine, engineVersion, profileId, verticalId, verticalLabel, executionMode, proposalOrigin, modelInference, agentIdentity, versions, seed, sampleCount, cases, summary, selfChecks, selfCheckStatus, suiteEvidenceSha256, startedAt, completedAt, durationMs, limits, interpretation, evidenceSha256]

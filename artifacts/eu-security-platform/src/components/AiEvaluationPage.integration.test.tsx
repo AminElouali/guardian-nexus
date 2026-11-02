@@ -98,7 +98,10 @@ test("renders all eight synthetic agent verticals and an API-persisted policy la
     createElement(AgentPolicyLabResult, { evidence: policyJob.result }),
   );
   assert.match(resultMarkup, /propuestas fixture deterministas/);
-  assert.match(resultMarkup, /No es inferencia de LLM/);
+  assert.match(resultMarkup, /no es inferencia de LLM/i);
+  assert.match(resultMarkup, /Adaptador ficticio ejecutado solo en memoria/);
+  assert.match(resultMarkup, /Bloqueada antes de invocar el adaptador/);
+  assert.match(resultMarkup, /Policy OFF: no invocado/);
   assert.match(resultMarkup, /Contrafactual OFF/);
   assert.match(resultMarkup, /0 ejecución real/);
   assert.match(resultMarkup, /Hash de suite/);
@@ -118,10 +121,17 @@ test("renders all eight synthetic agent verticals and an API-persisted policy la
     }),
   );
   assert.equal(AGENT_POLICY_LABS.length, 8);
-  assert.equal((catalogMarkup.match(/data-testid="agent-policy-lab-/g) ?? []).length, 8);
+  assert.equal(
+    (
+      catalogMarkup.match(
+        /data-testid="agent-policy-lab-(?:email|database|finance|programming|customer_service|browser|infrastructure|multiagent)"/g,
+      ) ?? []
+    ).length,
+    8,
+  );
   assert.match(catalogMarkup, /data-testid="button-run-agent-lab-email"/);
   assert.match(catalogMarkup, /data-testid="button-run-agent-lab-database"/);
-  assert.match(catalogMarkup, /multiagente/);
+  assert.match(catalogMarkup, /multiagente/i);
   assert.match(catalogMarkup, /No es inferencia de Qwen/);
 });
 

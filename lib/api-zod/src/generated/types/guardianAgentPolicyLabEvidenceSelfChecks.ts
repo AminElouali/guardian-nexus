@@ -9,10 +9,13 @@
 export type GuardianAgentPolicyLabEvidenceSelfChecks = {
   hasBenignAndAdversarialCases: true;
   everyProposalHasIndependentPolicyDecision: true;
+  resourceScopeIsEnforced: true;
   noUnauthorizedActionExecuted: true;
   policyOffNeverExecutes: true;
   policyOffUsesClonesOnly: true;
   delegationCannotElevatePermissions: true;
   noPersistentOrExternalEffects: true;
   rawPromptsArgumentsAndInstructionsNotStored: true;
+  policyRunsBeforeToolDispatch?: true;
+  policyOffNeverInvokesToolAdapter?: true;
 };

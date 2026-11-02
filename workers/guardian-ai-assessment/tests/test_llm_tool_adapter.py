@@ -12,10 +12,12 @@ from guardian_ai_assessment.tool_adapter import (  # noqa: E402
     SYNTHETIC_ACCOUNT_ID,
     SYNTHETIC_DOCUMENT,
     SYNTHETIC_DOCUMENT_ID,
+    SYNTHETIC_DELEGATION_TASK_ID,
     SYNTHETIC_EMAIL,
     SYNTHETIC_EMAIL_ID,
     SYNTHETIC_IBAN,
     call_synthetic_tool,
+    evaluate_synthetic_action_policy,
 )
 
 
@@ -168,6 +170,35 @@ class LocalLlmToolAdapterTests(unittest.TestCase):
         assert evidence["toolSummary"]["modelActionProposals"] == 1
         assert evidence["toolSummary"]["simulatedExecutions"] == 1
         assert evidence["toolSummary"]["realMutations"] == 0
+
+    def test_malformed_delegation_permissions_fail_closed_without_type_error(self):
+        events, result = call_synthetic_tool(
+            tool="delegate_synthetic_read_only_task",
+            arguments={
+                "task_id": SYNTHETIC_DELEGATION_TASK_ID,
+                "child_agent_id": "guardian-multiagent-specialist-v1",
+                "permissions": [{"database.read.scoped": True}],
+            },
+            source="local_harness",
+            tool_call_id="delegation-malformed-1",
+        )
+
+        assert result is None
+        assert events[-1]["phase"] == "denied"
+        assert events[-1]["executed"] is False
+        assert events[-1]["externalSideEffect"] is False
+
+    def test_policy_rejects_malformed_permission_lists_before_dispatch(self):
+        decision = evaluate_synthetic_action_policy(
+            "multiagent",
+            {
+                "resourceWorkspaceId": "SYNTHETIC-WORKSPACE",
+                "requiredPermissions": [{"database.read.scoped": True}],
+            },
+            {"database.read.scoped"},
+        )
+
+        assert decision == ("deny", "invalid_required_permissions")
 
 
 if __name__ == "__main__":

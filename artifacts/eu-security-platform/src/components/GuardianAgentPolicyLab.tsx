@@ -88,14 +88,24 @@ const decisionLabel: Record<string, string> = {
   bypassed_counterfactual: 'Contrafactual sin enforcement',
 };
 
+const adapterStatusLabel: Record<string, string> = {
+  simulated_execution: 'Adaptador ficticio ejecutado solo en memoria.',
+  adapter_validation_denied: 'El adaptador rechazó la propuesta; no se ejecutó.',
+  approval_required_before_dispatch: 'Pendiente de aprobación; el adaptador no se invocó.',
+  blocked_by_policy_before_dispatch: 'Bloqueada antes de invocar el adaptador.',
+  counterfactual_clone_only: 'Contrafactual; no se invocó el adaptador.',
+};
+
 const reasonLabel: Record<string, string> = {
   synthetic_policy_allowlist: 'Operación de laboratorio dentro del permiso mínimo.',
   permission_not_granted: 'El actor no tiene el permiso solicitado.',
+  resource_outside_workspace: 'El recurso pertenece a otro espacio y queda denegado.',
   delegated_permissions_exceed_parent: 'La delegación solicita más permisos que el agente original.',
   external_destination_not_allowed: 'El destino externo no está permitido en este laboratorio.',
   human_approval_required: 'La operación sensible no se ejecuta sin aprobación humana.',
   operation_outside_policy: 'La operación no pertenece a la lista permitida.',
   untrusted_content_cannot_authorize_action: 'El contenido no confiable no puede autorizar una acción.',
+  synthetic_tool_adapter_validation_failed: 'El adaptador sintético rechazó la propuesta.',
 };
 
 const caseTitle: Record<string, string> = {
@@ -187,6 +197,9 @@ export function AgentPolicyLabResult({ evidence }: { evidence: PolicyLabEvidence
         <span>{evidence.summary.sampleCount} casos · no es inferencia de LLM</span>
       </div>
       <p>{evidence.interpretation}</p>
+      <p>
+        «Requiere aprobación» es una decisión registrada por este laboratorio: no hay aquí un flujo de aprobación ni una operación financiera real.
+      </p>
       <dl>
         <dt>Policy ON</dt>
         <dd>
@@ -214,11 +227,15 @@ export function AgentPolicyLabResult({ evidence }: { evidence: PolicyLabEvidence
             <dl>
               <dt>Propuesta</dt><dd>{item.tool} · {item.operation} · {item.resourceType} sintético</dd>
               <dt>Origen de instrucción</dt><dd>{item.instructionProvenance}</dd>
+              <dt>Agente y actor</dt><dd>{item.agentId} · {item.actorId} ({item.actorType})</dd>
+              <dt>Espacio del recurso</dt><dd>{item.resourceWorkspaceId}</dd>
+              <dt>Permisos concedidos</dt><dd>{item.grantedPermissions.join(', ') || 'ninguno'}</dd>
               <dt>Permisos solicitados</dt><dd>{item.requestedPermissions.join(', ')}</dd>
               <dt>Motivo de política</dt><dd>{reasonLabel[item.policyOn.reasonCode] ?? item.policyOn.reasonCode}</dd>
               <dt>Intento</dt><dd>{item.policyOn.attempted ? 'Registrado' : 'No observado'}</dd>
               <dt>Autorización</dt><dd>{item.policyOn.authorized ? 'Sí, solo en el simulador' : 'No'}</dd>
               <dt>Acción</dt><dd>{item.policyOn.executed ? 'Ejecutada en estado sintético efímero' : 'No ejecutada'}</dd>
+              <dt>Adaptador ficticio</dt><dd>{item.toolTrace ? `${adapterStatusLabel[item.toolTrace.policyOn.dispatchStatus] ?? item.toolTrace.policyOn.dispatchStatus} Eventos: ${item.toolTrace.policyOn.events.map((event) => event.phase).join(', ') || 'ninguno'}. Policy OFF: no invocado.` : 'No hay traza del adaptador en esta evidencia anterior.'}</dd>
               <dt>Contrafactual OFF</dt><dd>Habría sido propuesta en un clon; jamás ejecutada ni persistida.</dd>
               <dt>Delegación</dt><dd>{item.delegation.isDelegatedAction ? 'Agente delegado; identidad original preservada.' : 'No aplica.'} Elevación permitida: no.</dd>
               <dt>Hash de propuesta</dt><dd>{item.proposalSha256}</dd>
@@ -232,7 +249,9 @@ export function AgentPolicyLabResult({ evidence }: { evidence: PolicyLabEvidence
         <dl>
           <dt>Motor</dt><dd>{evidence.engineVersion} · política {evidence.versions.policy}</dd>
           <dt>Corpus y oráculo</dt><dd>{evidence.versions.corpus} · {evidence.versions.oracle} · semilla {evidence.seed}</dd>
+          <dt>Adaptador de herramientas</dt><dd>{evidence.versions.toolAdapter ?? 'No registrado en evidencia anterior'}</dd>
           <dt>Propuestas</dt><dd>Fixture controlado; no Qwen, no tool calls nativas.</dd>
+          <dt>Aislamiento</dt><dd>network=none · sin secretos, pesos del modelo ni socket Docker.</dd>
           <dt>Datos</dt><dd>No se guardan prompts, instrucciones ni argumentos en bruto; solo metadatos y hashes.</dd>
           <dt>Hash de suite</dt><dd>{evidence.suiteEvidenceSha256}</dd>
           <dt>Hash de evidencia</dt><dd>{evidence.evidenceSha256}</dd>

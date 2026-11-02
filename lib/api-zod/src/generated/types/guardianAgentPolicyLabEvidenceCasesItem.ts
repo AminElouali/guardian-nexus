@@ -5,13 +5,16 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { GuardianAgentPolicyLabEvidenceCasesItemActorType } from './guardianAgentPolicyLabEvidenceCasesItemActorType';
 import type { GuardianAgentPolicyLabEvidenceCasesItemDelegation } from './guardianAgentPolicyLabEvidenceCasesItemDelegation';
 import type { GuardianAgentPolicyLabEvidenceCasesItemInstructionProvenance } from './guardianAgentPolicyLabEvidenceCasesItemInstructionProvenance';
 import type { GuardianAgentPolicyLabEvidenceCasesItemLabel } from './guardianAgentPolicyLabEvidenceCasesItemLabel';
 import type { GuardianAgentPolicyLabEvidenceCasesItemLanguage } from './guardianAgentPolicyLabEvidenceCasesItemLanguage';
 import type { GuardianAgentPolicyLabEvidenceCasesItemPolicyOff } from './guardianAgentPolicyLabEvidenceCasesItemPolicyOff';
 import type { GuardianAgentPolicyLabEvidenceCasesItemPolicyOn } from './guardianAgentPolicyLabEvidenceCasesItemPolicyOn';
+import type { GuardianAgentPolicyLabEvidenceCasesItemResourceWorkspaceId } from './guardianAgentPolicyLabEvidenceCasesItemResourceWorkspaceId';
 import type { GuardianAgentPolicyLabEvidenceCasesItemSensitivity } from './guardianAgentPolicyLabEvidenceCasesItemSensitivity';
+import type { GuardianAgentPolicyLabEvidenceCasesItemToolTrace } from './guardianAgentPolicyLabEvidenceCasesItemToolTrace';
 
 export type GuardianAgentPolicyLabEvidenceCasesItem = {
   /** @maxLength 100 */
@@ -26,8 +29,18 @@ export type GuardianAgentPolicyLabEvidenceCasesItem = {
   resourceType: string;
   /** @maxLength 180 */
   resourceId: string;
+  resourceWorkspaceId: GuardianAgentPolicyLabEvidenceCasesItemResourceWorkspaceId;
   sensitivity: GuardianAgentPolicyLabEvidenceCasesItemSensitivity;
   instructionProvenance: GuardianAgentPolicyLabEvidenceCasesItemInstructionProvenance;
+  /** @maxLength 100 */
+  agentId: string;
+  actorId: 'SYNTHETIC-LAB-OPERATOR';
+  actorType: GuardianAgentPolicyLabEvidenceCasesItemActorType;
+  /**
+     * @maxItems 16
+     * @items.maxLength 80
+     */
+  grantedPermissions: string[];
   /**
      * @maxItems 8
      * @items.maxLength 80
@@ -44,6 +57,7 @@ export type GuardianAgentPolicyLabEvidenceCasesItem = {
   proposalSha256: string;
   policyOn: GuardianAgentPolicyLabEvidenceCasesItemPolicyOn;
   policyOff: GuardianAgentPolicyLabEvidenceCasesItemPolicyOff;
+  toolTrace?: GuardianAgentPolicyLabEvidenceCasesItemToolTrace;
   delegation: GuardianAgentPolicyLabEvidenceCasesItemDelegation;
   unauthorizedActionExecuted: false;
   rawArgumentsStored: false;

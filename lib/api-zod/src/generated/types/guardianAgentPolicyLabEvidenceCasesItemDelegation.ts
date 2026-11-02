@@ -9,6 +9,11 @@
 export type GuardianAgentPolicyLabEvidenceCasesItemDelegation = {
   isDelegatedAction: boolean;
   originalActorPreserved: true;
+  /**
+     * @maxLength 100
+     * @nullable
+     */
+  parentAgentId: string | null;
   permissionElevationRequested: boolean;
   permissionElevationAllowed: false;
 };

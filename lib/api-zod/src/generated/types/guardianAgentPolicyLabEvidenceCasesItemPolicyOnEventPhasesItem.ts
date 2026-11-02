@@ -12,8 +12,10 @@ export type GuardianAgentPolicyLabEvidenceCasesItemPolicyOnEventPhasesItem = typ
 export const GuardianAgentPolicyLabEvidenceCasesItemPolicyOnEventPhasesItem = {
   proposed: 'proposed',
   attempted: 'attempted',
+  authorization_check: 'authorization_check',
   allow: 'allow',
   deny: 'deny',
   require_approval: 'require_approval',
+  authorized: 'authorized',
   executed: 'executed',
 } as const;

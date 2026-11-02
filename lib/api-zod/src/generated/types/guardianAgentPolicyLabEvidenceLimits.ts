@@ -11,6 +11,9 @@ export type GuardianAgentPolicyLabEvidenceLimits = {
   concurrency: 1;
   maxCases: 2;
   customerDataUsed: false;
+  secretsMounted: false;
+  modelWeightsMounted: false;
+  dockerSocketMounted: false;
   externalCalls: 0;
   actualOperations: 0;
   rawPromptsStored: false;

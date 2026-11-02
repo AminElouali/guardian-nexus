@@ -7,6 +7,8 @@
  */
 import type { GuardianAgentPolicyLabEvidenceAgentIdentity } from './guardianAgentPolicyLabEvidenceAgentIdentity';
 import type { GuardianAgentPolicyLabEvidenceCasesItem } from './guardianAgentPolicyLabEvidenceCasesItem';
+import type { GuardianAgentPolicyLabEvidenceEngineVersion } from './guardianAgentPolicyLabEvidenceEngineVersion';
+import type { GuardianAgentPolicyLabEvidenceEvidenceVersion } from './guardianAgentPolicyLabEvidenceEvidenceVersion';
 import type { GuardianAgentPolicyLabEvidenceLimits } from './guardianAgentPolicyLabEvidenceLimits';
 import type { GuardianAgentPolicyLabEvidenceProfileId } from './guardianAgentPolicyLabEvidenceProfileId';
 import type { GuardianAgentPolicyLabEvidenceSelfChecks } from './guardianAgentPolicyLabEvidenceSelfChecks';
@@ -15,10 +17,10 @@ import type { GuardianAgentPolicyLabEvidenceVersions } from './guardianAgentPoli
 import type { GuardianAgentPolicyLabEvidenceVerticalId } from './guardianAgentPolicyLabEvidenceVerticalId';
 
 export interface GuardianAgentPolicyLabEvidence {
-  evidenceVersion: 1;
+  evidenceVersion: GuardianAgentPolicyLabEvidenceEvidenceVersion;
   source: 'synthetic_policy_scenarios';
   engine: 'guardian_policy_lab';
-  engineVersion: 'guardian-agent-policy-lab-v1';
+  engineVersion: GuardianAgentPolicyLabEvidenceEngineVersion;
   profileId: GuardianAgentPolicyLabEvidenceProfileId;
   verticalId: GuardianAgentPolicyLabEvidenceVerticalId;
   /** @maxLength 80 */

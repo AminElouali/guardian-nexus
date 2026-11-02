@@ -784,10 +784,10 @@ export type GuardianLocalLlmAutonomousToolSelectionEvidence = Omit<
 };
 
 export type GuardianAgentPolicyLabEvidence = {
-  evidenceVersion: 1;
+  evidenceVersion: 1 | 2;
   source: "synthetic_policy_scenarios";
   engine: "guardian_policy_lab";
-  engineVersion: "guardian-agent-policy-lab-v1";
+  engineVersion: "guardian-agent-policy-lab-v1" | "guardian-agent-policy-lab-v2";
   profileId:
     | "guardian-agent-lab-email-v1"
     | "guardian-agent-lab-database-v1"
@@ -820,7 +820,14 @@ export type GuardianAgentPolicyLabEvidence = {
     permissions: string[];
     identityPreservedAcrossDelegation: true;
   };
-  versions: { policy: string; corpus: string; oracle: string };
+  versions: {
+    policy:
+      | "guardian-policy-engine-synthetic-v1"
+      | "guardian-policy-engine-synthetic-v2";
+    corpus: "guardian-agent-lab-corpus-v1";
+    oracle: "guardian-policy-oracle-v1";
+    toolAdapter?: "guardian-synthetic-tool-adapter-v1";
+  };
   seed: number;
   sampleCount: 2;
   cases: Array<{
@@ -884,6 +891,40 @@ export type GuardianAgentPolicyLabEvidence = {
       simulatedOnly: true;
       eventPhases: string[];
     };
+    toolTrace?: {
+      adapterVersion: "guardian-synthetic-tool-adapter-v1";
+      toolName: string;
+      policyOn: {
+        invoked: boolean;
+        dispatchStatus:
+          | "simulated_execution"
+          | "adapter_validation_denied"
+          | "approval_required_before_dispatch"
+          | "blocked_by_policy_before_dispatch";
+        events: Array<{
+          toolCallId: string;
+          source: "guardian_policy_lab_fixture";
+          tool: string;
+          phase: "authorization_attempt" | "denied" | "executed";
+          authorization: "not_checked" | "allowed" | "denied";
+          executed: boolean;
+          simulatedOnly: true;
+          stateChanged: false;
+          externalSideEffect: false;
+          argumentsSha256: string;
+          resultCode: string;
+        }>;
+        externalSideEffect: false;
+        persistentStateMutation: false;
+      };
+      policyOff: {
+        invoked: false;
+        dispatchStatus: "counterfactual_clone_only";
+        events: [];
+        externalSideEffect: false;
+        persistentStateMutation: false;
+      };
+    };
     delegation: {
       isDelegatedAction: boolean;
       originalActorPreserved: true;
@@ -924,6 +965,9 @@ export type GuardianAgentPolicyLabEvidence = {
     concurrency: 1;
     maxCases: 2;
     customerDataUsed: false;
+    secretsMounted: false;
+    modelWeightsMounted: false;
+    dockerSocketMounted: false;
     externalCalls: 0;
     actualOperations: 0;
     rawPromptsStored: false;

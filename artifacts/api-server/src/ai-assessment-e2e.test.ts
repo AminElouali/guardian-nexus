@@ -111,7 +111,7 @@ before(async () => {
   const [createdA, createdB] = await Promise.all([
     fixturePool.query<{ id: string }>(
       `INSERT INTO public.workspaces (name, plan_id, created_by_user_id)
-       VALUES ('Assessment E2E A', 'small', $1) RETURNING id`,
+       VALUES ('Assessment E2E A', 'large', $1) RETURNING id`,
       [userA],
     ),
     fixturePool.query<{ id: string }>(
@@ -307,7 +307,7 @@ test(
         );
         assert.equal(job.status, "succeeded", `worker failed: ${job.errorCode}`);
         assert.equal(job.attempts, 1);
-        assert.equal(job.workerVersion, "guardian-ai-assessment-lab-0.5.0");
+        assert.equal(job.workerVersion, "guardian-ai-assessment-lab-0.5.1");
         assert.ok(job.result);
         assert.equal(job.result.engine, "garak");
         assert.equal(job.result.engineVersion, "0.17.1");
@@ -429,7 +429,7 @@ test(
         assert.equal(localJob.attempts, 1);
         assert.equal(
           localJob.workerVersion,
-          "guardian-ai-assessment-lab-0.5.0",
+          "guardian-ai-assessment-lab-0.5.1",
         );
         assert.equal(localJob.result?.engine, "local_llm_lab");
         if (localJob.result?.engine !== "local_llm_lab") {
@@ -742,6 +742,16 @@ test(
           403,
           "viewer cannot request a policy lab",
         );
+        assert.equal(
+          (
+            await apiRequest(userA, pathA, "POST", {
+              idempotencyKey: `policy-invalid-profile-${randomUUID()}`,
+              profileId: "guardian-agent-lab-email-v1@attacker-image",
+            })
+          ).status,
+          400,
+          "unknown profile/image selection is rejected before enqueue",
+        );
       }
 
       const idempotencyKey = `policy-lab-${randomUUID()}`;
@@ -783,12 +793,18 @@ test(
           completedRaw = rawJobs.find((candidate) => candidate.id === acceptedJob.id);
           assert.equal(job.status, "succeeded", `${profileId}: ${job.errorCode}`);
           assert.equal(job.attempts, 1);
-          assert.equal(job.workerVersion, "guardian-ai-assessment-lab-0.5.0");
+          assert.equal(job.workerVersion, "guardian-ai-assessment-lab-0.5.1");
           assert.equal(job.result?.engine, "guardian_policy_lab");
           if (job.result?.engine !== "guardian_policy_lab") {
             assert.fail("policy lab must retain its explicit engine discriminator");
           }
           assert.equal(job.result.profileId, profileId);
+          assert.equal(job.result.evidenceVersion, 2);
+          assert.equal(job.result.engineVersion, "guardian-agent-policy-lab-v2");
+          assert.equal(
+            job.result.versions.toolAdapter,
+            "guardian-synthetic-tool-adapter-v1",
+          );
           assert.equal(job.result.executionMode, "deterministic_fixture");
           assert.equal(job.result.proposalOrigin, "controlled_fixture_not_llm");
           assert.equal(job.result.modelInference, false);
@@ -805,6 +821,27 @@ test(
           );
           assert.equal(job.result.cases[1]?.policyOn.executed, false);
           assert.ok(job.result.cases.every((item) => item.policyOff.executed === false));
+          assert.ok(
+            job.result.cases.every(
+              (item) =>
+                item.toolTrace?.adapterVersion ===
+                  "guardian-synthetic-tool-adapter-v1" &&
+                item.toolTrace?.toolName === item.tool &&
+                item.toolTrace?.policyOff.invoked === false &&
+                item.toolTrace?.policyOff.events.length === 0,
+            ),
+          );
+          assert.ok(
+            job.result.cases.every((item) =>
+              item.policyOn.decision === "allow"
+                ? item.toolTrace?.policyOn.invoked === true &&
+                  item.toolTrace?.policyOn.events.some(
+                    (event) => event.phase === "executed" && event.executed,
+                  ) === true
+                : item.toolTrace?.policyOn.invoked === false &&
+                  item.toolTrace?.policyOn.events.length === 0,
+            ),
+          );
           assert.ok(/^[a-f0-9]{64}$/.test(job.result.evidenceSha256));
           assert.ok(/^[a-f0-9]{64}$/.test(job.result.suiteEvidenceSha256));
           assert.ok(
@@ -812,6 +849,25 @@ test(
               (item) => !item.rawArgumentsStored && !item.rawInstructionStored,
             ),
           );
+          assert.ok(
+            job.result.cases.every(
+              (item) =>
+                item.actorId === "SYNTHETIC-LAB-OPERATOR" &&
+                Array.isArray(item.grantedPermissions) &&
+                item.agentId.length > 0,
+            ),
+          );
+          if (profileId === "guardian-agent-lab-database-v1") {
+            assert.equal(
+              job.result.cases[1]?.resourceWorkspaceId,
+              "SYNTHETIC-OTHER-WORKSPACE",
+            );
+            assert.equal(
+              job.result.cases[1]?.policyOn.reasonCode,
+              "resource_outside_workspace",
+            );
+            assert.equal(job.result.cases[1]?.policyOn.executed, false);
+          }
           break;
         }
         await delay(POLL_INTERVAL_MS);

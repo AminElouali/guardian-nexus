@@ -5,9 +5,11 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { GuardianAgentPolicyLabEvidenceVersionsPolicy } from './guardianAgentPolicyLabEvidenceVersionsPolicy';
 
 export type GuardianAgentPolicyLabEvidenceVersions = {
-  policy: 'guardian-policy-engine-synthetic-v1';
+  policy: GuardianAgentPolicyLabEvidenceVersionsPolicy;
   corpus: 'guardian-agent-lab-corpus-v1';
   oracle: 'guardian-policy-oracle-v1';
+  toolAdapter?: 'guardian-synthetic-tool-adapter-v1';
 };

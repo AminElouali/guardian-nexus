@@ -1098,3 +1098,49 @@ This update supersedes the older diskcache status, worker-test count, and OSV
 - No se ejecutaron E2E Garak/Qwen, build UI/monorepo ni escaneo OSV en este
   hito; no se modificó producción ni se habilitó red. El riesgo de autoridad
   Docker de API, IPv6, CVEs, licencias y Clerk de navegador siguen pendientes.
+
+## Ocho laboratorios sintéticos de políticas de agentes — 2026-11-02
+
+- Base de trabajo: HEAD `1bc8297`, árbol de trabajo con cambios del hito antes
+  de su commit. Se conserva la arquitectura de cola PostgreSQL, leases,
+  idempotencia, tenant/RLS, Clerk/RBAC, API y dashboard; no hubo migración ni
+  cambios en producción.
+- Se añadieron verticales locales para correo, bases de datos, finanzas,
+  programación, atención al cliente, navegador, infraestructura y
+  multiagente. Cada perfil se solicita desde el catálogo del dashboard y usa
+  dos fixtures deterministas (benigno/adversarial), uno en español y otro en
+  inglés. Evidencia v2 versiona actor/agente, tool, recurso, sensibilidad,
+  procedencia, permisos, decisión, estado y hashes.
+- Los ocho jobs API/cola terminaron `succeeded`: 16 propuestas e intentos;
+  8 ALLOW y ejecuciones ficticias, 6 DENY y 2 `require_approval`; 0 ejecuciones
+  no autorizadas, 0 operaciones reales, 0 cambios persistentes y 0 llamadas
+  externas. La política ON autoriza antes de despachar. Política OFF se calcula
+  solo en clones efímeros; 16 resultados contrafactuales y 12 cambios solo en
+  esos clones, sin invocar el adaptador. Estos resultados son conteos de
+  fixtures, no métricas de precisión ni resultados de inferencia LLM.
+- Las herramientas ficticias rechazan argumentos no permitidos. Se añadió una
+  prueba de listas de permisos malformadas para asegurar DENY sin excepción;
+  hashes de argumentos registrados, sin persistir argumentos, prompts o
+  respuestas en bruto. `require_approval` bloquea despacho, pero todavía no hay
+  bandeja ni flujo de aprobación humana.
+- Informe:
+  `workers/guardian-ai-assessment/reports/eight-synthetic-agent-labs-2026-11-02.md`
+  — SHA-256 `f8578f8a70df315946151f91c727cef2cee3a571c68bfee073ccb8df3e863d70`.
+- Evidencia E2E redactada local:
+  `generated-artifacts/guardian-agent-policy-labs-e2e.json` — SHA-256
+  `9c258d2f6d556428400719ad7af1210da6e9c3aac5e54b003eaf339fddf3b79e`.
+- Verificación: E2E integral serial **4/4** y componentes/informe/JSON **6/6**;
+  después del guard final, E2E dirigido de los ocho perfiles **1/1**, tests del
+  Policy Lab **6/6** y adaptador **5/5**. API/security previo **53/53**;
+  typecheck API/UI y builds API/web pasaron. Build web emite avisos de sourcemap
+  de `tooltip.tsx` y chunk mayor de 500 kB. La batería Python host previa tuvo
+  101 éxitos y 1 error de importación por ausencia de Garak; su suite específica
+  de corpus pasó **3/3** en la imagen Garak fijada con `--network=none`.
+- Preview visual público de Home cargó. La sesión real de Clerk no se automatizó
+  en navegador; el dashboard se validó con componentes y E2E API de identidad
+  de prueba.
+- Límites: estas ocho verticales son fixtures de acciones estructuradas; no
+  ejecutan inferencias Qwen ni evalúan detección de prompt injection por un
+  modelo. No conectan proveedores ni representan servicio listo para clientes.
+  Siguen pendientes la autoridad API→Docker del host, OSV/Debian y revisión de
+  licencias, IPv6 dual-stack y el flujo real de aprobación.
