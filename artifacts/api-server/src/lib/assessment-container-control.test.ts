@@ -47,7 +47,7 @@ function fakeChild(options: {
 function sequenceSpawner(
   responses: Array<{
     args: string[];
-    child: FakeChild;
+    child: () => FakeChild;
   }>,
   captured: string[][] = [],
 ): DockerControlSpawner {
@@ -57,7 +57,7 @@ function sequenceSpawner(
     const response = responses[index++];
     assert.ok(response, `unexpected Docker control call: ${args.join(" ")}`);
     assert.deepEqual(args, response.args);
-    return response.child;
+    return response.child();
   };
 }
 
@@ -69,11 +69,11 @@ test("container cleanup kills, removes, and confirms absence by exact name", asy
       [
         {
           args: ["kill", "--signal=KILL", containerName],
-          child: fakeChild({ exitCode: 0 }),
+          child: () => fakeChild({ exitCode: 0 }),
         },
         {
           args: ["rm", "--force", containerName],
-          child: fakeChild({ exitCode: 0 }),
+          child: () => fakeChild({ exitCode: 0 }),
         },
         {
           args: [
@@ -84,7 +84,7 @@ test("container cleanup kills, removes, and confirms absence by exact name", asy
             "--format",
             "{{.Names}}",
           ],
-          child: fakeChild({ output: Buffer.from("") }),
+          child: () => fakeChild({ output: Buffer.from("") }),
         },
       ],
       calls,
@@ -104,11 +104,11 @@ test("cleanup fails closed when a residual container remains or Docker control f
     sequenceSpawner([
       {
         args: ["kill", "--signal=KILL", containerName],
-        child: fakeChild({ exitCode: 1 }),
+        child: () => fakeChild({ exitCode: 1 }),
       },
       {
         args: ["rm", "--force", containerName],
-        child: fakeChild({ exitCode: 1 }),
+        child: () => fakeChild({ exitCode: 1 }),
       },
       {
         args: [
@@ -119,7 +119,7 @@ test("cleanup fails closed when a residual container remains or Docker control f
           "--format",
           "{{.Names}}",
         ],
-        child: fakeChild({ output: Buffer.from(`${containerName}\n`) }),
+        child: () => fakeChild({ output: Buffer.from(`${containerName}\n`) }),
       },
     ]),
   );
@@ -131,11 +131,11 @@ test("cleanup fails closed when a residual container remains or Docker control f
     sequenceSpawner([
       {
         args: ["kill", "--signal=KILL", containerName],
-        child: fakeChild({ emitError: true }),
+        child: () => fakeChild({ emitError: true }),
       },
       {
         args: ["rm", "--force", containerName],
-        child: fakeChild({ exitCode: 1 }),
+        child: () => fakeChild({ exitCode: 1 }),
       },
       {
         args: [
@@ -146,7 +146,7 @@ test("cleanup fails closed when a residual container remains or Docker control f
           "--format",
           "{{.Names}}",
         ],
-        child: fakeChild({ exitCode: 1 }),
+        child: () => fakeChild({ exitCode: 1 }),
       },
     ]),
   );

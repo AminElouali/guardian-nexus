@@ -204,6 +204,7 @@ test(
     const imageInspection = JSON.parse(inspected.stdout) as Parameters<
       typeof validateAssessmentImageInspection
     >[1];
+    assert.ok(imageInspection, "image inspect must return an object");
     assert.equal(imageInspection.Id, lock.images.qwen.imageId);
     assert.equal(
       validateAssessmentImageInspection(

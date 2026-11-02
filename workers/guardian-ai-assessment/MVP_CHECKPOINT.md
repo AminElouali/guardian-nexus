@@ -1067,3 +1067,34 @@ This update supersedes the older diskcache status, worker-test count, and OSV
 - No se repitieron los 87 tests Python ni el build monorepo; la modificación es
   solo del worker/orquestación TypeScript. IPv6, OSV/licencias, attestation y
   autenticación de navegador Clerk siguen pendientes.
+
+## Validación real del límite stdout y timeout del contenedor — 2026-11-02
+
+- Cierre iniciado sobre HEAD `e591a4d`; los cambios previos de límite de salida
+  y cleanup quedaron revisados antes de empezar las nuevas verticales.
+- Se ejecutó un test Docker real en la imagen Qwen local fijada
+  `sha256:884d4f7bc6c11e03f6ced5cfcc9e88e7a8043d85923429f1a3a181953f07830f`,
+  con `--pull=never`, `--network=none`, usuario `65532:65532`, rootfs de solo
+  lectura, `cap-drop=ALL`, `no-new-privileges`, PIDs 64, CPU 1, memoria/swap
+  256 MiB, tmpfs `/tmp` de 16 MiB `noexec` y `--log-driver=none`.
+- Caso stdout: el proceso local de prueba emitió 65.537 bytes; límite 65.536.
+  Resultado `worker_output_limit_exceeded`; contenedor detenido por SIGKILL,
+  removido y ausencia confirmada mediante `docker ps -a` y `docker inspect`.
+  Tiempo observado 2.961 ms. La evidencia contiene solo recuentos y estado;
+  nada de stdout crudo se escribió.
+- Caso timeout: programa de 30 s y límite 750 ms. Resultado `worker_timeout`,
+  señal SIGKILL, cleanup verificado y salida retenida 0 bytes; tiempo total con
+  cleanup 1.450 ms. No quedaron contenedores residuales.
+- Verificación final: API typecheck pasó; `pnpm --filter @workspace/api-server
+  test` **52/52**; integración Docker real **1/1**. Las fallas iniciales fueron
+  un race en los doubles de proceso y una posible inspección nula; ambos se
+  corrigieron y las repeticiones pasaron. `git diff --check` pasó.
+- Evidencia redactada:
+  `generated-artifacts/guardian-ai-assessment/container-hardening-integration.json`,
+  SHA-256
+  `6055e5a82476c01fcc3dbe59b442abfa3fd04161873b7cfc12451d41097accc5`.
+  Informe:
+  `workers/guardian-ai-assessment/reports/container-output-timeout-integration-2026-11-02.md`.
+- No se ejecutaron E2E Garak/Qwen, build UI/monorepo ni escaneo OSV en este
+  hito; no se modificó producción ni se habilitó red. El riesgo de autoridad
+  Docker de API, IPv6, CVEs, licencias y Clerk de navegador siguen pendientes.
