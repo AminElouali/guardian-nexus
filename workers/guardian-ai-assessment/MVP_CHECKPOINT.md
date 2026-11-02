@@ -1007,7 +1007,63 @@ This update supersedes the older diskcache status, worker-test count, and OSV
   `baa3746338e04b4d26d434f25ef4838732d72610829e9a3ec2d50cddfe8ef2ff`.
 - Límites restantes: daemon Docker disponible al proceso API; sin attestation
   firmada; no se probó retag concurrente real del daemon (gate unitario y
-  ejecución por ID sí verificados); no se simuló overrun real de stdout/timeout;
+  ejecución por ID sí verificados); no se generó overrun real del contenedor;
   IPv6, advisories OSV, licencias/procedencia legal y Clerk autenticado en
   navegador siguen pendientes. El informe no declara remediación de
   vulnerabilidades ni disponibilidad para clientes.
+
+## Preflight del broker y límite de salida — 2026-11-02
+
+- Inspección iniciada desde HEAD limpio
+  `10f8c7242a998a00eccbac0cb2aad09ca80f1f22`. No hubo cambios de host, socket,
+  ACL, secretos, roles ni producción.
+- El API corre como UID/GID `runner` (1000). El socket Docker es `root:runner`,
+  modo `0660`; `test -w` como `runner` dio acceso. Prueba no privilegiada de
+  cambio a UID 65534 con `setpriv --reuid=65534 --regid=65534 --clear-groups`
+  falló con `setresuid failed: Operation not permitted` (salida 127).
+  Documentación oficial consultada no resolvió si Replit permite UID separado
+  ni secretos por workflow; no se inspeccionaron valores secretos.
+- Conclusión: no hay soporte demostrable para separar API y broker en este host.
+  Un proceso/workflow adicional como `runner` no reduce la autoridad Docker. No
+  se creó broker ni se quitó el worker local. Desbloqueo requiere UID/GID
+  independientes, socket limitado al broker y credenciales PostgreSQL solo
+  disponibles para el broker.
+- Código actual: `index.ts` inicia poller y API en un mismo Node. Queue worker
+  reclama vía `FOR UPDATE SKIP LOCKED`, con lease 45 s, heartbeat 10 s, dos
+  intentos y un slot global. `withAiAssessmentQueueTransaction` puede asumir
+  `app_runtime` y `app_ai_assessment_worker`; la readiness permite hoy ese
+  cambio desde el login API, aunque el rol worker no lee `result` y los tests
+  niegan cambios de tenant.
+- Rutas y exportación: las rutas de datos de `/workspaces` usan Clerk
+  `requireAuth` y transacciones RLS; `/healthz` y `/plans` son públicos sin datos
+  de tenant; el callback OAuth usa estado firmado/expirado, nonce de un solo
+  uso y revalida membresía/rol. No hay endpoint de descarga JSON independiente:
+  la UI crea el Blob de un job obtenido por la API tenant-scoped. La suite UI
+  verifica allowlist y descarte de propiedades contaminadas/raw. No se simuló
+  una sesión Clerk real de navegador.
+- Hallazgo corregido: al rebasar 64 KiB de stdout, antes se mataba solo el
+  cliente `docker run`. Ahora el guard pide detener el contenedor y mata el
+  cliente una sola vez; el CLI de kill tiene límite de 3 s. Si el daemon no
+  responde, el resultado no garantiza terminación inmediata; próximo intento
+  limpia el nombre fijo. Se añadió helper/test unitario; no se provocó un
+  overrun real en Docker.
+- Verificación tras el cambio:
+  - Test del límite: **2/2**.
+  - API/security completo: **43/43**, incluidos RLS/RBAC, lease/recovery,
+    idempotencia, 413 y contratos de imagen.
+  - E2E dirigido, evaluación local Garak/Qwen real y tenant queue: **1/1**.
+  - UI informe/export JSON: **5/5**.
+  - API typecheck y build: pasaron.
+- Informe:
+  `workers/guardian-ai-assessment/reports/api-broker-preflight-2026-11-02.md`.
+  SHA-256 `7a452683f785e7e6443dd5c6c18fabf8d3b716e7b70c10b0570db8355c2c395f`.
+- SHA-256 del guard de salida:
+  `assessment-output-limit.ts`
+  `0ac8ce8767c89a1adbfdabeedd9c1b4d82b85eb48f12d80308a5b0b5fc123ece`;
+  prueba `assessment-output-limit.test.ts`
+  `21f50cf09c77ca913226a30483a687d0f15e9d25577e016c595cc2851f66bb2e`;
+  worker `ai-assessment-worker.ts`
+  `d610c0eada09727c2dcf7a12feb01d4f2513cbd87520b1015bf451bd675454d2`.
+- No se repitieron los 87 tests Python ni el build monorepo; la modificación es
+  solo del worker/orquestación TypeScript. IPv6, OSV/licencias, attestation y
+  autenticación de navegador Clerk siguen pendientes.

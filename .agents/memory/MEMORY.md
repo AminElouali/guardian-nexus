@@ -4,3 +4,4 @@
 - [Qwen native tool calls](qwen-native-tool-calling.md) — llama-cpp-python 0.3.36 returns Qwen auto `<tool_call>` markup as content; normalize only complete tagged JSON, never free JSON.
 - [Mounted worker artifacts](guardian-nexus-safety.md) — Image SBOMs do not cover mounted model wheels or weights; audit their hashes, provenance, licenses, and advisories separately.
 - [Queue test ordering](ai-assessment-queue-tests.md) — Serialize real E2E queue jobs and lease-recovery tests against the shared development database.
+- [Docker broker host boundary](docker-broker-host-boundary.md) — A same-user broker is not isolation; require distinct Unix identities, socket ACLs, and credential scope.

@@ -36,6 +36,7 @@ import {
   type AssessmentProfileId,
   type DockerImageInspection,
 } from "./ai-assessment-sandbox";
+import { createAssessmentOutputLimit } from "./assessment-output-limit";
 import { withWorkspaceUserTransaction } from "./tenant-db";
 import { logger } from "./logger";
 
@@ -537,7 +538,12 @@ function killDockerContainer(jobId: string): void {
       env: dockerCliEnvironment(),
     },
   );
-  killer.on("error", () => undefined);
+  const deadline = setTimeout(() => {
+    killer.kill("SIGKILL");
+  }, 3_000);
+  deadline.unref();
+  killer.once("close", () => clearTimeout(deadline));
+  killer.once("error", () => clearTimeout(deadline));
 }
 
 function canonicalJson(value: unknown): string {
@@ -1824,6 +1830,18 @@ async function runDockerAssessment(
           env: dockerCliEnvironment(),
         }),
     );
+    const outputLimit = createAssessmentOutputLimit(
+      MAX_STDOUT_BYTES,
+      () => {
+        try {
+          killDockerContainer(jobId);
+        } catch {
+          // The run process is still stopped; the next attempt reaps stale names.
+        } finally {
+          child.kill("SIGKILL");
+        }
+      },
+    );
 
     const timeout = setTimeout(() => {
       timedOut = true;
@@ -1834,11 +1852,9 @@ async function runDockerAssessment(
       : GARAK_MAX_RUNTIME_MS);
 
     child.stdout.on("data", (chunk: Buffer) => {
-      stdoutBytes += chunk.length;
-      if (stdoutBytes > MAX_STDOUT_BYTES) {
-        child.kill("SIGKILL");
-        return;
-      }
+      const state = outputLimit.recordChunk(chunk.length);
+      stdoutBytes = state.bytesReceived;
+      if (state.exceeded) return;
       stdout += chunk.toString("utf8");
     });
     child.on("error", () => {
