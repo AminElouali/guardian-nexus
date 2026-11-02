@@ -1,6 +1,6 @@
 # Guardian Nexus MVP checkpoint
 
-Updated: 2026-11-02 — offline worker verification follow-up
+Updated: 2026-11-02 — offline OSV reconciliation and supply-chain summary
 Scope: development/local laboratory only. No customer systems, external model APIs,
 paid services, production database, remote deployment, or publishing.
 
@@ -10,7 +10,9 @@ This section supersedes older statements below about the cold offline image
 build, IPv4 UDP coverage, and worker/API/dashboard test counts. Detailed
 methodology and package triage are in `DEPENDENCY_AUDIT.md`.
 
-- Starting point was clean HEAD `31bad696`. The offline candidate
+- The preceding offline-build milestone began at clean HEAD `31bad696`. This
+  follow-up started from HEAD `828766f286643f523b5035b30020a7cb2c7083e4`.
+  The offline candidate
   `guardian-ai-assessment:offline-rebuilt` was already built locally as
   `sha256:e2d13fb48471dbcdc169e421598d5830303717266baf9892a3f11e86eb48e476`;
   it was not pushed or promoted over `guardian-ai-assessment:local`.
@@ -22,34 +24,78 @@ methodology and package triage are in `DEPENDENCY_AUDIT.md`.
   `ab8bc155558cc91e79a5a2f638b64dc0f0645bad29b42cc28bc521a1e37ebc79`.
   Candidate CycloneDX 1.6 SBOM: 124 components, SHA-256
   `8eb49149a21afac04818f94ac0183eb799ed740b8f2254a9f63c453c279c5d97`.
-- Candidate OSV scan used Debian DB hash `95c71e88…6ec8` and PyPI DB hash
-  `8fd7138a…5dde`: 186 Debian matches / 84 IDs / 20 package-version pairs,
-  zero PyPI matches, exit code recorded as 2. The JSON SHA-256 is
+- The original full `--all-vulns` scan used Debian DB
+  `95c71e88…6ec8` and PyPI DB `8fd7138a…5dde`: 186 Debian matches / 84 IDs;
+  JSON SHA-256
   `c80e9efec40dbed890c691d33ac85cebe98dcd5aa646cedef7a3698ae326e6c2`.
+  An offline rerun on 2026-11-02 with OSV Scanner 2.7.0 / SCALIBR 0.5.3,
+  `--offline --offline-vulnerabilities --all-packages --all-vulns`, produced
+  byte-identical JSON and exit code 1. The prior checkpoint's exit code 2 was
+  incorrect; the original local `.exit-code` file also contains 1. Exit 1
+  indicates findings, not a clean scan or a scan execution failure. Invocation,
+  stdout/stderr, hashes, and summary are in
+  `generated-artifacts/guardian-ai-assessment-offline/osv-reconciliation-20261102/`;
+  summary SHA-256 `793ccb8d1c7e76e9c4978ef7f615d340522da98e78735478e5951112107cef55`;
+  checksum manifest SHA-256 `c785e79f76773c134144d16a496db6a74ac499a984e0dab4b617134ce86a0089`.
+  The shell capture wrapper then exited 2 on a formatting-only `printf` error
+  after saving scanner exit 1 and JSON; that wrapper error is separately
+  recorded and does not change the scanner result.
   The 124 PURLs match the preceding inventory exactly; no package remediation
-  occurred. The older-database severity distribution and package triage are in
-  `DEPENDENCY_AUDIT.md`; zero PyPI matches do not mean zero vulnerabilities.
+  occurred. A full offline rescan of the same candidate image using the newer
+  already-local Debian DB `4816191f…3582` returned exit 1, 177 matches / 81 IDs
+  (1 critical, 25 high, 43 moderate, 9 low, 3 unscored; zero PyPI matches).
+  Latest JSON SHA-256
+  `292c48b7a65092730f080cb737e72e8e29a1610cbd3e304e1d9b6a87d18c59ca`;
+  summary SHA-256
+  `efcc94a5e803ca7999acec31812fdcd5d7a943a179c2fdd32b3777ddda4ceb6f`;
+  run manifest SHA-256
+  `d1f59502a412b9ee3acb5bdbd9e6f8e4c31547a91ae663551857b8c2126bcd16`.
+  The older full scan had 186/84; only three moderate IDs differ across
+  databases, not due to package changes. The separate 18-ID result used default
+  filtering and is not the complete inventory. All 26 critical/high IDs remain
+  in the latest full scan. Individual triage is in `DEPENDENCY_AUDIT.md`.
 - Real container network audit under `--network=none`: IPv4 TCP/UDP and DNS
   blocked; IPv4 loopback reachable; IPv6
   `kernel_protocol_unavailable`, therefore NO VERIFICADO. Overall
   `incomplete_ipv6_not_verified`, exit 2; evidence SHA-256
   `be7b4fcb57bf9354fb8d655c30b8665350a2371bff1e9bcdbe81282012f4ed79`.
-- Repeated tests: worker 64/64, API AI-contract 7/7, dashboard report 4/4,
-  all pass. Logs and hashes are in ignored
-  `generated-artifacts/guardian-ai-assessment-offline/`; hashes are recorded in
-  `DEPENDENCY_AUDIT.md`. RLS/RBAC integration tests were not rerun because
+- Previously recorded, not rerun in this follow-up: API AI-contract 7/7 and
+  dashboard report 4/4 passed. RLS/RBAC integration tests were not rerun because
   they write PostgreSQL fixtures and this step did not verify the target DB
   environment. No API or database code changed.
 - Wheel provenance was rechecked against local hash locks. `langdetect 1.0.9`
   remains license-ambiguous (MIT metadata versus Apache license files); the
-  separate llama.cpp/native component review is not legal clearance. No
-  package was removed or updated. The Trixie candidate simulation found no
-  safe applicable package fix for the matched Debian advisories.
+  local license inventory for all 38 locked artifacts has SHA-256
+  `168e1534da55376e403b5587c6d702810f356c0517c6d8a3d64aa5aca4b36ff0`.
+  The separate mounted native runtime inventory has SHA-256
+  `2fafa80a397f89ccae66fcab113b94cd6475db627e4dc3f6f58f5ca528197873`;
+  it hashes the local llama-cpp-python shared libraries and MarkupSafe extension.
+  This is not complete dependency attribution or legal clearance. No package
+  was removed or updated. The Trixie candidate simulation found no safe
+  applicable package fix for the matched Debian advisories.
+- The worker runtime inventory confirmed the reported source-package versions.
+  `mount`, `nsenter`, `ldd`, `infocmp`, and `perl` binaries are present;
+  `sqlite3`, `getfacl`, `setfacl`, `getfattr`, and `setfattr` are absent.
+  Python's SQLite and gzip modules are present, but no worker source call path
+  to the affected SQLite, ACL, attr, ncurses, PAM, Perl, or util-linux tools was
+  identified. This is static reachability review, not exploit testing.
+- The worker suite was rerun under `network=none`, read-only root, resource and
+  capability limits, with an ephemeral `/tmp` tmpfs: 64/64 passed. A preceding
+  read-only run without tmpfs had 7 errors from temporary-directory creation;
+  that failed run is retained separately and was not counted as a pass.
+- No package was changed and no image rebuild was needed or performed for this
+  evidence/documentation-only follow-up. API, dashboard, database, typecheck,
+  build, and E2E were not rerun; the UI was not changed.
+- The Qwen/Garak executive report remains a tenant-scoped agent-evaluation
+  report. The global worker supply-chain evidence is not inserted into that
+  report because it is not tenant-job evidence; a separate internal summary is
+  `reports/worker-supply-chain-executive.md`. No dashboard/API supply-chain
+  report route was added.
 - Remaining blockers: dual-stack host needed to verify IPv6; legal review of
-  `langdetect` and native component obligations; fresh OSV database scan of the
-  candidate image would require an already-authorized database acquisition
-  outside the evaluator. The API still uses the prior `:local` image; candidate
-  promotion was intentionally not performed.
+  `langdetect` and native component obligations; the local OSV archives have no
+  upstream signature verification and no Trixie fix candidate was found. The
+  latest already-cached local database was used offline. The API still uses the
+  prior `:local` image; candidate promotion was intentionally not performed.
 
 ## Follow-up audit — 2026-11-02
 
@@ -85,11 +131,14 @@ This update supersedes the older diskcache status, worker-test count, and OSV
   not verified. A separate public IPv4 UDP destination was not probed; do not
   claim that protocol-specific check passed. Evidence SHA-256
   `3e6c52fddaf22e485fd4f5f0f2c7957213c36afbc180d9d7c53316c97e2bc424`.
-- Current Debian OSV database hash changed from the previous scan. The new scan
-  still reports four high `util-linux` findings and no critical IDs; 66
-  historical IDs are absent from the refreshed local dataset while the installed
-  package PURLs are unchanged. This is not remediation. The historical critical
-  and high triage and exact scan hashes are in `DEPENDENCY_AUDIT.md`.
+- The earlier scan against the newer Debian OSV database used default
+  filtering and showed 18 IDs (four high, zero critical); it was not a complete
+  `--all-vulns` inventory. The comparable full scan against that same database
+  shows 177 matches / 81 IDs, including 1 critical and 25 high. Compared with
+  the older full scan, only three moderate IDs are absent; no package changed.
+  The earlier claim that 66 IDs disappeared due to database content was wrong.
+  This is not remediation. Exact scan hashes and critical/high triage are in
+  `DEPENDENCY_AUDIT.md`.
 - API unit tests pass 34/34; API and dashboard typechecks pass; the dashboard
   JSON download/redaction component test passes as part of 4/4 component tests.
   The download plumbing is tested without a Clerk session; no authenticated

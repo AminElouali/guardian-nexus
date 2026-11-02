@@ -80,3 +80,9 @@ description: Product boundaries for security integrations, claims, and productio
 **Why:** A cache can turn attacker-controlled writes into unsafe deserialization, and merely not using an optional cache path is weaker than removing its package and preventing activation.
 
 **How to apply:** Review the model runtime's optional cache dependencies and serialization format whenever changing inference runtimes; preserve tests for absence, disabled configuration, and fail-closed construction.
+
+**Rule:** Compare OSV scans only when the advisory database and scanner flags match; record the scanner process exit code separately from any shell or log-wrapper exit code.
+
+**Why:** The same refreshed local database produced a filtered 18-ID result and a full 81-ID result with `--all-vulns`; an earlier comparison wrongly attributed the difference to database content. A logging wrapper can also fail after the scanner has already saved its result.
+
+**How to apply:** Save exact argv, database hashes, scanner version/binary hash, JSON hash, scanner exit status, and wrapper status. Treat a failed database load as invalid—not a zero-finding scan—and never infer a fix from absence across different filtering modes or database snapshots.
