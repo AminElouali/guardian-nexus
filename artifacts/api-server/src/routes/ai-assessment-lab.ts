@@ -1,17 +1,24 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, gt, lte, sql } from "drizzle-orm";
+import { createHash } from "node:crypto";
 import { Router, type IRouter, type RequestHandler } from "express";
 import {
   CreateWorkspaceAiAssessmentLabJobBody,
   CreateWorkspaceAiAssessmentLabJobParams,
   CreateWorkspaceAiAssessmentLabJobResponse,
+  DecideWorkspaceAiAssessmentApprovalBody,
+  DecideWorkspaceAiAssessmentApprovalParams,
+  DecideWorkspaceAiAssessmentApprovalResponse,
   GetWorkspaceAiAssessmentLabAvailabilityParams,
   GetWorkspaceAiAssessmentLabAvailabilityResponse,
   ListWorkspaceAiAssessmentLabJobsParams,
   ListWorkspaceAiAssessmentLabJobsResponse,
+  ListWorkspaceAiAssessmentApprovalsParams,
+  ListWorkspaceAiAssessmentApprovalsResponse,
   RetryWorkspaceAiAssessmentLabJobParams,
   RetryWorkspaceAiAssessmentLabJobResponse,
 } from "@workspace/api-zod";
 import {
+  aiAssessmentApprovalRequestsTable,
   aiAssessmentJobsTable,
   workspaceAuditEventsTable,
   type AiAssessmentJob,
@@ -36,6 +43,7 @@ const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MAX_HISTORY = 20;
 const MAX_PENDING_PER_WORKSPACE = 3;
+const MAX_APPROVAL_HISTORY = 50;
 
 function formatJob(job: AiAssessmentJob) {
   return CreateWorkspaceAiAssessmentLabJobResponse.parse({
@@ -51,6 +59,56 @@ function formatJob(job: AiAssessmentJob) {
     startedAt: job.startedAt,
     completedAt: job.completedAt,
   });
+}
+
+function formatApproval(
+  approval: {
+  id: string;
+  jobId: string;
+  caseId: string;
+  proposalSha256: string;
+  actionSha256: string | null;
+  proposalBindingSha256: string;
+  requestedByUserId: string;
+  status: string;
+  expiresAt: Date;
+  decidedByUserId: string | null;
+  decidedAt: Date | null;
+    createdAt: Date;
+  },
+  canCurrentUserDecide = false,
+) {
+  return {
+    ...approval,
+    status:
+      approval.status === "pending" && approval.expiresAt <= new Date()
+        ? "expired"
+        : approval.status,
+    canCurrentUserDecide:
+      canCurrentUserDecide &&
+      approval.status === "pending" &&
+      approval.expiresAt > new Date(),
+  };
+}
+
+function computeApprovalBinding(approval: {
+  workspaceId: string;
+  jobId: string;
+  caseId: string;
+  proposalSha256: string;
+  actionSha256: string | null;
+}): string {
+  return createHash("sha256")
+    .update(
+      JSON.stringify([
+        approval.workspaceId,
+        approval.jobId,
+        approval.caseId,
+        approval.proposalSha256,
+        approval.actionSha256,
+      ]),
+    )
+    .digest("hex");
 }
 
 routes.get(
@@ -110,6 +168,195 @@ routes.get(
       ListWorkspaceAiAssessmentLabJobsResponse.parse(
         access.value.jobs.map(formatJob),
       ),
+    );
+  },
+);
+
+routes.get(
+  "/workspaces/:workspaceId/ai-security-assessments/approvals",
+  async (req, res): Promise<void> => {
+    const params = ListWorkspaceAiAssessmentApprovalsParams.safeParse(req.params);
+    if (!params.success || !UUID_PATTERN.test(params.data.workspaceId)) {
+      res.status(400).json({ error: "Invalid workspace ID" });
+      return;
+    }
+    const { workspaceId } = params.data;
+    const access = await withWorkspaceUserTransaction(
+      req.authUserId!,
+      workspaceId,
+      async (tx, membership) => {
+        const now = new Date();
+        const canDecide = canRunAiEvaluation(membership.role);
+        const approvals = await tx
+          .select()
+          .from(aiAssessmentApprovalRequestsTable)
+          .where(eq(aiAssessmentApprovalRequestsTable.workspaceId, workspaceId))
+          .orderBy(desc(aiAssessmentApprovalRequestsTable.createdAt))
+          .limit(MAX_APPROVAL_HISTORY);
+        return {
+          approvals: approvals.map((approval) =>
+            formatApproval(
+              approval,
+              canDecide && approval.requestedByUserId !== req.authUserId,
+            ),
+          ),
+          canDecide,
+        };
+      },
+    );
+    if (!access.authorized) {
+      res.status(403).json({ error: "Workspace membership required" });
+      return;
+    }
+    res.json(
+      ListWorkspaceAiAssessmentApprovalsResponse.parse({
+        ...access.value,
+        execution: "not_performed_laboratory_approval_only",
+      }),
+    );
+  },
+);
+
+routes.post(
+  "/workspaces/:workspaceId/ai-security-assessments/approvals/:approvalId/decision",
+  async (req, res): Promise<void> => {
+    const params = DecideWorkspaceAiAssessmentApprovalParams.safeParse(req.params);
+    const body = DecideWorkspaceAiAssessmentApprovalBody.safeParse(req.body);
+    if (
+      !params.success ||
+      !body.success ||
+      !UUID_PATTERN.test(params.data.workspaceId) ||
+      !UUID_PATTERN.test(params.data.approvalId)
+    ) {
+      res.status(400).json({ error: "Invalid approval decision request" });
+      return;
+    }
+    const { workspaceId, approvalId } = params.data;
+    const now = new Date();
+    const access = await withWorkspaceUserTransaction(
+      req.authUserId!,
+      workspaceId,
+      async (tx, membership) => {
+        if (!canRunAiEvaluation(membership.role)) {
+          return { kind: "forbidden" as const };
+        }
+        const [approval] = await tx
+          .select()
+          .from(aiAssessmentApprovalRequestsTable)
+          .where(
+            and(
+              eq(aiAssessmentApprovalRequestsTable.id, approvalId),
+              eq(aiAssessmentApprovalRequestsTable.workspaceId, workspaceId),
+            ),
+          )
+          .limit(1);
+        if (!approval) return { kind: "missing" as const };
+        if (approval.status !== "pending") {
+          return { kind: "already_decided" as const };
+        }
+        if (approval.requestedByUserId === req.authUserId) {
+          return { kind: "self_approval" as const };
+        }
+        if (approval.expiresAt <= now) {
+          const [expired] = await tx
+            .update(aiAssessmentApprovalRequestsTable)
+            .set({ status: "expired", updatedAt: now })
+            .where(
+              and(
+                eq(aiAssessmentApprovalRequestsTable.id, approvalId),
+                eq(aiAssessmentApprovalRequestsTable.workspaceId, workspaceId),
+                eq(aiAssessmentApprovalRequestsTable.status, "pending"),
+                lte(aiAssessmentApprovalRequestsTable.expiresAt, now),
+              ),
+            )
+            .returning();
+          if (expired) {
+            await tx.insert(workspaceAuditEventsTable).values({
+              workspaceId,
+              actorUserId: req.authUserId!,
+              action: "ai_assessment.approval_expired",
+              resourceType: "ai_assessment_approval",
+              resourceId: approvalId,
+              metadata: { jobId: approval.jobId, caseId: approval.caseId },
+            });
+          }
+          return { kind: "expired" as const };
+        }
+        const expectedBinding = computeApprovalBinding(approval);
+        if (
+          approval.proposalBindingSha256 !== expectedBinding ||
+          body.data.proposalBindingSha256 !== expectedBinding
+        ) {
+          return { kind: "binding_mismatch" as const };
+        }
+        const status = body.data.decision === "approve" ? "approved" : "denied";
+        const [updated] = await tx
+          .update(aiAssessmentApprovalRequestsTable)
+          .set({
+            status,
+            decidedByUserId: req.authUserId!,
+            decidedAt: now,
+            updatedAt: now,
+          })
+          .where(
+            and(
+              eq(aiAssessmentApprovalRequestsTable.id, approvalId),
+              eq(aiAssessmentApprovalRequestsTable.workspaceId, workspaceId),
+              eq(aiAssessmentApprovalRequestsTable.status, "pending"),
+              eq(
+                aiAssessmentApprovalRequestsTable.proposalBindingSha256,
+                expectedBinding,
+              ),
+              gt(aiAssessmentApprovalRequestsTable.expiresAt, now),
+            ),
+          )
+          .returning();
+        if (!updated) return { kind: "already_decided" as const };
+        await tx.insert(workspaceAuditEventsTable).values({
+          workspaceId,
+          actorUserId: req.authUserId!,
+          action: `ai_assessment.approval_${status}`,
+          resourceType: "ai_assessment_approval",
+          resourceId: approvalId,
+          metadata: {
+            jobId: approval.jobId,
+            caseId: approval.caseId,
+            proposalSha256: approval.proposalSha256,
+            proposalBindingSha256: expectedBinding,
+          },
+        });
+        return { kind: "decided" as const, approval: updated };
+      },
+    );
+    if (!access.authorized) {
+      res.status(403).json({ error: "Workspace membership required" });
+      return;
+    }
+    if (access.value.kind === "forbidden" || access.value.kind === "self_approval") {
+      res.status(403).json({ error: "A different workspace owner or admin must decide this request" });
+      return;
+    }
+    if (access.value.kind === "missing") {
+      res.status(404).json({ error: "Approval not found in this workspace" });
+      return;
+    }
+    if (
+      access.value.kind === "already_decided" ||
+      access.value.kind === "expired" ||
+      access.value.kind === "binding_mismatch"
+    ) {
+      res.status(409).json({ error: `Approval is ${access.value.kind}` });
+      return;
+    }
+    if (access.value.kind !== "decided") {
+      res.status(500).json({ error: "Approval decision failed" });
+      return;
+    }
+    res.json(
+      DecideWorkspaceAiAssessmentApprovalResponse.parse({
+        approval: formatApproval(access.value.approval),
+        execution: "not_performed_laboratory_approval_only",
+      }),
     );
   },
 );

@@ -10,7 +10,11 @@ import type { Server } from "node:http";
 import express, { type RequestHandler } from "express";
 import pg from "pg";
 import { eq } from "drizzle-orm";
-import { ListWorkspaceAiAssessmentLabJobsResponse } from "@workspace/api-zod";
+import {
+  DecideWorkspaceAiAssessmentApprovalResponse,
+  ListWorkspaceAiAssessmentLabJobsResponse,
+  ListWorkspaceAiAssessmentApprovalsResponse,
+} from "@workspace/api-zod";
 import {
   aiAssessmentJobsTable,
   assertRlsRuntimeReady,
@@ -21,6 +25,7 @@ import {
 } from "@workspace/db";
 import { withWorkspaceUserTransaction } from "./lib/tenant-db";
 import {
+  AI_ASSESSMENT_WORKER_VERSION,
   getLocalWorkerAvailability,
   stopLocalAssessmentQueueWorker,
 } from "./lib/ai-assessment-worker";
@@ -38,7 +43,8 @@ const POLL_INTERVAL_MS = 500;
 const userA = `assessment-e2e-owner-${randomUUID()}`;
 const userB = `assessment-e2e-owner-${randomUUID()}`;
 const viewerA = `assessment-e2e-viewer-${randomUUID()}`;
-const authorizedTestUsers = new Set([userA, userB, viewerA]);
+const adminA = `assessment-e2e-admin-${randomUUID()}`;
+const authorizedTestUsers = new Set([userA, userB, viewerA, adminA]);
 const testAuth: RequestHandler = (req, res, next) => {
   const userId = req.get("x-guardian-test-user");
   if (!userId || !authorizedTestUsers.has(userId)) {
@@ -138,8 +144,8 @@ before(async () => {
   workspaceB = createdB.rows[0]!.id;
   await fixturePool.query(
     `INSERT INTO public.workspace_memberships (workspace_id, user_id, role)
-     VALUES ($1, $2, 'owner'), ($1, $3, 'viewer'), ($4, $5, 'owner')`,
-    [workspaceA, userA, viewerA, workspaceB, userB],
+     VALUES ($1, $2, 'owner'), ($1, $3, 'viewer'), ($1, $4, 'admin'), ($5, $6, 'owner')`,
+    [workspaceA, userA, viewerA, adminA, workspaceB, userB],
   );
 
   server = app.listen(0, "127.0.0.1");
@@ -322,7 +328,7 @@ test(
         );
         assert.equal(job.status, "succeeded", `worker failed: ${job.errorCode}`);
         assert.equal(job.attempts, 1);
-        assert.equal(job.workerVersion, "guardian-ai-assessment-lab-0.5.1");
+        assert.equal(job.workerVersion, AI_ASSESSMENT_WORKER_VERSION);
         assert.ok(job.result);
         assert.equal(job.result.engine, "garak");
         assert.equal(job.result.engineVersion, "0.17.1");
@@ -444,7 +450,7 @@ test(
         assert.equal(localJob.attempts, 1);
         assert.equal(
           localJob.workerVersion,
-          "guardian-ai-assessment-lab-0.5.1",
+          AI_ASSESSMENT_WORKER_VERSION,
         );
         assert.equal(localJob.result?.engine, "local_llm_lab");
         if (localJob.result?.engine !== "local_llm_lab") {
@@ -808,7 +814,7 @@ test(
           completedRaw = rawJobs.find((candidate) => candidate.id === acceptedJob.id);
           assert.equal(job.status, "succeeded", `${profileId}: ${job.errorCode}`);
           assert.equal(job.attempts, 1);
-          assert.equal(job.workerVersion, "guardian-ai-assessment-lab-0.5.1");
+          assert.equal(job.workerVersion, AI_ASSESSMENT_WORKER_VERSION);
           assert.equal(job.result?.engine, "guardian_policy_lab");
           if (job.result?.engine !== "guardian_policy_lab") {
             assert.fail("policy lab must retain its explicit engine discriminator");
@@ -1478,5 +1484,228 @@ test(
     );
     mkdirSync(dirname(artifactPath), { recursive: true });
     writeFileSync(artifactPath, JSON.stringify(rawJob, null, 2));
+  },
+);
+
+test(
+  "persistent synthetic approvals enforce tenant, role, expiry, binding, and replay controls",
+  { timeout: TIMEOUT_MS },
+  async () => {
+    const profileId = "guardian-agent-lab-finance-v1";
+    const jobsPath = `/api/workspaces/${workspaceA}/ai-security-assessments/lab/jobs`;
+    const approvalsPath = `/api/workspaces/${workspaceA}/ai-security-assessments/approvals`;
+    assert.equal(
+      getLocalWorkerAvailability().profiles.find(
+        (profile) => profile.profileId === profileId,
+      )?.status,
+      "ready",
+    );
+
+    async function runFinanceFixture() {
+      const created = await apiRequest(userA, jobsPath, "POST", {
+        idempotencyKey: `approval-e2e-${randomUUID()}`,
+        profileId,
+      });
+      assert.equal(created.status, 202);
+      const accepted = (await created.json()) as { id: string };
+      policyLabJobIds.push(accepted.id);
+      const deadline = Date.now() + 60_000;
+      while (Date.now() < deadline) {
+        const response = await apiRequest(userA, jobsPath);
+        assert.equal(response.status, 200);
+        const jobs = ListWorkspaceAiAssessmentLabJobsResponse.parse(
+          await response.json(),
+        );
+        const job = jobs.find((candidate) => candidate.id === accepted.id);
+        if (job?.status === "succeeded") return job;
+        if (job?.status === "failed") {
+          assert.fail(`synthetic finance job failed: ${job.errorCode}`);
+        }
+        await delay(POLL_INTERVAL_MS);
+      }
+      assert.fail("synthetic finance job did not complete");
+    }
+
+    async function listApprovals(userId: string) {
+      const response = await apiRequest(userId, approvalsPath);
+      assert.equal(response.status, 200);
+      return ListWorkspaceAiAssessmentApprovalsResponse.parse(
+        await response.json(),
+      );
+    }
+
+    async function oneApprovalForJob(userId: string, currentJobId: string) {
+      const list = await listApprovals(userId);
+      const approval = list.approvals.find((item) => item.jobId === currentJobId);
+      assert.ok(approval, "require_approval result must persist an approval row");
+      return approval;
+    }
+
+    const firstJob = await runFinanceFixture();
+    const firstCases = (
+      firstJob.result as unknown as {
+        cases: Array<{
+          policyOn: { decision: string; executed: boolean };
+          proposalSha256: string;
+          toolTrace?: {
+            policyOn: {
+              dispatchStatus: string;
+              externalSideEffect: false;
+              events: Array<{ executed: boolean }>;
+            };
+          };
+        }>;
+      }
+    ).cases;
+    const pendingCase = firstCases.find(
+      (item) =>
+        item.policyOn.decision === "require_approval" &&
+        item.toolTrace?.policyOn.dispatchStatus ===
+          "approval_required_before_dispatch",
+    );
+    assert.ok(pendingCase, "fixture must require approval before dispatch");
+    assert.equal(pendingCase.policyOn.executed, false);
+    assert.equal(pendingCase.toolTrace?.policyOn.externalSideEffect, false);
+    assert.ok(pendingCase.toolTrace?.policyOn.events.every((event) => !event.executed));
+
+    const firstApproval = await oneApprovalForJob(userA, firstJob.id);
+    assert.equal(firstApproval.status, "pending");
+    assert.equal(firstApproval.canCurrentUserDecide, false);
+    assert.equal(
+      (
+        await apiRequest(
+          userB,
+          `/api/workspaces/${workspaceA}/ai-security-assessments/approvals`,
+        )
+      ).status,
+      403,
+      "other tenants cannot list approval records",
+    );
+    assert.equal(
+      (
+        await apiRequest(
+          userA,
+          `${approvalsPath}/${firstApproval.id}/decision`,
+          "POST",
+          {
+            decision: "approve",
+            proposalBindingSha256: firstApproval.proposalBindingSha256,
+          },
+        )
+      ).status,
+      403,
+      "a requester cannot approve their own proposal",
+    );
+    assert.equal(
+      (
+        await apiRequest(
+          viewerA,
+          `${approvalsPath}/${firstApproval.id}/decision`,
+          "POST",
+          {
+            decision: "approve",
+            proposalBindingSha256: firstApproval.proposalBindingSha256,
+          },
+        )
+      ).status,
+      403,
+      "viewers cannot decide approvals",
+    );
+    const alteredBinding = await apiRequest(
+      adminA,
+      `${approvalsPath}/${firstApproval.id}/decision`,
+      "POST",
+      { decision: "approve", proposalBindingSha256: "0".repeat(64) },
+    );
+    assert.equal(alteredBinding.status, 409);
+    assert.equal(
+      (await oneApprovalForJob(adminA, firstJob.id)).status,
+      "pending",
+      "a mismatched binding must not change the decision state",
+    );
+    const approvedResponse = await apiRequest(
+      adminA,
+      `${approvalsPath}/${firstApproval.id}/decision`,
+      "POST",
+      {
+        decision: "approve",
+        proposalBindingSha256: firstApproval.proposalBindingSha256,
+      },
+    );
+    assert.equal(approvedResponse.status, 200);
+    const approved = DecideWorkspaceAiAssessmentApprovalResponse.parse(
+      await approvedResponse.json(),
+    );
+    assert.equal(approved.approval.status, "approved");
+    assert.equal(approved.approval.decidedByUserId, adminA);
+    assert.equal(approved.execution, "not_performed_laboratory_approval_only");
+    assert.equal(
+      (
+        await apiRequest(
+          adminA,
+          `${approvalsPath}/${firstApproval.id}/decision`,
+          "POST",
+          {
+            decision: "approve",
+            proposalBindingSha256: firstApproval.proposalBindingSha256,
+          },
+        )
+      ).status,
+      409,
+      "decisions cannot be replayed",
+    );
+
+    const secondJob = await runFinanceFixture();
+    const secondApproval = await oneApprovalForJob(adminA, secondJob.id);
+    const deniedResponse = await apiRequest(
+      adminA,
+      `${approvalsPath}/${secondApproval.id}/decision`,
+      "POST",
+      {
+        decision: "deny",
+        proposalBindingSha256: secondApproval.proposalBindingSha256,
+      },
+    );
+    assert.equal(deniedResponse.status, 200);
+    assert.equal(
+      DecideWorkspaceAiAssessmentApprovalResponse.parse(
+        await deniedResponse.json(),
+      ).approval.status,
+      "denied",
+    );
+
+    const thirdJob = await runFinanceFixture();
+    const expiredApproval = await oneApprovalForJob(adminA, thirdJob.id);
+    await fixturePool.query(
+      `UPDATE public.ai_assessment_approval_requests
+       SET expires_at = now() - interval '1 minute'
+       WHERE id = $1 AND workspace_id = $2`,
+      [expiredApproval.id, workspaceA],
+    );
+    const expiredDecision = await apiRequest(
+      adminA,
+      `${approvalsPath}/${expiredApproval.id}/decision`,
+      "POST",
+      {
+        decision: "approve",
+        proposalBindingSha256: expiredApproval.proposalBindingSha256,
+      },
+    );
+    assert.equal(expiredDecision.status, 409);
+    const persistedExpiry = await fixturePool.query<{ status: string }>(
+      `SELECT status FROM public.ai_assessment_approval_requests
+       WHERE id = $1 AND workspace_id = $2`,
+      [expiredApproval.id, workspaceA],
+    );
+    assert.equal(persistedExpiry.rows[0]?.status, "expired");
+    for (const job of [firstJob, secondJob, thirdJob]) {
+      const original = job.result as unknown as { cases: typeof firstCases };
+      const requestCase = original.cases.find(
+        (item) => item.policyOn.decision === "require_approval",
+      );
+      assert.ok(requestCase);
+      assert.equal(requestCase.policyOn.executed, false);
+      assert.equal(job.status, "succeeded");
+    }
   },
 );

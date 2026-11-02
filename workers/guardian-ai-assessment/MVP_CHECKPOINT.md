@@ -1264,3 +1264,51 @@ This update supersedes the older diskcache status, worker-test count, and OSV
   reales del modelo, prueba ON/OFF discriminante, llamadas nativas directas,
   autenticación Clerk en navegador, IPv6 y las puertas de comercialización de
   supply chain/licencias/broker.
+
+## Aprobaciones humanas persistentes de laboratorio — 2026-11-03
+
+- Se añadió `ai_assessment_approval_requests` con `ENABLE/FORCE ROW LEVEL
+  SECURITY`, índices, unicidad por workspace/job/case y restricciones de
+  hashes/estado/anti-autoaprobación. `app_runtime` solo tiene `SELECT`,
+  `INSERT` y actualización de columnas de decisión; no puede borrar ni
+  modificar la propuesta o los hashes. El SQL idempotente se aplicó solo en
+  desarrollo con
+  `ALLOW_DEV_DB_ROLE_BOOTSTRAP=true NODE_ENV=development pnpm --filter @workspace/db run apply-rls-policies:dev`.
+- El worker crea solicitudes a partir de evidencia `require_approval` de
+  `guardian_policy_lab` o `guardian_qwen_policy_lab`, con expiración de 24 h y
+  hash de vínculo SHA-256 sobre workspace/job/caso/hash de propuesta/hash de
+  acción. No persiste prompts, respuestas o argumentos en bruto.
+- API autenticada: `GET /api/workspaces/{workspaceId}/ai-security-assessments/approvals`
+  y `POST /api/workspaces/{workspaceId}/ai-security-assessments/approvals/{approvalId}/decision`.
+  Solo owner/admin distinto del solicitante puede decidir; la transición es
+  condicional y de un solo uso, con auditoría. La UI muestra pendientes,
+  aprobadas sin ejecución, denegadas y caducadas.
+- **Límite de seguridad deliberado:** aprobar/denegar solo registra el estado;
+  no encola, reanuda ni ejecuta herramientas. La respuesta API indica
+  `not_performed_laboratory_approval_only`. Reanudar una acción ficticia exacta
+  sigue pendiente hasta poder validar la representación sintética vinculada
+  sin guardar argumentos sensibles ni permitir replay/alteración.
+- E2E serial de aprobaciones: **1/1**; creó 3 trabajos fixture financieros
+  exitosos, comprobó 3 solicitudes, 1 aprobación, 1 denegación, 1 caducidad,
+  rechazo de autoaprobación/viewer/tenant cruzado/hash alterado/replay y
+  `executed=false` en los casos de aprobación. Son fixtures deterministas,
+  no solicitudes de Qwen.
+- Regresión Qwen local correo/base de datos/finanzas: **1/1**, 3/3 jobs
+  exitosos; no se observó `require_approval` de Qwen. Regresión del recorrido
+  Garak/LLM original: **1/1** después de corregir una aserción antigua de
+  versión 0.5.1 para comparar con `AI_ASSESSMENT_WORKER_VERSION` (0.5.2).
+- API **56/56**, worker Python dentro de la imagen local con `--network=none`
+  **87/87**, pruebas UI/informe/exportación **8/8**, typecheck API/web y builds
+  API/web correctos. La primera prueba UI detectó `React is not defined`; se
+  corrigió el import y se repitió con éxito. El build web conserva los avisos
+  de sourcemap de `tooltip.tsx` y chunk >500 kB. La llamada directa al script
+  Python falló por falta de bit ejecutable; `sh workers/guardian-ai-assessment/scripts/run-local.sh --unit-tests`
+  pasó. 0 contenedores residuales.
+- Reporte técnico:
+  `workers/guardian-ai-assessment/reports/human-approval-workflow-2026-11-03.md`
+  — SHA-256 `a154e5949c6b576ecdb68c00f9033753536710d2c33ef0043dadae1b5fb0c38b`.
+- Estado funcional: inferencia Qwen real permanece en **3/8** verticales;
+  cinco siguen solo fixture. Aprobaciones persistentes validadas en fixture,
+  no en una propuesta `require_approval` real de Qwen. Esta fase no verifica
+  Clerk con una sesión real en navegador. No se publicó, desplegó ni tocó
+  producción.

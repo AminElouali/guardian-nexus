@@ -1218,4 +1218,113 @@ export const aiAssessmentJobsTable = pgTable(
   ],
 ).enableRLS();
 
+export const aiAssessmentApprovalRequestsTable = pgTable(
+  "ai_assessment_approval_requests",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspacesTable.id, { onDelete: "cascade" }),
+    jobId: uuid("job_id")
+      .notNull()
+      .references(() => aiAssessmentJobsTable.id, { onDelete: "cascade" }),
+    caseId: text("case_id").notNull(),
+    proposalSha256: text("proposal_sha256").notNull(),
+    actionSha256: text("action_sha256"),
+    proposalBindingSha256: text("proposal_binding_sha256").notNull(),
+    requestedByUserId: text("requested_by_user_id").notNull(),
+    status: text("status").notNull().default("pending"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    decidedByUserId: text("decided_by_user_id"),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    uniqueIndex("ai_assessment_approval_job_case_idx").on(
+      table.workspaceId,
+      table.jobId,
+      table.caseId,
+    ),
+    index("ai_assessment_approval_workspace_status_expiry_idx").on(
+      table.workspaceId,
+      table.status,
+      table.expiresAt,
+    ),
+    check(
+      "ai_assessment_approval_status_check",
+      sql`${table.status} IN ('pending', 'approved', 'denied', 'expired')`,
+    ),
+    check(
+      "ai_assessment_approval_hashes_check",
+      sql`${table.proposalSha256} ~ '^[a-f0-9]{64}$' AND (${table.actionSha256} IS NULL OR ${table.actionSha256} ~ '^[a-f0-9]{64}$') AND ${table.proposalBindingSha256} ~ '^[a-f0-9]{64}$'`,
+    ),
+    check(
+      "ai_assessment_approval_decision_check",
+      sql`(${table.status} = 'pending' AND ${table.decidedByUserId} IS NULL AND ${table.decidedAt} IS NULL) OR (${table.status} IN ('approved', 'denied') AND ${table.decidedByUserId} IS NOT NULL AND ${table.decidedAt} IS NOT NULL) OR (${table.status} = 'expired' AND ${table.decidedByUserId} IS NULL)`,
+    ),
+    check(
+      "ai_assessment_approval_no_self_approval_check",
+      sql`${table.decidedByUserId} IS NULL OR ${table.decidedByUserId} <> ${table.requestedByUserId}`,
+    ),
+    pgPolicy("ai_assessment_approvals_select_member", {
+      for: "select",
+      to: appRuntimeRole,
+      using: memberScope(table.workspaceId),
+    }),
+    pgPolicy("ai_assessment_approvals_insert_owner", {
+      for: "insert",
+      to: appRuntimeRole,
+      withCheck: sql`
+        ${ownerOrAdminScope(table.workspaceId)}
+        AND ${table.requestedByUserId} = NULLIF(current_setting('app.user_id', true), '')
+        AND ${table.status} = 'pending'
+        AND ${table.decidedByUserId} IS NULL
+        AND ${table.decidedAt} IS NULL
+        AND EXISTS (
+          SELECT 1
+          FROM ${aiAssessmentJobsTable} AS job
+          WHERE job.id = ${table.jobId}
+            AND job.workspace_id = ${table.workspaceId}
+            AND job.requested_by_user_id = ${table.requestedByUserId}
+            AND job.status = 'succeeded'
+        )
+      `,
+    }),
+    pgPolicy("ai_assessment_approvals_update_approver", {
+      for: "update",
+      to: appRuntimeRole,
+      using: sql`
+        ${ownerOrAdminScope(table.workspaceId)}
+        AND ${table.status} = 'pending'
+        AND (
+          (${table.expiresAt} > now()
+           AND ${table.requestedByUserId} <> NULLIF(current_setting('app.user_id', true), ''))
+          OR ${table.expiresAt} <= now()
+        )
+      `,
+      withCheck: sql`
+        ${ownerOrAdminScope(table.workspaceId)}
+        AND (
+          (${table.status} IN ('approved', 'denied')
+           AND ${table.decidedByUserId} = NULLIF(current_setting('app.user_id', true), '')
+           AND ${table.decidedAt} IS NOT NULL
+           AND ${table.requestedByUserId} <> ${table.decidedByUserId})
+          OR (${table.status} = 'expired'
+              AND ${table.expiresAt} <= now()
+              AND ${table.decidedByUserId} IS NULL
+              AND ${table.decidedAt} IS NULL)
+        )
+      `,
+    }),
+  ],
+).enableRLS();
+
 export type AiAssessmentJob = typeof aiAssessmentJobsTable.$inferSelect;
+export type AiAssessmentApprovalRequest =
+  typeof aiAssessmentApprovalRequestsTable.$inferSelect;

@@ -615,6 +615,61 @@ paths:
           description: Job is not retryable or has exhausted its attempt limit
         "503":
           description: Local isolated Docker worker is unavailable or disabled outside development
+  /workspaces/{workspaceId}/ai-security-assessments/approvals:
+    get:
+      operationId: listWorkspaceAiAssessmentApprovals
+      tags: [ai-evaluations]
+      summary: List tenant-scoped simulated action approvals
+      description: Approval decisions record an authorization decision only; they never dispatch an external action.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Pending and historical approval requests for this workspace
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AiAssessmentApprovalList" }
+        "403":
+          description: Workspace membership required
+  /workspaces/{workspaceId}/ai-security-assessments/approvals/{approvalId}/decision:
+    post:
+      operationId: decideWorkspaceAiAssessmentApproval
+      tags: [ai-evaluations]
+      summary: Approve or deny one exact simulated proposal
+      description: Requires a distinct workspace owner/admin. The immutable proposal binding prevents replay or altered proposals; this endpoint never runs tools.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: approvalId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AiAssessmentApprovalDecisionRequest" }
+      responses:
+        "200":
+          description: Decision recorded; no action was executed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AiAssessmentApprovalDecisionResponse" }
+        "400":
+          description: Invalid request
+        "403":
+          description: Workspace owner/admin role required or requester cannot approve own proposal
+        "404":
+          description: Approval not found in this workspace
+        "409":
+          description: Expired, stale, already decided, or proposal binding mismatch
 components:
   schemas:
     HealthStatus:
@@ -874,6 +929,48 @@ components:
         startedAt: { type: ["string", "null"], format: date-time }
         completedAt: { type: ["string", "null"], format: date-time }
       required: [id, status, profileId, workerVersion, attempts, engineVersion, result, errorCode, createdAt, startedAt, completedAt]
+    AiAssessmentApproval:
+      type: object
+      additionalProperties: false
+      properties:
+        id: { type: string, format: uuid }
+        jobId: { type: string, format: uuid }
+        caseId: { type: string }
+        proposalSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        actionSha256: { type: ["string", "null"], pattern: "^[a-f0-9]{64}$" }
+        proposalBindingSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        requestedByUserId: { type: string }
+        status: { type: string, enum: [pending, approved, denied, expired] }
+        canCurrentUserDecide: { type: boolean }
+        expiresAt: { type: string, format: date-time }
+        decidedByUserId: { type: ["string", "null"] }
+        decidedAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+      required: [id, jobId, caseId, proposalSha256, actionSha256, proposalBindingSha256, requestedByUserId, status, canCurrentUserDecide, expiresAt, decidedByUserId, decidedAt, createdAt]
+    AiAssessmentApprovalList:
+      type: object
+      additionalProperties: false
+      properties:
+        approvals:
+          type: array
+          items: { $ref: "#/components/schemas/AiAssessmentApproval" }
+        canDecide: { type: boolean }
+        execution: { type: string, const: not_performed_laboratory_approval_only }
+      required: [approvals, canDecide, execution]
+    AiAssessmentApprovalDecisionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        decision: { type: string, enum: [approve, deny] }
+        proposalBindingSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+      required: [decision, proposalBindingSha256]
+    AiAssessmentApprovalDecisionResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        approval: { $ref: "#/components/schemas/AiAssessmentApproval" }
+        execution: { type: string, const: not_performed_laboratory_approval_only }
+      required: [approval, execution]
     GuardianLocalLlmEvidence:
       type: object
       additionalProperties: false

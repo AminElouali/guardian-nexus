@@ -1,5 +1,124 @@
 BEGIN;
 
+CREATE TABLE IF NOT EXISTS public.ai_assessment_approval_requests (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id uuid NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
+  job_id uuid NOT NULL REFERENCES public.ai_assessment_jobs(id) ON DELETE CASCADE,
+  case_id text NOT NULL,
+  proposal_sha256 text NOT NULL,
+  action_sha256 text,
+  proposal_binding_sha256 text NOT NULL,
+  requested_by_user_id text NOT NULL,
+  status text NOT NULL DEFAULT 'pending'
+    CONSTRAINT ai_assessment_approval_status_check
+    CHECK (status IN ('pending', 'approved', 'denied', 'expired')),
+  expires_at timestamptz NOT NULL,
+  decided_by_user_id text,
+  decided_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT ai_assessment_approval_hashes_check CHECK (
+    proposal_sha256 ~ '^[a-f0-9]{64}$'
+    AND (action_sha256 IS NULL OR action_sha256 ~ '^[a-f0-9]{64}$')
+    AND proposal_binding_sha256 ~ '^[a-f0-9]{64}$'
+  ),
+  CONSTRAINT ai_assessment_approval_decision_check CHECK (
+    (status = 'pending' AND decided_by_user_id IS NULL AND decided_at IS NULL)
+    OR (status IN ('approved', 'denied')
+        AND decided_by_user_id IS NOT NULL AND decided_at IS NOT NULL)
+    OR (status = 'expired' AND decided_by_user_id IS NULL)
+  ),
+  CONSTRAINT ai_assessment_approval_no_self_approval_check CHECK (
+    decided_by_user_id IS NULL OR decided_by_user_id <> requested_by_user_id
+  )
+);
+CREATE UNIQUE INDEX IF NOT EXISTS ai_assessment_approval_job_case_idx
+  ON public.ai_assessment_approval_requests (workspace_id, job_id, case_id);
+CREATE INDEX IF NOT EXISTS ai_assessment_approval_workspace_status_expiry_idx
+  ON public.ai_assessment_approval_requests (workspace_id, status, expires_at);
+GRANT SELECT, INSERT ON TABLE public.ai_assessment_approval_requests TO app_runtime;
+GRANT UPDATE (status, decided_by_user_id, decided_at, updated_at)
+  ON TABLE public.ai_assessment_approval_requests TO app_runtime;
+ALTER TABLE public.ai_assessment_approval_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ai_assessment_approval_requests FORCE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS ai_assessment_approvals_select_member
+  ON public.ai_assessment_approval_requests;
+CREATE POLICY ai_assessment_approvals_select_member
+  ON public.ai_assessment_approval_requests FOR SELECT TO app_runtime
+  USING (
+    workspace_id::text = NULLIF(current_setting('app.workspace_id', true), '')
+    AND EXISTS (
+      SELECT 1 FROM public.workspace_memberships AS membership
+      WHERE membership.workspace_id = ai_assessment_approval_requests.workspace_id
+        AND membership.user_id = NULLIF(current_setting('app.user_id', true), '')
+    )
+  );
+
+DROP POLICY IF EXISTS ai_assessment_approvals_insert_owner
+  ON public.ai_assessment_approval_requests;
+CREATE POLICY ai_assessment_approvals_insert_owner
+  ON public.ai_assessment_approval_requests FOR INSERT TO app_runtime
+  WITH CHECK (
+    workspace_id::text = NULLIF(current_setting('app.workspace_id', true), '')
+    AND requested_by_user_id = NULLIF(current_setting('app.user_id', true), '')
+    AND status = 'pending'
+    AND decided_by_user_id IS NULL
+    AND decided_at IS NULL
+    AND EXISTS (
+      SELECT 1 FROM public.workspace_memberships AS membership
+      WHERE membership.workspace_id = ai_assessment_approval_requests.workspace_id
+        AND membership.user_id = NULLIF(current_setting('app.user_id', true), '')
+        AND membership.role IN ('owner', 'admin')
+    )
+    AND EXISTS (
+      SELECT 1 FROM public.ai_assessment_jobs AS job
+      WHERE job.id = ai_assessment_approval_requests.job_id
+        AND job.workspace_id = ai_assessment_approval_requests.workspace_id
+        AND job.requested_by_user_id = ai_assessment_approval_requests.requested_by_user_id
+        AND job.status = 'succeeded'
+    )
+  );
+
+DROP POLICY IF EXISTS ai_assessment_approvals_update_approver
+  ON public.ai_assessment_approval_requests;
+CREATE POLICY ai_assessment_approvals_update_approver
+  ON public.ai_assessment_approval_requests FOR UPDATE TO app_runtime
+  USING (
+    workspace_id::text = NULLIF(current_setting('app.workspace_id', true), '')
+    AND EXISTS (
+      SELECT 1 FROM public.workspace_memberships AS membership
+      WHERE membership.workspace_id = ai_assessment_approval_requests.workspace_id
+        AND membership.user_id = NULLIF(current_setting('app.user_id', true), '')
+        AND membership.role IN ('owner', 'admin')
+    )
+    AND status = 'pending'
+    AND (
+      (expires_at > now()
+       AND requested_by_user_id <> NULLIF(current_setting('app.user_id', true), ''))
+      OR expires_at <= now()
+    )
+  )
+  WITH CHECK (
+    workspace_id::text = NULLIF(current_setting('app.workspace_id', true), '')
+    AND EXISTS (
+      SELECT 1 FROM public.workspace_memberships AS membership
+      WHERE membership.workspace_id = ai_assessment_approval_requests.workspace_id
+        AND membership.user_id = NULLIF(current_setting('app.user_id', true), '')
+        AND membership.role IN ('owner', 'admin')
+    )
+    AND (
+      (status IN ('approved', 'denied')
+       AND decided_by_user_id = NULLIF(current_setting('app.user_id', true), '')
+       AND decided_at IS NOT NULL
+       AND requested_by_user_id <> decided_by_user_id)
+      OR (status = 'expired'
+          AND expires_at <= now()
+          AND decided_by_user_id IS NULL
+          AND decided_at IS NULL)
+    )
+  );
+
 ALTER TABLE public.workspaces ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.workspaces FORCE ROW LEVEL SECURITY;
 ALTER TABLE public.workspace_memberships ENABLE ROW LEVEL SECURITY;

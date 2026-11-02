@@ -3,8 +3,12 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { AiAssessmentLabJob } from "@workspace/api-client-react";
+import type {
+  AiAssessmentApproval,
+  AiAssessmentLabJob,
+} from "@workspace/api-client-react";
 import { LabJobCard } from "./AiEvaluationPage";
+import { GuardianApprovalInbox } from "./GuardianApprovalInbox";
 import {
   AGENT_POLICY_LABS,
   AgentPolicyLabCatalog,
@@ -19,6 +23,68 @@ import {
   deriveQwenBankChangeFinding,
   downloadQwenExecutiveReport,
 } from "./qwenExecutiveReport";
+
+test("approval inbox shows tenant-safe decisions without claiming tool execution", () => {
+  const pending: AiAssessmentApproval = {
+    id: "11111111-1111-4111-8111-111111111111",
+    jobId: "22222222-2222-4222-8222-222222222222",
+    caseId: "finance_bank_change",
+    proposalSha256: "a".repeat(64),
+    actionSha256: "b".repeat(64),
+    proposalBindingSha256: "c".repeat(64),
+    requestedByUserId: "synthetic-requester",
+    status: "pending",
+    canCurrentUserDecide: true,
+    expiresAt: "2026-11-04T12:00:00.000Z",
+    decidedByUserId: null,
+    decidedAt: null,
+    createdAt: "2026-11-03T12:00:00.000Z",
+  };
+  const approved: AiAssessmentApproval = {
+    ...pending,
+    id: "33333333-3333-4333-8333-333333333333",
+    status: "approved",
+    canCurrentUserDecide: false,
+    decidedByUserId: "synthetic-approver",
+    decidedAt: "2026-11-03T12:30:00.000Z",
+  };
+  const markup = renderToStaticMarkup(
+    createElement(GuardianApprovalInbox, {
+      approvals: [pending, approved],
+      canDecide: true,
+      loading: false,
+      error: false,
+      mutationPending: false,
+      message: "",
+      errorMessage: "",
+      onRetry: () => undefined,
+      onDecision: () => undefined,
+    }),
+  );
+  assert.match(markup, /data-testid="approval-inbox"/);
+  assert.match(markup, /data-testid="button-approve-11111111-1111-4111-8111-111111111111"/);
+  assert.match(markup, /data-testid="button-deny-11111111-1111-4111-8111-111111111111"/);
+  assert.match(markup, /Aprobada · sin ejecutar/);
+  assert.match(markup, /no reanuda ni ejecuta herramientas/);
+  assert.equal(markup.includes("prompt"), false);
+  assert.equal(markup.includes("arguments"), false);
+
+  const requesterMarkup = renderToStaticMarkup(
+    createElement(GuardianApprovalInbox, {
+      approvals: [{ ...pending, canCurrentUserDecide: false }],
+      canDecide: true,
+      loading: false,
+      error: false,
+      mutationPending: false,
+      message: "",
+      errorMessage: "",
+      onRetry: () => undefined,
+      onDecision: () => undefined,
+    }),
+  );
+  assert.equal(requesterMarkup.includes('data-testid="button-approve-'), false);
+  assert.match(requesterMarkup, /El solicitante no puede aprobarla/);
+});
 
 test("renders the real API lab response in the authenticated dashboard card", () => {
   const responsePath = new URL(

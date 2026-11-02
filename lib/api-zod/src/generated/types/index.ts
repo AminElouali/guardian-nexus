@@ -6,6 +6,12 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './aiAssessmentApproval';
+export * from './aiAssessmentApprovalDecisionRequest';
+export * from './aiAssessmentApprovalDecisionRequestDecision';
+export * from './aiAssessmentApprovalDecisionResponse';
+export * from './aiAssessmentApprovalList';
+export * from './aiAssessmentApprovalStatus';
 export * from './aiAssessmentEvidence';
 export * from './aiAssessmentEvidenceEngine';
 export * from './aiAssessmentEvidenceFindingsItem';

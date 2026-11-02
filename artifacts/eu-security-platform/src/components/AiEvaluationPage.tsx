@@ -2,10 +2,13 @@ import React, { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Activity, AlertTriangle, Check, Clock3, FlaskConical, LockKeyhole, ShieldAlert, ShieldCheck } from 'lucide-react';
 import {
+  getListWorkspaceAiAssessmentApprovalsQueryKey,
   getListWorkspaceAiAssessmentLabJobsQueryKey,
   getListWorkspaceAiEvaluationsQueryKey,
+  useDecideWorkspaceAiAssessmentApproval,
   useCreateWorkspaceAiAssessmentLabJob,
   useGetWorkspaceAiAssessmentLabAvailability,
+  useListWorkspaceAiAssessmentApprovals,
   useListWorkspaceAiAssessmentLabJobs,
   useListWorkspaceAiEvaluations,
   useRetryWorkspaceAiAssessmentLabJob,
@@ -20,6 +23,7 @@ import {
   deriveQwenBankChangeFinding,
   downloadQwenExecutiveReport,
 } from './qwenExecutiveReport';
+import { GuardianApprovalInbox } from './GuardianApprovalInbox';
 import {
   AgentPolicyLabCatalog,
   AgentPolicyLabResult,
@@ -781,12 +785,18 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
   const labJobs = useListWorkspaceAiAssessmentLabJobs(workspace.id, {
     query: { refetchInterval: availability.data?.status === 'ready' ? 3_000 : false },
   });
+  const approvalList = useListWorkspaceAiAssessmentApprovals(workspace.id, {
+    query: { refetchInterval: 10_000 },
+  });
   const createLabJob = useCreateWorkspaceAiAssessmentLabJob();
   const retryLabJob = useRetryWorkspaceAiAssessmentLabJob();
+  const decideApproval = useDecideWorkspaceAiAssessmentApproval();
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [labMessage, setLabMessage] = useState('');
   const [labError, setLabError] = useState('');
+  const [approvalMessage, setApprovalMessage] = useState('');
+  const [approvalError, setApprovalError] = useState('');
   const canRun = workspace.role === 'owner' || workspace.role === 'admin';
   const garakAvailable = availability.data?.profiles.some(
     (profile) => profile.profileId === 'guardian-local-agent-v1' && profile.status === 'ready',
@@ -815,6 +825,29 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
       });
     } catch {
       setLabError('No se pudo iniciar el laboratorio. No se ha creado un resultado simulado.');
+    }
+  }
+
+  async function recordApprovalDecision(
+    approvalId: string,
+    proposalBindingSha256: string,
+    decision: 'approve' | 'deny',
+  ) {
+    setApprovalMessage('');
+    setApprovalError('');
+    try {
+      await decideApproval.mutateAsync({
+        workspaceId: workspace.id,
+        approvalId,
+        data: { decision, proposalBindingSha256 },
+      });
+      setApprovalMessage('Decisión registrada. No se ejecutó ni reanudó ninguna herramienta.');
+      await cache.invalidateQueries({
+        queryKey: getListWorkspaceAiAssessmentApprovalsQueryKey(workspace.id),
+      });
+    } catch {
+      setApprovalError('No se pudo registrar la decisión. La operación simulada no se ejecutó.');
+      await approvalList.refetch();
     }
   }
 
@@ -947,6 +980,20 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
         <a href="https://docs.cloud.google.com/model-armor/data-residency" target="_blank" rel="noreferrer">Residencia y regiones oficiales ↗</a>
       </section>
     </div>
+
+    <GuardianApprovalInbox
+      approvals={approvalList.data?.approvals ?? []}
+      canDecide={approvalList.data?.canDecide ?? false}
+      loading={approvalList.isLoading}
+      error={approvalList.isError}
+      mutationPending={decideApproval.isPending}
+      message={approvalMessage}
+      errorMessage={approvalError}
+      onRetry={() => void approvalList.refetch()}
+      onDecision={(approvalId, binding, decision) =>
+        void recordApprovalDecision(approvalId, binding, decision)
+      }
+    />
 
     <section className="panel ai-evaluation-history">
         <div className="panel-heading"><div><span className="panel-kicker">DATOS SINTÉTICOS</span><h2>Simulaciones recientes</h2></div><span className="ai-evaluation-state ai-state-pending"><i /> Separadas de evaluaciones reales</span></div>

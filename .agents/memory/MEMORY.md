@@ -5,3 +5,4 @@
 - [Mounted worker artifacts](guardian-nexus-safety.md) — Image SBOMs do not cover mounted model wheels or weights; audit their hashes, provenance, licenses, and advisories separately.
 - [Queue test ordering](ai-assessment-queue-tests.md) — Serialize real E2E queue jobs and lease-recovery tests against the shared development database.
 - [Docker broker host boundary](docker-broker-host-boundary.md) — A same-user broker is not isolation; require distinct Unix identities, socket ACLs, and credential scope.
+- [Approval replay boundary](approval-replay-boundary.md) — Keep approvals decision-only unless an exact, hash-bound synthetic action can be safely reconstructed and replayed.

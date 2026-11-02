@@ -15,6 +15,7 @@ import { fileURLToPath } from "node:url";
 import { sql } from "drizzle-orm";
 import { CreateWorkspaceAiAssessmentLabJobResponse } from "@workspace/api-zod";
 import {
+  aiAssessmentApprovalRequestsTable,
   aiAssessmentJobsTable,
   withAiAssessmentQueueTransaction,
   workspaceAuditEventsTable,
@@ -2827,6 +2828,68 @@ async function runDockerAssessment(
   });
 }
 
+type ApprovalCandidate = {
+  caseId: string;
+  proposalSha256: string;
+  actionSha256: string | null;
+};
+
+function extractApprovalCandidates(
+  result: AiAssessmentJobEvidence,
+): ApprovalCandidate[] {
+  const evidence = result as unknown as Record<string, unknown>;
+  if (
+    !["guardian_policy_lab", "guardian_qwen_policy_lab"].includes(
+      String(evidence.engine),
+    ) ||
+    !Array.isArray(evidence.cases)
+  ) {
+    return [];
+  }
+  return evidence.cases.flatMap((value): ApprovalCandidate[] => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+    const item = value as Record<string, unknown>;
+    const policyOn =
+      item.policyOn && typeof item.policyOn === "object"
+        ? (item.policyOn as Record<string, unknown>)
+        : null;
+    const toolTrace =
+      item.toolTrace && typeof item.toolTrace === "object"
+        ? (item.toolTrace as Record<string, unknown>)
+        : null;
+    const toolTraceOn =
+      toolTrace?.policyOn && typeof toolTrace.policyOn === "object"
+        ? (toolTrace.policyOn as Record<string, unknown>)
+        : null;
+    const decision = item.decision ?? policyOn?.decision;
+    const dispatchStatus = item.dispatchStatus ?? toolTraceOn?.dispatchStatus;
+    const caseId = item.caseId;
+    const proposalSha256 = item.proposalSha256;
+    const actionSha256 = item.actionSha256;
+    if (
+      decision !== "require_approval" ||
+      dispatchStatus !== "approval_required_before_dispatch" ||
+      typeof caseId !== "string" ||
+      caseId.length < 1 ||
+      caseId.length > 128 ||
+      typeof proposalSha256 !== "string" ||
+      !/^[a-f0-9]{64}$/.test(proposalSha256)
+    ) {
+      return [];
+    }
+    return [
+      {
+        caseId,
+        proposalSha256,
+        actionSha256:
+          typeof actionSha256 === "string" && /^[a-f0-9]{64}$/.test(actionSha256)
+            ? actionSha256
+            : null,
+      },
+    ];
+  });
+}
+
 async function updateJob(
   item: ClaimedJob,
   update: {
@@ -2866,6 +2929,61 @@ async function updateJob(
         )
         .returning({ id: aiAssessmentJobsTable.id });
       if (!updated) return false;
+      if (update.status === "succeeded" && update.result) {
+        const approvalCandidates = extractApprovalCandidates(update.result);
+        if (approvalCandidates.length > 0) {
+          const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+          const inserted = await tx
+            .insert(aiAssessmentApprovalRequestsTable)
+            .values(
+              approvalCandidates.map((candidate) => ({
+                workspaceId: item.workspaceId,
+                jobId: item.jobId,
+                caseId: candidate.caseId,
+                proposalSha256: candidate.proposalSha256,
+                actionSha256: candidate.actionSha256,
+                proposalBindingSha256: createHash("sha256")
+                  .update(
+                    JSON.stringify([
+                      item.workspaceId,
+                      item.jobId,
+                      candidate.caseId,
+                      candidate.proposalSha256,
+                      candidate.actionSha256,
+                    ]),
+                  )
+                  .digest("hex"),
+                requestedByUserId: item.actorUserId,
+                status: "pending",
+                expiresAt,
+              })),
+            )
+            .onConflictDoNothing()
+            .returning({
+              id: aiAssessmentApprovalRequestsTable.id,
+              caseId: aiAssessmentApprovalRequestsTable.caseId,
+              proposalSha256: aiAssessmentApprovalRequestsTable.proposalSha256,
+              proposalBindingSha256:
+                aiAssessmentApprovalRequestsTable.proposalBindingSha256,
+            });
+          for (const approval of inserted) {
+            await tx.insert(workspaceAuditEventsTable).values({
+              workspaceId: item.workspaceId,
+              actorUserId: item.actorUserId,
+              action: "ai_assessment.approval_requested",
+              resourceType: "ai_assessment_approval",
+              resourceId: approval.id,
+              metadata: {
+                jobId: item.jobId,
+                caseId: approval.caseId,
+                proposalSha256: approval.proposalSha256,
+                proposalBindingSha256: approval.proposalBindingSha256,
+                expiresAt: expiresAt.toISOString(),
+              },
+            });
+          }
+        }
+      }
       if (update.auditAction) {
         await tx.insert(workspaceAuditEventsTable).values({
           workspaceId: item.workspaceId,

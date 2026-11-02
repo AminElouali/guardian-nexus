@@ -3472,6 +3472,65 @@ export interface AiAssessmentLabJob {
   completedAt: string | null;
 }
 
+export type AiAssessmentApprovalStatus = typeof AiAssessmentApprovalStatus[keyof typeof AiAssessmentApprovalStatus];
+
+
+export const AiAssessmentApprovalStatus = {
+  pending: 'pending',
+  approved: 'approved',
+  denied: 'denied',
+  expired: 'expired',
+} as const;
+
+export interface AiAssessmentApproval {
+  id: string;
+  jobId: string;
+  caseId: string;
+  /** @pattern ^[a-f0-9]{64}$ */
+  proposalSha256: string;
+  /**
+     * @nullable
+     * @pattern ^[a-f0-9]{64}$
+     */
+  actionSha256: string | null;
+  /** @pattern ^[a-f0-9]{64}$ */
+  proposalBindingSha256: string;
+  requestedByUserId: string;
+  status: AiAssessmentApprovalStatus;
+  canCurrentUserDecide: boolean;
+  expiresAt: string;
+  /** @nullable */
+  decidedByUserId: string | null;
+  /** @nullable */
+  decidedAt: string | null;
+  createdAt: string;
+}
+
+export interface AiAssessmentApprovalList {
+  approvals: AiAssessmentApproval[];
+  canDecide: boolean;
+  execution: 'not_performed_laboratory_approval_only';
+}
+
+export type AiAssessmentApprovalDecisionRequestDecision = typeof AiAssessmentApprovalDecisionRequestDecision[keyof typeof AiAssessmentApprovalDecisionRequestDecision];
+
+
+export const AiAssessmentApprovalDecisionRequestDecision = {
+  approve: 'approve',
+  deny: 'deny',
+} as const;
+
+export interface AiAssessmentApprovalDecisionRequest {
+  decision: AiAssessmentApprovalDecisionRequestDecision;
+  /** @pattern ^[a-f0-9]{64}$ */
+  proposalBindingSha256: string;
+}
+
+export interface AiAssessmentApprovalDecisionResponse {
+  approval: AiAssessmentApproval;
+  execution: 'not_performed_laboratory_approval_only';
+}
+
 export type MicrosoftOAuthCallbackParams = {
 code?: string;
 state: string;

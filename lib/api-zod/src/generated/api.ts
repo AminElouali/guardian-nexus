@@ -7781,3 +7781,79 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
 })
 
 
+/**
+ * Approval decisions record an authorization decision only; they never dispatch an external action.
+ * @summary List tenant-scoped simulated action approvals
+ */
+export const ListWorkspaceAiAssessmentApprovalsParams = zod.object({
+  "workspaceId": zod.uuid()
+})
+
+export const listWorkspaceAiAssessmentApprovalsResponseApprovalsItemProposalSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const listWorkspaceAiAssessmentApprovalsResponseApprovalsItemActionSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const listWorkspaceAiAssessmentApprovalsResponseApprovalsItemProposalBindingSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+
+
+export const ListWorkspaceAiAssessmentApprovalsResponse = zod.object({
+  "approvals": zod.array(zod.object({
+  "id": zod.uuid(),
+  "jobId": zod.uuid(),
+  "caseId": zod.string(),
+  "proposalSha256": zod.string().regex(listWorkspaceAiAssessmentApprovalsResponseApprovalsItemProposalSha256RegExp),
+  "actionSha256": zod.string().regex(listWorkspaceAiAssessmentApprovalsResponseApprovalsItemActionSha256RegExp).nullable(),
+  "proposalBindingSha256": zod.string().regex(listWorkspaceAiAssessmentApprovalsResponseApprovalsItemProposalBindingSha256RegExp),
+  "requestedByUserId": zod.string(),
+  "status": zod.enum(['pending', 'approved', 'denied', 'expired']),
+  "canCurrentUserDecide": zod.boolean(),
+  "expiresAt": zod.coerce.date(),
+  "decidedByUserId": zod.string().nullable(),
+  "decidedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date()
+})),
+  "canDecide": zod.boolean(),
+  "execution": zod.literal("not_performed_laboratory_approval_only")
+})
+
+
+/**
+ * Requires a distinct workspace owner/admin. The immutable proposal binding prevents replay or altered proposals; this endpoint never runs tools.
+ * @summary Approve or deny one exact simulated proposal
+ */
+export const DecideWorkspaceAiAssessmentApprovalParams = zod.object({
+  "workspaceId": zod.uuid(),
+  "approvalId": zod.uuid()
+})
+
+export const decideWorkspaceAiAssessmentApprovalBodyProposalBindingSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+
+
+export const DecideWorkspaceAiAssessmentApprovalBody = zod.object({
+  "decision": zod.enum(['approve', 'deny']),
+  "proposalBindingSha256": zod.string().regex(decideWorkspaceAiAssessmentApprovalBodyProposalBindingSha256RegExp)
+})
+
+export const decideWorkspaceAiAssessmentApprovalResponseApprovalProposalSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const decideWorkspaceAiAssessmentApprovalResponseApprovalActionSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const decideWorkspaceAiAssessmentApprovalResponseApprovalProposalBindingSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+
+
+export const DecideWorkspaceAiAssessmentApprovalResponse = zod.object({
+  "approval": zod.object({
+  "id": zod.uuid(),
+  "jobId": zod.uuid(),
+  "caseId": zod.string(),
+  "proposalSha256": zod.string().regex(decideWorkspaceAiAssessmentApprovalResponseApprovalProposalSha256RegExp),
+  "actionSha256": zod.string().regex(decideWorkspaceAiAssessmentApprovalResponseApprovalActionSha256RegExp).nullable(),
+  "proposalBindingSha256": zod.string().regex(decideWorkspaceAiAssessmentApprovalResponseApprovalProposalBindingSha256RegExp),
+  "requestedByUserId": zod.string(),
+  "status": zod.enum(['pending', 'approved', 'denied', 'expired']),
+  "canCurrentUserDecide": zod.boolean(),
+  "expiresAt": zod.coerce.date(),
+  "decidedByUserId": zod.string().nullable(),
+  "decidedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date()
+}),
+  "execution": zod.literal("not_performed_laboratory_approval_only")
+})
+
+
