@@ -326,3 +326,31 @@ test("renders the Qwen run as an honest Spanish executive report with bounded ev
   assert.equal(missingCaseFinding.stages.simulatedExecution, "INCONCLUSO");
   assert.match(missingCaseFinding.remediationStatus, /^INCONCLUSO:/);
 });
+
+test("report v3 export allow-lists fields and drops unexpected tenant or raw-content properties", () => {
+  const responsePath = new URL(
+    "../../../../generated-artifacts/ai-assessment-autonomous-e2e-response.json",
+    import.meta.url,
+  );
+  const source = JSON.parse(readFileSync(responsePath, "utf8")) as AiAssessmentLabJob;
+  assert.equal(source.status, "succeeded");
+  const contaminated = structuredClone(source) as AiAssessmentLabJob & Record<string, unknown>;
+  const canary = "SYNTHETIC-RAW-CONTENT-MUST-NOT-EXPORT-4ce19f";
+  Object.assign(contaminated, {
+    workspaceId: "tenant-private-id",
+    rawPrompt: canary,
+    rawResponse: canary,
+  });
+  const result = contaminated.result;
+  assert.ok(result);
+  Object.assign(result, { rawArguments: canary, privateWorkspaceMetadata: canary });
+
+  const report = buildQwenExecutiveReport(contaminated);
+  assert.ok(report);
+  const exported = JSON.stringify(report);
+  assert.doesNotMatch(exported, new RegExp(canary));
+  assert.doesNotMatch(exported, /tenant-private-id|workspaceId|privateWorkspaceMetadata/i);
+  assert.doesNotMatch(exported, /rawPrompt|rawResponse|rawArguments/i);
+  assert.equal(report.reportVersion, 3);
+  assert.equal(report.brand, "Guardian Nexus");
+});

@@ -13,6 +13,29 @@ worker continúa sin red (`network=none`), con usuario no privilegiado y límite
 de recursos. La auditoría **no acredita que la imagen esté libre de
 vulnerabilidades ni lista para clientes**.
 
+## Verificación automatizada de procedencia y runtime Qwen — 2 de noviembre
+
+Se añadió un ejecutor offline que exige explícitamente `XDG_CACHE_HOME`, la
+versión del scanner y los SHA-256 de las bases Debian/PyPI. Comprueba también
+que OSV informe de las rutas exactas cargadas, recalcula sus hashes y conserva
+los comandos, salidas, códigos y un hash lateral del manifiesto. Un test con
+hash incorrecto se detuvo antes de escanear como `provenance_error`; un escaneo
+con hallazgos conserva el exit code 1 del scanner sin confundirlo con error de
+ejecución.
+
+La nueva repetición del worker devolvió 177 coincidencias, 81 IDs únicos,
+38 registros de paquete con hallazgos y 0 coincidencias PyPI. Los hashes de
+las bases OSV coinciden con el manifiesto y el JSON es byte-idéntico al escaneo
+corregido anterior. Los 81 IDs, incluido 1 crítico y 25 altos, siguen presentes:
+esto no es una remediación.
+
+El runtime Qwen montado tiene ahora un inventario CycloneDX separado con 13
+componentes, pesos y wheels hash-verificados, seis ELF de llama.cpp/ggml y la
+extensión nativa de MarkupSafe. El inventario confirma hashes y metadatos
+disponibles; no acredita firma, build bit-a-bit, revisión legal completa ni
+escaneo de vulnerabilidades. `numpy` y `typing-extensions` siguen sin wheels
+separados en este inventario; `langdetect` continúa con licencia ambigua.
+
 El escaneo completo más reciente de OSV Scanner registró **177 coincidencias
 paquete/advisory**, **81 IDs únicos** (1 crítico, 25 altos, 43 moderados, 9 bajos
 y 3 sin puntuación) y **cero coincidencias PyPI** en esta imagen. El escaneo

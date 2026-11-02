@@ -1,5 +1,102 @@
 # Guardian Nexus worker dependency audit
 
+## Automated OSV provenance and mounted Qwen runtime SBOM — 2026-11-02
+
+### Fail-closed OSV runner
+
+- Added `scripts/run_offline_osv_audit.py`. It requires the cache directory and
+  expected Debian/PyPI database hashes explicitly, unsets `HOME`, sets
+  `XDG_CACHE_HOME`, checks the scanner version and binary hash, confirms the
+  Docker image is local, exports it with `docker image save`, and invokes OSV
+  with `--offline --offline-vulnerabilities --all-packages --all-vulns`.
+- The runner checks that scanner stderr reports exactly one local Debian and
+  one local PyPI database path beneath the selected XDG cache, hashes the files
+  actually named by the scanner, and compares those hashes with the expected
+  values. It stores exact argv, scanner and Docker exit codes, JSON and log
+  hashes, database paths/hashes, and a `manifest.sha256` sidecar.
+- Finding exit code 1 is not treated as an execution failure when valid JSON
+  contains findings and both loaded databases verify. The wrapper exits 0 for
+  a provenance-verified scan and states `verified_with_findings`; invalid or
+  mismatched provenance is written as `provenance_error`, while process and
+  output failures remain `execution_error`. A deliberately incorrect Debian
+  hash failed closed before image export/scan with wrapper exit 2.
+- Verified command inputs were scanner 2.7.0 (binary SHA-256
+  `73cc8c323f04d4dbc39a861033819624524f3a7908be730f92d3f076fda0f087`),
+  `XDG_CACHE_HOME=/home/runner/workspace/generated-artifacts/osv-cache`,
+  Debian DB SHA-256
+  `4816191fe3b9edc162646d56b0f26ee417c26bacdd02d1c39a5bcfa957c53582`, and
+  PyPI DB SHA-256
+  `8fd7138ad08c733316d229a05ac5a8a9fdcba4f6439d80cdab97fe4e18445dde`.
+- The offline scan of local image
+  `guardian-ai-assessment:offline-rebuilt` (`sha256:e2d13fb48471dbcdc169e421598d5830303717266baf9892a3f11e86eb48e476`)
+  reported 177 match records, 38 package records with findings, 81 unique
+  advisory IDs and 0 PyPI matches. Scanner exit 1 means findings; wrapper exit
+  0 means execution and provenance were validated. JSON SHA-256
+  `292c48b7a65092730f080cb737e72e8e29a1610cbd3e304e1d9b6a87d18c59ca`;
+  manifest SHA-256
+  `69098d3673fa48ba6d326290a5007e0b07e00e815fbddfc1e2a0d1349bcdb814`.
+  The JSON is byte-identical to the prior corrected current-worker scan. This
+  is confirmation, not a new remediation: the 81 IDs remain, including the
+  recorded 1 critical and 25 high.
+- Complete run manifest, DB load paths, raw scanner output, and negative
+  preflight test are retained under
+  `generated-artifacts/guardian-ai-assessment-offline/osv-verified-20261102/`
+  and `.../osv-provenance-negative-20261102/`. The consolidated hash inventory
+  is `generated-artifacts/guardian-ai-assessment-offline/EVIDENCE-MANIFEST-SHA256SUMS-20261102-incremental.txt`.
+- Negative provenance result: a test run supplied an all-zero Debian DB digest.
+  It returned wrapper exit 2, `status=provenance_error`,
+  `Debian_database_preflight_hash_mismatch`, and produced a hashed preflight
+  error manifest without running the scanner.
+- Unit coverage includes wrong cache path, wrong database hash, missing and
+  duplicate database load lines, scanner exit/findings disagreement, and
+  separate execution/provenance classification. The scanner remains offline;
+  no evaluator egress was enabled.
+
+### Mounted Qwen runtime CycloneDX
+
+- Added `scripts/generate_local_llm_sbom.py`; it consumes local manifests and
+  archives only, recalculates the model, active llama-cpp-python wheel, Jinja2
+  and MarkupSafe wheel hashes, checks wheel metadata and embedded license-file
+  hashes, verifies the PyPI sdist and matching license files inside it, checks
+  the local patch/build-input manifest, and extracts/hashes the six unique
+  llama.cpp/ggml ELF objects plus MarkupSafe's native extension.
+- Generated CycloneDX 1.6 contains 13 components. Model weights hash
+  `9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031`;
+  active `llama-cpp-python 0.3.36` wheel hash
+  `5e50c8f09c0ed78512bfb16adb32be9e0c65b8ced7c1efcfc200c38782141e96`;
+  sdist hash `832db0699007f1be95a7e41ef12e88926b02ba836461e36a36372db2760c1a2e`;
+  source manifest hash
+  `8fb7551d2fee1d4e8bb81e2d5e1eaabc4ba6dc776c92662ac61bc0e0132a529b`.
+  SBOM SHA-256
+  `10a4798631f5e8fa3de156d9866ca07d2dfd9c272712455451a52ce41fb42418`;
+  verification JSON SHA-256
+  `a24bc71cd87d7b00262817ffc39bacf273398d8966a528b044aa200847536d5f`.
+- The SBOM labels declared licenses and available evidence; it does not claim
+  legal approval or vulnerability status. Gaps remain: `numpy` and
+  `typing-extensions` are inherited from the worker image and have no separate
+  wheel hashes in this mounted-runtime inventory; `langdetect` has conflicting
+  license evidence; system libraries named in ELF `DT_NEEDED` are not individually
+  file-hashed here; native license completeness and legal review are pending;
+  no signed build attestation or bit-for-bit rebuild was established.
+
+### Compatibility, network and regression checks
+
+- No runtime package was changed and no image was rebuilt or promoted: the
+  existing temporary Trixie slim image still has the same 81 advisory IDs and
+  fails `ctypes` (`libffi.so.8`) and `readline` (`libreadline.so.8`) imports.
+  The current worker image passes both imports in an ephemeral
+  `--network=none` container.
+- Repeated `sh scripts/verify-egress-isolation.sh guardian-ai-assessment:offline-rebuilt`:
+  IPv4 TCP, UDP and DNS/UDP are blocked; loopback IPv4 is reachable; IPv6
+  returns `kernel_protocol_unavailable`, and the audit exits 2 as incomplete.
+  IPv6 remains **NO VERIFICADO**.
+- Current validation: focused Python tests 12/12, worker Docker tests 64/64
+  using the prescribed ephemeral `/tmp` tmpfs, API tests 34/34 (including
+  tenant/RLS/RBAC/idempotency checks), report/export component tests 5/5,
+  frontend typecheck passed, Vite build passed with existing sourcemap and
+  >500 kB chunk warnings. No real Clerk login or authenticated-browser JSON
+  download was tested; no credentials were accessed.
+
 ## Trixie slim experiment and OSV cache correction — 2026-11-02
 
 ### Cache-resolution correction and comparable scans
@@ -131,8 +228,10 @@
   the worker image without separate wheel archives in this inventory.
 - `langdetect 1.0.9` remains ambiguous (MIT metadata versus Apache-2.0 packaged
   license evidence). Native dependency notice completeness and legal review
-  remain open; no legal conclusion is made. The Qwen-mounted runtime still does
-  not have a complete independent CycloneDX SBOM.
+  remain open; no legal conclusion is made. At that audit snapshot, no complete
+  independent CycloneDX SBOM existed for the mounted Qwen runtime. The
+  2026-11-02 follow-up above adds a bounded inventory with explicit gaps; it is
+  not a complete dependency or legal attestation.
 
 **Date:** 2026-11-01  
 **Scope:** local development worker image only; no production, customers, cloud

@@ -92,3 +92,9 @@ description: Product boundaries for security integrations, claims, and productio
 **Why:** A Trixie scan intended to use the refreshed database instead loaded the workspace default cache, so its result counts were valid but the recorded database provenance was wrong.
 
 **How to apply:** Set `XDG_CACHE_HOME` explicitly to the intended cache and verify the scanner's `Loaded ... local db from` stderr lines and the loaded archive hashes before comparing results. Preserve prior logs and add a correction record rather than rewriting evidence.
+
+**Rule:** A scanner exit code indicating findings is not an execution failure when valid output and database provenance are verified; record scanner and wrapper exit codes separately.
+
+**Why:** OSV Scanner returns a nonzero status for vulnerability matches, while cache, version, archive, or JSON failures make the result untrustworthy for a different reason.
+
+**How to apply:** Require a parseable scanner version, exact loaded DB paths and hashes, valid JSON, and internally consistent finding counts. Classify mismatched provenance separately from process failures and findings.

@@ -1,8 +1,69 @@
 # Guardian Nexus MVP checkpoint
 
-Updated: 2026-11-02 — Trixie slim experiment and OSV cache correction
+Updated: 2026-11-02 — provenance verifier, mounted-runtime SBOM, egress and report checks
 Scope: development/local laboratory only. No customer systems, external model APIs,
 paid services, production database, remote deployment, or publishing.
+
+## Verificación incremental de supply chain, egress y reporte v3 — 2026-11-02
+
+- Inicio confirmado en HEAD limpio `3fae4739b2edaae37a623d970827c2b54fec49cd`.
+  Se añadieron herramientas locales de auditoría, tests y una prueba de
+  allow-list del informe; no se modificaron API, esquema/BD, políticas, Clerk,
+  Qwen/Garak/GVE ni imágenes de runtime.
+- La nueva puerta `scripts/run_offline_osv_audit.py` exige `XDG_CACHE_HOME`,
+  hashes esperados de ambas bases y versión OSV 2.7.0. Captura comandos, salida,
+  código del scanner, hashes de imagen/DB/JSON y hash lateral del manifiesto.
+  Verifica que stderr confirme exactamente una ruta Debian y una PyPI dentro
+  del XDG dado y recalcula ambos hashes. Un resultado con hallazgos se distingue
+  de error de ejecución; una prueba negativa con hash Debian falso detuvo la
+  ejecución con `provenance_error`, salida 2.
+- Escaneo offline del worker actual `guardian-ai-assessment:offline-rebuilt`,
+  image ID `sha256:e2d13fb48471dbcdc169e421598d5830303717266baf9892a3f11e86eb48e476`:
+  177 coincidencias de vulnerabilidad, 38 registros de paquete con hallazgos,
+  81 IDs únicos, cero matches PyPI. OSV Scanner 2.7.0, binario SHA-256
+  `73cc8c323f04d4dbc39a861033819624524f3a7908be730f92d3f076fda0f087`;
+  DB Debian `4816191fe3b9edc162646d56b0f26ee417c26bacdd02d1c39a5bcfa957c53582`;
+  DB PyPI `8fd7138ad08c733316d229a05ac5a8a9fdcba4f6439d80cdab97fe4e18445dde`.
+  Salida OSV 1 = hallazgos; wrapper 0 = ejecución y procedencia verificadas.
+  JSON SHA `292c48b7a65092730f080cb737e72e8e29a1610cbd3e304e1d9b6a87d18c59ca`,
+  manifiesto SHA `69098d3673fa48ba6d326290a5007e0b07e00e815fbddfc1e2a0d1349bcdb814`.
+  El JSON coincide byte a byte con el escaneo 177/81 anterior. Siguen los
+  hallazgos Debian, incluido 1 crítico y 25 altos; no se aplicaron remediaciones
+  ni se reconstruyó/promovió una imagen.
+- Nuevo CycloneDX del runtime Qwen montado: 13 componentes, seis bibliotecas
+  nativas llama.cpp/ggml con hashes verificados, extensión nativa MarkupSafe,
+  pesos Qwen, wheel activo y wheels disponibles. Se contrastaron hashes reales
+  de artefactos y licencias presentes en wheels/sdist. SBOM SHA
+  `10a4798631f5e8fa3de156d9866ca07d2dfd9c272712455451a52ce41fb42418`;
+  verificación SHA `a24bc71cd87d7b00262817ffc39bacf273398d8966a528b044aa200847536d5f`.
+  No es una revisión legal ni escaneo de vulnerabilidades. `numpy` y
+  `typing-extensions` no tienen wheel separado aquí; `langdetect` sigue
+  ambiguo; bibliotecas de sistema ELF no tienen hash individual en este
+  inventario; no hay attestación firmada ni reproducibilidad bit a bit.
+- Smoke imports en contenedores efímeros con `--network=none`: imagen vigente,
+  `ctypes` y `readline` pasan; candidata Trixie slim falla ambos: falta
+  `libffi.so.8` y `libreadline.so.8`. La candidata no se promocionó. No había
+  mejora de avisos que justificase reparación/rebuild offline.
+- Repetición del auditor de red en `guardian-ai-assessment:offline-rebuilt`,
+  `--network=none`: IPv4 TCP/UDP y DNS/UDP `blocked`, loopback IPv4 alcanzable,
+  IPv6 `kernel_protocol_unavailable`, salida 2 e incompleto. JSON SHA
+  `be7b4fcb57bf9354fb8d655c30b8665350a2371bff1e9bcdbe81282012f4ed79`.
+  IPv6 continúa **NO VERIFICADO**; no se encontró ni creó host dual-stack.
+  La primera invocación directa del script devolvió 126 por no tener permiso de
+  ejecución; se repitió explícitamente con `sh`, sin cambiar el script ni el
+  aislamiento.
+- Pruebas: nuevos tests Python de procedencia/SBOM más los existentes, **12/12**;
+  worker vigente **64/64** con tmpfs efímero; API, incluyendo RLS/RBAC, roles,
+  tenant e idempotencia **34/34**; informe v3 y descarga redactada **5/5**;
+  typecheck y build Vite pasaron. El build conserva avisos de sourcemap y chunk
+  >500 kB. El primer worker test sin tmpfs falló en pruebas que necesitan
+  `tempfile`; al repetir con el tmpfs previsto, pasó. No se automatizó un login
+  real Clerk ni una descarga en navegador autenticado.
+- Los logs y manifiestos de evidencia están bajo
+  `generated-artifacts/guardian-ai-assessment-offline/`; el inventario de sus
+  hashes está en `EVIDENCE-MANIFEST-SHA256SUMS-20261102-incremental.txt` dentro
+  de ese directorio. Son artefactos locales ignorados por Git. Ver
+  `DEPENDENCY_AUDIT.md` y `NETWORK_ISOLATION.md` para comandos, hashes y límites.
 
 ## Temporary Debian Trixie slim experiment — 2026-11-02
 
