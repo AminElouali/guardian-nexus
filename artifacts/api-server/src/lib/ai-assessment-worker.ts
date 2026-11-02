@@ -924,7 +924,7 @@ export function validateGuardianQwenPolicyLabEvidence(
   evidence: GuardianQwenPolicyLabEvidence,
   raw: unknown,
   requestedProfileId: AssessmentProfileId,
-): boolean {
+): string | null {
   const profileMap: Record<string, { verticalId: "email" | "database"; cases: string[] }> = {
     [QWEN_EMAIL_POLICY_PROFILE_ID]: {
       verticalId: "email",
@@ -937,7 +937,7 @@ export function validateGuardianQwenPolicyLabEvidence(
   };
   const expected = profileMap[requestedProfileId];
   if (!expected || !raw || typeof raw !== "object" || Array.isArray(raw)) {
-    return false;
+    return "profile_or_shape";
   }
   const rawEvidence = raw as Record<string, unknown>;
   const rawNetwork = rawEvidence.network;
@@ -957,7 +957,7 @@ export function validateGuardianQwenPolicyLabEvidence(
     !Array.isArray(rawCases) ||
     !hasValidDigestAt(raw, "evidenceSha256")
   ) {
-    return false;
+    return "missing_fields_or_evidence_digest";
   }
   const network = rawNetwork as Record<string, unknown>;
   const limits = rawLimits as Record<string, unknown>;
@@ -1017,7 +1017,7 @@ export function validateGuardianQwenPolicyLabEvidence(
     typeof verifiedLimits !== "object" ||
     Array.isArray(verifiedLimits)
   ) {
-    return false;
+    return "identity_provider_network_or_limits";
   }
 
   const containerLimits = verifiedLimits as Record<string, unknown>;
@@ -1033,7 +1033,7 @@ export function validateGuardianQwenPolicyLabEvidence(
     containerLimits.pids > 64 ||
     containerLimits.concurrency !== 1
   ) {
-    return false;
+    return "verified_container_limits";
   }
 
   if (
@@ -1041,7 +1041,7 @@ export function validateGuardianQwenPolicyLabEvidence(
     new Set(cases.map((item) => item.caseId)).size !== 2 ||
     !expectedIds.every((caseId) => cases.some((item) => item.caseId === caseId))
   ) {
-    return false;
+    return "case_set";
   }
 
   const count = (predicate: (item: (typeof cases)[number]) => boolean) =>
@@ -1185,8 +1185,9 @@ export function validateGuardianQwenPolicyLabEvidence(
     return true;
   });
 
-  return (
-    caseEvidenceValid &&
+  if (!caseEvidenceValid) return "case_evidence";
+
+  const summaryIsValid =
     summary.sampleCount === 2 &&
     summary.benignCases === count((item) => item.label === "benign") &&
     summary.adversarialCases === count((item) => item.label === "adversarial") &&
@@ -1207,8 +1208,8 @@ export function validateGuardianQwenPolicyLabEvidence(
     Object.values(evidence.selfChecks).every((check) => check === true) &&
     evidence.durationSeconds >= 0 &&
     evidence.durationSeconds <= 180 &&
-    hasValidDigestAt(raw, "evidenceSha256")
-  );
+    hasValidDigestAt(raw, "evidenceSha256");
+  return summaryIsValid ? null : "summary_or_evidence_digest";
 }
 
 export function validatePolicyComparisonEvidence(
