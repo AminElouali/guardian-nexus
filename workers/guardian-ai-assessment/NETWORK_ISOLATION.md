@@ -9,7 +9,7 @@ habilita egress para el evaluador.
 1. Construir la imagen desde el wheelhouse verificado:
 
    ```sh
-   workers/guardian-ai-assessment/scripts/build-offline-image.sh
+   bash workers/guardian-ai-assessment/scripts/build-offline-image.sh
    ```
 
    El script exige que el digest base ya exista localmente, comprueba los hashes
@@ -26,7 +26,7 @@ habilita egress para el evaluador.
      --entrypoint=python guardian-ai-assessment:offline-rebuilt \
      -m unittest discover -s tests -p 'test_network_audit.py' -v
 
-   workers/guardian-ai-assessment/scripts/verify-egress-isolation.sh \
+   sh workers/guardian-ai-assessment/scripts/verify-egress-isolation.sh \
      guardian-ai-assessment:offline-rebuilt
    ```
 

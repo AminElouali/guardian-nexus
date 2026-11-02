@@ -1,8 +1,55 @@
 # Guardian Nexus MVP checkpoint
 
-Updated: 2026-11-02
+Updated: 2026-11-02 — offline worker verification follow-up
 Scope: development/local laboratory only. No customer systems, external model APIs,
 paid services, production database, remote deployment, or publishing.
+
+## Latest supply-chain and isolation follow-up
+
+This section supersedes older statements below about the cold offline image
+build, IPv4 UDP coverage, and worker/API/dashboard test counts. Detailed
+methodology and package triage are in `DEPENDENCY_AUDIT.md`.
+
+- Starting point was clean HEAD `31bad696`. The offline candidate
+  `guardian-ai-assessment:offline-rebuilt` was already built locally as
+  `sha256:e2d13fb48471dbcdc169e421598d5830303717266baf9892a3f11e86eb48e476`;
+  it was not pushed or promoted over `guardian-ai-assessment:local`.
+- Cold/offline build support uses the pinned local base plus the verified
+  wheelhouse; this succeeds in the current prepared environment without build
+  network. It is not an empty-machine build or bitwise reproducibility claim.
+- Wheelhouse: 38/38 locked artifacts verified locally (36 runtime, 2
+  build-only), `networkUsed=false`. Manifest SHA-256
+  `ab8bc155558cc91e79a5a2f638b64dc0f0645bad29b42cc28bc521a1e37ebc79`.
+  Candidate CycloneDX 1.6 SBOM: 124 components, SHA-256
+  `8eb49149a21afac04818f94ac0183eb799ed740b8f2254a9f63c453c279c5d97`.
+- Candidate OSV scan used Debian DB hash `95c71e88…6ec8` and PyPI DB hash
+  `8fd7138a…5dde`: 186 Debian matches / 84 IDs / 20 package-version pairs,
+  zero PyPI matches, exit code recorded as 2. The JSON SHA-256 is
+  `c80e9efec40dbed890c691d33ac85cebe98dcd5aa646cedef7a3698ae326e6c2`.
+  The 124 PURLs match the preceding inventory exactly; no package remediation
+  occurred. The older-database severity distribution and package triage are in
+  `DEPENDENCY_AUDIT.md`; zero PyPI matches do not mean zero vulnerabilities.
+- Real container network audit under `--network=none`: IPv4 TCP/UDP and DNS
+  blocked; IPv4 loopback reachable; IPv6
+  `kernel_protocol_unavailable`, therefore NO VERIFICADO. Overall
+  `incomplete_ipv6_not_verified`, exit 2; evidence SHA-256
+  `be7b4fcb57bf9354fb8d655c30b8665350a2371bff1e9bcdbe81282012f4ed79`.
+- Repeated tests: worker 64/64, API AI-contract 7/7, dashboard report 4/4,
+  all pass. Logs and hashes are in ignored
+  `generated-artifacts/guardian-ai-assessment-offline/`; hashes are recorded in
+  `DEPENDENCY_AUDIT.md`. RLS/RBAC integration tests were not rerun because
+  they write PostgreSQL fixtures and this step did not verify the target DB
+  environment. No API or database code changed.
+- Wheel provenance was rechecked against local hash locks. `langdetect 1.0.9`
+  remains license-ambiguous (MIT metadata versus Apache license files); the
+  separate llama.cpp/native component review is not legal clearance. No
+  package was removed or updated. The Trixie candidate simulation found no
+  safe applicable package fix for the matched Debian advisories.
+- Remaining blockers: dual-stack host needed to verify IPv6; legal review of
+  `langdetect` and native component obligations; fresh OSV database scan of the
+  candidate image would require an already-authorized database acquisition
+  outside the evaluator. The API still uses the prior `:local` image; candidate
+  promotion was intentionally not performed.
 
 ## Follow-up audit — 2026-11-02
 

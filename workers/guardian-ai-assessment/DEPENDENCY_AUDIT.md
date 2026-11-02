@@ -329,3 +329,125 @@ https://security-tracker.debian.org/tracker/source-package/gcc-14 .
   `llama.pc` prefix, and the derived `RECORD` hashes differed. This is evidence
   of a successful offline source rebuild, not bit-for-bit reproducibility; the
   rebuilt artifact was not installed or promoted.
+
+## Offline worker rebuild and traceability follow-up — 2026-11-02
+
+This addendum reconciles commit `31bad696` and the local evidence generated
+after the preceding checkpoint. It supersedes earlier statements that IPv4 UDP
+was untested and that an offline worker image could not be built. It does not
+replace `guardian-ai-assessment:local`, which remains the API's existing image.
+
+### Rebuild, inventory, and scan evidence
+
+- The cold build had previously stopped at a missing PyPI layer. The new
+  `Dockerfile.offline` and `build-offline-image.sh` consume an already-present,
+  digest-pinned Python base and the local hash-locked wheelhouse. The
+  dependencies stage uses `--no-index`, and the candidate build uses
+  `--no-cache --pull=false --network=none`. The script fails if the pinned base
+  is not already local; it does not fetch dependencies or promote the result.
+- Candidate image: `guardian-ai-assessment:offline-rebuilt`, image ID
+  `sha256:e2d13fb48471dbcdc169e421598d5830303717266baf9892a3f11e86eb48e476`.
+  It was built locally and not pushed. This verifies an offline build with the
+  currently cached base and prepared wheelhouse, not a build from an empty
+  machine or bit-for-bit reproducibility.
+- Wheelhouse verification used the standard-library verifier against both
+  lockfiles: 38/38 artifacts matched one exact pinned SHA-256 each (36 runtime,
+  2 build-only); no network was used. Runtime lock SHA-256
+  `75bcda09cdcaaa9d1528936ea2406965a497c0d91803f3b3e4b3c9fed74352a5`;
+  build lock SHA-256
+  `d19fd247e275104d426c23297aa0cead3c7c70626306cb5b3d5a0ae0edadbac1`.
+  The verification JSON is
+  `generated-artifacts/guardian-ai-assessment-offline/wheelhouse-verification.json`,
+  SHA-256
+  `ab8bc155558cc91e79a5a2f638b64dc0f0645bad29b42cc28bc521a1e37ebc79`.
+  The verifier checks local bytes against locks; official PyPI release metadata
+  provenance remains the separate evidence described above.
+- Candidate CycloneDX 1.6 SBOM:
+  `generated-artifacts/guardian-ai-assessment-offline/sbom.cdx.json`,
+  124 components, SHA-256
+  `8eb49149a21afac04818f94ac0183eb799ed740b8f2254a9f63c453c279c5d97`.
+  Its 124 PURLs exactly match the preceding worker-follow-up SBOM; no package
+  version changed in this build. The offline OSV JSON is
+  `generated-artifacts/guardian-ai-assessment-offline/osv.json`, SHA-256
+  `c80e9efec40dbed890c691d33ac85cebe98dcd5aa646cedef7a3698ae326e6c2`.
+- That candidate scan used local Debian database SHA-256
+  `95c71e88a626f4ba428196019dae1658358862d45e2c769ad85b8a5e74ee6ec8` and
+  PyPI database SHA-256
+  `8fd7138ad08c733316d229a05ac5a8a9fdcba4f6439d80cdab97fe4e18445dde`.
+  It reports 186 Debian package/advisory matches, 84 unique IDs, 20
+  package/version pairs, and zero PyPI matches. Its recorded process exit code
+  is 2; the JSON is present and contains findings. A prior scan against the
+  same two database hashes has identical advisory-ID and package/version/ID
+  sets, with the documented severity distribution: 1 critical, 25 high, 46
+  moderate, 9 low, and 3 unscored. The nonzero code is preserved as observed;
+  it is not interpreted as a clean scan.
+- A separate, previously refreshed Debian database
+  (`4816191fe3b9edc162646d56b0f26ee417c26bacdd02d1c39a5bcfa957c53582`)
+  produced 18 IDs, including four high util-linux findings. That refreshed
+  report is from the prior local image, not a new scan of this candidate.
+  Because the candidate and prior SBOMs have identical PURLs, the installed
+  package inventory is unchanged; database changes explain the count
+  difference, not remediation. The four high IDs remain
+  `DEBIAN-CVE-2026-76642` (8.5), `DEBIAN-CVE-2026-78408` (7.9),
+  `DEBIAN-CVE-2026-78410` (7.8), and `DEBIAN-CVE-2026-78409` (7.0) in
+  installed `util-linux 2.41.5-0+deb13u1`.
+- No OS package was upgraded or removed, no advisory was suppressed, and no
+  finding was confirmed as a false positive. No exploitability test was run.
+  Existing per-package critical/high reachability notes and fixed-version
+  events remain in “Actionable historical critical/high triage” above. The
+  recorded Trixie package simulation had no candidate update for matched
+  packages; an OSV fixed event elsewhere is not a Trixie patch. Lower-severity
+  matches have not each received a separate code-path exploitability review.
+  Package presence and OSV severity are not proof of exploitability.
+
+### Network, tests, and licensing
+
+- The candidate egress audit ran inside Docker `--network=none` and produced
+  `ipv4PublicTcp=blocked`, `ipv4PublicUdp=blocked`, `ipv4DnsUdp=blocked`,
+  `loopbackIpv4=reachable`, no active non-loopback interface, and
+  `ipv6Capability=kernel_protocol_unavailable`. IPv6 TCP/UDP/DNS and IPv6
+  loopback are unavailable, not verified blocked. Overall
+  `incomplete_ipv6_not_verified`, exit code 2. JSON SHA-256
+  `be7b4fcb57bf9354fb8d655c30b8665350a2371bff1e9bcdbe81282012f4ed79`.
+  Reproduction instructions invoke the checked-in mode-100644 scripts through
+  `bash`/`sh`; direct execution is not supported by their file mode.
+- Repeated local verification, with logs in ignored
+  `generated-artifacts/guardian-ai-assessment-offline/`:
+  - Worker suite: 64/64 passed, exit 0; log SHA-256
+    `30ecb3d22976e558d337406a6efe5fdba1e0152bb93141792627b57128893f1b`.
+  - API AI-contract suite: 7/7 passed, exit 0; log SHA-256
+    `82ff454b02486aac8b08aba51e2c220ff34e4225e09db4e08e33071b17b4d63f`.
+  - Dashboard report component suite: 4/4 passed, exit 0; log SHA-256
+    `b2ac12b5079db6f0cb4a91f165e8f44b6459e1deb5eaf5315da96ea4270cad23`.
+  - Egress audit: exit 2 solely as an incomplete result with IPv6 unavailable;
+    the IPv4 UDP/TCP and DNS outcomes above are recorded. The first direct
+    script invocation was denied by file permissions; running it through `sh`
+    completed the probe.
+- The wheelhouse verifier rechecked all locked bytes without network. In
+  particular, `langdetect-1.0.9.tar.gz` is 981,474 bytes,
+  SHA-256 `cbc1fef89f8d062739774bd51eda3da3274006b3661d199c2655f6b3f6d605a0`.
+  Its `setup.py` and PyPI `PKG-INFO` say MIT, but the package classifier,
+  `LICENSE`, and `NOTICE` indicate Apache-2.0. The archived `LICENSE` hash is
+  `9c539fdc47fa4e195b88efaa6495f11463de271f59c8de96feb8bc9c8abab1ab`;
+  `NOTICE` hash is
+  `bc22bad5907339e12834d91f7809ec35c3c44fa4b812f274ebfefa38de080869`.
+  This is still ambiguous and requires legal review; no license is selected as
+  definitive.
+- The separate local-LLM runtime remains outside the worker image SBOM. Its
+  source manifest pins the official `llama-cpp-python 0.3.36` sdist SHA-256
+  `832db0699007f1be95a7e41ef12e88926b02ba836461e36a36372db2760c1a2e`, the
+  locally built wheel SHA-256
+  `5e50c8f09c0ed78512bfb16adb32be9e0c65b8ced7c1efcfc200c38782141e96`, and
+  vendored llama.cpp commit `0c1e57098bba43ac29e6e3b677cdceebdd22334f`
+  (MIT). The component notices are inventoried, but complete native linkage
+  and legal review remain open; a later offline wheel rebuild differed in ELF
+  build-id and temporary prefix metadata.
+- No remediation was justified by available local package candidates, so none
+  was applied. `diskcache` remains absent from the active LLM wheelhouse with
+  fail-closed cache tests; this does not fix its upstream advisory.
+- Database-backed RLS/RBAC tests were not rerun: their fixture setup writes
+  tenants and requires `DATABASE_URL`, and this step did not inspect or use
+  connection credentials to establish the database environment. The pure API
+  contract and dashboard report tests above do not replace those DB tests.
+  No API/database code changed. No production data, customers, credentials,
+  external services, or paid infrastructure were used.
