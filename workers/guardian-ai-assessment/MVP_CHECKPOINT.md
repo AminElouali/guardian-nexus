@@ -797,7 +797,10 @@ This update supersedes the older diskcache status, worker-test count, and OSV
   archivo de imagen ni lo reemplaza. Ningún resultado permite concluir ausencia
   de vulnerabilidades en el runtime nativo/modelo. El SBOM compuesto tiene 105
   registros; hashes y comandos se conservan en el directorio de evidencias.
-- E2E API 3/3 y UI/componentes 5/5; worker en contenedor 87/87; API 35/35;
+- E2E API 3/3 y UI/componentes 5/5; el E2E ejecutó Garak 0.17.1 real (1
+  solicitud, registros attempt/eval, 144 casos GVE/42 métricas, 1 allow/1 deny
+  con Policy ON y 2 resultados contrafactuales en clon OFF); worker en contenedor
+  87/87; API 35/35;
   typecheck/build correctos; tests de composición SBOM 3/3. Job Qwen autónomo
   `05fcd10d-bccd-4bca-886c-036b1b96511b`, 14 casos, 13 propuestas, 11 tareas
   resueltas. Los 13 resultados fueron marcadores de plantilla Qwen adaptados,

@@ -29,7 +29,12 @@ Los builds usaron la imagen base ya presente y fijada por digest, wheelhouse loc
 
 La suite E2E `pnpm --filter @workspace/api-server test:ai-assessment-e2e` terminó correctamente:
 
-- API autenticada, cola, persistencia y UI: 3/3 pruebas E2E.
+- API autenticada, cola, persistencia y UI: 3/3 pruebas E2E. La prueba Garak
+  ejecutó realmente Garak 0.17.1 con una solicitud de probe, registros
+  `attempt`/`eval` y 144 casos GVE con 42 métricas; la comparación de propuestas
+  sintéticas controladas obtuvo 1 autorización y 1 denegación con ON, y 2
+  resultados contrafactuales en el clon con OFF. No produjo acciones reales ni
+  llamadas externas.
 - Pruebas de componentes/integración de UI: 5/5, incluyendo descarga JSON allow-listed, ausencia de contenido crudo, separación de evidencia Qwen adaptada frente a fixtures y reporte ejecutivo español.
 - Pruebas worker dentro del contenedor Garak: 87/87.
 - Pruebas API: 35/35; typecheck y build correctos.
