@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-IMAGE="guardian-ai-assessment:local"
+IMAGE="guardian-ai-assessment:garak-gve-profile-candidate"
 CONTAINER_ARGS="
   --rm
   --init
@@ -18,6 +18,16 @@ CONTAINER_ARGS="
   --log-driver=none
   --tmpfs=/tmp:rw,noexec,nosuid,nodev,size=64m
 "
+
+if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
+  echo "garak_profile_image_not_built" >&2
+  exit 69
+fi
+PROFILE_LABEL="$(docker image inspect --format '{{index .Config.Labels "org.guardian.profile"}}' "$IMAGE")"
+if [ "$PROFILE_LABEL" != "garak-gve-v1" ]; then
+  echo "garak_profile_image_label_mismatch" >&2
+  exit 69
+fi
 
 # Keep the security options fixed. Never accept caller-supplied Docker flags,
 # targets, credentials, or arbitrary probes through this script.

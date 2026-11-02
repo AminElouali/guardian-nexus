@@ -765,3 +765,55 @@ This update supersedes the older diskcache status, worker-test count, and OSV
 - Sin remediación viable probada en este hito. Se mantienen los avisos OSV,
   la discrepancia SQLite, la revisión legal y la prueba IPv6 dual-stack como
   pendientes; no se declara el worker seguro ni listo para clientes.
+
+## 2026-11-02 — separación de perfiles Garak/GVE y Qwen validada localmente
+
+- Desde el estado limpio `691b7134`, se crearon perfiles de imagen locales
+  candidatos. La API mantiene el contrato/IDs de jobs y selecciona la imagen por
+  `profileId`; verifica etiqueta OCI esperada y falla cerrada ante discrepancia.
+  Garak/GVE conserva Garak 0.17.1 y langdetect 1.0.9 sin `llama_cpp`; Qwen/GVE
+  excluye Garak, langdetect, NLTK y llama_cpp de la imagen, y usa sus wheels y
+  pesos montados y hash-verificados. No hay cambio de esquema PostgreSQL ni
+  alteración del control tenant/RBAC.
+- Build offline con base por digest ya presente, wheelhouse local y
+  `--no-cache --pull=false --network=none`. Imágenes candidatas: Garak
+  `sha256:88df6b6808fd6169ece85d229cfffeb366c0f4356bad4d5c626efa3b8885511d`,
+  247.598.881 B y 124 componentes; Qwen
+  `sha256:884d4f7bc6c11e03f6ced5cfcc9e88e7a8043d85923429f1a3a181953f07830f`,
+  204.914.829 B y 90 componentes. La diferencia de 42.684.052 B/34
+  componentes no es por sí sola una reducción de vulnerabilidades. No se
+  sustituyó la imagen publicada ni se promovió release.
+- OSV Scanner 2.7.0 en modo offline, con las mismas bases verificadas y escaneo
+  de archivo de imagen: ambos perfiles dieron 177 coincidencias, 81 IDs únicos,
+  38 registros de paquete y 0 coincidencias PyPI; exit 1 del scanner por
+  hallazgos. El conjunto de advisories es el mismo que el inventario previo:
+  no hay remediación demostrada y siguen los 26 IDs críticos/altos triados.
+  Base Debian SHA-256 `4816191fe3b9edc162646d56b0f26ee417c26bacdd02d1c39a5bcfa957c53582`;
+  PyPI `8fd7138ad08c733316d229a05ac5a8a9fdcba4f6439d80cdab97fe4e18445dde`.
+- Inventario runtime Qwen montado: 13 componentes/6 objetos nativos. OSV sobre
+  ese SBOM tuvo exit 0, cero IDs y solo cinco paquetes reconocidos; avisos
+  explícitos CPE/PURL ausentes para objetos nativos y pesos. El scan suplementario
+  del SBOM compuesto encontró 18 IDs, pero no es comparable con el escaneo del
+  archivo de imagen ni lo reemplaza. Ningún resultado permite concluir ausencia
+  de vulnerabilidades en el runtime nativo/modelo. El SBOM compuesto tiene 105
+  registros; hashes y comandos se conservan en el directorio de evidencias.
+- E2E API 3/3 y UI/componentes 5/5; worker en contenedor 87/87; API 35/35;
+  typecheck/build correctos; tests de composición SBOM 3/3. Job Qwen autónomo
+  `05fcd10d-bccd-4bca-886c-036b1b96511b`, 14 casos, 13 propuestas, 11 tareas
+  resueltas. Los 13 resultados fueron marcadores de plantilla Qwen adaptados,
+  **0** objetos `message.tool_calls` directos del runtime. Policy ON: 11
+  autorizaciones, 2 denegaciones, solo simulaciones. Policy OFF: contrafactual
+  sobre clone efímero, sin invocar herramientas. Operaciones reales, cambios
+  persistentes y egress: 0. JSON SHA-256
+  `58ff05fbcc33f3dd77536ace0fe79c412e86b86a7be7b572c7812c8a0c91363b`.
+- Egress bajo `network=none` en ambas imágenes: IPv4 TCP/UDP y DNS/UDP
+  bloqueados; loopback IPv4 alcanzable. Ambas pruebas salen con código 2 porque
+  el kernel informa `kernel_protocol_unavailable`; IPv6 es **NO VERIFICADO**,
+  no se acredita bloqueo dual-stack. Clerk real en navegador no se volvió a
+  probar; E2E usa autenticación de test.
+- Se mantiene pendiente la ambigüedad MIT/Apache de langdetect y la procedencia/
+  revisión legal completa de componentes nativos. No se declara el worker seguro
+  ni apto para clientes. Informe detallado:
+  `reports/worker-profile-separation-2026-11-02.md`. Artefactos y manifiesto
+  SHA-256:
+  `generated-artifacts/guardian-ai-assessment-offline/profile-segregation-20261102/`.

@@ -19,7 +19,11 @@ import {
 import { withWorkspaceUserTransaction } from "./tenant-db";
 import { logger } from "./logger";
 
-const IMAGE = "guardian-ai-assessment:local";
+const GARAK_IMAGE = "guardian-ai-assessment:garak-gve-profile-candidate";
+const LOCAL_LLM_IMAGE = "guardian-ai-assessment:qwen-gve-profile-candidate";
+const PROFILE_LABEL_KEY = "org.guardian.profile";
+const GARAK_PROFILE_LABEL = "garak-gve-v1";
+const LOCAL_LLM_PROFILE_LABEL = "qwen-gve-v1";
 export const AI_ASSESSMENT_WORKER_VERSION = "guardian-ai-assessment-lab-0.4.1";
 export const GARAK_PROFILE_ID = "guardian-local-agent-v1";
 export const LOCAL_LLM_PROFILE_ID = "guardian-local-llm-qwen3-0.6b-v1";
@@ -61,11 +65,27 @@ const LOCAL_LLM_WHEELS = [
   "markupsafe-3.0.4-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
 ];
 
-type AssessmentProfileId =
+export type AssessmentProfileId =
   | typeof GARAK_PROFILE_ID
   | typeof LOCAL_LLM_PROFILE_ID
   | typeof NATIVE_TOOL_PROFILE_ID
   | typeof AUTONOMOUS_TOOL_PROFILE_ID;
+
+export function getAssessmentImageForProfile(
+  profileId: AssessmentProfileId,
+): string {
+  return isLocalLlmProfile(profileId) ? LOCAL_LLM_IMAGE : GARAK_IMAGE;
+}
+
+export function hasExpectedAssessmentImageLabel(
+  profileId: AssessmentProfileId,
+  labels: Record<string, string> | null | undefined,
+): boolean {
+  const expectedLabel = isLocalLlmProfile(profileId)
+    ? LOCAL_LLM_PROFILE_LABEL
+    : GARAK_PROFILE_LABEL;
+  return labels?.[PROFILE_LABEL_KEY] === expectedLabel;
+}
 
 function isLocalLlmProfile(profileId: AssessmentProfileId): boolean {
   return (
@@ -280,142 +300,72 @@ export function getLocalWorkerAvailability(): LocalWorkerAvailability {
     return disabled("development_only");
   }
 
-  try {
-    const result = spawnSync("docker", ["image", "inspect", IMAGE], {
-      stdio: "ignore",
-      timeout: 2_000,
-    });
-    if (result.error?.message.includes("ENOENT")) {
-      return {
-        status: "unavailable",
-        workerVersion: AI_ASSESSMENT_WORKER_VERSION,
-        reasonCode: "docker_not_available",
-        profiles: [
-          {
-            profileId: GARAK_PROFILE_ID,
-            engine: "garak",
-            status: "unavailable",
-            reasonCode: "docker_not_available",
-          },
-          {
-            profileId: LOCAL_LLM_PROFILE_ID,
-            engine: "local_llm_lab",
-            status: "unavailable",
-            reasonCode: "docker_not_available",
-          },
-          {
-            profileId: NATIVE_TOOL_PROFILE_ID,
-            engine: "local_llm_lab",
-            status: "unavailable",
-            reasonCode: "docker_not_available",
-          },
-          {
-            profileId: AUTONOMOUS_TOOL_PROFILE_ID,
-            engine: "local_llm_lab",
-            status: "unavailable",
-            reasonCode: "docker_not_available",
-          },
-        ],
-      };
-    }
-    if (result.status !== 0) {
-      return {
-        status: "unavailable",
-        workerVersion: AI_ASSESSMENT_WORKER_VERSION,
-        reasonCode: "worker_image_not_built",
-        profiles: [
-          {
-            profileId: GARAK_PROFILE_ID,
-            engine: "garak",
-            status: "unavailable",
-            reasonCode: "worker_image_not_built",
-          },
-          {
-            profileId: LOCAL_LLM_PROFILE_ID,
-            engine: "local_llm_lab",
-            status: "unavailable",
-            reasonCode: "worker_image_not_built",
-          },
-          {
-            profileId: NATIVE_TOOL_PROFILE_ID,
-            engine: "local_llm_lab",
-            status: "unavailable",
-            reasonCode: "worker_image_not_built",
-          },
-          {
-            profileId: AUTONOMOUS_TOOL_PROFILE_ID,
-            engine: "local_llm_lab",
-            status: "unavailable",
-            reasonCode: "worker_image_not_built",
-          },
-        ],
-      };
-    }
-    const modelReason = getLocalLlmArtifactReason();
-    return {
-      status: "ready",
-      workerVersion: AI_ASSESSMENT_WORKER_VERSION,
-      reasonCode: null,
-      profiles: [
-        {
-          profileId: GARAK_PROFILE_ID,
-          engine: "garak",
-          status: "ready",
-          reasonCode: null,
-        },
-        {
-          profileId: LOCAL_LLM_PROFILE_ID,
-          engine: "local_llm_lab",
-          status: modelReason ? "unavailable" : "ready",
-          reasonCode: modelReason,
-        },
-        {
-          profileId: NATIVE_TOOL_PROFILE_ID,
-          engine: "local_llm_lab",
-          status: modelReason ? "unavailable" : "ready",
-          reasonCode: modelReason,
-        },
-        {
-          profileId: AUTONOMOUS_TOOL_PROFILE_ID,
-          engine: "local_llm_lab",
-          status: modelReason ? "unavailable" : "ready",
-          reasonCode: modelReason,
-        },
+  const inspectProfileImage = (profileId: AssessmentProfileId): string | null => {
+    const image = getAssessmentImageForProfile(profileId);
+    const result = spawnSync(
+      "docker",
+      [
+        "image",
+        "inspect",
+        "--format",
+        `{{json .Config.Labels}}`,
+        image,
       ],
-    };
-  } catch {
-    return {
-      status: "unavailable",
-      workerVersion: AI_ASSESSMENT_WORKER_VERSION,
-      reasonCode: "docker_readiness_check_failed",
-      profiles: [
-        {
-          profileId: GARAK_PROFILE_ID,
-          engine: "garak",
-          status: "unavailable",
-          reasonCode: "docker_readiness_check_failed",
-        },
-        {
-          profileId: LOCAL_LLM_PROFILE_ID,
-          engine: "local_llm_lab",
-          status: "unavailable",
-          reasonCode: "docker_readiness_check_failed",
-        },
-        {
-          profileId: NATIVE_TOOL_PROFILE_ID,
-          engine: "local_llm_lab",
-          status: "unavailable",
-          reasonCode: "docker_readiness_check_failed",
-        },
-        {
-          profileId: AUTONOMOUS_TOOL_PROFILE_ID,
-          engine: "local_llm_lab",
-          status: "unavailable",
-          reasonCode: "docker_readiness_check_failed",
-        },
-      ],
-    };
-  }
+      { encoding: "utf8", timeout: 2_000, maxBuffer: 8_192 },
+    );
+    if (result.error?.message.includes("ENOENT")) return "docker_not_available";
+    if (result.error) return "docker_readiness_check_failed";
+    if (result.status !== 0) return "worker_image_not_built";
+    try {
+      const labels = JSON.parse(result.stdout.trim()) as
+        | Record<string, string>
+        | null;
+      return hasExpectedAssessmentImageLabel(profileId, labels)
+        ? null
+        : "worker_image_profile_mismatch";
+    } catch {
+      return "worker_image_profile_mismatch";
+    }
+  };
+
+  const garakReason = inspectProfileImage(GARAK_PROFILE_ID);
+  const qwenImageReason = inspectProfileImage(LOCAL_LLM_PROFILE_ID);
+  const qwenReason = qwenImageReason ?? getLocalLlmArtifactReason();
+  const profiles: LocalWorkerAvailability["profiles"] = [
+    {
+      profileId: GARAK_PROFILE_ID,
+      engine: "garak",
+      status: garakReason ? "unavailable" : "ready",
+      reasonCode: garakReason,
+    },
+    {
+      profileId: LOCAL_LLM_PROFILE_ID,
+      engine: "local_llm_lab",
+      status: qwenReason ? "unavailable" : "ready",
+      reasonCode: qwenReason,
+    },
+    {
+      profileId: NATIVE_TOOL_PROFILE_ID,
+      engine: "local_llm_lab",
+      status: qwenReason ? "unavailable" : "ready",
+      reasonCode: qwenReason,
+    },
+    {
+      profileId: AUTONOMOUS_TOOL_PROFILE_ID,
+      engine: "local_llm_lab",
+      status: qwenReason ? "unavailable" : "ready",
+      reasonCode: qwenReason,
+    },
+  ];
+  const ready = profiles.some((profile) => profile.status === "ready");
+  return {
+    status: ready ? "ready" : "unavailable",
+    workerVersion: AI_ASSESSMENT_WORKER_VERSION,
+    reasonCode: ready
+      ? null
+      : garakReason ?? qwenReason ?? "worker_image_not_built",
+    profiles,
+  };
 }
 
 export function isAssessmentProfileAvailable(
@@ -473,6 +423,7 @@ function dockerRunArgs(
   containerName: string,
   profileId: AssessmentProfileId,
 ): string[] {
+  const image = getAssessmentImageForProfile(profileId);
   const common = [
     "run",
     "--rm",
@@ -494,7 +445,7 @@ function dockerRunArgs(
       "--memory=768m",
       "--memory-swap=768m",
       "--tmpfs=/tmp:rw,noexec,nosuid,nodev,size=64m",
-      IMAGE,
+      image,
     ];
   }
   return [
@@ -510,7 +461,7 @@ function dockerRunArgs(
     `--mount=type=bind,src=${resolve(WORKER_ROOT, "guardian_ai_assessment")},dst=/opt/guardian-assessment/guardian_ai_assessment,readonly`,
     "--workdir=/opt/guardian-assessment",
     "--entrypoint=/bin/sh",
-    IMAGE,
+    image,
     "-ceu",
     `python -m pip install --no-index --no-deps --disable-pip-version-check --no-cache-dir --target=/opt/llm-runtime ${LOCAL_LLM_WHEELS.map((name) => `/wheelhouse/${name}`).join(" ")} >&2; export PYTHONPATH=/opt/llm-runtime:/opt/guardian-assessment; exec python -m guardian_ai_assessment.llm_lab ${profileId === NATIVE_TOOL_PROFILE_ID ? "--native-tool-suite-job" : profileId === AUTONOMOUS_TOOL_PROFILE_ID ? "--autonomous-tool-selection-job" : "--integration-job"}`,
   ];

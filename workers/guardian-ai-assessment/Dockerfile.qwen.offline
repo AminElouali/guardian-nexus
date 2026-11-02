@@ -1,0 +1,32 @@
+FROM python:3.13-slim-trixie@sha256:2d44738ebf4ce5f63b9d9ea871e9c7cfdc0426f7b0c97cac915fd88ded1d86bb
+
+LABEL org.guardian.profile="qwen-gve-v1" \
+      org.guardian.engine="local-llm-lab+guardian-verification" \
+      org.guardian.separation="garak-langdetect-nltk-excluded"
+
+ENV PIP_CONFIG_FILE=/dev/null \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    HOME=/tmp/guardian-home \
+    TMPDIR=/tmp
+
+WORKDIR /opt/guardian-assessment
+
+COPY requirements-qwen-runtime.txt /tmp/requirements-qwen-runtime.txt
+COPY wheelhouse/ /tmp/wheelhouse/
+RUN python -m pip install --no-cache-dir --disable-pip-version-check \
+      --no-index --find-links=/tmp/wheelhouse --no-deps --require-hashes \
+      --only-binary=:all: -r /tmp/requirements-qwen-runtime.txt \
+    && rm -rf /tmp/wheelhouse /tmp/requirements-qwen-runtime.txt \
+    && python -c "import importlib.metadata as m, importlib.util as u; assert m.version('numpy') == '2.3.4'; assert m.version('typing_extensions') == '4.16.0'; assert all(u.find_spec(name) is None for name in ('garak', 'langdetect', 'nltk', 'llama_cpp'))"
+
+COPY source/guardian_ai_assessment/__init__.py /opt/guardian-assessment/guardian_ai_assessment/__init__.py
+COPY source/guardian_ai_assessment/llm_lab.py /opt/guardian-assessment/guardian_ai_assessment/llm_lab.py
+COPY source/guardian_ai_assessment/tool_adapter.py /opt/guardian-assessment/guardian_ai_assessment/tool_adapter.py
+COPY source/local-llm-manifest.json /opt/guardian-assessment/local-llm-manifest.json
+COPY source/scripts/generate_container_sbom.py /opt/guardian-assessment/scripts/
+
+RUN chown -R 65532:65532 /opt/guardian-assessment
+
+USER 65532:65532
+ENTRYPOINT ["python", "-m", "guardian_ai_assessment.llm_lab"]

@@ -92,11 +92,36 @@ class ComposeDeploymentSbomTests(unittest.TestCase):
         self.assertIn(
             {
                 "name": "guardian:vulnerability-assessment",
-                "value": "OSV scan covers worker image only; mounted Qwen runtime not scanned",
+                "value": "Image archive and mounted-runtime SBOM are scanned separately; SBOM scan is supplemental and does not assess unidentifiable native files or model weights",
             },
             metadata,
         )
         self.assertEqual(len(result["dependencies"]), 3)
+
+    def test_composes_profile_image_with_explicit_inventory_count(self) -> None:
+        import json
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as directory:
+            worker_path = Path(directory) / "qwen-profile-image.json"
+            qwen_path = Path(directory) / "mounted-qwen.json"
+            worker_path.write_text(
+                json.dumps(bom("qwen-profile", "shared", "pkg:pypi/shared@1.0", 90)),
+                encoding="utf-8",
+            )
+            qwen_path.write_text(
+                json.dumps(bom("qwen-runtime", "llama", "pkg:pypi/llama@1.0", 13)),
+                encoding="utf-8",
+            )
+            result = compose(
+                worker_path,
+                qwen_path,
+                expected_worker_components=90,
+                expected_qwen_components=13,
+            )
+
+        self.assertEqual(len(result["components"]), 105)
 
     def test_invalid_component_count_is_rejected(self) -> None:
         import json

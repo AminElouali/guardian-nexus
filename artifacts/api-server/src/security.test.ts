@@ -31,14 +31,54 @@ import {
 } from "./lib/connector-jobs";
 import {
   claimNextAssessmentJob,
+  getAssessmentImageForProfile,
+  hasExpectedAssessmentImageLabel,
   isAiAssessmentJobRetryable,
   renewAssessmentJobLease,
+  GARAK_PROFILE_ID,
+  LOCAL_LLM_PROFILE_ID,
+  NATIVE_TOOL_PROFILE_ID,
+  AUTONOMOUS_TOOL_PROFILE_ID,
 } from "./lib/ai-assessment-worker";
 
 if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL is required for isolated security-test fixtures.");
 }
 const fixturePool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+
+test("assessment profiles use separate, profile-labeled images", () => {
+  const garakImage = getAssessmentImageForProfile(GARAK_PROFILE_ID);
+  const qwenImages = [
+    getAssessmentImageForProfile(LOCAL_LLM_PROFILE_ID),
+    getAssessmentImageForProfile(NATIVE_TOOL_PROFILE_ID),
+    getAssessmentImageForProfile(AUTONOMOUS_TOOL_PROFILE_ID),
+  ];
+  assert.equal(garakImage, "guardian-ai-assessment:garak-gve-profile-candidate");
+  assert.ok(qwenImages.every((image) => image === "guardian-ai-assessment:qwen-gve-profile-candidate"));
+  assert.notEqual(qwenImages[0], garakImage);
+  assert.equal(
+    hasExpectedAssessmentImageLabel(GARAK_PROFILE_ID, {
+      "org.guardian.profile": "garak-gve-v1",
+    }),
+    true,
+  );
+  assert.equal(
+    hasExpectedAssessmentImageLabel(GARAK_PROFILE_ID, {
+      "org.guardian.profile": "qwen-gve-v1",
+    }),
+    false,
+  );
+  assert.equal(
+    hasExpectedAssessmentImageLabel(LOCAL_LLM_PROFILE_ID, {
+      "org.guardian.profile": "qwen-gve-v1",
+    }),
+    true,
+  );
+  assert.equal(
+    hasExpectedAssessmentImageLabel(LOCAL_LLM_PROFILE_ID, null),
+    false,
+  );
+});
 
 const userA = `rls-test-a-${randomUUID()}`;
 const userB = `rls-test-b-${randomUUID()}`;

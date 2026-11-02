@@ -12,7 +12,7 @@ ARTIFACT_ROOT="$REPO_ROOT/generated-artifacts/guardian-llm-lab"
 MODEL="$ARTIFACT_ROOT/Qwen3-0.6B-Q8_0.gguf"
 WHEELHOUSE="$ARTIFACT_ROOT/wheelhouse"
 MANIFEST="$WORKER_ROOT/local-llm-manifest.json"
-IMAGE="guardian-ai-assessment:local"
+IMAGE="guardian-ai-assessment:qwen-gve-profile-candidate"
 OUTPUT="$ARTIFACT_ROOT/evidence.json"
 TEMP_OUTPUT="$ARTIFACT_ROOT/evidence.json.tmp"
 
@@ -49,7 +49,15 @@ for filename, expected_hash in expected.items():
         raise SystemExit(f"runtime_wheel_missing_or_hash_mismatch:{filename}")
 PY
 
-docker image inspect "$IMAGE" >/dev/null
+if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
+  echo "qwen_profile_image_not_built" >&2
+  exit 69
+fi
+PROFILE_LABEL="$(docker image inspect --format '{{index .Config.Labels "org.guardian.profile"}}' "$IMAGE")"
+if [ "$PROFILE_LABEL" != "qwen-gve-v1" ]; then
+  echo "qwen_profile_image_label_mismatch" >&2
+  exit 69
+fi
 mkdir -p "$ARTIFACT_ROOT"
 rm -f "$TEMP_OUTPUT"
 

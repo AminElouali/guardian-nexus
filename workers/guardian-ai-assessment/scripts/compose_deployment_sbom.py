@@ -100,11 +100,17 @@ def add_scope(
     return converted, dependencies, root_ref
 
 
-def compose(worker_path: Path, qwen_path: Path) -> dict[str, Any]:
+def compose(
+    worker_path: Path,
+    qwen_path: Path,
+    *,
+    expected_worker_components: int = 124,
+    expected_qwen_components: int = 13,
+) -> dict[str, Any]:
     worker = json.loads(worker_path.read_text(encoding="utf-8"))
     qwen = json.loads(qwen_path.read_text(encoding="utf-8"))
-    require_bom(worker, 124, "worker SBOM")
-    require_bom(qwen, 13, "mounted Qwen SBOM")
+    require_bom(worker, expected_worker_components, "worker SBOM")
+    require_bom(qwen, expected_qwen_components, "mounted Qwen SBOM")
     worker_hash = sha256_file(worker_path)
     qwen_hash = sha256_file(qwen_path)
     worker_components, worker_dependencies, worker_root = add_scope(
@@ -156,7 +162,7 @@ def compose(worker_path: Path, qwen_path: Path) -> dict[str, Any]:
                     },
                     {
                         "name": "guardian:vulnerability-assessment",
-                        "value": "OSV scan covers worker image only; mounted Qwen runtime not scanned",
+                        "value": "Image archive and mounted-runtime SBOM are scanned separately; SBOM scan is supplemental and does not assess unidentifiable native files or model weights",
                     },
                     {
                         "name": "guardian:legal-approval",
@@ -192,9 +198,16 @@ def main() -> int:
     parser.add_argument("--worker-sbom", type=Path, required=True)
     parser.add_argument("--qwen-sbom", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--expected-worker-components", type=int, default=124)
+    parser.add_argument("--expected-qwen-components", type=int, default=13)
     args = parser.parse_args()
     try:
-        bom = compose(args.worker_sbom, args.qwen_sbom)
+        bom = compose(
+            args.worker_sbom,
+            args.qwen_sbom,
+            expected_worker_components=args.expected_worker_components,
+            expected_qwen_components=args.expected_qwen_components,
+        )
     except (OSError, json.JSONDecodeError, ValueError, KeyError) as error:
         print(f"composition_error: {error}")
         return 2
