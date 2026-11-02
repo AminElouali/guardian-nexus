@@ -1,5 +1,5 @@
 import type { ChildProcess } from "node:child_process";
-import { createAssessmentTimeout } from "./assessment-output-limit";
+import { createAssessmentTimeout, type AssessmentTimeout } from "./assessment-output-limit";
 
 export type DockerControlResult = {
   exitCode: number | null;
@@ -33,11 +33,12 @@ export function runDockerControlCommand(
     let outputExceeded = false;
     let settled = false;
     let child: ChildProcess;
+    let timeout: AssessmentTimeout | undefined;
 
     const finish = (result: DockerControlResult) => {
       if (settled) return;
       settled = true;
-      timeout.cancel();
+      timeout?.cancel();
       resolve(result);
     };
 
@@ -54,8 +55,18 @@ export function runDockerControlCommand(
       return;
     }
 
-    const timeout = createAssessmentTimeout(timeoutMs, () => {
-      child.kill("SIGKILL");
+    timeout = createAssessmentTimeout(timeoutMs, () => {
+      try {
+        child.kill("SIGKILL");
+      } finally {
+        finish({
+          exitCode: null,
+          spawnError: false,
+          timedOut: true,
+          outputExceeded,
+          stdout: "",
+        });
+      }
     });
 
     child.stdout?.on("data", (chunk: Buffer) => {

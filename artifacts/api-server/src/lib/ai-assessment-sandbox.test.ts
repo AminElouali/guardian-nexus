@@ -13,6 +13,7 @@ import {
   type AssessmentImageLock,
   type DockerImageInspection,
 } from "./ai-assessment-sandbox";
+import { classifyDockerImageInspectResult } from "./assessment-docker-inspection";
 
 const workerRoot = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -260,5 +261,51 @@ test("profile image lock cannot be redirected to an arbitrary image or command",
   assert.throws(
     () => parseAssessmentImageLock(alteredQwen),
     /worker_image_lock_invalid/,
+  );
+});
+
+test("Docker inspection failures and malformed responses fail closed before launch", () => {
+  const profile = "guardian-local-llm-qwen3-0.6b-v1";
+  const validJson = JSON.stringify(inspection("qwen"));
+
+  assert.equal(
+    classifyDockerImageInspectResult(
+      profile,
+      { error: Object.assign(new Error("spawn docker ENOENT"), {}), status: null, stdout: "" },
+      lock,
+    ).reasonCode,
+    "docker_not_available",
+  );
+  assert.equal(
+    classifyDockerImageInspectResult(
+      profile,
+      { error: new Error("spawn docker ETIMEDOUT"), status: null, stdout: "" },
+      lock,
+    ).reasonCode,
+    "docker_readiness_check_failed",
+  );
+  assert.equal(
+    classifyDockerImageInspectResult(
+      profile,
+      { status: 1, stdout: "", error: null },
+      lock,
+    ).reasonCode,
+    "worker_image_not_built",
+  );
+  assert.equal(
+    classifyDockerImageInspectResult(
+      profile,
+      { status: 0, stdout: "{", error: null },
+      lock,
+    ).reasonCode,
+    "worker_image_profile_mismatch",
+  );
+  assert.deepEqual(
+    classifyDockerImageInspectResult(
+      profile,
+      { status: 0, stdout: validJson, error: null },
+      lock,
+    ),
+    { inspection: inspection("qwen"), reasonCode: null },
   );
 });

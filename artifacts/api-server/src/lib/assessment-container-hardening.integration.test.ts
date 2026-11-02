@@ -33,7 +33,7 @@ const workerRoot = resolve(
   dirname(fileURLToPath(import.meta.url)),
   "../../../../workers/guardian-ai-assessment",
 );
-const repoRoot = resolve(workerRoot, "../../..");
+const repoRoot = resolve(workerRoot, "../..");
 const evidencePath = resolve(
   repoRoot,
   "generated-artifacts/guardian-ai-assessment/container-hardening-integration.json",
