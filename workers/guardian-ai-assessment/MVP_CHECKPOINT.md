@@ -1,6 +1,6 @@
 # Guardian Nexus MVP checkpoint
 
-Updated: 2026-11-02 — 81-ID Debian reconciliation, composed inventory and regression checks
+Updated: 2026-11-02 — local runtime comparison, 55-ID triage and evidence manifest
 Scope: development/local laboratory only. No customer systems, external model APIs,
 paid services, production database, remote deployment, or publishing.
 
@@ -693,3 +693,75 @@ This update supersedes the older diskcache status, worker-test count, and OSV
 - Pendientes: ampliar en fase futura a bases de datos/programación; completar
   evaluación de licencias/procedencia nativa y build frío; verificar IPv6 en host
   dual-stack autorizado. No publicar ni habilitar evaluaciones de clientes.
+
+## Reducción de riesgo y trazabilidad local — 2026-11-02
+
+- Inicio desde `23c2a55e11c4ed72c85410e49ac399f9caecc98f`, árbol limpio. Se
+  añadieron un generador de matriz offline y cuatro tests; no se tocaron el
+  runtime del worker, la API, la UI, la base de datos, Clerk, RBAC/RLS ni las
+  imágenes Docker.
+- El generador excluye exactamente los 26 CVE críticos/altos de la tabla
+  mantenida y coteja los otros 55 IDs contra la revisión local OSV/Tracker:
+  54 figuran `vulnerable` en Trixie y uno (`CVE-2026-39113`, SQLite) como
+  `not affected` por Debian. En el escaneo completo, el agregado restante es
+  43 moderados, 9 bajos y 3 sin puntuación; se conservan los vectores por ID,
+  sin recalcularlos ni asignar un CVSS numérico nuevo.
+- La matriz prioriza, solo para orden de revisión: 26 IDs de bibliotecas
+  enlazadas/disponibles en el runtime (15 glibc, 11 SQLite), 3 IDs de bibliotecas
+  de formatos/terminal y 26 IDs de paquetes de comandos/servicios instalados sin
+  invocación directa observada en el flujo fijo del worker (tar 4, shadow 2,
+  apt 1, perl 2, systemd 7, coreutils 4, util-linux 2, dash 2, diffutils 1,
+  PAM 1). Es prioridad de análisis, no severidad ni explotabilidad. Los 55
+  registros incluyen versión/PURL, vector disponible, URL/hash de extracto
+  Tracker, estado Trixie, filas de versiones fix capturadas, ruta estática,
+  mitigación y límites. No se probó exploit ni se demuestra la inalcanzabilidad
+  por CVE.
+- Los datos OSV/Tracker registran 54 vulnerables Trixie y una fila SQLite
+  no afectada en este subconjunto. No se verificó ningún fix Trixie aplicable
+  en las simulaciones APT ya registradas; no se volvió a ejecutar APT ni se
+  modificaron paquetes. Una versión listada en otra suite no se trata como fix
+  de Trixie.
+- La candidata reducida conserva cinco capas de filesystem iguales entre la
+  imagen candidata escaneada y su tag de reconstrucción repetida, aunque los
+  IDs de metadata difieren. Respecto al worker actual: 240.379.047 B frente a
+  247.459.678 B (−7.080.631 B, 2,862 %), SBOM 116 frente a 124 componentes,
+  OSV 175 frente a 177 registros; ambos conservan los mismos 81 IDs y 0 matches
+  PyPI. No es reducción material de avisos ni una remediación. La importación
+  real del runtime Qwen falla con `libffi.so.8` ausente; también fallan los
+  smoke tests `ctypes`/`readline`. **La candidata no se promueve.** No se copiaron
+  bibliotecas ad hoc, no se purgó SQLite ni se forzó APT.
+- Confirmado en evidencia previa: `diskcache` ya no está en el runtime activo.
+  `langdetect 1.0.9` sigue siendo dependencia requerida por Garak y mantiene
+  discrepancia MIT/Apache pendiente de revisión legal. SQLite permanece porque
+  la simulación segura de purga implicaba retirar dependencias esenciales.
+- Corridas reales locales ya existentes, ambas con `network=none`: Qwen3-0.6B
+  Q8_0 realizó una inferencia sintética, produjo una propuesta JSON adaptada y
+  una consulta ficticia autorizada/simulada; cero mutaciones reales y cero
+  llamadas externas. No es function calling nativo. JSON SHA-256
+  `d6e6a260d115b29c6957a98712a0f6f42b4f0cf67ce92b698ad4aeb884dab763`.
+  Garak 0.17.1 ejecutó 1 solicitud/1 generación y produjo 8 registros, 0
+  puntuaciones detectoras positivas y 0 llamadas externas; no es garantía de
+  seguridad. JSON SHA-256
+  `74d2fdb8aefd8e734ee865fb024fc8bbc648b1a94368ab92d3b8118d0d64b94e`.
+- Verificación del código de triage: 4/4 tests aislados pasaron. Suite worker
+  completa con el árbol actual montado como solo lectura en la imagen vigente,
+  `network=none`, UID 65532 y límites: **87/87**, exit 0. No se repitieron Qwen,
+  Garak ni OSV después de cambios exclusivamente en la herramienta de triage,
+  pruebas y documentación. API/UI no cambiaron; no se revalidaron en navegador.
+- IPv4 TCP/UDP y DNS/UDP bloqueados; IPv4 loopback alcanzable, según el artefacto
+  local existente. IPv6 continúa `kernel_protocol_unavailable`, **NO VERIFICADO**.
+  `NETWORK_ISOLATION.md` ya contiene el protocolo reproducible para un host
+  dual-stack autorizado; no se creó ni contrató infraestructura.
+- Matriz: `generated-artifacts/guardian-ai-assessment-offline/runtime-reduction-20261102/debian-remaining-55-triage.json`,
+  SHA-256 `6fc81197a6104331a8696659ec8a117abaacc32bdfb22265aec01bc6877ff56e`.
+  Comparativo de imágenes/corridas:
+  `.../runtime-reduction-comparison.json`, SHA-256
+  `ef1f9232f8d1a068499ed12877935e82e23111be36a3b5e40b3fe5db308896ca`.
+  Comandos y límites:
+  `.../commands-and-results.txt`, SHA-256
+  `e2e8e4b0e51bcd0ec3e7be782cff9ed21d7497138bb8824f8d190bd41bffa456`.
+  El manifiesto `.../SHA256SUMS.txt` se verificó con `sha256sum -c`; su SHA-256
+  está en `.../SHA256SUMS.sha256` (`a18104cd726600a0376e8aa3295323d1b34eed2c4ca688edbd1990c022639089`).
+- Sin remediación viable probada en este hito. Se mantienen los avisos OSV,
+  la discrepancia SQLite, la revisión legal y la prueba IPv6 dual-stack como
+  pendientes; no se declara el worker seguro ni listo para clientes.

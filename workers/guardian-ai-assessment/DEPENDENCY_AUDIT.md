@@ -1090,3 +1090,117 @@ Pruebas nuevas: parser/procedencia Debian 7/7, composición SBOM 2/2,
 procedencia OSV 8/8 y SBOM local Qwen 2/2. El generador produjo 81/81 registros y 81/81 cruces de
 paquete fuente. Ver `MVP_CHECKPOINT.md` para el estado del producto y límites de
 login, licencias y aislamiento de red.
+
+## Triage estático offline de los 55 IDs restantes — 2026-11-02
+
+Se añadió `scripts/generate_remaining_advisory_triage.py`, que consume solo la
+matriz OSV/Tracker ya capturada, el resumen del scan local y la tabla fija de 26
+críticos/altos de este documento. Falla si no reconcilian los 81 IDs, el conteo
+26/55, la imagen o las categorías agregadas del escaneo. El artefacto contiene
+55 filas individualizadas con ID/CVE, paquete(s), versión/PURL instalada,
+vectores OSV, Tracker Trixie y hash del extracto oficial, filas de versiones
+fijas del Tracker, clasificación conservadora de ruta y mitigación. No vuelve a
+consultar la red ni inicia APT o un escáner.
+
+### Resultado y prioridad de revisión
+
+- Se excluyeron exactamente los 26 IDs de la tabla crítica/alta. Los 55
+  restantes corresponden en el resumen del escaneo completo a 43 moderados,
+  9 bajos y 3 sin puntuación. El generador retiene los vectores publicados, no
+  calcula nuevos scores y no atribuye una severidad individual a partir de una
+  métrica propia.
+- El cruce con los extractos del Debian Security Tracker da 54 filas
+  `vulnerable` en Trixie y una fila SQLite `not affected` según el Tracker.
+  Esta última no elimina la coincidencia OSV ni se trata como parche. Los datos
+  describen paquetes fuente/suite; no prueban código alcanzable o explotación.
+- Prioridad **P1 de revisión**: 26 IDs que afectan a bibliotecas runtime
+  enlazadas o accesibles: 15 glibc y 11 SQLite. En el caso glibc, Python y
+  extensiones nativas dependen de la libc; para SQLite existe el módulo de
+  Python y consumidores en dependencias del worker. Ninguna de estas
+  observaciones demuestra que la función específica del advisory se invoque.
+- Prioridad **P2 de revisión**: 3 IDs en bibliotecas de soporte (`ncurses`,
+  `zlib`, `bzip2`) con uso API concreto no demostrado; 26 IDs en comandos o
+  servicios instalados (4 tar, 2 shadow, 1 apt, 2 perl, 7 systemd, 4 coreutils,
+  2 util-linux, 2 dash, 1 diffutils y 1 PAM). La inspección del camino fijo del
+  worker encontró la llamada a Garak mediante `sys.executable` con argumentos
+  fijos; el `ENTRYPOINT` Docker es JSON y ejecuta Python. No se encontró llamada
+  directa al ejecutable/operación de esos avisos. Esto no es prueba de
+  inalcanzabilidad: los paquetes siguen instalados y no se realizaron pruebas
+  de exploit.
+- En las versiones/Tracker capturados no hay fix Trixie probado para estos
+  paquetes. Las filas de fix en otras suites, si las hay, no son candidatas
+  automáticas para Debian 13. La simulación apt previamente guardada no mostró
+  candidatos para el inventario; no se repitió en este paso. No se afirma que
+  las fuentes futuras carezcan de actualizaciones.
+- La mitigación inmediata se limita a mantener el worker sin privilegios, con
+  filesystem de solo lectura, capacidades descartadas, `no-new-privileges`,
+  cuotas, entrada de datos acotada y `network=none`; no usar comandos auxiliares
+  con entradas no confiables ni archivos de formato complejo. Son controles de
+  exposición, no parches. No se encontró una retirada de paquetes que reduzca
+  materialmente los IDs sin perder compatibilidad: la candidata slim reduce
+  tamaño y componentes, pero falla `ctypes`/`readline` y el runtime Qwen por
+  falta de `libffi.so.8`, y conserva los mismos 81 IDs.
+
+El detalle por advisory y la evidencia se generaron con:
+
+```sh
+python workers/guardian-ai-assessment/scripts/generate_remaining_advisory_triage.py \
+  --output generated-artifacts/guardian-ai-assessment-offline/runtime-reduction-20261102/debian-remaining-55-triage.json
+python -m unittest discover -s workers/guardian-ai-assessment/tests \
+  -p 'test_remaining_advisory_triage.py' -v
+```
+
+Resultados: 55 filas, Tracker 54 vulnerable/1 not affected; prioridad 26
+runtime-library, 3 library-available, 26 installed-command-or-service. La
+salida JSON SHA-256 es
+`6fc81197a6104331a8696659ec8a117abaacc32bdfb22265aec01bc6877ff56e`; los cuatro
+tests del generador pasan. La suite de worker en el contenedor actual, con fuente
+montada en solo lectura y `network=none`, pasó **87/87**. No se reconstruyó la
+imagen ni se repitió OSV porque no se modificó el inventario.
+
+## Comparación runtime local y ensayos — 2026-11-02
+
+- La imagen actual `offline-rebuilt` mide 247.459.678 bytes y conserva SBOM de
+  124 componentes (hash `8eb49149a21afac04818f94ac0183eb799ed740b8f2254a9f63c453c279c5d97`).
+  La candidata Trixie slim escaneada mide 240.379.047 bytes y tiene 116
+  componentes (hash `33b2ba7ed3a403a5e6aac88bfeb00beea1d8ca8925b28f4f99634e4e2a35bf3e`):
+  reducción de 7.080.631 bytes (2,862 %), no una afirmación de menor riesgo.
+- Escaneos offline existentes OSV Scanner 2.7.0, mismas opciones `--all-packages
+  --all-vulns`, mismas bases locales (Debian
+  `4816191fe3b9edc162646d56b0f26ee417c26bacdd02d1c39a5bcfa957c53582`;
+  PyPI `8fd7138ad08c733316d229a05ac5a8a9fdcba4f6439d80cdab97fe4e18445dde`):
+  actual 177 matches/81 IDs, candidata 175/81 IDs, conjuntos de IDs idénticos y
+  cero matches PyPI. Los dos registros menos no eliminan ningún aviso.
+- La imagen candidata no se promueve: la carga real del wheel local
+  `llama-cpp-python 0.3.36` falla porque falta `libffi.so.8`; también fallaron
+  importaciones `ctypes` y `readline`. No se copiaron librerías fuera de
+  procedencia, ni se retiraron paquetes esenciales ni se forzó APT.
+- Las pruebas funcionales locales previas de Qwen y Garak se conservan como
+  evidencia distinta: Qwen3-0.6B Q8_0 hizo 1 inferencia sintética y propuso una
+  consulta de factura mediante adaptación JSON, con 1 ejecución ficticia
+  autorizada y 0 mutaciones/egress. No fue function calling nativo. Garak 0.17.1
+  ejecutó 1 probe/1 generación, 8 registros y 0 puntuaciones positivas; no es
+  una garantía. JSON Qwen SHA-256
+  `d6e6a260d115b29c6957a98712a0f6f42b4f0cf67ce92b698ad4aeb884dab763`; JSON
+  Garak SHA-256
+  `74d2fdb8aefd8e734ee865fb024fc8bbc648b1a94368ab92d3b8118d0d64b94e`.
+- `diskcache` ya está ausente del runtime activo. `langdetect 1.0.9` es requerido
+  por Garak; la contradicción de licencia MIT/Apache permanece para revisión
+  jurídica. SQLite no se purga: la simulación anterior implicaba retirar
+  dependencias esenciales. No se tomó ninguna de esas acciones de nuevo.
+- IPv4 TCP/UDP y DNS/UDP están bloqueados en Docker `network=none`; IPv4
+  loopback funciona. El kernel no permite IPv6 (`kernel_protocol_unavailable`),
+  por lo que IPv6 sigue **NO VERIFICADO**. El procedimiento para ejecutar en un
+  host ya dual-stack autorizado está en `NETWORK_ISOLATION.md`; no se creó ni
+  contrató infraestructura.
+- El informe ejecutivo de supply-chain es interno y separado del reporte por
+  tenant. La UI/API y la descarga JSON redactada no cambiaron ni se revalidaron
+  en navegador autenticado en este hito.
+
+La comparación completa y comandos están bajo
+`generated-artifacts/guardian-ai-assessment-offline/runtime-reduction-20261102/`.
+`SHA256SUMS.txt` se verificó íntegramente con `sha256sum -c`; el hash del
+manifiesto es
+`a18104cd726600a0376e8aa3295323d1b34eed2c4ca688edbd1990c022639089`. El árbol
+de trabajo empezó en `23c2a55e11c4ed72c85410e49ac399f9caecc98f`; no hubo cambio
+de paquetes, Dockerfile o imagen.

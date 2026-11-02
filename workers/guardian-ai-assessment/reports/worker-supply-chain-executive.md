@@ -225,6 +225,49 @@ El detalle por advisory, comandos, hashes y límites de alcance está en
 evidencia de agentes IA por tenant; este resumen global de la imagen worker no
 se mezcla con esos informes.
 
+## Triage del resto de avisos Debian
+
+El scan local completo conserva 81 IDs: 1 crítico, 25 altos, 43 moderados,
+9 bajos y 3 sin puntuación. Tras separar los 26 ya triageados como crítico/alto,
+quedan 55 IDs. La captura de Debian Tracker clasifica 54 como vulnerables en
+Trixie y uno (`CVE-2026-39113`, SQLite) como no afectado por Debian; el aviso
+OSV de SQLite sigue visible como discrepancia. Ninguno de estos estados demuestra
+que el worker ejecute el código vulnerable.
+
+La revisión del flujo fijo coloca 26 IDs primero para inspección porque sus
+paquetes corresponden a bibliotecas enlazadas o disponibles en runtime
+(glibc y SQLite); otros 3 son bibliotecas de soporte; y 26 corresponden a
+comandos/servicios instalados para los que no se encontró una invocación directa
+en la ruta del worker. Esa búsqueda estática no prueba inalcanzabilidad y no se
+realizaron pruebas de exploit. El inventario individual de los 55 IDs conserva
+paquete, versión, PURL, vector, referencia/hash Tracker, estado Trixie y
+mitigación, sin recalcular CVSS:
+
+`generated-artifacts/guardian-ai-assessment-offline/runtime-reduction-20261102/debian-remaining-55-triage.json`
+(SHA-256 `6fc81197a6104331a8696659ec8a117abaacc32bdfb22265aec01bc6877ff56e`).
+
+No se encontró un fix de Trixie verificado en las simulaciones APT previamente
+registradas. No se modificaron paquetes. La candidata de base reducida es
+7.080.631 bytes más pequeña y tiene 8 componentes menos en SBOM, pero los
+escaneos comparables siguen devolviendo los mismos 81 IDs; además, su runtime
+Qwen no importa por ausencia de `libffi.so.8`. No se promueve ni se considera
+una corrección de seguridad.
+
+El worker actual pasó 87/87 tests con el árbol actual montado en solo lectura y
+Docker `network=none`. La inferencia Qwen y la corrida Garak anotadas arriba son
+corridas reales, acotadas y separadas; no se repitieron porque este cambio se
+limitó al generador de triage, sus tests y documentación. El egress IPv4
+TCP/UDP y DNS permanece probado como bloqueado; IPv6 continúa **NO VERIFICADO**
+por `kernel_protocol_unavailable`. Se mantiene el protocolo para host
+dual-stack autorizado en `../NETWORK_ISOLATION.md`.
+
+La evidencia consolidada, límites y salida de comandos están en
+`generated-artifacts/guardian-ai-assessment-offline/runtime-reduction-20261102/`.
+El manifiesto SHA-256 fue verificado; su hash es
+`a18104cd726600a0376e8aa3295323d1b34eed2c4ca688edbd1990c022639089`.
+No se cambió la UI ni el informe por tenant y no se comprobó una sesión Clerk
+en navegador en este hito.
+
 ## Qué contiene realmente el runtime local de Qwen
 
 El runner de laboratorio valida antes de cargar el wheel local de
