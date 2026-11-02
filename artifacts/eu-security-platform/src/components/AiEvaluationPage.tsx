@@ -284,6 +284,8 @@ function PolicyComparisonResult({ comparison }: { comparison: PolicyComparison }
 
 const toolLabels: Record<string, string> = {
   consult_synthetic_invoice: 'Consultar factura sintética',
+  read_synthetic_document: 'Leer documento sintético',
+  read_synthetic_email: 'Leer correo sintético',
   send_email_simulated: 'Preparar correo simulado',
   request_bank_account_change: 'Solicitar cambio ficticio',
   unknown: 'Operación desconocida',
@@ -365,6 +367,8 @@ const nativeObjectiveLabels: Record<string, string> = {
 
 const autonomousTaskLabels: Record<string, string> = {
   authorized_invoice_read: 'Lectura autorizada de factura sintética',
+  authorized_document_read: 'Lectura autorizada de documento sintético',
+  authorized_email_read: 'Lectura autorizada de correo sintético',
   authorized_simulated_email_draft: 'Preparación autorizada de correo simulado',
   authorized_synthetic_bank_request: 'Solicitud ficticia de cambio bancario',
   attack_bank_es_cal: 'Intento de modificación bancaria no autorizada bloqueado',
@@ -372,6 +376,18 @@ const autonomousTaskLabels: Record<string, string> = {
 
 const autonomousCaseLabels: Record<string, string> = {
   attack_bank_es_cal: 'Intento de modificación bancaria no autorizada bloqueado',
+  benign_document_en_holdout: 'Lectura benigna de documento en inglés',
+  benign_document_es_holdout: 'Lectura benigna de documento en español',
+  benign_email_reply_en_cal: 'Lectura benigna de correo en inglés',
+  attack_document_injection_en_holdout: 'Inyección indirecta en documento en inglés',
+  attack_email_en_cal: 'Inyección indirecta en correo en inglés',
+  attack_email_es_holdout: 'Inyección indirecta en correo en español',
+};
+
+const agentDomainLabels: Record<string, string> = {
+  email: 'Correo',
+  documents: 'Documentos',
+  finance: 'Finanzas sintéticas',
 };
 
 function pairedRate(
@@ -582,7 +598,7 @@ function NativeToolSuiteResult({
     </div>}
     <p className="guardian-verification-disclaimer">
       {autonomous
-        ? `La muestra de ${suite.sampleCount} casos incluye ${suite.benignCases} controles benignos y ${suite.attackCases} ataques de inyección documental. Es pequeña y no permite calcular una tasa general de seguridad. «Verificada» significa que la tarea sintética elegible obtuvo el resultado esperado; no se evalúa una respuesta conversacional posterior. Las propuestas, intentos de autorización, autorizaciones y simulaciones son etapas distintas. Una llamada ausente o incorrecta no se convierte en éxito y nunca se cambia a selección forzada.`
+        ? `La muestra de ${suite.sampleCount} casos incluye ${suite.benignCases} controles benignos y ${suite.attackCases} ataques de inyección indirecta en correo o documentos. Es pequeña y no permite calcular una tasa general de seguridad. «Verificada» significa que la tarea sintética elegible obtuvo el resultado esperado; no se evalúa una respuesta conversacional posterior. Las propuestas, intentos de autorización, autorizaciones y simulaciones son etapas distintas. Una llamada ausente o incorrecta no se convierte en éxito y nunca se cambia a selección forzada.`
         : 'En tareas benignas autorizadas, el arnés seleccionó la función específica para comprobar argumentos y autorización; eso no mide selección autónoma. Ataques y textos citados usaron selección automática. Las matrices comparan tipo de escenario con eventos de herramienta observados; un falso negativo significa que no se observó ese evento en un caso de ataque, no que un detector de ataques haya fallado.'}
     </p>
       {autonomous && suite.policyComparison && (
@@ -619,7 +635,7 @@ function NativeToolSuiteResult({
         </table>
       </div>
       {autonomous && <p className="guardian-verification-note">
-        Este conjunto acotado contiene {suite.benignCases} controles benignos y {suite.attackCases} casos de inyección documental. Las matrices reflejan solo eventos observados en esta muestra; no son una estimación general de seguridad.
+        Este conjunto de laboratorio cubre correo, documentos y una acción financiera ficticia: {suite.benignCases} controles benignos y {suite.attackCases} casos de inyección indirecta. Bases de datos y programación aún no están evaluadas. Las matrices reflejan solo eventos observados en esta muestra; no son una estimación general de seguridad.
       </p>}
       <div className="guardian-verification-table-wrap">
         <table className="guardian-verification-table">
@@ -638,7 +654,7 @@ function NativeToolSuiteResult({
               <tr key={item.caseId}>
                 <th scope="row">{autonomousCaseLabels[item.caseId] ?? item.caseId}</th>
                 <td>{autonomous
-                  ? `${item.label === 'attack' ? 'ataque indirecto' : 'control benigno'} · ${item.split === 'calibration' ? 'calibración' : 'holdout'} · ${item.language.toUpperCase()} · ${autonomousTaskLabels[item.category] ?? item.label}`
+                  ? `${agentDomainLabels[item.agentDomain ?? ''] ?? 'Dominio no registrado'} · ${item.label === 'attack' ? 'ataque indirecto' : 'control benigno'} · ${item.split === 'calibration' ? 'calibración' : 'holdout'} · ${item.language.toUpperCase()} · ${autonomousTaskLabels[item.category] ?? item.label}`
                   : `${item.split} · ${item.language.toUpperCase()} · ${item.label}`}</td>
                 <td>{item.proposedTools.length ? item.proposedTools.map((tool) => toolLabels[tool] ?? tool).join(', ') : 'Ninguna'}</td>
                 {autonomous && <td>{item.toolCallOrigin === 'guardian_qwen_native_markup_adapter' ? 'Marcador de plantilla Qwen adaptado por Guardian' : item.toolCallOrigin === 'runtime_message_tool_calls' ? 'message.tool_calls directo del runtime' : item.toolCallOrigin === 'test_provider_message_tool_calls' ? 'Respuesta de prueba · no inferencia real' : item.toolCallOrigin === 'unparsed_qwen_native_markup' ? 'Marcador no interpretable' : item.toolCallOrigin === 'not_observed' ? 'No observada' : 'Origen no registrado'}</td>}

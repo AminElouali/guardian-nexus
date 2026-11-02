@@ -322,6 +322,8 @@ export type GuardianLocalLlmEvidence = {
     source: "local_harness" | "model_json_emulation";
     tool:
       | "consult_synthetic_invoice"
+      | "read_synthetic_document"
+      | "read_synthetic_email"
       | "send_email_simulated"
       | "request_bank_account_change"
       | "unknown";
@@ -348,6 +350,8 @@ export type GuardianLocalLlmEvidence = {
     action:
       | "final"
       | "consult_synthetic_invoice"
+      | "read_synthetic_document"
+      | "read_synthetic_email"
       | "send_email_simulated"
       | "request_bank_account_change"
       | "invalid";
@@ -416,6 +420,7 @@ type GuardianNativeToolMetric = {
 
 type GuardianNativeToolCaseEvidence = {
   caseId: string;
+  agentDomain?: "email" | "documents" | "finance";
   split: "calibration" | "holdout";
   language: "en" | "es";
   label: "attack" | "benign";
@@ -435,6 +440,8 @@ type GuardianNativeToolCaseEvidence = {
   nativeToolCallCount: number;
   proposedTools: Array<
     | "consult_synthetic_invoice"
+    | "read_synthetic_document"
+    | "read_synthetic_email"
     | "send_email_simulated"
     | "request_bank_account_change"
     | "unknown"
@@ -467,6 +474,8 @@ type GuardianNativeToolTraceEvent = {
   source: "native_tool_call";
   tool:
     | "consult_synthetic_invoice"
+    | "read_synthetic_document"
+    | "read_synthetic_email"
     | "send_email_simulated"
     | "request_bank_account_change"
     | "unknown";
@@ -500,6 +509,8 @@ type GuardianQwenPolicyPair = {
   finishReason: string;
   tool:
     | "consult_synthetic_invoice"
+    | "read_synthetic_document"
+    | "read_synthetic_email"
     | "send_email_simulated"
     | "request_bank_account_change"
     | "unknown";
@@ -602,7 +613,8 @@ type GuardianLocalLlmToolSuiteEvidenceBase = {
     | "guardian-autonomous-tool-selection-v1"
     | "guardian-autonomous-tool-selection-v1.1"
     | "guardian-autonomous-tool-selection-v1.2"
-    | "guardian-autonomous-tool-selection-v1.3";
+    | "guardian-autonomous-tool-selection-v1.3"
+    | "guardian-autonomous-tool-selection-v1.4";
   profileId:
     | "guardian-local-llm-native-tools-v1"
     | "guardian-local-llm-autonomous-tools-v1";
@@ -664,7 +676,7 @@ type GuardianLocalLlmToolSuiteEvidenceBase = {
   toolTrace: GuardianNativeToolTraceEvent[];
   nativeToolSuite: {
     suiteId: string;
-    suiteVersion: "1.0.0" | "1.1.0" | "1.2.0" | "1.3.0" | "1.4.0";
+    suiteVersion: "1.0.0" | "1.1.0" | "1.2.0" | "1.3.0" | "1.4.0" | "1.5.0";
     sampleCount: number;
     splitSampleCounts: { calibration: number; holdout: number };
     languageCounts: { en: number; es: number };
@@ -711,6 +723,8 @@ type GuardianLocalLlmToolSuiteEvidenceBase = {
       parserFinishReason: "tool_calls" | "stop" | "length";
       toolName:
         | "consult_synthetic_invoice"
+        | "read_synthetic_document"
+        | "read_synthetic_email"
         | "send_email_simulated"
         | "request_bank_account_change"
         | "unknown"
@@ -763,7 +777,8 @@ export type GuardianLocalLlmAutonomousToolSelectionEvidence = Omit<
     | "guardian-autonomous-tool-selection-v1"
     | "guardian-autonomous-tool-selection-v1.1"
     | "guardian-autonomous-tool-selection-v1.2"
-    | "guardian-autonomous-tool-selection-v1.3";
+    | "guardian-autonomous-tool-selection-v1.3"
+    | "guardian-autonomous-tool-selection-v1.4";
   profileId: "guardian-local-llm-autonomous-tools-v1";
   taskId: "autonomous_tool_selection_en_es_v1";
 };

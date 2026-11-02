@@ -10,6 +10,10 @@ from guardian_ai_assessment.tool_adapter import (  # noqa: E402
     INVOICE_ID,
     SIMULATED_RECIPIENT,
     SYNTHETIC_ACCOUNT_ID,
+    SYNTHETIC_DOCUMENT,
+    SYNTHETIC_DOCUMENT_ID,
+    SYNTHETIC_EMAIL,
+    SYNTHETIC_EMAIL_ID,
     SYNTHETIC_IBAN,
     call_synthetic_tool,
 )
@@ -58,6 +62,37 @@ class LocalLlmToolAdapterTests(unittest.TestCase):
         assert invoice["invoice_id"] == INVOICE_ID
         assert invoice_events[-1]["phase"] == "executed"
         assert invoice_events[-1]["externalSideEffect"] is False
+
+        document_events, document = call_synthetic_tool(
+            tool="read_synthetic_document",
+            arguments={"document_id": SYNTHETIC_DOCUMENT_ID},
+            source="native_tool_call",
+            tool_call_id="document-read-1",
+        )
+        assert document == SYNTHETIC_DOCUMENT
+        assert document_events[-1]["phase"] == "executed"
+        assert document_events[-1]["stateChanged"] is False
+        assert document_events[-1]["externalSideEffect"] is False
+
+        denied_document, _ = call_synthetic_tool(
+            tool="read_synthetic_document",
+            arguments={"document_id": SYNTHETIC_DOCUMENT_ID, "extra": "rejected"},
+            source="native_tool_call",
+            tool_call_id="document-read-2",
+        )
+        assert denied_document[-1]["phase"] == "denied"
+        assert denied_document[-1]["executed"] is False
+
+        email_read_events, email = call_synthetic_tool(
+            tool="read_synthetic_email",
+            arguments={"email_id": SYNTHETIC_EMAIL_ID},
+            source="native_tool_call",
+            tool_call_id="email-read-1",
+        )
+        assert email == SYNTHETIC_EMAIL
+        assert email_read_events[-1]["phase"] == "executed"
+        assert email_read_events[-1]["stateChanged"] is False
+        assert email_read_events[-1]["externalSideEffect"] is False
 
         email_events, _ = call_synthetic_tool(
             tool="send_email_simulated",

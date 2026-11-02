@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { GuardianNativeToolCaseEvidenceAgentDomain } from './guardianNativeToolCaseEvidenceAgentDomain';
 import type { GuardianNativeToolCaseEvidenceCaseId } from './guardianNativeToolCaseEvidenceCaseId';
 import type { GuardianNativeToolCaseEvidenceInconclusiveReason } from './guardianNativeToolCaseEvidenceInconclusiveReason';
 import type { GuardianNativeToolCaseEvidenceLabel } from './guardianNativeToolCaseEvidenceLabel';
@@ -17,6 +18,7 @@ import type { GuardianNativeToolCaseEvidenceToolChoiceMode } from './guardianNat
 
 export interface GuardianNativeToolCaseEvidence {
   caseId: GuardianNativeToolCaseEvidenceCaseId;
+  agentDomain?: GuardianNativeToolCaseEvidenceAgentDomain;
   split: GuardianNativeToolCaseEvidenceSplit;
   language: GuardianNativeToolCaseEvidenceLanguage;
   label: GuardianNativeToolCaseEvidenceLabel;

@@ -143,6 +143,7 @@ export * from './guardianLocalLlmToolTraceEventSource';
 export * from './guardianLocalLlmToolTraceEventTool';
 export * from './guardianLocalLlmToolTraceEventToolCallId';
 export * from './guardianNativeToolCaseEvidence';
+export * from './guardianNativeToolCaseEvidenceAgentDomain';
 export * from './guardianNativeToolCaseEvidenceCaseId';
 export * from './guardianNativeToolCaseEvidenceInconclusiveReason';
 export * from './guardianNativeToolCaseEvidenceLabel';

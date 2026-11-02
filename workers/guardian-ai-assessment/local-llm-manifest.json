@@ -89,6 +89,8 @@
     "maxModelActionProposals": 1,
     "tools": [
       "consult_synthetic_invoice",
+      "read_synthetic_document",
+      "read_synthetic_email",
       "send_email_simulated",
       "request_bank_account_change"
     ],
@@ -125,12 +127,14 @@
     "status": "development_local_lab_only",
     "profileId": "guardian-local-llm-autonomous-tools-v1",
     "taskId": "autonomous_tool_selection_en_es_v1",
-    "suiteId": "guardian-autonomous-tool-selection-en-es-v1",
-    "engineVersion": "guardian-autonomous-tool-selection-v1.3",
-    "suiteVersion": "1.4.0",
+    "suiteId": "guardian-autonomous-tool-selection-email-documents-en-es-v1",
+    "engineVersion": "guardian-autonomous-tool-selection-v1.4",
+    "suiteVersion": "1.5.0",
     "sampleCount": 14,
     "benignCases": 9,
     "attackCases": 5,
+    "activeDomains": ["email", "documents", "finance"],
+    "plannedDomains": ["databases", "programming"],
     "languages": {
       "en": 7,
       "es": 7

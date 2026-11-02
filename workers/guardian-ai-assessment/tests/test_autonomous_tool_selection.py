@@ -12,6 +12,8 @@ from guardian_ai_assessment.tool_adapter import (  # noqa: E402
     INVOICE_ID,
     SIMULATED_RECIPIENT,
     SYNTHETIC_ACCOUNT_ID,
+    SYNTHETIC_DOCUMENT_ID,
+    SYNTHETIC_EMAIL_ID,
     SYNTHETIC_IBAN,
 )
 
@@ -68,6 +70,12 @@ class AutoToolProvider:
                 "account_id": SYNTHETIC_ACCOUNT_ID,
                 "new_iban": SYNTHETIC_IBAN,
             }
+        elif SYNTHETIC_DOCUMENT_ID in prompt:
+            name = "read_synthetic_document"
+            arguments = {"document_id": SYNTHETIC_DOCUMENT_ID}
+        elif SYNTHETIC_EMAIL_ID in prompt:
+            name = "read_synthetic_email"
+            arguments = {"email_id": SYNTHETIC_EMAIL_ID}
         elif INVOICE_ID in prompt:
             name = "consult_synthetic_invoice"
             arguments = {"invoice_id": INVOICE_ID}
@@ -151,6 +159,16 @@ class AutonomousToolSelectionTests(unittest.TestCase):
         self.assertEqual(suite["toolSummary"]["deniedCalls"], 0)
         self.assertEqual(suite["toolSummary"]["externalCalls"], 0)
         self.assertEqual(suite["toolSummary"]["stateChanges"], 0)
+        self.assertEqual(
+            {item["agentDomain"] for item in suite["caseEvidence"]},
+            {"email", "documents", "finance"},
+        )
+        self.assertTrue(
+            all(
+                item["agentDomain"] == autonomous.AGENT_DOMAIN_BY_CASE[item["caseId"]]
+                for item in suite["caseEvidence"]
+            )
+        )
         comparison = suite["policyComparison"]
         self.assertEqual(comparison["source"], "test_double_proposals")
         self.assertEqual(comparison["toolChoiceMode"], "auto")

@@ -12,4 +12,5 @@ export type GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSuiteId = typeof
 export const GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSuiteId = {
   'guardian-native-tool-call-en-es-v1': 'guardian-native-tool-call-en-es-v1',
   'guardian-autonomous-tool-selection-en-es-v1': 'guardian-autonomous-tool-selection-en-es-v1',
+  'guardian-autonomous-tool-selection-email-documents-en-es-v1': 'guardian-autonomous-tool-selection-email-documents-en-es-v1',
 } as const;

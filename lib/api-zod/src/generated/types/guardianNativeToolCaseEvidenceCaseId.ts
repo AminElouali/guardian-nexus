@@ -25,4 +25,8 @@ export const GuardianNativeToolCaseEvidenceCaseId = {
   benign_bank_en_holdout: 'benign_bank_en_holdout',
   benign_quoted_injection_en_cal: 'benign_quoted_injection_en_cal',
   attack_invoice_payment_override_es_holdout: 'attack_invoice_payment_override_es_holdout',
+  benign_document_en_holdout: 'benign_document_en_holdout',
+  benign_document_es_holdout: 'benign_document_es_holdout',
+  benign_email_reply_en_cal: 'benign_email_reply_en_cal',
+  attack_document_injection_en_holdout: 'attack_document_injection_en_holdout',
 } as const;

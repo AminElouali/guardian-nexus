@@ -777,7 +777,26 @@ test(
     assert.equal(evidence.nativeToolSuite.attackCases, 5);
     assert.equal(evidence.nativeToolSuite.benignCases, 9);
     assert.equal(evidence.nativeToolSuite.taskSuccess.denominator, 14);
-    assert.equal(evidence.nativeToolSuite.suiteVersion, "1.4.0");
+    assert.equal(
+      evidence.nativeToolSuite.suiteId,
+      "guardian-autonomous-tool-selection-email-documents-en-es-v1",
+    );
+    assert.equal(
+      evidence.engineVersion,
+      "guardian-autonomous-tool-selection-v1.4",
+    );
+    assert.equal(evidence.nativeToolSuite.suiteVersion, "1.5.0");
+    assert.deepEqual(
+      evidence.nativeToolSuite.caseEvidence.reduce<Record<string, number>>(
+        (counts, item) => {
+          const domain = item.agentDomain ?? "missing";
+          counts[domain] = (counts[domain] ?? 0) + 1;
+          return counts;
+        },
+        {},
+      ),
+      { documents: 7, email: 5, finance: 2 },
+    );
     const parsing = evidence.nativeToolSuite.toolCallParsing;
     assert.ok(parsing, "Qwen marker parsing provenance is present");
     assert.equal(
@@ -802,15 +821,17 @@ test(
     );
     for (const [category, expectedCount] of [
       ["authorized_invoice_read", 3],
-      ["authorized_simulated_email_draft", 3],
-      ["authorized_synthetic_bank_request", 3],
+      ["authorized_document_read", 2],
+      ["authorized_email_read", 1],
+      ["authorized_simulated_email_draft", 2],
+      ["authorized_synthetic_bank_request", 1],
     ] as const) {
       assert.equal(
         evidence.nativeToolSuite.caseEvidence.filter(
           (item) => item.label === "benign" && item.category === category,
         ).length,
         expectedCount,
-        `suite contains two ${category} tasks`,
+        `suite contains ${expectedCount} ${category} tasks`,
       );
     }
     for (const item of evidence.nativeToolSuite.caseEvidence) {

@@ -997,7 +997,7 @@ components:
         evidenceVersion: { type: integer, const: 1 }
         source: { type: string, enum: [isolated_local_lab] }
         engine: { type: string, enum: [local_llm_lab] }
-        engineVersion: { type: string, enum: [guardian-native-tool-suite-v1, guardian-autonomous-tool-selection-v1, guardian-autonomous-tool-selection-v1.1, guardian-autonomous-tool-selection-v1.2, guardian-autonomous-tool-selection-v1.3] }
+        engineVersion: { type: string, enum: [guardian-native-tool-suite-v1, guardian-autonomous-tool-selection-v1, guardian-autonomous-tool-selection-v1.1, guardian-autonomous-tool-selection-v1.2, guardian-autonomous-tool-selection-v1.3, guardian-autonomous-tool-selection-v1.4] }
         profileId: { type: string, enum: [guardian-local-llm-native-tools-v1, guardian-local-llm-autonomous-tools-v1] }
         executionMode: { type: string, enum: [real_local_llm_inference] }
         toolInvocationMode: { type: string, enum: [native_tool_calls] }
@@ -1077,8 +1077,8 @@ components:
           type: object
           additionalProperties: false
           properties:
-            suiteId: { type: string, enum: [guardian-native-tool-call-en-es-v1, guardian-autonomous-tool-selection-en-es-v1] }
-            suiteVersion: { type: string, enum: ["1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0"] }
+            suiteId: { type: string, enum: [guardian-native-tool-call-en-es-v1, guardian-autonomous-tool-selection-en-es-v1, guardian-autonomous-tool-selection-email-documents-en-es-v1] }
+            suiteVersion: { type: string, enum: ["1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0"] }
             sampleCount: { type: integer, enum: [6, 12, 14] }
             splitSampleCounts:
               type: object
@@ -1156,7 +1156,7 @@ components:
                 toolChoice: { type: string, enum: [specific_function, auto] }
                 toolCallObserved: { type: boolean }
                 parserFinishReason: { type: string, enum: [tool_calls, stop, length] }
-                toolName: { type: string, enum: [consult_synthetic_invoice, send_email_simulated, request_bank_account_change, unknown, none] }
+                toolName: { type: string, enum: [consult_synthetic_invoice, read_synthetic_document, read_synthetic_email, send_email_simulated, request_bank_account_change, unknown, none] }
                 argumentsValid: { type: boolean }
                 authorization: { type: string, enum: [allowed_for_synthetic_read, allowed_for_synthetic_tool, denied, not_observed] }
                 fakeExecution: { type: boolean }
@@ -1200,7 +1200,7 @@ components:
         - { $ref: "#/components/schemas/GuardianLocalLlmToolSuiteEvidenceBase" }
         - type: object
           properties:
-            engineVersion: { type: string, enum: [guardian-autonomous-tool-selection-v1, guardian-autonomous-tool-selection-v1.1, guardian-autonomous-tool-selection-v1.2, guardian-autonomous-tool-selection-v1.3] }
+            engineVersion: { type: string, enum: [guardian-autonomous-tool-selection-v1, guardian-autonomous-tool-selection-v1.1, guardian-autonomous-tool-selection-v1.2, guardian-autonomous-tool-selection-v1.3, guardian-autonomous-tool-selection-v1.4] }
             profileId: { type: string, const: guardian-local-llm-autonomous-tools-v1 }
             taskId: { type: string, const: autonomous_tool_selection_en_es_v1 }
           required: [engineVersion, profileId, taskId]
@@ -1210,10 +1210,10 @@ components:
       properties:
         caseId:
           type: string
-          enum: [capability_preflight, attack_email_en_cal, attack_bank_es_cal, benign_invoice_en_cal, benign_quote_es_cal, benign_email_en_cal, benign_bank_es_cal, attack_email_es_holdout, attack_bank_en_holdout, benign_invoice_es_holdout, benign_quote_en_holdout, benign_email_es_holdout, benign_bank_es_holdout, benign_bank_en_holdout, benign_quoted_injection_en_cal, attack_invoice_payment_override_es_holdout]
+          enum: [capability_preflight, attack_email_en_cal, attack_bank_es_cal, benign_invoice_en_cal, benign_quote_es_cal, benign_email_en_cal, benign_bank_es_cal, attack_email_es_holdout, attack_bank_en_holdout, benign_invoice_es_holdout, benign_quote_en_holdout, benign_email_es_holdout, benign_bank_es_holdout, benign_bank_en_holdout, benign_quoted_injection_en_cal, attack_invoice_payment_override_es_holdout, benign_document_en_holdout, benign_document_es_holdout, benign_email_reply_en_cal, attack_document_injection_en_holdout]
         toolCallId: { type: string, maxLength: 80 }
         source: { type: string, enum: [native_tool_call] }
-        tool: { type: string, enum: [consult_synthetic_invoice, send_email_simulated, request_bank_account_change, unknown] }
+        tool: { type: string, enum: [consult_synthetic_invoice, read_synthetic_document, read_synthetic_email, send_email_simulated, request_bank_account_change, unknown] }
         phase: { type: string, enum: [proposal, authorization_attempt, executed, denied] }
         authorization: { type: string, enum: [not_checked, allowed, denied] }
         executed: { type: boolean }
@@ -1229,7 +1229,8 @@ components:
       properties:
         caseId:
           type: string
-          enum: [attack_email_en_cal, attack_bank_es_cal, benign_invoice_en_cal, benign_quote_es_cal, benign_email_en_cal, benign_bank_es_cal, attack_email_es_holdout, attack_bank_en_holdout, benign_invoice_es_holdout, benign_quote_en_holdout, benign_email_es_holdout, benign_bank_es_holdout, benign_bank_en_holdout, benign_quoted_injection_en_cal, attack_invoice_payment_override_es_holdout]
+          enum: [attack_email_en_cal, attack_bank_es_cal, benign_invoice_en_cal, benign_quote_es_cal, benign_email_en_cal, benign_bank_es_cal, attack_email_es_holdout, attack_bank_en_holdout, benign_invoice_es_holdout, benign_quote_en_holdout, benign_email_es_holdout, benign_bank_es_holdout, benign_bank_en_holdout, benign_quoted_injection_en_cal, attack_invoice_payment_override_es_holdout, benign_document_en_holdout, benign_document_es_holdout, benign_email_reply_en_cal, attack_document_injection_en_holdout]
+        agentDomain: { type: string, enum: [email, documents, finance] }
         split: { type: string, enum: [calibration, holdout] }
         language: { type: string, enum: [en, es] }
         label: { type: string, enum: [attack, benign] }
@@ -1245,7 +1246,7 @@ components:
         proposedTools:
           type: array
           maxItems: 64
-          items: { type: string, enum: [consult_synthetic_invoice, send_email_simulated, request_bank_account_change, unknown] }
+          items: { type: string, enum: [consult_synthetic_invoice, read_synthetic_document, read_synthetic_email, send_email_simulated, request_bank_account_change, unknown] }
         argumentsValid: { type: boolean }
         policyAllowed: { type: boolean }
         simulatedExecution: { type: boolean }
@@ -1307,7 +1308,7 @@ components:
       properties:
         caseId:
           type: string
-          enum: [attack_email_en_cal, attack_bank_es_cal, benign_invoice_en_cal, benign_quote_es_cal, benign_email_en_cal, benign_bank_es_cal, attack_email_es_holdout, attack_bank_en_holdout, benign_invoice_es_holdout, benign_quote_en_holdout, benign_email_es_holdout, benign_bank_es_holdout, benign_bank_en_holdout, benign_quoted_injection_en_cal, attack_invoice_payment_override_es_holdout]
+          enum: [attack_email_en_cal, attack_bank_es_cal, benign_invoice_en_cal, benign_quote_es_cal, benign_email_en_cal, benign_bank_es_cal, attack_email_es_holdout, attack_bank_en_holdout, benign_invoice_es_holdout, benign_quote_en_holdout, benign_email_es_holdout, benign_bank_es_holdout, benign_bank_en_holdout, benign_quoted_injection_en_cal, attack_invoice_payment_override_es_holdout, benign_document_en_holdout, benign_document_es_holdout, benign_email_reply_en_cal, attack_document_injection_en_holdout]
         split: { type: string, enum: [calibration, holdout] }
         language: { type: string, enum: [en, es] }
         label: { type: string, enum: [attack, benign] }
@@ -1315,7 +1316,7 @@ components:
         toolChoiceMode: { type: string, const: auto }
         toolCallOrigin: { type: string, enum: [guardian_qwen_native_markup_adapter, runtime_message_tool_calls, test_provider_message_tool_calls] }
         finishReason: { type: string, enum: [tool_calls, stop, length] }
-        tool: { type: string, enum: [consult_synthetic_invoice, send_email_simulated, request_bank_account_change, unknown] }
+        tool: { type: string, enum: [consult_synthetic_invoice, read_synthetic_document, read_synthetic_email, send_email_simulated, request_bank_account_change, unknown] }
         argumentsValid: { type: boolean }
         argumentsSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
         proposalSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
@@ -1458,7 +1459,7 @@ components:
       properties:
         toolCallId: { type: string, enum: [invoice-read-1, model-proposal-1] }
         source: { type: string, enum: [local_harness, model_json_emulation] }
-        tool: { type: string, enum: [consult_synthetic_invoice, send_email_simulated, request_bank_account_change, unknown] }
+        tool: { type: string, enum: [consult_synthetic_invoice, read_synthetic_document, read_synthetic_email, send_email_simulated, request_bank_account_change, unknown] }
         phase: { type: string, enum: [proposal, authorization_attempt, executed, denied] }
         authorization: { type: string, enum: [not_checked, allowed, denied] }
         executed: { type: boolean }
@@ -1468,7 +1469,7 @@ components:
         argumentsSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
         resultCode:
           type: string
-          enum: [authorization_pending, synthetic_invoice_returned, invoice_not_authorized, authorized_for_synthetic_execution, model_action_proposed_not_native_calling, simulated_email_prepared, simulated_email_denied, simulated_change_request_pending, bank_change_request_denied, unknown_tool_rejected]
+          enum: [authorization_pending, synthetic_invoice_returned, invoice_not_authorized, synthetic_document_returned, document_not_authorized, synthetic_email_returned, email_not_authorized, authorized_for_synthetic_execution, model_action_proposed_not_native_calling, simulated_email_prepared, simulated_email_denied, simulated_change_request_pending, bank_change_request_denied, unknown_tool_rejected]
       required: [toolCallId, source, tool, phase, authorization, executed, simulatedOnly, stateChanged, externalSideEffect, argumentsSha256, resultCode]
     AiAssessmentEvidence:
       type: object

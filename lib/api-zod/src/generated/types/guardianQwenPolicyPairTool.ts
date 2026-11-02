@@ -11,6 +11,8 @@ export type GuardianQwenPolicyPairTool = typeof GuardianQwenPolicyPairTool[keyof
 
 export const GuardianQwenPolicyPairTool = {
   consult_synthetic_invoice: 'consult_synthetic_invoice',
+  read_synthetic_document: 'read_synthetic_document',
+  read_synthetic_email: 'read_synthetic_email',
   send_email_simulated: 'send_email_simulated',
   request_bank_account_change: 'request_bank_account_change',
   unknown: 'unknown',

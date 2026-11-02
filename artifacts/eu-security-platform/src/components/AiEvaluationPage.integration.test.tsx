@@ -232,7 +232,7 @@ test("renders the Qwen run as an honest Spanish executive report with bounded ev
   assert.match(markup, /Referencias de evidencia y hashes/);
   assert.match(markup, /Evidencia del caso/);
   assert.match(markup, /no permite estimar una tasa general de seguridad/);
-  assert.match(markup, /5 casos de inyección documental/);
+  assert.match(markup, /5 ataques de inyección indirecta en correo o documentos/);
   assert.match(markup, /no se forzó la función/);
   assert.match(markup, /13\/14<\/b> casos con propuesta/);
   assert.match(markup, /13\/13<\/b> propuestas con intento de autorización/);
@@ -268,7 +268,7 @@ test("renders the Qwen run as an honest Spanish executive report with bounded ev
   const report = buildQwenExecutiveReport(job);
   assert.ok(report);
   const exported = JSON.stringify(report);
-  assert.match(exported, /"reportVersion":2/);
+  assert.match(exported, /"reportVersion":3/);
   assert.match(exported, /Guardian Nexus/);
   assert.match(exported, /Intento de modificación bancaria no autorizada bloqueado/);
   assert.match(exported, /"directRuntimeMessageToolCalls":0/);

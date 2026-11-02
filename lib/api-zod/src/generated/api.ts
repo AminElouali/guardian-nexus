@@ -1684,7 +1684,7 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "toolTrace": zod.array(zod.object({
   "toolCallId": zod.enum(['invoice-read-1', 'model-proposal-1']),
   "source": zod.enum(['local_harness', 'model_json_emulation']),
-  "tool": zod.enum(['consult_synthetic_invoice', 'send_email_simulated', 'request_bank_account_change', 'unknown']),
+  "tool": zod.enum(['consult_synthetic_invoice', 'read_synthetic_document', 'read_synthetic_email', 'send_email_simulated', 'request_bank_account_change', 'unknown']),
   "phase": zod.enum(['proposal', 'authorization_attempt', 'executed', 'denied']),
   "authorization": zod.enum(['not_checked', 'allowed', 'denied']),
   "executed": zod.boolean(),
@@ -1692,7 +1692,7 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "stateChanged": zod.literal(false),
   "externalSideEffect": zod.literal(false),
   "argumentsSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultTwoToolTraceItemArgumentsSha256RegExp),
-  "resultCode": zod.enum(['authorization_pending', 'synthetic_invoice_returned', 'invoice_not_authorized', 'authorized_for_synthetic_execution', 'model_action_proposed_not_native_calling', 'simulated_email_prepared', 'simulated_email_denied', 'simulated_change_request_pending', 'bank_change_request_denied', 'unknown_tool_rejected'])
+  "resultCode": zod.enum(['authorization_pending', 'synthetic_invoice_returned', 'invoice_not_authorized', 'synthetic_document_returned', 'document_not_authorized', 'synthetic_email_returned', 'email_not_authorized', 'authorized_for_synthetic_execution', 'model_action_proposed_not_native_calling', 'simulated_email_prepared', 'simulated_email_denied', 'simulated_change_request_pending', 'bank_change_request_denied', 'unknown_tool_rejected'])
 })).max(listWorkspaceAiAssessmentLabJobsResponseResultTwoToolTraceMax),
   "toolSummary": zod.object({
   "harnessToolExecutions": zod.literal(1),
@@ -1729,7 +1729,7 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "evidenceVersion": zod.literal(1),
   "source": zod.enum(['isolated_local_lab']),
   "engine": zod.enum(['local_llm_lab']),
-  "engineVersion": zod.enum(['guardian-native-tool-suite-v1', 'guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1', 'guardian-autonomous-tool-selection-v1.2', 'guardian-autonomous-tool-selection-v1.3']),
+  "engineVersion": zod.enum(['guardian-native-tool-suite-v1', 'guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1', 'guardian-autonomous-tool-selection-v1.2', 'guardian-autonomous-tool-selection-v1.3', 'guardian-autonomous-tool-selection-v1.4']),
   "profileId": zod.enum(['guardian-local-llm-native-tools-v1', 'guardian-local-llm-autonomous-tools-v1']),
   "executionMode": zod.enum(['real_local_llm_inference']),
   "toolInvocationMode": zod.enum(['native_tool_calls']),
@@ -1785,10 +1785,10 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
 })
 }),
   "toolTrace": zod.array(zod.object({
-  "caseId": zod.enum(['capability_preflight', 'attack_email_en_cal', 'attack_bank_es_cal', 'benign_invoice_en_cal', 'benign_quote_es_cal', 'benign_email_en_cal', 'benign_bank_es_cal', 'attack_email_es_holdout', 'attack_bank_en_holdout', 'benign_invoice_es_holdout', 'benign_quote_en_holdout', 'benign_email_es_holdout', 'benign_bank_es_holdout', 'benign_bank_en_holdout', 'benign_quoted_injection_en_cal', 'attack_invoice_payment_override_es_holdout']),
+  "caseId": zod.enum(['capability_preflight', 'attack_email_en_cal', 'attack_bank_es_cal', 'benign_invoice_en_cal', 'benign_quote_es_cal', 'benign_email_en_cal', 'benign_bank_es_cal', 'attack_email_es_holdout', 'attack_bank_en_holdout', 'benign_invoice_es_holdout', 'benign_quote_en_holdout', 'benign_email_es_holdout', 'benign_bank_es_holdout', 'benign_bank_en_holdout', 'benign_quoted_injection_en_cal', 'attack_invoice_payment_override_es_holdout', 'benign_document_en_holdout', 'benign_document_es_holdout', 'benign_email_reply_en_cal', 'attack_document_injection_en_holdout']),
   "toolCallId": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultThreeOneToolTraceItemToolCallIdMax),
   "source": zod.enum(['native_tool_call']),
-  "tool": zod.enum(['consult_synthetic_invoice', 'send_email_simulated', 'request_bank_account_change', 'unknown']),
+  "tool": zod.enum(['consult_synthetic_invoice', 'read_synthetic_document', 'read_synthetic_email', 'send_email_simulated', 'request_bank_account_change', 'unknown']),
   "phase": zod.enum(['proposal', 'authorization_attempt', 'executed', 'denied']),
   "authorization": zod.enum(['not_checked', 'allowed', 'denied']),
   "executed": zod.boolean(),
@@ -1799,8 +1799,8 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "resultCode": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultThreeOneToolTraceItemResultCodeMax)
 })).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeOneToolTraceMax),
   "nativeToolSuite": zod.object({
-  "suiteId": zod.enum(['guardian-native-tool-call-en-es-v1', 'guardian-autonomous-tool-selection-en-es-v1']),
-  "suiteVersion": zod.enum(['1.0.0', '1.1.0', '1.2.0', '1.3.0', '1.4.0']),
+  "suiteId": zod.enum(['guardian-native-tool-call-en-es-v1', 'guardian-autonomous-tool-selection-en-es-v1', 'guardian-autonomous-tool-selection-email-documents-en-es-v1']),
+  "suiteVersion": zod.enum(['1.0.0', '1.1.0', '1.2.0', '1.3.0', '1.4.0', '1.5.0']),
   "sampleCount": zod.union([zod.literal(6),zod.literal(12),zod.literal(14)]),
   "splitSampleCounts": zod.object({
   "calibration": zod.union([zod.literal(3),zod.literal(6),zod.literal(7)]),
@@ -1813,7 +1813,8 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "attackCases": zod.union([zod.literal(0),zod.literal(4),zod.literal(5)]),
   "benignCases": zod.union([zod.literal(6),zod.literal(8),zod.literal(9)]),
   "caseEvidence": zod.array(zod.object({
-  "caseId": zod.enum(['attack_email_en_cal', 'attack_bank_es_cal', 'benign_invoice_en_cal', 'benign_quote_es_cal', 'benign_email_en_cal', 'benign_bank_es_cal', 'attack_email_es_holdout', 'attack_bank_en_holdout', 'benign_invoice_es_holdout', 'benign_quote_en_holdout', 'benign_email_es_holdout', 'benign_bank_es_holdout', 'benign_bank_en_holdout', 'benign_quoted_injection_en_cal', 'attack_invoice_payment_override_es_holdout']),
+  "caseId": zod.enum(['attack_email_en_cal', 'attack_bank_es_cal', 'benign_invoice_en_cal', 'benign_quote_es_cal', 'benign_email_en_cal', 'benign_bank_es_cal', 'attack_email_es_holdout', 'attack_bank_en_holdout', 'benign_invoice_es_holdout', 'benign_quote_en_holdout', 'benign_email_es_holdout', 'benign_bank_es_holdout', 'benign_bank_en_holdout', 'benign_quoted_injection_en_cal', 'attack_invoice_payment_override_es_holdout', 'benign_document_en_holdout', 'benign_document_es_holdout', 'benign_email_reply_en_cal', 'attack_document_injection_en_holdout']),
+  "agentDomain": zod.enum(['email', 'documents', 'finance']).optional(),
   "split": zod.enum(['calibration', 'holdout']),
   "language": zod.enum(['en', 'es']),
   "label": zod.enum(['attack', 'benign']),
@@ -1826,7 +1827,7 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "inconclusiveReason": zod.union([zod.literal('completion_token_limit'),zod.literal(null)]).nullable(),
   "promptSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuiteCaseEvidenceItemPromptSha256RegExp),
   "nativeToolCallCount": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuiteCaseEvidenceItemNativeToolCallCountMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuiteCaseEvidenceItemNativeToolCallCountMax),
-  "proposedTools": zod.array(zod.enum(['consult_synthetic_invoice', 'send_email_simulated', 'request_bank_account_change', 'unknown'])).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuiteCaseEvidenceItemProposedToolsMax),
+  "proposedTools": zod.array(zod.enum(['consult_synthetic_invoice', 'read_synthetic_document', 'read_synthetic_email', 'send_email_simulated', 'request_bank_account_change', 'unknown'])).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuiteCaseEvidenceItemProposedToolsMax),
   "argumentsValid": zod.boolean().optional(),
   "policyAllowed": zod.boolean().optional(),
   "simulatedExecution": zod.boolean().optional(),
@@ -1936,7 +1937,7 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "pairedProposalCount": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuitePolicyComparisonPairedProposalCountMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuitePolicyComparisonPairedProposalCountMax),
   "unpairedProposalCount": zod.literal(0),
   "pairs": zod.array(zod.object({
-  "caseId": zod.enum(['attack_email_en_cal', 'attack_bank_es_cal', 'benign_invoice_en_cal', 'benign_quote_es_cal', 'benign_email_en_cal', 'benign_bank_es_cal', 'attack_email_es_holdout', 'attack_bank_en_holdout', 'benign_invoice_es_holdout', 'benign_quote_en_holdout', 'benign_email_es_holdout', 'benign_bank_es_holdout', 'benign_bank_en_holdout', 'benign_quoted_injection_en_cal', 'attack_invoice_payment_override_es_holdout']),
+  "caseId": zod.enum(['attack_email_en_cal', 'attack_bank_es_cal', 'benign_invoice_en_cal', 'benign_quote_es_cal', 'benign_email_en_cal', 'benign_bank_es_cal', 'attack_email_es_holdout', 'attack_bank_en_holdout', 'benign_invoice_es_holdout', 'benign_quote_en_holdout', 'benign_email_es_holdout', 'benign_bank_es_holdout', 'benign_bank_en_holdout', 'benign_quoted_injection_en_cal', 'attack_invoice_payment_override_es_holdout', 'benign_document_en_holdout', 'benign_document_es_holdout', 'benign_email_reply_en_cal', 'attack_document_injection_en_holdout']),
   "split": zod.enum(['calibration', 'holdout']),
   "language": zod.enum(['en', 'es']),
   "label": zod.enum(['attack', 'benign']),
@@ -1944,7 +1945,7 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "toolChoiceMode": zod.literal("auto"),
   "toolCallOrigin": zod.enum(['guardian_qwen_native_markup_adapter', 'runtime_message_tool_calls', 'test_provider_message_tool_calls']),
   "finishReason": zod.enum(['tool_calls', 'stop', 'length']),
-  "tool": zod.enum(['consult_synthetic_invoice', 'send_email_simulated', 'request_bank_account_change', 'unknown']),
+  "tool": zod.enum(['consult_synthetic_invoice', 'read_synthetic_document', 'read_synthetic_email', 'send_email_simulated', 'request_bank_account_change', 'unknown']),
   "argumentsValid": zod.boolean(),
   "argumentsSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuitePolicyComparisonPairsItemArgumentsSha256RegExp),
   "proposalSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuitePolicyComparisonPairsItemProposalSha256RegExp),
@@ -2081,7 +2082,7 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "toolChoice": zod.enum(['specific_function', 'auto']),
   "toolCallObserved": zod.boolean(),
   "parserFinishReason": zod.enum(['tool_calls', 'stop', 'length']),
-  "toolName": zod.enum(['consult_synthetic_invoice', 'send_email_simulated', 'request_bank_account_change', 'unknown', 'none']),
+  "toolName": zod.enum(['consult_synthetic_invoice', 'read_synthetic_document', 'read_synthetic_email', 'send_email_simulated', 'request_bank_account_change', 'unknown', 'none']),
   "argumentsValid": zod.boolean(),
   "authorization": zod.enum(['allowed_for_synthetic_read', 'allowed_for_synthetic_tool', 'denied', 'not_observed']),
   "fakeExecution": zod.boolean(),
@@ -2115,7 +2116,7 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "evidenceVersion": zod.literal(1),
   "source": zod.enum(['isolated_local_lab']),
   "engine": zod.enum(['local_llm_lab']),
-  "engineVersion": zod.enum(['guardian-native-tool-suite-v1', 'guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1', 'guardian-autonomous-tool-selection-v1.2', 'guardian-autonomous-tool-selection-v1.3']),
+  "engineVersion": zod.enum(['guardian-native-tool-suite-v1', 'guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1', 'guardian-autonomous-tool-selection-v1.2', 'guardian-autonomous-tool-selection-v1.3', 'guardian-autonomous-tool-selection-v1.4']),
   "profileId": zod.enum(['guardian-local-llm-native-tools-v1', 'guardian-local-llm-autonomous-tools-v1']),
   "executionMode": zod.enum(['real_local_llm_inference']),
   "toolInvocationMode": zod.enum(['native_tool_calls']),
@@ -2171,10 +2172,10 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
 })
 }),
   "toolTrace": zod.array(zod.object({
-  "caseId": zod.enum(['capability_preflight', 'attack_email_en_cal', 'attack_bank_es_cal', 'benign_invoice_en_cal', 'benign_quote_es_cal', 'benign_email_en_cal', 'benign_bank_es_cal', 'attack_email_es_holdout', 'attack_bank_en_holdout', 'benign_invoice_es_holdout', 'benign_quote_en_holdout', 'benign_email_es_holdout', 'benign_bank_es_holdout', 'benign_bank_en_holdout', 'benign_quoted_injection_en_cal', 'attack_invoice_payment_override_es_holdout']),
+  "caseId": zod.enum(['capability_preflight', 'attack_email_en_cal', 'attack_bank_es_cal', 'benign_invoice_en_cal', 'benign_quote_es_cal', 'benign_email_en_cal', 'benign_bank_es_cal', 'attack_email_es_holdout', 'attack_bank_en_holdout', 'benign_invoice_es_holdout', 'benign_quote_en_holdout', 'benign_email_es_holdout', 'benign_bank_es_holdout', 'benign_bank_en_holdout', 'benign_quoted_injection_en_cal', 'attack_invoice_payment_override_es_holdout', 'benign_document_en_holdout', 'benign_document_es_holdout', 'benign_email_reply_en_cal', 'attack_document_injection_en_holdout']),
   "toolCallId": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultFourOneToolTraceItemToolCallIdMax),
   "source": zod.enum(['native_tool_call']),
-  "tool": zod.enum(['consult_synthetic_invoice', 'send_email_simulated', 'request_bank_account_change', 'unknown']),
+  "tool": zod.enum(['consult_synthetic_invoice', 'read_synthetic_document', 'read_synthetic_email', 'send_email_simulated', 'request_bank_account_change', 'unknown']),
   "phase": zod.enum(['proposal', 'authorization_attempt', 'executed', 'denied']),
   "authorization": zod.enum(['not_checked', 'allowed', 'denied']),
   "executed": zod.boolean(),
@@ -2185,8 +2186,8 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "resultCode": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultFourOneToolTraceItemResultCodeMax)
 })).max(listWorkspaceAiAssessmentLabJobsResponseResultFourOneToolTraceMax),
   "nativeToolSuite": zod.object({
-  "suiteId": zod.enum(['guardian-native-tool-call-en-es-v1', 'guardian-autonomous-tool-selection-en-es-v1']),
-  "suiteVersion": zod.enum(['1.0.0', '1.1.0', '1.2.0', '1.3.0', '1.4.0']),
+  "suiteId": zod.enum(['guardian-native-tool-call-en-es-v1', 'guardian-autonomous-tool-selection-en-es-v1', 'guardian-autonomous-tool-selection-email-documents-en-es-v1']),
+  "suiteVersion": zod.enum(['1.0.0', '1.1.0', '1.2.0', '1.3.0', '1.4.0', '1.5.0']),
   "sampleCount": zod.union([zod.literal(6),zod.literal(12),zod.literal(14)]),
   "splitSampleCounts": zod.object({
   "calibration": zod.union([zod.literal(3),zod.literal(6),zod.literal(7)]),
@@ -2199,7 +2200,8 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "attackCases": zod.union([zod.literal(0),zod.literal(4),zod.literal(5)]),
   "benignCases": zod.union([zod.literal(6),zod.literal(8),zod.literal(9)]),
   "caseEvidence": zod.array(zod.object({
-  "caseId": zod.enum(['attack_email_en_cal', 'attack_bank_es_cal', 'benign_invoice_en_cal', 'benign_quote_es_cal', 'benign_email_en_cal', 'benign_bank_es_cal', 'attack_email_es_holdout', 'attack_bank_en_holdout', 'benign_invoice_es_holdout', 'benign_quote_en_holdout', 'benign_email_es_holdout', 'benign_bank_es_holdout', 'benign_bank_en_holdout', 'benign_quoted_injection_en_cal', 'attack_invoice_payment_override_es_holdout']),
+  "caseId": zod.enum(['attack_email_en_cal', 'attack_bank_es_cal', 'benign_invoice_en_cal', 'benign_quote_es_cal', 'benign_email_en_cal', 'benign_bank_es_cal', 'attack_email_es_holdout', 'attack_bank_en_holdout', 'benign_invoice_es_holdout', 'benign_quote_en_holdout', 'benign_email_es_holdout', 'benign_bank_es_holdout', 'benign_bank_en_holdout', 'benign_quoted_injection_en_cal', 'attack_invoice_payment_override_es_holdout', 'benign_document_en_holdout', 'benign_document_es_holdout', 'benign_email_reply_en_cal', 'attack_document_injection_en_holdout']),
+  "agentDomain": zod.enum(['email', 'documents', 'finance']).optional(),
   "split": zod.enum(['calibration', 'holdout']),
   "language": zod.enum(['en', 'es']),
   "label": zod.enum(['attack', 'benign']),
@@ -2212,7 +2214,7 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "inconclusiveReason": zod.union([zod.literal('completion_token_limit'),zod.literal(null)]).nullable(),
   "promptSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuiteCaseEvidenceItemPromptSha256RegExp),
   "nativeToolCallCount": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuiteCaseEvidenceItemNativeToolCallCountMin).max(listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuiteCaseEvidenceItemNativeToolCallCountMax),
-  "proposedTools": zod.array(zod.enum(['consult_synthetic_invoice', 'send_email_simulated', 'request_bank_account_change', 'unknown'])).max(listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuiteCaseEvidenceItemProposedToolsMax),
+  "proposedTools": zod.array(zod.enum(['consult_synthetic_invoice', 'read_synthetic_document', 'read_synthetic_email', 'send_email_simulated', 'request_bank_account_change', 'unknown'])).max(listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuiteCaseEvidenceItemProposedToolsMax),
   "argumentsValid": zod.boolean().optional(),
   "policyAllowed": zod.boolean().optional(),
   "simulatedExecution": zod.boolean().optional(),
@@ -2322,7 +2324,7 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "pairedProposalCount": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuitePolicyComparisonPairedProposalCountMin).max(listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuitePolicyComparisonPairedProposalCountMax),
   "unpairedProposalCount": zod.literal(0),
   "pairs": zod.array(zod.object({
-  "caseId": zod.enum(['attack_email_en_cal', 'attack_bank_es_cal', 'benign_invoice_en_cal', 'benign_quote_es_cal', 'benign_email_en_cal', 'benign_bank_es_cal', 'attack_email_es_holdout', 'attack_bank_en_holdout', 'benign_invoice_es_holdout', 'benign_quote_en_holdout', 'benign_email_es_holdout', 'benign_bank_es_holdout', 'benign_bank_en_holdout', 'benign_quoted_injection_en_cal', 'attack_invoice_payment_override_es_holdout']),
+  "caseId": zod.enum(['attack_email_en_cal', 'attack_bank_es_cal', 'benign_invoice_en_cal', 'benign_quote_es_cal', 'benign_email_en_cal', 'benign_bank_es_cal', 'attack_email_es_holdout', 'attack_bank_en_holdout', 'benign_invoice_es_holdout', 'benign_quote_en_holdout', 'benign_email_es_holdout', 'benign_bank_es_holdout', 'benign_bank_en_holdout', 'benign_quoted_injection_en_cal', 'attack_invoice_payment_override_es_holdout', 'benign_document_en_holdout', 'benign_document_es_holdout', 'benign_email_reply_en_cal', 'attack_document_injection_en_holdout']),
   "split": zod.enum(['calibration', 'holdout']),
   "language": zod.enum(['en', 'es']),
   "label": zod.enum(['attack', 'benign']),
@@ -2330,7 +2332,7 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "toolChoiceMode": zod.literal("auto"),
   "toolCallOrigin": zod.enum(['guardian_qwen_native_markup_adapter', 'runtime_message_tool_calls', 'test_provider_message_tool_calls']),
   "finishReason": zod.enum(['tool_calls', 'stop', 'length']),
-  "tool": zod.enum(['consult_synthetic_invoice', 'send_email_simulated', 'request_bank_account_change', 'unknown']),
+  "tool": zod.enum(['consult_synthetic_invoice', 'read_synthetic_document', 'read_synthetic_email', 'send_email_simulated', 'request_bank_account_change', 'unknown']),
   "argumentsValid": zod.boolean(),
   "argumentsSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuitePolicyComparisonPairsItemArgumentsSha256RegExp),
   "proposalSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuitePolicyComparisonPairsItemProposalSha256RegExp),
@@ -2467,7 +2469,7 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "toolChoice": zod.enum(['specific_function', 'auto']),
   "toolCallObserved": zod.boolean(),
   "parserFinishReason": zod.enum(['tool_calls', 'stop', 'length']),
-  "toolName": zod.enum(['consult_synthetic_invoice', 'send_email_simulated', 'request_bank_account_change', 'unknown', 'none']),
+  "toolName": zod.enum(['consult_synthetic_invoice', 'read_synthetic_document', 'read_synthetic_email', 'send_email_simulated', 'request_bank_account_change', 'unknown', 'none']),
   "argumentsValid": zod.boolean(),
   "authorization": zod.enum(['allowed_for_synthetic_read', 'allowed_for_synthetic_tool', 'denied', 'not_observed']),
   "fakeExecution": zod.boolean(),
@@ -2494,7 +2496,7 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "interpretation": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultFourOneInterpretationMax),
   "evidenceSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultFourOneEvidenceSha256RegExp)
 }).and(zod.object({
-  "engineVersion": zod.enum(['guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1', 'guardian-autonomous-tool-selection-v1.2', 'guardian-autonomous-tool-selection-v1.3']),
+  "engineVersion": zod.enum(['guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1', 'guardian-autonomous-tool-selection-v1.2', 'guardian-autonomous-tool-selection-v1.3', 'guardian-autonomous-tool-selection-v1.4']),
   "profileId": zod.literal("guardian-local-llm-autonomous-tools-v1"),
   "taskId": zod.literal("autonomous_tool_selection_en_es_v1")
 })),zod.null()]),
@@ -3723,7 +3725,7 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "toolTrace": zod.array(zod.object({
   "toolCallId": zod.enum(['invoice-read-1', 'model-proposal-1']),
   "source": zod.enum(['local_harness', 'model_json_emulation']),
-  "tool": zod.enum(['consult_synthetic_invoice', 'send_email_simulated', 'request_bank_account_change', 'unknown']),
+  "tool": zod.enum(['consult_synthetic_invoice', 'read_synthetic_document', 'read_synthetic_email', 'send_email_simulated', 'request_bank_account_change', 'unknown']),
   "phase": zod.enum(['proposal', 'authorization_attempt', 'executed', 'denied']),
   "authorization": zod.enum(['not_checked', 'allowed', 'denied']),
   "executed": zod.boolean(),
@@ -3731,7 +3733,7 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "stateChanged": zod.literal(false),
   "externalSideEffect": zod.literal(false),
   "argumentsSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultTwoToolTraceItemArgumentsSha256RegExp),
-  "resultCode": zod.enum(['authorization_pending', 'synthetic_invoice_returned', 'invoice_not_authorized', 'authorized_for_synthetic_execution', 'model_action_proposed_not_native_calling', 'simulated_email_prepared', 'simulated_email_denied', 'simulated_change_request_pending', 'bank_change_request_denied', 'unknown_tool_rejected'])
+  "resultCode": zod.enum(['authorization_pending', 'synthetic_invoice_returned', 'invoice_not_authorized', 'synthetic_document_returned', 'document_not_authorized', 'synthetic_email_returned', 'email_not_authorized', 'authorized_for_synthetic_execution', 'model_action_proposed_not_native_calling', 'simulated_email_prepared', 'simulated_email_denied', 'simulated_change_request_pending', 'bank_change_request_denied', 'unknown_tool_rejected'])
 })).max(createWorkspaceAiAssessmentLabJobResponseResultTwoToolTraceMax),
   "toolSummary": zod.object({
   "harnessToolExecutions": zod.literal(1),
@@ -3768,7 +3770,7 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "evidenceVersion": zod.literal(1),
   "source": zod.enum(['isolated_local_lab']),
   "engine": zod.enum(['local_llm_lab']),
-  "engineVersion": zod.enum(['guardian-native-tool-suite-v1', 'guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1', 'guardian-autonomous-tool-selection-v1.2', 'guardian-autonomous-tool-selection-v1.3']),
+  "engineVersion": zod.enum(['guardian-native-tool-suite-v1', 'guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1', 'guardian-autonomous-tool-selection-v1.2', 'guardian-autonomous-tool-selection-v1.3', 'guardian-autonomous-tool-selection-v1.4']),
   "profileId": zod.enum(['guardian-local-llm-native-tools-v1', 'guardian-local-llm-autonomous-tools-v1']),
   "executionMode": zod.enum(['real_local_llm_inference']),
   "toolInvocationMode": zod.enum(['native_tool_calls']),
@@ -3824,10 +3826,10 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
 })
 }),
   "toolTrace": zod.array(zod.object({
-  "caseId": zod.enum(['capability_preflight', 'attack_email_en_cal', 'attack_bank_es_cal', 'benign_invoice_en_cal', 'benign_quote_es_cal', 'benign_email_en_cal', 'benign_bank_es_cal', 'attack_email_es_holdout', 'attack_bank_en_holdout', 'benign_invoice_es_holdout', 'benign_quote_en_holdout', 'benign_email_es_holdout', 'benign_bank_es_holdout', 'benign_bank_en_holdout', 'benign_quoted_injection_en_cal', 'attack_invoice_payment_override_es_holdout']),
+  "caseId": zod.enum(['capability_preflight', 'attack_email_en_cal', 'attack_bank_es_cal', 'benign_invoice_en_cal', 'benign_quote_es_cal', 'benign_email_en_cal', 'benign_bank_es_cal', 'attack_email_es_holdout', 'attack_bank_en_holdout', 'benign_invoice_es_holdout', 'benign_quote_en_holdout', 'benign_email_es_holdout', 'benign_bank_es_holdout', 'benign_bank_en_holdout', 'benign_quoted_injection_en_cal', 'attack_invoice_payment_override_es_holdout', 'benign_document_en_holdout', 'benign_document_es_holdout', 'benign_email_reply_en_cal', 'attack_document_injection_en_holdout']),
   "toolCallId": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultThreeOneToolTraceItemToolCallIdMax),
   "source": zod.enum(['native_tool_call']),
-  "tool": zod.enum(['consult_synthetic_invoice', 'send_email_simulated', 'request_bank_account_change', 'unknown']),
+  "tool": zod.enum(['consult_synthetic_invoice', 'read_synthetic_document', 'read_synthetic_email', 'send_email_simulated', 'request_bank_account_change', 'unknown']),
   "phase": zod.enum(['proposal', 'authorization_attempt', 'executed', 'denied']),
   "authorization": zod.enum(['not_checked', 'allowed', 'denied']),
   "executed": zod.boolean(),
@@ -3838,8 +3840,8 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "resultCode": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultThreeOneToolTraceItemResultCodeMax)
 })).max(createWorkspaceAiAssessmentLabJobResponseResultThreeOneToolTraceMax),
   "nativeToolSuite": zod.object({
-  "suiteId": zod.enum(['guardian-native-tool-call-en-es-v1', 'guardian-autonomous-tool-selection-en-es-v1']),
-  "suiteVersion": zod.enum(['1.0.0', '1.1.0', '1.2.0', '1.3.0', '1.4.0']),
+  "suiteId": zod.enum(['guardian-native-tool-call-en-es-v1', 'guardian-autonomous-tool-selection-en-es-v1', 'guardian-autonomous-tool-selection-email-documents-en-es-v1']),
+  "suiteVersion": zod.enum(['1.0.0', '1.1.0', '1.2.0', '1.3.0', '1.4.0', '1.5.0']),
   "sampleCount": zod.union([zod.literal(6),zod.literal(12),zod.literal(14)]),
   "splitSampleCounts": zod.object({
   "calibration": zod.union([zod.literal(3),zod.literal(6),zod.literal(7)]),
@@ -3852,7 +3854,8 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "attackCases": zod.union([zod.literal(0),zod.literal(4),zod.literal(5)]),
   "benignCases": zod.union([zod.literal(6),zod.literal(8),zod.literal(9)]),
   "caseEvidence": zod.array(zod.object({
-  "caseId": zod.enum(['attack_email_en_cal', 'attack_bank_es_cal', 'benign_invoice_en_cal', 'benign_quote_es_cal', 'benign_email_en_cal', 'benign_bank_es_cal', 'attack_email_es_holdout', 'attack_bank_en_holdout', 'benign_invoice_es_holdout', 'benign_quote_en_holdout', 'benign_email_es_holdout', 'benign_bank_es_holdout', 'benign_bank_en_holdout', 'benign_quoted_injection_en_cal', 'attack_invoice_payment_override_es_holdout']),
+  "caseId": zod.enum(['attack_email_en_cal', 'attack_bank_es_cal', 'benign_invoice_en_cal', 'benign_quote_es_cal', 'benign_email_en_cal', 'benign_bank_es_cal', 'attack_email_es_holdout', 'attack_bank_en_holdout', 'benign_invoice_es_holdout', 'benign_quote_en_holdout', 'benign_email_es_holdout', 'benign_bank_es_holdout', 'benign_bank_en_holdout', 'benign_quoted_injection_en_cal', 'attack_invoice_payment_override_es_holdout', 'benign_document_en_holdout', 'benign_document_es_holdout', 'benign_email_reply_en_cal', 'attack_document_injection_en_holdout']),
+  "agentDomain": zod.enum(['email', 'documents', 'finance']).optional(),
   "split": zod.enum(['calibration', 'holdout']),
   "language": zod.enum(['en', 'es']),
   "label": zod.enum(['attack', 'benign']),
@@ -3865,7 +3868,7 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "inconclusiveReason": zod.union([zod.literal('completion_token_limit'),zod.literal(null)]).nullable(),
   "promptSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteCaseEvidenceItemPromptSha256RegExp),
   "nativeToolCallCount": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteCaseEvidenceItemNativeToolCallCountMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteCaseEvidenceItemNativeToolCallCountMax),
-  "proposedTools": zod.array(zod.enum(['consult_synthetic_invoice', 'send_email_simulated', 'request_bank_account_change', 'unknown'])).max(createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteCaseEvidenceItemProposedToolsMax),
+  "proposedTools": zod.array(zod.enum(['consult_synthetic_invoice', 'read_synthetic_document', 'read_synthetic_email', 'send_email_simulated', 'request_bank_account_change', 'unknown'])).max(createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteCaseEvidenceItemProposedToolsMax),
   "argumentsValid": zod.boolean().optional(),
   "policyAllowed": zod.boolean().optional(),
   "simulatedExecution": zod.boolean().optional(),
@@ -3975,7 +3978,7 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "pairedProposalCount": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuitePolicyComparisonPairedProposalCountMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuitePolicyComparisonPairedProposalCountMax),
   "unpairedProposalCount": zod.literal(0),
   "pairs": zod.array(zod.object({
-  "caseId": zod.enum(['attack_email_en_cal', 'attack_bank_es_cal', 'benign_invoice_en_cal', 'benign_quote_es_cal', 'benign_email_en_cal', 'benign_bank_es_cal', 'attack_email_es_holdout', 'attack_bank_en_holdout', 'benign_invoice_es_holdout', 'benign_quote_en_holdout', 'benign_email_es_holdout', 'benign_bank_es_holdout', 'benign_bank_en_holdout', 'benign_quoted_injection_en_cal', 'attack_invoice_payment_override_es_holdout']),
+  "caseId": zod.enum(['attack_email_en_cal', 'attack_bank_es_cal', 'benign_invoice_en_cal', 'benign_quote_es_cal', 'benign_email_en_cal', 'benign_bank_es_cal', 'attack_email_es_holdout', 'attack_bank_en_holdout', 'benign_invoice_es_holdout', 'benign_quote_en_holdout', 'benign_email_es_holdout', 'benign_bank_es_holdout', 'benign_bank_en_holdout', 'benign_quoted_injection_en_cal', 'attack_invoice_payment_override_es_holdout', 'benign_document_en_holdout', 'benign_document_es_holdout', 'benign_email_reply_en_cal', 'attack_document_injection_en_holdout']),
   "split": zod.enum(['calibration', 'holdout']),
   "language": zod.enum(['en', 'es']),
   "label": zod.enum(['attack', 'benign']),
@@ -3983,7 +3986,7 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "toolChoiceMode": zod.literal("auto"),
   "toolCallOrigin": zod.enum(['guardian_qwen_native_markup_adapter', 'runtime_message_tool_calls', 'test_provider_message_tool_calls']),
   "finishReason": zod.enum(['tool_calls', 'stop', 'length']),
-  "tool": zod.enum(['consult_synthetic_invoice', 'send_email_simulated', 'request_bank_account_change', 'unknown']),
+  "tool": zod.enum(['consult_synthetic_invoice', 'read_synthetic_document', 'read_synthetic_email', 'send_email_simulated', 'request_bank_account_change', 'unknown']),
   "argumentsValid": zod.boolean(),
   "argumentsSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuitePolicyComparisonPairsItemArgumentsSha256RegExp),
   "proposalSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuitePolicyComparisonPairsItemProposalSha256RegExp),
@@ -4120,7 +4123,7 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "toolChoice": zod.enum(['specific_function', 'auto']),
   "toolCallObserved": zod.boolean(),
   "parserFinishReason": zod.enum(['tool_calls', 'stop', 'length']),
-  "toolName": zod.enum(['consult_synthetic_invoice', 'send_email_simulated', 'request_bank_account_change', 'unknown', 'none']),
+  "toolName": zod.enum(['consult_synthetic_invoice', 'read_synthetic_document', 'read_synthetic_email', 'send_email_simulated', 'request_bank_account_change', 'unknown', 'none']),
   "argumentsValid": zod.boolean(),
   "authorization": zod.enum(['allowed_for_synthetic_read', 'allowed_for_synthetic_tool', 'denied', 'not_observed']),
   "fakeExecution": zod.boolean(),
@@ -4154,7 +4157,7 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "evidenceVersion": zod.literal(1),
   "source": zod.enum(['isolated_local_lab']),
   "engine": zod.enum(['local_llm_lab']),
-  "engineVersion": zod.enum(['guardian-native-tool-suite-v1', 'guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1', 'guardian-autonomous-tool-selection-v1.2', 'guardian-autonomous-tool-selection-v1.3']),
+  "engineVersion": zod.enum(['guardian-native-tool-suite-v1', 'guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1', 'guardian-autonomous-tool-selection-v1.2', 'guardian-autonomous-tool-selection-v1.3', 'guardian-autonomous-tool-selection-v1.4']),
   "profileId": zod.enum(['guardian-local-llm-native-tools-v1', 'guardian-local-llm-autonomous-tools-v1']),
   "executionMode": zod.enum(['real_local_llm_inference']),
   "toolInvocationMode": zod.enum(['native_tool_calls']),
@@ -4210,10 +4213,10 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
 })
 }),
   "toolTrace": zod.array(zod.object({
-  "caseId": zod.enum(['capability_preflight', 'attack_email_en_cal', 'attack_bank_es_cal', 'benign_invoice_en_cal', 'benign_quote_es_cal', 'benign_email_en_cal', 'benign_bank_es_cal', 'attack_email_es_holdout', 'attack_bank_en_holdout', 'benign_invoice_es_holdout', 'benign_quote_en_holdout', 'benign_email_es_holdout', 'benign_bank_es_holdout', 'benign_bank_en_holdout', 'benign_quoted_injection_en_cal', 'attack_invoice_payment_override_es_holdout']),
+  "caseId": zod.enum(['capability_preflight', 'attack_email_en_cal', 'attack_bank_es_cal', 'benign_invoice_en_cal', 'benign_quote_es_cal', 'benign_email_en_cal', 'benign_bank_es_cal', 'attack_email_es_holdout', 'attack_bank_en_holdout', 'benign_invoice_es_holdout', 'benign_quote_en_holdout', 'benign_email_es_holdout', 'benign_bank_es_holdout', 'benign_bank_en_holdout', 'benign_quoted_injection_en_cal', 'attack_invoice_payment_override_es_holdout', 'benign_document_en_holdout', 'benign_document_es_holdout', 'benign_email_reply_en_cal', 'attack_document_injection_en_holdout']),
   "toolCallId": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultFourOneToolTraceItemToolCallIdMax),
   "source": zod.enum(['native_tool_call']),
-  "tool": zod.enum(['consult_synthetic_invoice', 'send_email_simulated', 'request_bank_account_change', 'unknown']),
+  "tool": zod.enum(['consult_synthetic_invoice', 'read_synthetic_document', 'read_synthetic_email', 'send_email_simulated', 'request_bank_account_change', 'unknown']),
   "phase": zod.enum(['proposal', 'authorization_attempt', 'executed', 'denied']),
   "authorization": zod.enum(['not_checked', 'allowed', 'denied']),
   "executed": zod.boolean(),
@@ -4224,8 +4227,8 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "resultCode": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultFourOneToolTraceItemResultCodeMax)
 })).max(createWorkspaceAiAssessmentLabJobResponseResultFourOneToolTraceMax),
   "nativeToolSuite": zod.object({
-  "suiteId": zod.enum(['guardian-native-tool-call-en-es-v1', 'guardian-autonomous-tool-selection-en-es-v1']),
-  "suiteVersion": zod.enum(['1.0.0', '1.1.0', '1.2.0', '1.3.0', '1.4.0']),
+  "suiteId": zod.enum(['guardian-native-tool-call-en-es-v1', 'guardian-autonomous-tool-selection-en-es-v1', 'guardian-autonomous-tool-selection-email-documents-en-es-v1']),
+  "suiteVersion": zod.enum(['1.0.0', '1.1.0', '1.2.0', '1.3.0', '1.4.0', '1.5.0']),
   "sampleCount": zod.union([zod.literal(6),zod.literal(12),zod.literal(14)]),
   "splitSampleCounts": zod.object({
   "calibration": zod.union([zod.literal(3),zod.literal(6),zod.literal(7)]),
@@ -4238,7 +4241,8 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "attackCases": zod.union([zod.literal(0),zod.literal(4),zod.literal(5)]),
   "benignCases": zod.union([zod.literal(6),zod.literal(8),zod.literal(9)]),
   "caseEvidence": zod.array(zod.object({
-  "caseId": zod.enum(['attack_email_en_cal', 'attack_bank_es_cal', 'benign_invoice_en_cal', 'benign_quote_es_cal', 'benign_email_en_cal', 'benign_bank_es_cal', 'attack_email_es_holdout', 'attack_bank_en_holdout', 'benign_invoice_es_holdout', 'benign_quote_en_holdout', 'benign_email_es_holdout', 'benign_bank_es_holdout', 'benign_bank_en_holdout', 'benign_quoted_injection_en_cal', 'attack_invoice_payment_override_es_holdout']),
+  "caseId": zod.enum(['attack_email_en_cal', 'attack_bank_es_cal', 'benign_invoice_en_cal', 'benign_quote_es_cal', 'benign_email_en_cal', 'benign_bank_es_cal', 'attack_email_es_holdout', 'attack_bank_en_holdout', 'benign_invoice_es_holdout', 'benign_quote_en_holdout', 'benign_email_es_holdout', 'benign_bank_es_holdout', 'benign_bank_en_holdout', 'benign_quoted_injection_en_cal', 'attack_invoice_payment_override_es_holdout', 'benign_document_en_holdout', 'benign_document_es_holdout', 'benign_email_reply_en_cal', 'attack_document_injection_en_holdout']),
+  "agentDomain": zod.enum(['email', 'documents', 'finance']).optional(),
   "split": zod.enum(['calibration', 'holdout']),
   "language": zod.enum(['en', 'es']),
   "label": zod.enum(['attack', 'benign']),
@@ -4251,7 +4255,7 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "inconclusiveReason": zod.union([zod.literal('completion_token_limit'),zod.literal(null)]).nullable(),
   "promptSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteCaseEvidenceItemPromptSha256RegExp),
   "nativeToolCallCount": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteCaseEvidenceItemNativeToolCallCountMin).max(createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteCaseEvidenceItemNativeToolCallCountMax),
-  "proposedTools": zod.array(zod.enum(['consult_synthetic_invoice', 'send_email_simulated', 'request_bank_account_change', 'unknown'])).max(createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteCaseEvidenceItemProposedToolsMax),
+  "proposedTools": zod.array(zod.enum(['consult_synthetic_invoice', 'read_synthetic_document', 'read_synthetic_email', 'send_email_simulated', 'request_bank_account_change', 'unknown'])).max(createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteCaseEvidenceItemProposedToolsMax),
   "argumentsValid": zod.boolean().optional(),
   "policyAllowed": zod.boolean().optional(),
   "simulatedExecution": zod.boolean().optional(),
@@ -4361,7 +4365,7 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "pairedProposalCount": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuitePolicyComparisonPairedProposalCountMin).max(createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuitePolicyComparisonPairedProposalCountMax),
   "unpairedProposalCount": zod.literal(0),
   "pairs": zod.array(zod.object({
-  "caseId": zod.enum(['attack_email_en_cal', 'attack_bank_es_cal', 'benign_invoice_en_cal', 'benign_quote_es_cal', 'benign_email_en_cal', 'benign_bank_es_cal', 'attack_email_es_holdout', 'attack_bank_en_holdout', 'benign_invoice_es_holdout', 'benign_quote_en_holdout', 'benign_email_es_holdout', 'benign_bank_es_holdout', 'benign_bank_en_holdout', 'benign_quoted_injection_en_cal', 'attack_invoice_payment_override_es_holdout']),
+  "caseId": zod.enum(['attack_email_en_cal', 'attack_bank_es_cal', 'benign_invoice_en_cal', 'benign_quote_es_cal', 'benign_email_en_cal', 'benign_bank_es_cal', 'attack_email_es_holdout', 'attack_bank_en_holdout', 'benign_invoice_es_holdout', 'benign_quote_en_holdout', 'benign_email_es_holdout', 'benign_bank_es_holdout', 'benign_bank_en_holdout', 'benign_quoted_injection_en_cal', 'attack_invoice_payment_override_es_holdout', 'benign_document_en_holdout', 'benign_document_es_holdout', 'benign_email_reply_en_cal', 'attack_document_injection_en_holdout']),
   "split": zod.enum(['calibration', 'holdout']),
   "language": zod.enum(['en', 'es']),
   "label": zod.enum(['attack', 'benign']),
@@ -4369,7 +4373,7 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "toolChoiceMode": zod.literal("auto"),
   "toolCallOrigin": zod.enum(['guardian_qwen_native_markup_adapter', 'runtime_message_tool_calls', 'test_provider_message_tool_calls']),
   "finishReason": zod.enum(['tool_calls', 'stop', 'length']),
-  "tool": zod.enum(['consult_synthetic_invoice', 'send_email_simulated', 'request_bank_account_change', 'unknown']),
+  "tool": zod.enum(['consult_synthetic_invoice', 'read_synthetic_document', 'read_synthetic_email', 'send_email_simulated', 'request_bank_account_change', 'unknown']),
   "argumentsValid": zod.boolean(),
   "argumentsSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuitePolicyComparisonPairsItemArgumentsSha256RegExp),
   "proposalSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuitePolicyComparisonPairsItemProposalSha256RegExp),
@@ -4506,7 +4510,7 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "toolChoice": zod.enum(['specific_function', 'auto']),
   "toolCallObserved": zod.boolean(),
   "parserFinishReason": zod.enum(['tool_calls', 'stop', 'length']),
-  "toolName": zod.enum(['consult_synthetic_invoice', 'send_email_simulated', 'request_bank_account_change', 'unknown', 'none']),
+  "toolName": zod.enum(['consult_synthetic_invoice', 'read_synthetic_document', 'read_synthetic_email', 'send_email_simulated', 'request_bank_account_change', 'unknown', 'none']),
   "argumentsValid": zod.boolean(),
   "authorization": zod.enum(['allowed_for_synthetic_read', 'allowed_for_synthetic_tool', 'denied', 'not_observed']),
   "fakeExecution": zod.boolean(),
@@ -4533,7 +4537,7 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "interpretation": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultFourOneInterpretationMax),
   "evidenceSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultFourOneEvidenceSha256RegExp)
 }).and(zod.object({
-  "engineVersion": zod.enum(['guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1', 'guardian-autonomous-tool-selection-v1.2', 'guardian-autonomous-tool-selection-v1.3']),
+  "engineVersion": zod.enum(['guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1', 'guardian-autonomous-tool-selection-v1.2', 'guardian-autonomous-tool-selection-v1.3', 'guardian-autonomous-tool-selection-v1.4']),
   "profileId": zod.literal("guardian-local-llm-autonomous-tools-v1"),
   "taskId": zod.literal("autonomous_tool_selection_en_es_v1")
 })),zod.null()]),
@@ -5751,7 +5755,7 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "toolTrace": zod.array(zod.object({
   "toolCallId": zod.enum(['invoice-read-1', 'model-proposal-1']),
   "source": zod.enum(['local_harness', 'model_json_emulation']),
-  "tool": zod.enum(['consult_synthetic_invoice', 'send_email_simulated', 'request_bank_account_change', 'unknown']),
+  "tool": zod.enum(['consult_synthetic_invoice', 'read_synthetic_document', 'read_synthetic_email', 'send_email_simulated', 'request_bank_account_change', 'unknown']),
   "phase": zod.enum(['proposal', 'authorization_attempt', 'executed', 'denied']),
   "authorization": zod.enum(['not_checked', 'allowed', 'denied']),
   "executed": zod.boolean(),
@@ -5759,7 +5763,7 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "stateChanged": zod.literal(false),
   "externalSideEffect": zod.literal(false),
   "argumentsSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultTwoToolTraceItemArgumentsSha256RegExp),
-  "resultCode": zod.enum(['authorization_pending', 'synthetic_invoice_returned', 'invoice_not_authorized', 'authorized_for_synthetic_execution', 'model_action_proposed_not_native_calling', 'simulated_email_prepared', 'simulated_email_denied', 'simulated_change_request_pending', 'bank_change_request_denied', 'unknown_tool_rejected'])
+  "resultCode": zod.enum(['authorization_pending', 'synthetic_invoice_returned', 'invoice_not_authorized', 'synthetic_document_returned', 'document_not_authorized', 'synthetic_email_returned', 'email_not_authorized', 'authorized_for_synthetic_execution', 'model_action_proposed_not_native_calling', 'simulated_email_prepared', 'simulated_email_denied', 'simulated_change_request_pending', 'bank_change_request_denied', 'unknown_tool_rejected'])
 })).max(retryWorkspaceAiAssessmentLabJobResponseResultTwoToolTraceMax),
   "toolSummary": zod.object({
   "harnessToolExecutions": zod.literal(1),
@@ -5796,7 +5800,7 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "evidenceVersion": zod.literal(1),
   "source": zod.enum(['isolated_local_lab']),
   "engine": zod.enum(['local_llm_lab']),
-  "engineVersion": zod.enum(['guardian-native-tool-suite-v1', 'guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1', 'guardian-autonomous-tool-selection-v1.2', 'guardian-autonomous-tool-selection-v1.3']),
+  "engineVersion": zod.enum(['guardian-native-tool-suite-v1', 'guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1', 'guardian-autonomous-tool-selection-v1.2', 'guardian-autonomous-tool-selection-v1.3', 'guardian-autonomous-tool-selection-v1.4']),
   "profileId": zod.enum(['guardian-local-llm-native-tools-v1', 'guardian-local-llm-autonomous-tools-v1']),
   "executionMode": zod.enum(['real_local_llm_inference']),
   "toolInvocationMode": zod.enum(['native_tool_calls']),
@@ -5852,10 +5856,10 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
 })
 }),
   "toolTrace": zod.array(zod.object({
-  "caseId": zod.enum(['capability_preflight', 'attack_email_en_cal', 'attack_bank_es_cal', 'benign_invoice_en_cal', 'benign_quote_es_cal', 'benign_email_en_cal', 'benign_bank_es_cal', 'attack_email_es_holdout', 'attack_bank_en_holdout', 'benign_invoice_es_holdout', 'benign_quote_en_holdout', 'benign_email_es_holdout', 'benign_bank_es_holdout', 'benign_bank_en_holdout', 'benign_quoted_injection_en_cal', 'attack_invoice_payment_override_es_holdout']),
+  "caseId": zod.enum(['capability_preflight', 'attack_email_en_cal', 'attack_bank_es_cal', 'benign_invoice_en_cal', 'benign_quote_es_cal', 'benign_email_en_cal', 'benign_bank_es_cal', 'attack_email_es_holdout', 'attack_bank_en_holdout', 'benign_invoice_es_holdout', 'benign_quote_en_holdout', 'benign_email_es_holdout', 'benign_bank_es_holdout', 'benign_bank_en_holdout', 'benign_quoted_injection_en_cal', 'attack_invoice_payment_override_es_holdout', 'benign_document_en_holdout', 'benign_document_es_holdout', 'benign_email_reply_en_cal', 'attack_document_injection_en_holdout']),
   "toolCallId": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultThreeOneToolTraceItemToolCallIdMax),
   "source": zod.enum(['native_tool_call']),
-  "tool": zod.enum(['consult_synthetic_invoice', 'send_email_simulated', 'request_bank_account_change', 'unknown']),
+  "tool": zod.enum(['consult_synthetic_invoice', 'read_synthetic_document', 'read_synthetic_email', 'send_email_simulated', 'request_bank_account_change', 'unknown']),
   "phase": zod.enum(['proposal', 'authorization_attempt', 'executed', 'denied']),
   "authorization": zod.enum(['not_checked', 'allowed', 'denied']),
   "executed": zod.boolean(),
@@ -5866,8 +5870,8 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "resultCode": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultThreeOneToolTraceItemResultCodeMax)
 })).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeOneToolTraceMax),
   "nativeToolSuite": zod.object({
-  "suiteId": zod.enum(['guardian-native-tool-call-en-es-v1', 'guardian-autonomous-tool-selection-en-es-v1']),
-  "suiteVersion": zod.enum(['1.0.0', '1.1.0', '1.2.0', '1.3.0', '1.4.0']),
+  "suiteId": zod.enum(['guardian-native-tool-call-en-es-v1', 'guardian-autonomous-tool-selection-en-es-v1', 'guardian-autonomous-tool-selection-email-documents-en-es-v1']),
+  "suiteVersion": zod.enum(['1.0.0', '1.1.0', '1.2.0', '1.3.0', '1.4.0', '1.5.0']),
   "sampleCount": zod.union([zod.literal(6),zod.literal(12),zod.literal(14)]),
   "splitSampleCounts": zod.object({
   "calibration": zod.union([zod.literal(3),zod.literal(6),zod.literal(7)]),
@@ -5880,7 +5884,8 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "attackCases": zod.union([zod.literal(0),zod.literal(4),zod.literal(5)]),
   "benignCases": zod.union([zod.literal(6),zod.literal(8),zod.literal(9)]),
   "caseEvidence": zod.array(zod.object({
-  "caseId": zod.enum(['attack_email_en_cal', 'attack_bank_es_cal', 'benign_invoice_en_cal', 'benign_quote_es_cal', 'benign_email_en_cal', 'benign_bank_es_cal', 'attack_email_es_holdout', 'attack_bank_en_holdout', 'benign_invoice_es_holdout', 'benign_quote_en_holdout', 'benign_email_es_holdout', 'benign_bank_es_holdout', 'benign_bank_en_holdout', 'benign_quoted_injection_en_cal', 'attack_invoice_payment_override_es_holdout']),
+  "caseId": zod.enum(['attack_email_en_cal', 'attack_bank_es_cal', 'benign_invoice_en_cal', 'benign_quote_es_cal', 'benign_email_en_cal', 'benign_bank_es_cal', 'attack_email_es_holdout', 'attack_bank_en_holdout', 'benign_invoice_es_holdout', 'benign_quote_en_holdout', 'benign_email_es_holdout', 'benign_bank_es_holdout', 'benign_bank_en_holdout', 'benign_quoted_injection_en_cal', 'attack_invoice_payment_override_es_holdout', 'benign_document_en_holdout', 'benign_document_es_holdout', 'benign_email_reply_en_cal', 'attack_document_injection_en_holdout']),
+  "agentDomain": zod.enum(['email', 'documents', 'finance']).optional(),
   "split": zod.enum(['calibration', 'holdout']),
   "language": zod.enum(['en', 'es']),
   "label": zod.enum(['attack', 'benign']),
@@ -5893,7 +5898,7 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "inconclusiveReason": zod.union([zod.literal('completion_token_limit'),zod.literal(null)]).nullable(),
   "promptSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteCaseEvidenceItemPromptSha256RegExp),
   "nativeToolCallCount": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteCaseEvidenceItemNativeToolCallCountMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteCaseEvidenceItemNativeToolCallCountMax),
-  "proposedTools": zod.array(zod.enum(['consult_synthetic_invoice', 'send_email_simulated', 'request_bank_account_change', 'unknown'])).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteCaseEvidenceItemProposedToolsMax),
+  "proposedTools": zod.array(zod.enum(['consult_synthetic_invoice', 'read_synthetic_document', 'read_synthetic_email', 'send_email_simulated', 'request_bank_account_change', 'unknown'])).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteCaseEvidenceItemProposedToolsMax),
   "argumentsValid": zod.boolean().optional(),
   "policyAllowed": zod.boolean().optional(),
   "simulatedExecution": zod.boolean().optional(),
@@ -6003,7 +6008,7 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "pairedProposalCount": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuitePolicyComparisonPairedProposalCountMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuitePolicyComparisonPairedProposalCountMax),
   "unpairedProposalCount": zod.literal(0),
   "pairs": zod.array(zod.object({
-  "caseId": zod.enum(['attack_email_en_cal', 'attack_bank_es_cal', 'benign_invoice_en_cal', 'benign_quote_es_cal', 'benign_email_en_cal', 'benign_bank_es_cal', 'attack_email_es_holdout', 'attack_bank_en_holdout', 'benign_invoice_es_holdout', 'benign_quote_en_holdout', 'benign_email_es_holdout', 'benign_bank_es_holdout', 'benign_bank_en_holdout', 'benign_quoted_injection_en_cal', 'attack_invoice_payment_override_es_holdout']),
+  "caseId": zod.enum(['attack_email_en_cal', 'attack_bank_es_cal', 'benign_invoice_en_cal', 'benign_quote_es_cal', 'benign_email_en_cal', 'benign_bank_es_cal', 'attack_email_es_holdout', 'attack_bank_en_holdout', 'benign_invoice_es_holdout', 'benign_quote_en_holdout', 'benign_email_es_holdout', 'benign_bank_es_holdout', 'benign_bank_en_holdout', 'benign_quoted_injection_en_cal', 'attack_invoice_payment_override_es_holdout', 'benign_document_en_holdout', 'benign_document_es_holdout', 'benign_email_reply_en_cal', 'attack_document_injection_en_holdout']),
   "split": zod.enum(['calibration', 'holdout']),
   "language": zod.enum(['en', 'es']),
   "label": zod.enum(['attack', 'benign']),
@@ -6011,7 +6016,7 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "toolChoiceMode": zod.literal("auto"),
   "toolCallOrigin": zod.enum(['guardian_qwen_native_markup_adapter', 'runtime_message_tool_calls', 'test_provider_message_tool_calls']),
   "finishReason": zod.enum(['tool_calls', 'stop', 'length']),
-  "tool": zod.enum(['consult_synthetic_invoice', 'send_email_simulated', 'request_bank_account_change', 'unknown']),
+  "tool": zod.enum(['consult_synthetic_invoice', 'read_synthetic_document', 'read_synthetic_email', 'send_email_simulated', 'request_bank_account_change', 'unknown']),
   "argumentsValid": zod.boolean(),
   "argumentsSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuitePolicyComparisonPairsItemArgumentsSha256RegExp),
   "proposalSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuitePolicyComparisonPairsItemProposalSha256RegExp),
@@ -6148,7 +6153,7 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "toolChoice": zod.enum(['specific_function', 'auto']),
   "toolCallObserved": zod.boolean(),
   "parserFinishReason": zod.enum(['tool_calls', 'stop', 'length']),
-  "toolName": zod.enum(['consult_synthetic_invoice', 'send_email_simulated', 'request_bank_account_change', 'unknown', 'none']),
+  "toolName": zod.enum(['consult_synthetic_invoice', 'read_synthetic_document', 'read_synthetic_email', 'send_email_simulated', 'request_bank_account_change', 'unknown', 'none']),
   "argumentsValid": zod.boolean(),
   "authorization": zod.enum(['allowed_for_synthetic_read', 'allowed_for_synthetic_tool', 'denied', 'not_observed']),
   "fakeExecution": zod.boolean(),
@@ -6182,7 +6187,7 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "evidenceVersion": zod.literal(1),
   "source": zod.enum(['isolated_local_lab']),
   "engine": zod.enum(['local_llm_lab']),
-  "engineVersion": zod.enum(['guardian-native-tool-suite-v1', 'guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1', 'guardian-autonomous-tool-selection-v1.2', 'guardian-autonomous-tool-selection-v1.3']),
+  "engineVersion": zod.enum(['guardian-native-tool-suite-v1', 'guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1', 'guardian-autonomous-tool-selection-v1.2', 'guardian-autonomous-tool-selection-v1.3', 'guardian-autonomous-tool-selection-v1.4']),
   "profileId": zod.enum(['guardian-local-llm-native-tools-v1', 'guardian-local-llm-autonomous-tools-v1']),
   "executionMode": zod.enum(['real_local_llm_inference']),
   "toolInvocationMode": zod.enum(['native_tool_calls']),
@@ -6238,10 +6243,10 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
 })
 }),
   "toolTrace": zod.array(zod.object({
-  "caseId": zod.enum(['capability_preflight', 'attack_email_en_cal', 'attack_bank_es_cal', 'benign_invoice_en_cal', 'benign_quote_es_cal', 'benign_email_en_cal', 'benign_bank_es_cal', 'attack_email_es_holdout', 'attack_bank_en_holdout', 'benign_invoice_es_holdout', 'benign_quote_en_holdout', 'benign_email_es_holdout', 'benign_bank_es_holdout', 'benign_bank_en_holdout', 'benign_quoted_injection_en_cal', 'attack_invoice_payment_override_es_holdout']),
+  "caseId": zod.enum(['capability_preflight', 'attack_email_en_cal', 'attack_bank_es_cal', 'benign_invoice_en_cal', 'benign_quote_es_cal', 'benign_email_en_cal', 'benign_bank_es_cal', 'attack_email_es_holdout', 'attack_bank_en_holdout', 'benign_invoice_es_holdout', 'benign_quote_en_holdout', 'benign_email_es_holdout', 'benign_bank_es_holdout', 'benign_bank_en_holdout', 'benign_quoted_injection_en_cal', 'attack_invoice_payment_override_es_holdout', 'benign_document_en_holdout', 'benign_document_es_holdout', 'benign_email_reply_en_cal', 'attack_document_injection_en_holdout']),
   "toolCallId": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultFourOneToolTraceItemToolCallIdMax),
   "source": zod.enum(['native_tool_call']),
-  "tool": zod.enum(['consult_synthetic_invoice', 'send_email_simulated', 'request_bank_account_change', 'unknown']),
+  "tool": zod.enum(['consult_synthetic_invoice', 'read_synthetic_document', 'read_synthetic_email', 'send_email_simulated', 'request_bank_account_change', 'unknown']),
   "phase": zod.enum(['proposal', 'authorization_attempt', 'executed', 'denied']),
   "authorization": zod.enum(['not_checked', 'allowed', 'denied']),
   "executed": zod.boolean(),
@@ -6252,8 +6257,8 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "resultCode": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultFourOneToolTraceItemResultCodeMax)
 })).max(retryWorkspaceAiAssessmentLabJobResponseResultFourOneToolTraceMax),
   "nativeToolSuite": zod.object({
-  "suiteId": zod.enum(['guardian-native-tool-call-en-es-v1', 'guardian-autonomous-tool-selection-en-es-v1']),
-  "suiteVersion": zod.enum(['1.0.0', '1.1.0', '1.2.0', '1.3.0', '1.4.0']),
+  "suiteId": zod.enum(['guardian-native-tool-call-en-es-v1', 'guardian-autonomous-tool-selection-en-es-v1', 'guardian-autonomous-tool-selection-email-documents-en-es-v1']),
+  "suiteVersion": zod.enum(['1.0.0', '1.1.0', '1.2.0', '1.3.0', '1.4.0', '1.5.0']),
   "sampleCount": zod.union([zod.literal(6),zod.literal(12),zod.literal(14)]),
   "splitSampleCounts": zod.object({
   "calibration": zod.union([zod.literal(3),zod.literal(6),zod.literal(7)]),
@@ -6266,7 +6271,8 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "attackCases": zod.union([zod.literal(0),zod.literal(4),zod.literal(5)]),
   "benignCases": zod.union([zod.literal(6),zod.literal(8),zod.literal(9)]),
   "caseEvidence": zod.array(zod.object({
-  "caseId": zod.enum(['attack_email_en_cal', 'attack_bank_es_cal', 'benign_invoice_en_cal', 'benign_quote_es_cal', 'benign_email_en_cal', 'benign_bank_es_cal', 'attack_email_es_holdout', 'attack_bank_en_holdout', 'benign_invoice_es_holdout', 'benign_quote_en_holdout', 'benign_email_es_holdout', 'benign_bank_es_holdout', 'benign_bank_en_holdout', 'benign_quoted_injection_en_cal', 'attack_invoice_payment_override_es_holdout']),
+  "caseId": zod.enum(['attack_email_en_cal', 'attack_bank_es_cal', 'benign_invoice_en_cal', 'benign_quote_es_cal', 'benign_email_en_cal', 'benign_bank_es_cal', 'attack_email_es_holdout', 'attack_bank_en_holdout', 'benign_invoice_es_holdout', 'benign_quote_en_holdout', 'benign_email_es_holdout', 'benign_bank_es_holdout', 'benign_bank_en_holdout', 'benign_quoted_injection_en_cal', 'attack_invoice_payment_override_es_holdout', 'benign_document_en_holdout', 'benign_document_es_holdout', 'benign_email_reply_en_cal', 'attack_document_injection_en_holdout']),
+  "agentDomain": zod.enum(['email', 'documents', 'finance']).optional(),
   "split": zod.enum(['calibration', 'holdout']),
   "language": zod.enum(['en', 'es']),
   "label": zod.enum(['attack', 'benign']),
@@ -6279,7 +6285,7 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "inconclusiveReason": zod.union([zod.literal('completion_token_limit'),zod.literal(null)]).nullable(),
   "promptSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteCaseEvidenceItemPromptSha256RegExp),
   "nativeToolCallCount": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteCaseEvidenceItemNativeToolCallCountMin).max(retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteCaseEvidenceItemNativeToolCallCountMax),
-  "proposedTools": zod.array(zod.enum(['consult_synthetic_invoice', 'send_email_simulated', 'request_bank_account_change', 'unknown'])).max(retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteCaseEvidenceItemProposedToolsMax),
+  "proposedTools": zod.array(zod.enum(['consult_synthetic_invoice', 'read_synthetic_document', 'read_synthetic_email', 'send_email_simulated', 'request_bank_account_change', 'unknown'])).max(retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteCaseEvidenceItemProposedToolsMax),
   "argumentsValid": zod.boolean().optional(),
   "policyAllowed": zod.boolean().optional(),
   "simulatedExecution": zod.boolean().optional(),
@@ -6389,7 +6395,7 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "pairedProposalCount": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuitePolicyComparisonPairedProposalCountMin).max(retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuitePolicyComparisonPairedProposalCountMax),
   "unpairedProposalCount": zod.literal(0),
   "pairs": zod.array(zod.object({
-  "caseId": zod.enum(['attack_email_en_cal', 'attack_bank_es_cal', 'benign_invoice_en_cal', 'benign_quote_es_cal', 'benign_email_en_cal', 'benign_bank_es_cal', 'attack_email_es_holdout', 'attack_bank_en_holdout', 'benign_invoice_es_holdout', 'benign_quote_en_holdout', 'benign_email_es_holdout', 'benign_bank_es_holdout', 'benign_bank_en_holdout', 'benign_quoted_injection_en_cal', 'attack_invoice_payment_override_es_holdout']),
+  "caseId": zod.enum(['attack_email_en_cal', 'attack_bank_es_cal', 'benign_invoice_en_cal', 'benign_quote_es_cal', 'benign_email_en_cal', 'benign_bank_es_cal', 'attack_email_es_holdout', 'attack_bank_en_holdout', 'benign_invoice_es_holdout', 'benign_quote_en_holdout', 'benign_email_es_holdout', 'benign_bank_es_holdout', 'benign_bank_en_holdout', 'benign_quoted_injection_en_cal', 'attack_invoice_payment_override_es_holdout', 'benign_document_en_holdout', 'benign_document_es_holdout', 'benign_email_reply_en_cal', 'attack_document_injection_en_holdout']),
   "split": zod.enum(['calibration', 'holdout']),
   "language": zod.enum(['en', 'es']),
   "label": zod.enum(['attack', 'benign']),
@@ -6397,7 +6403,7 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "toolChoiceMode": zod.literal("auto"),
   "toolCallOrigin": zod.enum(['guardian_qwen_native_markup_adapter', 'runtime_message_tool_calls', 'test_provider_message_tool_calls']),
   "finishReason": zod.enum(['tool_calls', 'stop', 'length']),
-  "tool": zod.enum(['consult_synthetic_invoice', 'send_email_simulated', 'request_bank_account_change', 'unknown']),
+  "tool": zod.enum(['consult_synthetic_invoice', 'read_synthetic_document', 'read_synthetic_email', 'send_email_simulated', 'request_bank_account_change', 'unknown']),
   "argumentsValid": zod.boolean(),
   "argumentsSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuitePolicyComparisonPairsItemArgumentsSha256RegExp),
   "proposalSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuitePolicyComparisonPairsItemProposalSha256RegExp),
@@ -6534,7 +6540,7 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "toolChoice": zod.enum(['specific_function', 'auto']),
   "toolCallObserved": zod.boolean(),
   "parserFinishReason": zod.enum(['tool_calls', 'stop', 'length']),
-  "toolName": zod.enum(['consult_synthetic_invoice', 'send_email_simulated', 'request_bank_account_change', 'unknown', 'none']),
+  "toolName": zod.enum(['consult_synthetic_invoice', 'read_synthetic_document', 'read_synthetic_email', 'send_email_simulated', 'request_bank_account_change', 'unknown', 'none']),
   "argumentsValid": zod.boolean(),
   "authorization": zod.enum(['allowed_for_synthetic_read', 'allowed_for_synthetic_tool', 'denied', 'not_observed']),
   "fakeExecution": zod.boolean(),
@@ -6561,7 +6567,7 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "interpretation": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultFourOneInterpretationMax),
   "evidenceSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultFourOneEvidenceSha256RegExp)
 }).and(zod.object({
-  "engineVersion": zod.enum(['guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1', 'guardian-autonomous-tool-selection-v1.2', 'guardian-autonomous-tool-selection-v1.3']),
+  "engineVersion": zod.enum(['guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1', 'guardian-autonomous-tool-selection-v1.2', 'guardian-autonomous-tool-selection-v1.3', 'guardian-autonomous-tool-selection-v1.4']),
   "profileId": zod.literal("guardian-local-llm-autonomous-tools-v1"),
   "taskId": zod.literal("autonomous_tool_selection_en_es_v1")
 })),zod.null()]),

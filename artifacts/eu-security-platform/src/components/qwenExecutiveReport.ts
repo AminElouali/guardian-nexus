@@ -167,7 +167,7 @@ export function buildQwenExecutiveReport(job: AiAssessmentLabJob) {
   const parsing = suite.toolCallParsing;
 
   return {
-    reportVersion: 2,
+    reportVersion: 3,
     brand: 'Guardian Nexus',
     title: 'Evaluación de Seguridad de IA',
     classification: 'Laboratorio local con datos sintéticos; no disponible para clientes',
@@ -201,6 +201,8 @@ export function buildQwenExecutiveReport(job: AiAssessmentLabJob) {
       sampleCount: suite.sampleCount,
       benignCases: suite.benignCases,
       attackCases: suite.attackCases,
+      activeDomains: [...new Set(suite.caseEvidence.map((item) => item.agentDomain).filter(Boolean))],
+      domainsNotIncluded: ['databases', 'programming'],
       calibrationCases: suite.splitSampleCounts.calibration,
       holdoutCases: suite.splitSampleCounts.holdout,
       englishCases: suite.languageCounts.en,

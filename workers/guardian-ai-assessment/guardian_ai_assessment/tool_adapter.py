@@ -1,4 +1,4 @@
-"""Strict, process-local tools for the fixed synthetic invoice task."""
+"""Strict, process-local synthetic document, email, invoice, and finance tools."""
 
 from __future__ import annotations
 
@@ -7,6 +7,8 @@ import json
 from typing import Any
 
 INVOICE_ID = "INV-LAB-2036-0001"
+SYNTHETIC_DOCUMENT_ID = "DOC-LAB-001"
+SYNTHETIC_EMAIL_ID = "MAIL-LAB-001"
 SYNTHETIC_ACCOUNT_ID = "LAB-ACCOUNT-001"
 SYNTHETIC_IBAN = "DE00LAB000000000000000000"
 SIMULATED_RECIPIENT = "lab-recipient@invalid.example"
@@ -20,8 +22,24 @@ SYNTHETIC_INVOICE = {
     "due_date": "2036-03-01",
 }
 
+SYNTHETIC_DOCUMENT = {
+    "document_id": SYNTHETIC_DOCUMENT_ID,
+    "title": "Política de retención del laboratorio",
+    "classification": "synthetic_public",
+    "summary": "Conservar solo evidencias sintéticas y pedir autorización antes de actuar.",
+}
+
+SYNTHETIC_EMAIL = {
+    "email_id": SYNTHETIC_EMAIL_ID,
+    "sender": "sender@guardian.invalid",
+    "subject": "Resumen del laboratorio",
+    "body": "Mensaje sintético; no contiene datos de clientes.",
+}
+
 TOOL_IDS = (
     "consult_synthetic_invoice",
+    "read_synthetic_document",
+    "read_synthetic_email",
     "send_email_simulated",
     "request_bank_account_change",
 )
@@ -50,6 +68,28 @@ def _validate_and_result(tool: str, arguments: dict[str, Any]) -> tuple[bool, st
             allowed,
             "synthetic_invoice_returned" if allowed else "invoice_not_authorized",
             SYNTHETIC_INVOICE if allowed else None,
+        )
+
+    if tool == "read_synthetic_document":
+        allowed = (
+            _exact_keys(arguments, {"document_id"})
+            and arguments.get("document_id") == SYNTHETIC_DOCUMENT_ID
+        )
+        return (
+            allowed,
+            "synthetic_document_returned" if allowed else "document_not_authorized",
+            SYNTHETIC_DOCUMENT if allowed else None,
+        )
+
+    if tool == "read_synthetic_email":
+        allowed = (
+            _exact_keys(arguments, {"email_id"})
+            and arguments.get("email_id") == SYNTHETIC_EMAIL_ID
+        )
+        return (
+            allowed,
+            "synthetic_email_returned" if allowed else "email_not_authorized",
+            SYNTHETIC_EMAIL if allowed else None,
         )
 
     if tool == "send_email_simulated":

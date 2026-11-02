@@ -1136,6 +1136,8 @@ export type GuardianLocalLlmToolTraceEventTool = typeof GuardianLocalLlmToolTrac
 
 export const GuardianLocalLlmToolTraceEventTool = {
   consult_synthetic_invoice: 'consult_synthetic_invoice',
+  read_synthetic_document: 'read_synthetic_document',
+  read_synthetic_email: 'read_synthetic_email',
   send_email_simulated: 'send_email_simulated',
   request_bank_account_change: 'request_bank_account_change',
   unknown: 'unknown',
@@ -1167,6 +1169,10 @@ export const GuardianLocalLlmToolTraceEventResultCode = {
   authorization_pending: 'authorization_pending',
   synthetic_invoice_returned: 'synthetic_invoice_returned',
   invoice_not_authorized: 'invoice_not_authorized',
+  synthetic_document_returned: 'synthetic_document_returned',
+  document_not_authorized: 'document_not_authorized',
+  synthetic_email_returned: 'synthetic_email_returned',
+  email_not_authorized: 'email_not_authorized',
   authorized_for_synthetic_execution: 'authorized_for_synthetic_execution',
   model_action_proposed_not_native_calling: 'model_action_proposed_not_native_calling',
   simulated_email_prepared: 'simulated_email_prepared',
@@ -1375,6 +1381,7 @@ export const GuardianLocalLlmToolSuiteEvidenceBaseEngineVersion = {
   'guardian-autonomous-tool-selection-v11': 'guardian-autonomous-tool-selection-v1.1',
   'guardian-autonomous-tool-selection-v12': 'guardian-autonomous-tool-selection-v1.2',
   'guardian-autonomous-tool-selection-v13': 'guardian-autonomous-tool-selection-v1.3',
+  'guardian-autonomous-tool-selection-v14': 'guardian-autonomous-tool-selection-v1.4',
 } as const;
 
 export type GuardianLocalLlmToolSuiteEvidenceBaseProfileId = typeof GuardianLocalLlmToolSuiteEvidenceBaseProfileId[keyof typeof GuardianLocalLlmToolSuiteEvidenceBaseProfileId];
@@ -1566,6 +1573,10 @@ export const GuardianNativeToolTraceEventCaseId = {
   benign_bank_en_holdout: 'benign_bank_en_holdout',
   benign_quoted_injection_en_cal: 'benign_quoted_injection_en_cal',
   attack_invoice_payment_override_es_holdout: 'attack_invoice_payment_override_es_holdout',
+  benign_document_en_holdout: 'benign_document_en_holdout',
+  benign_document_es_holdout: 'benign_document_es_holdout',
+  benign_email_reply_en_cal: 'benign_email_reply_en_cal',
+  attack_document_injection_en_holdout: 'attack_document_injection_en_holdout',
 } as const;
 
 export type GuardianNativeToolTraceEventSource = typeof GuardianNativeToolTraceEventSource[keyof typeof GuardianNativeToolTraceEventSource];
@@ -1580,6 +1591,8 @@ export type GuardianNativeToolTraceEventTool = typeof GuardianNativeToolTraceEve
 
 export const GuardianNativeToolTraceEventTool = {
   consult_synthetic_invoice: 'consult_synthetic_invoice',
+  read_synthetic_document: 'read_synthetic_document',
+  read_synthetic_email: 'read_synthetic_email',
   send_email_simulated: 'send_email_simulated',
   request_bank_account_change: 'request_bank_account_change',
   unknown: 'unknown',
@@ -1628,6 +1641,7 @@ export type GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSuiteId = typeof
 export const GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSuiteId = {
   'guardian-native-tool-call-en-es-v1': 'guardian-native-tool-call-en-es-v1',
   'guardian-autonomous-tool-selection-en-es-v1': 'guardian-autonomous-tool-selection-en-es-v1',
+  'guardian-autonomous-tool-selection-email-documents-en-es-v1': 'guardian-autonomous-tool-selection-email-documents-en-es-v1',
 } as const;
 
 export type GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSuiteVersion = typeof GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSuiteVersion[keyof typeof GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSuiteVersion];
@@ -1639,6 +1653,7 @@ export const GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSuiteVersion = 
   '120': '1.2.0',
   '130': '1.3.0',
   '140': '1.4.0',
+  '150': '1.5.0',
 } as const;
 
 export type GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSampleCount = typeof GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSampleCount[keyof typeof GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSampleCount];
@@ -1723,6 +1738,19 @@ export const GuardianNativeToolCaseEvidenceCaseId = {
   benign_bank_en_holdout: 'benign_bank_en_holdout',
   benign_quoted_injection_en_cal: 'benign_quoted_injection_en_cal',
   attack_invoice_payment_override_es_holdout: 'attack_invoice_payment_override_es_holdout',
+  benign_document_en_holdout: 'benign_document_en_holdout',
+  benign_document_es_holdout: 'benign_document_es_holdout',
+  benign_email_reply_en_cal: 'benign_email_reply_en_cal',
+  attack_document_injection_en_holdout: 'attack_document_injection_en_holdout',
+} as const;
+
+export type GuardianNativeToolCaseEvidenceAgentDomain = typeof GuardianNativeToolCaseEvidenceAgentDomain[keyof typeof GuardianNativeToolCaseEvidenceAgentDomain];
+
+
+export const GuardianNativeToolCaseEvidenceAgentDomain = {
+  email: 'email',
+  documents: 'documents',
+  finance: 'finance',
 } as const;
 
 export type GuardianNativeToolCaseEvidenceSplit = typeof GuardianNativeToolCaseEvidenceSplit[keyof typeof GuardianNativeToolCaseEvidenceSplit];
@@ -1783,6 +1811,8 @@ export type GuardianNativeToolCaseEvidenceProposedToolsItem = typeof GuardianNat
 
 export const GuardianNativeToolCaseEvidenceProposedToolsItem = {
   consult_synthetic_invoice: 'consult_synthetic_invoice',
+  read_synthetic_document: 'read_synthetic_document',
+  read_synthetic_email: 'read_synthetic_email',
   send_email_simulated: 'send_email_simulated',
   request_bank_account_change: 'request_bank_account_change',
   unknown: 'unknown',
@@ -1802,6 +1832,7 @@ export const GuardianNativeToolCaseEvidenceTaskOutcomeCode = {
 
 export interface GuardianNativeToolCaseEvidence {
   caseId: GuardianNativeToolCaseEvidenceCaseId;
+  agentDomain?: GuardianNativeToolCaseEvidenceAgentDomain;
   split: GuardianNativeToolCaseEvidenceSplit;
   language: GuardianNativeToolCaseEvidenceLanguage;
   label: GuardianNativeToolCaseEvidenceLabel;
@@ -2048,6 +2079,10 @@ export const GuardianQwenPolicyPairCaseId = {
   benign_bank_en_holdout: 'benign_bank_en_holdout',
   benign_quoted_injection_en_cal: 'benign_quoted_injection_en_cal',
   attack_invoice_payment_override_es_holdout: 'attack_invoice_payment_override_es_holdout',
+  benign_document_en_holdout: 'benign_document_en_holdout',
+  benign_document_es_holdout: 'benign_document_es_holdout',
+  benign_email_reply_en_cal: 'benign_email_reply_en_cal',
+  attack_document_injection_en_holdout: 'attack_document_injection_en_holdout',
 } as const;
 
 export type GuardianQwenPolicyPairSplit = typeof GuardianQwenPolicyPairSplit[keyof typeof GuardianQwenPolicyPairSplit];
@@ -2097,6 +2132,8 @@ export type GuardianQwenPolicyPairTool = typeof GuardianQwenPolicyPairTool[keyof
 
 export const GuardianQwenPolicyPairTool = {
   consult_synthetic_invoice: 'consult_synthetic_invoice',
+  read_synthetic_document: 'read_synthetic_document',
+  read_synthetic_email: 'read_synthetic_email',
   send_email_simulated: 'send_email_simulated',
   request_bank_account_change: 'request_bank_account_change',
   unknown: 'unknown',
@@ -2380,6 +2417,8 @@ export type GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteNativeCapability
 
 export const GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteNativeCapabilityProbeToolName = {
   consult_synthetic_invoice: 'consult_synthetic_invoice',
+  read_synthetic_document: 'read_synthetic_document',
+  read_synthetic_email: 'read_synthetic_email',
   send_email_simulated: 'send_email_simulated',
   request_bank_account_change: 'request_bank_account_change',
   unknown: 'unknown',
@@ -2652,6 +2691,7 @@ export const GuardianLocalLlmAutonomousToolSelectionEvidenceEngineVersion = {
   'guardian-autonomous-tool-selection-v11': 'guardian-autonomous-tool-selection-v1.1',
   'guardian-autonomous-tool-selection-v12': 'guardian-autonomous-tool-selection-v1.2',
   'guardian-autonomous-tool-selection-v13': 'guardian-autonomous-tool-selection-v1.3',
+  'guardian-autonomous-tool-selection-v14': 'guardian-autonomous-tool-selection-v1.4',
 } as const;
 
 export type GuardianLocalLlmAutonomousToolSelectionEvidence = GuardianLocalLlmToolSuiteEvidenceBase & {
