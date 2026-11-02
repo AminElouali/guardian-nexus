@@ -40,6 +40,38 @@ local de paquetes no encontró candidatos Trixie para los paquetes afectados.
   La licencia y las obligaciones de los componentes nativos necesitan revisión
   legal; este informe no concede aprobación legal.
 
+## Revisión oficial de Debian y procedencia — 2 de noviembre de 2026
+
+- Consultamos las páginas oficiales del Debian Security Tracker para los 26
+  avisos críticos/altos y sus paquetes fuente. En Debian 13/Trixie, 25 aparecen
+  como `vulnerable` y PAM como `undetermined`; no hay una versión corregida de
+  Trixie listada para ninguno. Varias correcciones existen en unstable/forky/sid,
+  pero no se incorporaron: mezclar paquetes de esas suites no es una
+  actualización segura de esta imagen Trixie. Las etiquetas Debian (`unimportant`,
+  `no-DSA`) son priorización de Debian y no sustituyen los CVSS ni eliminan los
+  resultados OSV.
+- Excepción de alcance documentada, no de escaneo: Debian indica que la extensión
+  SQLite `zipfile` no se construye en sus binarios. En una ejecución efímera,
+  aislada y de solo lectura de la imagen candidata, SQLite 3.46.1 informó
+  `ENABLE_ZIPFILE=False` y no había ejecutable `sqlite3`. La coincidencia OSV se
+  mantiene visible; esta evidencia solo descarta esa ruta concreta en el binario
+  probado.
+- Los 38 artefactos locales bloqueados coinciden en SHA-256 con los digest
+  publicados en la API oficial de PyPI. La respuesta capturada no incluye
+  attestations para esos archivos. Esto verifica igualdad de archivos con los
+  metadatos de PyPI, no una firma independiente del publicador ni una build
+  reproducible.
+- `langdetect 1.0.9` sigue sin resolución legal: sus metadatos dicen MIT, pero
+  su clasificador y archivo `LICENSE` dicen Apache-2.0. `llama-cpp-python`
+  declara MIT; la sdist coincide con el digest de PyPI, y los archivos MIT de
+  su release y del commit vendorizado de llama.cpp coinciden con los hashes
+  locales. La rueda nativa activa se construyó localmente y no es un artefacto
+  de PyPI; su procedencia de build y la revisión jurídica completa siguen
+  pendientes.
+- No se cambió paquete ni imagen: por ello no hay rebuild, nuevo SBOM ni rescan
+  que puedan presentarse como remediación. Los avisos continúan abiertos salvo
+  la ruta `zipfile` concreta no incluida en el binario.
+
 ## Evidencia trazable
 
 - Imagen candidata: `sha256:e2d13fb48471dbcdc169e421598d5830303717266baf9892a3f11e86eb48e476`.
@@ -48,6 +80,16 @@ local de paquetes no encontró candidatos Trixie para los paquetes afectados.
 - Wheelhouse: 38/38 archivos coinciden con los locks locales; inventario de
   licencias y archivos de licencia:
   `168e1534da55376e403b5587c6d702810f356c0517c6d8a3d64aa5aca4b36ff0`.
+- Comparación con digests de la API oficial de PyPI (38/38 iguales; cero
+  attestations declaradas en la captura): JSON SHA-256
+  `0765397da2d2c663d16fa69f6cf8798fec5f364bc17c9f8a58301d157ddf665f`.
+- Captura de páginas oficiales de Debian, 26 CVE:
+  `b7ec922e37a5951387f2986cfbf3632f09727f2b5db92f98e6a53f8e4696f7ec`;
+  páginas de paquetes fuente:
+  `10d28ad109a83f9d7022a8491e2da875a754f3f40a59b144039fb1e3d176609f`.
+  Evidencia de la prueba efímera `ENABLE_ZIPFILE=False` y su comando:
+  `debian-official-review-20261102/SHA256SUMS.txt`, SHA-256
+  `24a258a49d2bd21e1756ceef796a3f9d3203ae7ab4eb1d704782fc7762410a8c`.
 - Runtime local montado: inventario de hashes de los binarios `.so` y de
   licencias disponibles de MarkupSafe y llama-cpp-python:
   `2fafa80a397f89ccae66fcab113b94cd6475db627e4dc3f6f58f5ca528197873`.

@@ -406,9 +406,73 @@ For all rows above, the candidate runs as UID 65532, with no Linux capabilities,
 `no-new-privileges`, a read-only root filesystem, `network=none`, and bounded
 CPU/memory/PIDs. Those are defense-in-depth controls, not advisory fixes.
 The local Debian database did not provide a Debian 13 fixed event for these
-entries; the prior local apt simulation found no candidate updates. Fix status
-must be reevaluated after an authorized Debian metadata refresh and only closed
-after applying an update, rebuilding, and rescanning.
+entries; the prior local apt simulation found no candidate updates. The
+follow-up check of the official Debian Security Tracker below also found no
+fixed package version for Trixie at its 2026-11-02 capture time. Fix status
+must be reevaluated when Debian publishes a Trixie update and only closed after
+applying it, rebuilding, and rescanning.
+
+### Official Debian Security Tracker review — 2026-11-02
+
+The official Debian Security Tracker was checked for each of the 26 CVEs and
+for the affected source packages. At capture time, **no row had a fixed package
+version available in Debian 13/Trixie**: 25 tracker rows say `vulnerable`; the
+PAM row is `undetermined`. Some fixes are listed for unstable, forky, or sid;
+those are not Trixie packages and were not copied into this Debian 13 image.
+The existing installed binary versions and call-path assessment are in the
+preceding 26-row matrix; this table adds Debian's current suite status and any
+version listed outside Trixie.
+
+| CVE | Debian source / Trixie source version | Trixie status | Version listed fixed outside Trixie / official note |
+| --- | --- | --- | --- |
+| [CVE-2019-1010022](https://security-tracker.debian.org/tracker/CVE-2019-1010022) | glibc `2.41-12+deb13u4` | vulnerable | unstable: unfixed; tracker urgency `unimportant` |
+| [CVE-2019-1010023](https://security-tracker.debian.org/tracker/CVE-2019-1010023) | glibc `2.41-12+deb13u4` | vulnerable | unstable: unfixed; tracker urgency `unimportant` |
+| [CVE-2018-20796](https://security-tracker.debian.org/tracker/CVE-2018-20796) | glibc `2.41-12+deb13u4` | vulnerable | eglibc/glibc unstable: unfixed; tracker urgency `unimportant` |
+| [CVE-2019-9192](https://security-tracker.debian.org/tracker/CVE-2019-9192) | glibc `2.41-12+deb13u4` | vulnerable | eglibc/glibc unstable: unfixed; tracker urgency `unimportant` |
+| [CVE-2026-19499](https://security-tracker.debian.org/tracker/CVE-2026-19499) | glibc `2.41-12+deb13u4` | vulnerable | unstable fixed version `2.43-5`; Trixie marked no-DSA/minor |
+| [CVE-2026-5435](https://security-tracker.debian.org/tracker/CVE-2026-5435) | glibc `2.41-12+deb13u4` | vulnerable | unstable fixed version `2.43-3`; Trixie marked no-DSA/minor |
+| [CVE-2026-84243](https://security-tracker.debian.org/tracker/CVE-2026-84243) | glibc `2.41-12+deb13u4` | vulnerable | unstable: unfixed |
+| [CVE-2026-119374](https://security-tracker.debian.org/tracker/CVE-2026-119374) | sqlite3 `3.46.1-7+deb13u2` | vulnerable | Debian unstable: unfixed; upstream fix is SQLite `3.54.0`, not a Trixie package |
+| [CVE-2026-119373](https://security-tracker.debian.org/tracker/CVE-2026-119373) | sqlite3 `3.46.1-7+deb13u2` | vulnerable | Debian unstable: unfixed; upstream fix is SQLite `3.54.0`, not a Trixie package |
+| [CVE-2026-119379](https://security-tracker.debian.org/tracker/CVE-2026-119379) | sqlite3 `3.46.1-7+deb13u2` | vulnerable | Debian unstable: unfixed; upstream fix is SQLite `3.54.0`, not a Trixie package |
+| [CVE-2026-119586](https://security-tracker.debian.org/tracker/CVE-2026-119586) | sqlite3 `3.46.1-7+deb13u2` | undetermined | no fixed version listed; affected CLI is absent in this worker |
+| [CVE-2025-70873](https://security-tracker.debian.org/tracker/CVE-2025-70873) | sqlite3 `3.46.1-7+deb13u2` | vulnerable | Debian tracker says the zipfile extension is not built for its binary packages; local image reports `ENABLE_ZIPFILE=False` (see runtime probe below) |
+| [CVE-2026-76642](https://security-tracker.debian.org/tracker/CVE-2026-76642) | util-linux `2.41.5-0+deb13u1` | vulnerable | unstable fixed version `2.42.3-1`; Trixie marked no-DSA/minor |
+| [CVE-2026-78408](https://security-tracker.debian.org/tracker/CVE-2026-78408) | util-linux `2.41.5-0+deb13u1` | vulnerable | unstable fixed version `2.42.4-1`; Trixie marked no-DSA/minor |
+| [CVE-2026-78409](https://security-tracker.debian.org/tracker/CVE-2026-78409) | util-linux `2.41.5-0+deb13u1` | vulnerable | unstable fixed version `2.42.3-1`; Trixie marked no-DSA/minor |
+| [CVE-2026-78410](https://security-tracker.debian.org/tracker/CVE-2026-78410) | util-linux `2.41.5-0+deb13u1` | vulnerable | unstable fixed version `2.42.3-1`; Trixie marked no-DSA/minor |
+| [CVE-2026-54369](https://security-tracker.debian.org/tracker/CVE-2026-54369) | acl `2.3.2-2` | vulnerable | unstable fixed version `2.4.0-1`; Debian says fix will go through unstable then a point release, not individual backports |
+| [CVE-2026-54370](https://security-tracker.debian.org/tracker/CVE-2026-54370) | acl `2.3.2-2` | vulnerable | unstable fixed version `2.4.0-1`; Debian says fix will go through unstable then a point release, not individual backports |
+| [CVE-2026-54371](https://security-tracker.debian.org/tracker/CVE-2026-54371) | attr `1:2.5.2-3` | vulnerable | unstable fixed version `1:2.6.0-1`; Debian says fix will go through unstable then a point release, not individual backports |
+| [CVE-2026-85091](https://security-tracker.debian.org/tracker/CVE-2026-85091) | zlib `1:1.3.dfsg+really1.3.1-1` | vulnerable | sid fixed version `1:1.3.dfsg+really1.3.2-4`; not a Trixie package |
+| [CVE-2025-69720](https://security-tracker.debian.org/tracker/CVE-2025-69720) | ncurses `6.5+20250216-2` | vulnerable | unstable fixed threshold `6.6+20251231-1`; current forky/sid version shown as `6.6+20260608-2` |
+| [CVE-2025-8941](https://security-tracker.debian.org/tracker/CVE-2025-8941) | pam `1.7.0-5` | undetermined | no fixed version listed |
+| [CVE-2026-82560](https://security-tracker.debian.org/tracker/CVE-2026-82560) | perl `5.40.1-6+deb13u1` | vulnerable | Debian perl/podlators: unfixed; upstream podlators has release `6.1.1`; Trixie marked no-DSA/minor |
+| [CVE-2026-9538](https://security-tracker.debian.org/tracker/CVE-2026-9538) | perl `5.40.1-6+deb13u1` | vulnerable | unstable fixed version `5.42.3-1`; Trixie fix postponed |
+| [CVE-2026-95619](https://security-tracker.debian.org/tracker/CVE-2026-95619) | gcc-14 `14.2.0-19` | vulnerable | forky/sid fixed version `14.4.0-3`; no Trixie fix listed |
+| [CVE-2026-102010](https://security-tracker.debian.org/tracker/CVE-2026-102010) | gcc-14 `14.2.0-19` | vulnerable | forky/sid fixed version `14.4.0-3`; no Trixie fix listed |
+
+The tracker labels (for example, `unimportant`, `no-DSA`, or `undetermined`)
+are Debian triage, not replacements for the OSV/CVSS scores in the scan. They do
+not erase the OSV matches. Conversely, a fixed version in unstable/forky/sid is
+not a safe Trixie patch. No package update was applied, so the candidate image,
+SBOM, and 177/81 scan remain unchanged.
+
+Evidence files saved under
+`generated-artifacts/guardian-ai-assessment-offline/`:
+
+- Individual CVE page excerpts, 26 rows: `debian-cve-tracker-status-20261102.json`,
+  SHA-256 `b7ec922e37a5951387f2986cfbf3632f09727f2b5db92f98e6a53f8e4696f7ec`.
+- Source-package page excerpts: `debian-source-package-status-20261102.json`,
+  SHA-256 `10d28ad109a83f9d7022a8491e2da875a754f3f40a59b144039fb1e3d176609f`.
+- Candidate-only SQLite compile-option probe and invocation:
+  `debian-official-review-20261102/`, with a SHA-256 manifest
+  `24a258a49d2bd21e1756ceef796a3f9d3203ae7ab4eb1d704782fc7762410a8c`.
+  It ran with `--network=none`, read-only root, UID 65532, dropped capabilities
+  and resource limits. The exact image ID was unchanged; SQLite reports
+  `ENABLE_ZIPFILE=False`, and `sqlite3` CLI is absent. This makes the specific
+  zipfile-extension route not applicable to the tested binary, but the OSV
+  record remains visible and was not suppressed.
 
 ### Local wheel and native-component license evidence
 
@@ -418,12 +482,21 @@ after applying an update, rebuilding, and rescanning.
   `168e1534da55376e403b5587c6d702810f356c0517c6d8a3d64aa5aca4b36ff0`.
   It lists 38/38 archive SHA matches, package license metadata and paths/hashes
   for included license/notice files. This is local archive evidence, not a legal
-  license interpretation. Official PyPI hash provenance is documented in the
-  earlier artifact-verification record; this rerun used no network.
+  license interpretation. A separate read of the official PyPI JSON API
+  confirmed the local SHA-256 for all 38 artifacts matches the published
+  release digest. The captured metadata has no PyPI attestations for these
+  artifacts; a digest match is not independent publisher/build provenance.
+  Evidence file:
+  `generated-artifacts/guardian-ai-assessment-offline/official-pypi-provenance-20261102.json`,
+  SHA-256 `0765397da2d2c663d16fa69f6cf8798fec5f364bc17c9f8a58301d157ddf665f`.
 - `langdetect 1.0.9` sdist hash is
   `cbc1fef89f8d062739774bd51eda3da3274006b3661d199c2655f6b3f6d605a0`.
   `setup.py`/`PKG-INFO` say MIT, while the classifier and `LICENSE`/`NOTICE`
-  indicate Apache-2.0. No definitive license selected; legal review remains.
+  indicate Apache-2.0. This exact artifact hash matches PyPI's published
+  digest; the local LICENSE and setup.py file hashes also match the fetched
+  upstream `master` files. The `v1.0.9` raw tag URL returned 404, so that branch
+  match is not a pinned release-tag attestation. No definitive license is
+  selected; legal review remains.
 - Local LLM source manifest SHA-256
   `8fb7551d2fee1d4e8bb81e2d5e1eaabc4ba6dc776c92662ac61bc0e0132a529b`;
   it records `llama-cpp-python 0.3.36` sdist SHA-256
@@ -432,6 +505,14 @@ after applying an update, rebuilding, and rescanning.
   `5e50c8f09c0ed78512bfb16adb32be9e0c65b8ced7c1efcfc200c38782141e96`,
   and vendored `llama.cpp` commit
   `0c1e57098bba43ac29e6e3b677cdceebdd22334f` with the listed MIT notice.
+  The source archive hash matches the official PyPI JSON digest; the upstream
+  `v0.3.36` `LICENSE.md` file hash
+  `c479fb11a66a85fed2004a17dd1b3e44a1858c564b167aecb20ff66cb422ed75`
+  matches the local source archive. The vendored llama.cpp MIT license file
+  hash at that exact commit is
+  `94f29bbed6a22c35b992c5c6ebf0e7c92f13b836b90f36f461c9cf2f0f1d010d`.
+  The active wheel is locally built, not a PyPI release artifact; source hash
+  equality does not prove the local build was reproducible or attested.
   The separate native wheel is outside the worker SBOM. Its complete native
   linkage/notice obligations and legal clearance remain unresolved.
 - The local mounted-runtime inventory is

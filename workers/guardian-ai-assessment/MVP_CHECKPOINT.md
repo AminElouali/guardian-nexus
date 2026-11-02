@@ -4,6 +4,56 @@ Updated: 2026-11-02 — offline OSV reconciliation and supply-chain summary
 Scope: development/local laboratory only. No customer systems, external model APIs,
 paid services, production database, remote deployment, or publishing.
 
+## Official Debian and provenance follow-up — 2026-11-02
+
+- Started from clean HEAD `14cc02d8fe0bc3fbc52ec5b9955c516c84747d58`.
+  This follow-up changed documentation/checkpoint only; it did not create a
+  commit or modify worker packages, application code, database, or image.
+- Official Debian Security Tracker snapshot for all 26 critical/high CVEs:
+  25 are `vulnerable` and PAM is `undetermined` in Trixie; **no Trixie fixed
+  package version was listed** at capture time. Some fixes are listed in
+  unstable/forky/sid, but no cross-suite packages or manual patches were used.
+  Individual package/version/status/fix rows and applicability are in
+  `DEPENDENCY_AUDIT.md`. Debian triage (`unimportant`/`no-DSA`) is not a
+  substitute for OSV/CVSS.
+- Candidate-only runtime check for `CVE-2025-70873`, using the unchanged image
+  ID `sha256:e2d13fb48471dbcdc169e421598d5830303717266baf9892a3f11e86eb48e476`,
+  exited 0 with `network=none`, read-only root, UID 65532, dropped
+  capabilities, CPU/memory/PID limits. SQLite 3.46.1 reported
+  `ENABLE_ZIPFILE=False`; `sqlite3` CLI was absent. Debian's tracker also says
+  the extension is not built in its binary packages. The OSV match is retained;
+  only that specific route is considered absent in this tested binary.
+  Command/stdout/stderr/exit/image ID are under
+  `generated-artifacts/guardian-ai-assessment-offline/debian-official-review-20261102/`;
+  manifest SHA-256
+  `24a258a49d2bd21e1756ceef796a3f9d3203ae7ab4eb1d704782fc7762410a8c`.
+- The 38 local locked Python artifacts match the SHA-256 digests in official
+  PyPI JSON for all 38. No artifact had an attestation in the captured metadata;
+  this proves digest equality to PyPI's listing, not independent publisher
+  identity or reproducible builds. Provenance capture SHA-256
+  `0765397da2d2c663d16fa69f6cf8798fec5f364bc17c9f8a58301d157ddf665f`.
+- `langdetect 1.0.9` remains legally ambiguous: PyPI/setup metadata says MIT,
+  while classifier and packaged `LICENSE` say Apache-2.0. Its local sdist hash
+  matches PyPI; source file hashes match current upstream `master`, but the
+  version-tag URL was unavailable. `llama-cpp-python 0.3.36` sdist hash matches
+  PyPI, and upstream MIT license files match local hashes; the active native
+  wheel is locally built, not a PyPI release artifact, with no build
+  attestation. Complete native dependency/legal review remains open.
+- No Debian package fix was safe to apply to Trixie at this capture time. No
+  candidate image rebuild, SBOM regeneration, or OSV rescan was performed;
+  the existing image/SBOM and full scan remain 177 matches / 81 IDs (1 critical,
+  25 high). Prior worker suite result remains 64/64; this follow-up added one
+  targeted container probe (exit 0), not a rerun of API/E2E/UI/RLS tests.
+- IPv4/IPv6 status is unchanged: IPv4 TCP/UDP and DNS blocked in the prior
+  `network=none` test; IPv6 is still `kernel_protocol_unavailable` and
+  unverified. No network test, remote deployment, client connection, or
+  production access was made.
+- Official Debian evidence captures:
+  `debian-cve-tracker-status-20261102.json` SHA-256
+  `b7ec922e37a5951387f2986cfbf3632f09727f2b5db92f98e6a53f8e4696f7ec`;
+  source-package capture SHA-256
+  `10d28ad109a83f9d7022a8491e2da875a754f3f40a59b144039fb1e3d176609f`.
+
 ## Latest supply-chain and isolation follow-up
 
 This section supersedes older statements below about the cold offline image
