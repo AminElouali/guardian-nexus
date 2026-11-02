@@ -396,3 +396,53 @@ This update supersedes the older diskcache status, worker-test count, and OSV
 - Next verification requires an authorized dual-stack development host for
   IPv4/IPv6 TCP/UDP and DNS negative tests, plus a reviewed Trixie fix or
   deliberate base-image update and legal review of ambiguous/vendor licenses.
+
+## Seguimiento de procedencia nativa e informe ejecutivo — 2026-11-02
+
+- Confirmé por hash que el wheel configurado por `run-local-llm.sh` es
+  `generated-artifacts/guardian-llm-lab/wheelhouse/llama_cpp_python-0.3.36-py3-none-linux_x86_64.whl`,
+  24,140,277 bytes, SHA-256
+  `5e50c8f09c0ed78512bfb16adb32be9e0c65b8ced7c1efcfc200c38782141e96`,
+  coincidente con el manifiesto. El wheel auxiliar `a71a5a2e…` declara
+  diskcache pero no es usado por el runner; el rebuild `7bd646f4…` tampoco fue
+  promovido. No se reconstruyó ni volvió a escanear la imagen.
+- `readelf -d` inventarió seis `.so` de llama.cpp/ggml y el `.so` de MarkupSafe,
+  sus hashes y bibliotecas requeridas. Los paquetes system asociados aparecen
+  en la SBOM candidata existente; no se generó SBOM completa del runtime Qwen
+  montado. El build se trazó hasta sdist, commit llama.cpp, base/constructor,
+  toolchain, flags y wheels build-only. No se ejecutaron binarios nativos,
+  no se verificó firma del build y no se demuestra reproducibilidad bit a bit.
+  `langdetect` y la revisión jurídica transitiva siguen pendientes.
+- `DEPENDENCY_AUDIT.md` y el informe interno ejecutivo describen este alcance.
+  `NETWORK_ISOLATION.md` ahora especifica preflight, evidencia y criterios
+  fail-closed para host dual-stack. En este entorno IPv6 sigue
+  `kernel_protocol_unavailable` y **NO VERIFICADO**; no se intentó habilitarlo.
+- El reporte autenticado por tenant presenta el caso sintético de cambio
+  bancario con riesgo ilustrado, mitigación de política independiente, etapas
+  por separado, referencias hash, limitaciones y estado de remediación/efectos.
+  La descarga JSON redactada se versionó como 2. No se cambió API, datos,
+  autenticación, RLS/RBAC ni permisos.
+- Verificación de frontend de este hito: componente de informe **4/4**, typecheck
+  **pasó**, build Vite **pasó** al proporcionar `PORT=5000 BASE_PATH=/`;
+  quedaron warnings de sourcemap de `tooltip.tsx` y tamaño de chunk >500 kB.
+  `git diff --check` pasó. Tests API/E2E, DB RLS/RBAC y worker no se repitieron
+  porque esos componentes no cambiaron; sus resultados anteriores son
+  históricos, no una regresión recién ejecutada.
+- Evidencia persistida en `generated-artifacts/guardian-ai-assessment-report-followup/`:
+  - Comprobador de procedencia: **23/23 hashes pasaron**, log SHA-256
+    `facb336673e2b843f71c59fc07a330dd2d76c282400367afedf9d4676c872846`.
+    El primer intento falló por una ruta ELF mal indicada en el comprobador;
+    log preservado con SHA `e01cd3427a44073e1ad534b7f85775acc6ac202376024bee6fa365a7611044f5`.
+    La ruta se corrigió y el segundo intento pasó sin cambiar los binarios.
+    Una inspección inicial que recorría todos los aliases ELF excedió el tiempo;
+    se repitió sobre los seis objetos únicos y el `.so` de MarkupSafe.
+  - Inventario estático `local-runtime-inspection.json`, SHA-256
+    `5dfe95f9cc8e1a7876e43a3aee6a8d8e305a53508b19f23540b14d9fdea968f2`.
+  - Dashboard: componente **4/4**, log SHA `1ad7d44857b7508a3a9617ab8163a012c6e00b59ed93f270980172cf60595231`;
+    typecheck pasó, log SHA `17bc24a9c1b0584b1629aaac1a9217bff84f56f099dfb8933b45bda2b4b68c6a`;
+    build pasó, log SHA `f8315c080bd1a8b8d602bdfe814b692e3cc21de4ca0ee397a622a9a9fd833100`.
+  - Los resultados de `git diff --check` se guardan junto a estos logs. El build
+    conserva warnings de sourcemap y tamaño de bundle, no fallos. Los primeros
+    intentos de build omitieron `PORT` y luego `BASE_PATH`; con ambos valores
+    requeridos, el build terminó correctamente. SHA del log limpio
+    `git diff --check`: `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`.

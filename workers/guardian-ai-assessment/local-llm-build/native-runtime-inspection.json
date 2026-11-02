@@ -1,0 +1,263 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-11-02T06:22:07Z",
+  "scope": {
+    "method": "Local manifest and wheel inspection; ELF dependencies read with readelf -d.",
+    "executedNativeBinaries": false,
+    "networkUsed": false,
+    "workerImageRebuiltOrRescanned": false
+  },
+  "activeRunnerArtifact": {
+    "wheelPath": "generated-artifacts/guardian-llm-lab/wheelhouse/llama_cpp_python-0.3.36-py3-none-linux_x86_64.whl",
+    "sizeBytes": 24140277,
+    "sha256": "5e50c8f09c0ed78512bfb16adb32be9e0c65b8ced7c1efcfc200c38782141e96",
+    "matchesWorkerManifest": true,
+    "runnerReference": "workers/guardian-ai-assessment/scripts/run-local-llm.sh",
+    "wheelTag": "py3-none-linux_x86_64",
+    "runtimeRequirements": [
+      "typing-extensions>=4.5.0",
+      "numpy>=1.20.0",
+      "jinja2>=2.11.3"
+    ],
+    "diskcacheDeclaredAsRuntimeRequirement": false
+  },
+  "artifactReconciliation": [
+    {
+      "path": "generated-artifacts/guardian-ai-assessment-source-audit/llama-source-built-wheel/llama_cpp_python-0.3.36-py3-none-linux_x86_64.whl",
+      "sizeBytes": 24139061,
+      "sha256": "a71a5a2e4b27e25b0fd783bdd5deb5a612ad950e2b0e92a0b500dee24ccb7981",
+      "status": "Separate auxiliary wheel; its adjacent manifest declares diskcache 5.6.3 as a dependency. The configured runner does not reference this path."
+    },
+    {
+      "path": "generated-artifacts/guardian-llm-lab/patched-wheelhouse/llama_cpp_python-0.3.36-py3-none-linux_x86_64.whl",
+      "sizeBytes": 24140282,
+      "sha256": "7bd646f48c830457b85fe4801f2f6992065299f3fea253dea03c247683397ad1",
+      "status": "Second offline source build; not promoted or referenced by the configured runner."
+    },
+    {
+      "path": "generated-artifacts/guardian-ai-assessment-source-audit/prebuilt-wheel/llama_cpp_python-0.3.36-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl",
+      "sizeBytes": 27077498,
+      "sha256": "c8a3e98093e950d7a770f794842e36f2db82b2933e8762ed7b5ffd435011e8e4",
+      "status": "Official PyPI prebuilt wheel referenced in prior digest verification; not active. Its metadata declares diskcache>=5.6.1."
+    }
+  ],
+  "sourceAndBuild": {
+    "sourceManifestPath": "workers/guardian-ai-assessment/local-llm-build/source-manifest.json",
+    "sourceManifestSha256": "8fb7551d2fee1d4e8bb81e2d5e1eaabc4ba6dc776c92662ac61bc0e0132a529b",
+    "package": "llama-cpp-python",
+    "version": "0.3.36",
+    "sourceArchiveSha256": "832db0699007f1be95a7e41ef12e88926b02ba836461e36a36372db2760c1a2e",
+    "declaredLicense": "MIT",
+    "sourceLicenseFileSha256": "c479fb11a66a85fed2004a17dd1b3e44a1858c564b167aecb20ff66cb422ed75",
+    "vendoredLlamaCpp": {
+      "commit": "0c1e57098bba43ac29e6e3b677cdceebdd22334f",
+      "license": "MIT",
+      "licenseFileSha256": "94f29bbed6a22c35b992c5c6ebf0e7c92f13b836b90f36f461c9cf2f0f1d010d"
+    },
+    "sourcePatchSha256": "4c923e8fa07ee71fb96551797f6deebdb7cff471307bbb6e3705462a731a6202",
+    "builderImageId": "sha256:1190b243b1ebdd29c6547a1959531a58c474e3c6cb953333fc9bf20b866bf2d6",
+    "builderBaseImage": "python:3.13-slim-trixie@sha256:2d44738ebf4ce5f63b9d9ea871e9c7cfdc0426f7b0c97cac915fd88ded1d86bb",
+    "debianSnapshot": "20261027T000000Z",
+    "toolchain": {
+      "gcc": "14.2.0-19",
+      "g++": "14.2.0-19",
+      "cmake": "3.31.6",
+      "ninja": "1.11.1.4"
+    },
+    "buildMode": {
+      "network": "none",
+      "cpuCores": 2,
+      "memoryMiB": 3072,
+      "pids": 128,
+      "user": "65532:65532",
+      "capabilities": "all dropped",
+      "noNewPrivileges": true,
+      "pipFlags": [
+        "--no-deps",
+        "--no-build-isolation",
+        "--no-cache-dir"
+      ],
+      "cmakeArgs": [
+        "-DGGML_NATIVE=OFF",
+        "-DGGML_AVX=ON",
+        "-DGGML_AVX2=ON",
+        "-DGGML_FMA=ON",
+        "-DGGML_AVX512=OFF",
+        "-DGGML_OPENMP=OFF"
+      ]
+    },
+    "buildInputsManifest": {
+      "path": "generated-artifacts/guardian-ai-assessment-source-audit/build-inputs.json",
+      "sha256": "dd10ed8b70e5221d0fcf1df7ea97dd2a30ea278b6cf9f2e938cbd7919e5ded6b",
+      "packages": [
+        {
+          "name": "scikit-build-core",
+          "version": "0.11.6",
+          "wheelSha256": "ce6d8fe64e6b4c759ea0fb95d2f8a68f60d2df31c2989838633b8ec930736360",
+          "licenseMetadata": "Apache Software License",
+          "licenseFileSha256": "203fb4d261f202242333928424e101de19abf5bf166620124418fb6dd6b279b5"
+        },
+        {
+          "name": "pathspec",
+          "version": "0.12.1",
+          "wheelSha256": "a0d503e138a4c123b27490a4f7beda6a01c6f288df0e4a8b79c7eb0dc7b4cc08",
+          "licenseMetadata": "MPL-2.0",
+          "licenseFileSha256": "fab3dd6bdab226f1c08630b1dd917e11fcb4ec5e1e020e2c16f83a0a13863e85"
+        },
+        {
+          "name": "packaging",
+          "version": "25.0",
+          "wheelSha256": "29572ef2b1f17581046b3a2227d5c611fb25ec70ca1ba8554b24b0e69331a484",
+          "licenseMetadata": "Apache-2.0 and BSD",
+          "licenseFileSha256": [
+            "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594",
+            "b70e7e9b742f1cc6f948b34c16aa39ffece94196364bc88ff0d2180f0028fac5"
+          ]
+        },
+        {
+          "name": "cmake",
+          "version": "3.31.6",
+          "wheelSha256": "1c8b05df0602365da91ee6a3336fe57525b137706c4ab5675498f662ae1dbcec",
+          "licenseMetadata": "Apache-2.0 and BSD",
+          "licenseFileSha256": [
+            "73ba74dfaa520b49a401b5d21459a8523a146f3b7518a833eea5efa85130bf68",
+            "a39f63ec8a8e9d63ee8fd85eac9eda615995216eff43c500f68c08d4c922bf3f"
+          ]
+        },
+        {
+          "name": "ninja",
+          "version": "1.11.1.4",
+          "wheelSha256": "096487995473320de7f65d622c3f1d16c3ad174797602218ca8c967f51ec38a0",
+          "licenseMetadata": "Apache-2.0 and BSD classifiers",
+          "licenseFileSha256": [
+            "73ba74dfaa520b49a401b5d21459a8523a146f3b7518a833eea5efa85130bf68"
+          ]
+        }
+      ]
+    },
+    "repeatability": "The active wheel matches the recorded output. A later offline rebuild differed in ELF build-id, temporary llama.pc prefix, and derived RECORD hashes; bit-for-bit reproducibility is not established."
+  },
+  "activeNativeObjects": [
+    {
+      "file": "llama_cpp/lib/libggml-base.so",
+      "sha256": "bcb21db6634058082c17283eb451748a2ffddb26f1bf7e54a93cc61d6ba3f5a0",
+      "needed": [
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6"
+      ]
+    },
+    {
+      "file": "llama_cpp/lib/libggml-cpu.so",
+      "sha256": "6ddd08e2932ec356c86f5e5027cd9f3e70670a41e40a405dc2e0b08d15c28ecf",
+      "needed": [
+        "libggml-base.so.0",
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6",
+        "ld-linux-x86-64.so.2"
+      ]
+    },
+    {
+      "file": "llama_cpp/lib/libggml.so",
+      "sha256": "8a46c5d11079fae9588e3cf12b5bc8279a9b968454d9db3f7cc8b505dc3b07a4",
+      "needed": [
+        "libggml-cpu.so.0",
+        "libggml-base.so.0",
+        "libstdc++.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6"
+      ]
+    },
+    {
+      "file": "lib/libllama-common.so",
+      "sha256": "6e1249949931b3010d5e5b4cc9209e0ba4a7a598b3b78d775ee8df17ca40044c",
+      "needed": [
+        "libllama.so.0",
+        "libggml.so.0",
+        "libggml-base.so.0",
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6",
+        "ld-linux-x86-64.so.2"
+      ]
+    },
+    {
+      "file": "llama_cpp/lib/libllama.so",
+      "sha256": "df2fae59fb6c68046833ad5e8007c5575a0505458cc06f2b59e239010131b2c1",
+      "needed": [
+        "libggml.so.0",
+        "libggml-base.so.0",
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6",
+        "ld-linux-x86-64.so.2"
+      ]
+    },
+    {
+      "file": "llama_cpp/lib/libmtmd.so",
+      "sha256": "377a9a30dbb4c75e9f7e73ddf128ebca458901cdba2829c0e50bd5804ce1be30",
+      "needed": [
+        "libllama.so.0",
+        "libggml.so.0",
+        "libggml-base.so.0",
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6",
+        "ld-linux-x86-64.so.2"
+      ]
+    }
+  ],
+  "otherNativeWheel": {
+    "package": "MarkupSafe",
+    "version": "3.0.4",
+    "wheelSha256": "434139499bb20b502ed3baa1f169e618f924a97e7a777fea1a49446d80106cf6",
+    "licenseMetadata": "BSD-3-Clause",
+    "extension": "markupsafe/_speedups.cpython-313-x86_64-linux-gnu.so",
+    "extensionSha256": "46affb4bc066cb554d529dc9ea9a0302a0ffb55ddc52ad293dd378fb270be2bd",
+    "needed": [
+      "libpthread.so.0",
+      "libc.so.6"
+    ]
+  },
+  "candidateImageSystemPackageMatches": {
+    "sbomSha256": "8eb49149a21afac04818f94ac0183eb799ed740b8f2254a9f63c453c279c5d97",
+    "packages": [
+      {
+        "name": "libc6",
+        "version": "2.41-12+deb13u4",
+        "license": "NOASSERTION"
+      },
+      {
+        "name": "libgcc-s1",
+        "version": "14.2.0-19",
+        "license": "NOASSERTION"
+      },
+      {
+        "name": "libstdc++6",
+        "version": "14.2.0-19",
+        "license": "NOASSERTION"
+      },
+      {
+        "name": "gcc-14-base",
+        "version": "14.2.0-19",
+        "license": "NOASSERTION"
+      }
+    ],
+    "note": "Package versions come from the existing candidate SBOM; ELF SONAME-to-package ownership was not independently queried in the image."
+  },
+  "limitations": [
+    "This inventory is a static ELF dependency list, not a complete CycloneDX SBOM for the separately mounted local-LLM runtime.",
+    "Wheel hashes and PyPI digest equality do not establish an upstream signature or signed build attestation.",
+    "The active wheel is built from pinned source, but repeated builds were not byte-for-byte identical.",
+    "Build-wheel license metadata and local license-text hashes are evidence for review, not legal approval; complete transitive notices and vendor obligations remain open.",
+    "The worker image scan was not repeated because the image and package inventory were unchanged.",
+    "The runtime's inherited NumPy and typing-extensions are covered by the worker image inventory, not by the three-wheel mounted wheelhouse.",
+    "The configured x86_64 CPU flags and runtime compatibility were not tested on other CPU families."
+  ]
+}

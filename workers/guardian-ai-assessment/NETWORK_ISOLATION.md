@@ -53,11 +53,49 @@ loopback funcionan. Un resultado de IPv6 no disponible es incompleto.
 
 ## Repetición en un host de desarrollo dual-stack autorizado
 
-No hace falta provisionar nube. En un host local autorizado que ya tenga soporte
-IPv6 del kernel, ejecutar los mismos dos comandos anteriores contra la imagen
-local `offline-rebuilt`. Confirmar primero que la creación de un socket IPv6
-funciona dentro de ese host; ejecutar los probes siempre dentro del contenedor
-`--network=none`, nunca contra endpoints públicos desde el host. Guardar el JSON
-de salida y el hash junto con la versión de Docker y el ID de imagen. Si el
-worker informa `kernel_protocol_unavailable`, no se puede acreditar IPv6 y no
-debe habilitarse el servicio remoto.
+No hace falta provisionar nube. Utilizar solo un host de desarrollo autorizado
+que ya tenga habilitado IPv6 en el kernel; no habilitar egress, cambiar reglas de
+red ni probar destinos desde el host. Los probes se ejecutan dentro del mismo
+contenedor `--network=none` y usan únicamente las direcciones reservadas y el
+dominio `.invalid` descritos arriba.
+
+1. Registrar `date -u`, `uname -a`, `docker version` y el ID de imagen local:
+
+   ```sh
+   date -u
+   uname -a
+   docker version
+   docker image inspect guardian-ai-assessment:offline-rebuilt \
+     --format '{{.Id}}'
+   ```
+
+2. Comprobar que IPv6 está disponible dentro del contenedor, sin enviar tráfico
+   de salida. Si la creación/enlace del socket falla, registrar el error y
+   detener la evaluación IPv6:
+
+   ```sh
+   docker run --rm --pull=never --network=none --read-only \
+     --cpus=0.5 --memory=256m --memory-swap=256m --pids-limit=32 \
+     --cap-drop=ALL --security-opt=no-new-privileges --user=65532:65532 \
+     --entrypoint=python guardian-ai-assessment:offline-rebuilt \
+     -c 'import socket; s=socket.socket(socket.AF_INET6, socket.SOCK_DGRAM); s.bind(("::1", 0)); print("ipv6_loopback_available"); s.close()'
+   ```
+
+3. Ejecutar el test unitario y el auditor ya descritos. Guardar el stdout,
+   stderr, exit code, JSON, hora UTC y SHA-256 de cada artefacto. No ejecutar los
+   probes fuera del contenedor ni sustituir `--network=none` por una red
+   conectada.
+
+La aceptación requiere, en una misma ejecución: preflight correcto; `network=none`;
+solo loopback activo y sin ruta por defecto; loopback IPv4 e IPv6 alcanzables;
+IPv4 TCP, IPv4 UDP, DNS IPv4/UDP, IPv6 TCP, IPv6 UDP y DNS IPv6/UDP clasificados
+`blocked` por los criterios estrictos del script; cero respuestas y cero
+timeouts clasificados como bloqueo; y un JSON cuya suma de verificación pueda
+recalcularse. Un timeout, error de envío, ruta ausente no atribuible al modo
+aislado o cualquier inconsistencia deja el resultado **INCONCLUSO**, nunca
+`verified`.
+
+Registrar el ID de imagen, versión de Docker, kernel, comandos, fechas, códigos
+de salida, JSON de evidencia y sus hashes. Si el worker informa literalmente
+`kernel_protocol_unavailable`, IPv6 permanece **NO VERIFICADO**; no se debe
+presentar como egress bloqueado ni habilitar un servicio remoto.

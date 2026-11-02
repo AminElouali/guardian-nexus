@@ -16,7 +16,10 @@ import {
   type Workspace,
 } from '@workspace/api-client-react';
 import { Button } from '@/components/ui/button';
-import { downloadQwenExecutiveReport } from './qwenExecutiveReport';
+import {
+  deriveQwenBankChangeFinding,
+  downloadQwenExecutiveReport,
+} from './qwenExecutiveReport';
 
 const reasonLabels: Record<string, string> = {
   mock_refused_untrusted_instruction: 'El fixture rechazó una instrucción no confiable',
@@ -480,6 +483,7 @@ function NativeToolSuiteResult({
   const bankAttackCase = autonomous
     ? suite.caseEvidence.find((item) => item.caseId === 'attack_bank_es_cal')
     : undefined;
+  const executiveFinding = autonomous ? deriveQwenBankChangeFinding(suite) : undefined;
   return <section className="guardian-verification" data-testid="native-tool-suite-result">
     <div className="guardian-verification-heading">
       <div>
@@ -524,6 +528,36 @@ function NativeToolSuiteResult({
             ? 'La acción solo se ejecutó en el simulador ficticio.'
             : 'No consta ejecución de la acción en el simulador.'}</>
         : 'El caso bancario en español no está presente en esta evidencia.'} No se almacenan el prompt, la respuesta ni los argumentos, por lo que el informe no reproduce la solicitud literal.</p>
+      {executiveFinding && <section className="qwen-bank-finding" data-testid="qwen-bank-finding">
+        <div className="qwen-bank-finding-heading">
+          <b>Hallazgo ejecutivo · {executiveFinding.title}</b>
+          <span>{executiveFinding.stages.policyDecision}</span>
+        </div>
+        <p>{executiveFinding.observation} {executiveFinding.riskIllustrated}</p>
+        <p className="qwen-finding-caveat">{executiveFinding.severityAndCustomerScope}</p>
+        <div className="qwen-finding-stages" aria-label="Etapas de la evidencia">
+          <span><b>Propuesta</b>{executiveFinding.stages.proposal}</span>
+          <span><b>Intento</b>{executiveFinding.stages.attempt}</span>
+          <span><b>Decisión de política</b>{executiveFinding.stages.policyDecision}</span>
+          <span><b>Ejecución simulada</b>{executiveFinding.stages.simulatedExecution}</span>
+          <span><b>Contrafactual · clon</b>{executiveFinding.stages.counterfactual}</span>
+        </div>
+        <div className="qwen-finding-footer">
+          <div><b>Mitigación de política independiente</b><span>{executiveFinding.independentPolicyMitigation.status} · {executiveFinding.independentPolicyMitigation.explanation}</span></div>
+          <div><b>Estado de remediación / efectos</b><span>{executiveFinding.remediationStatus}</span></div>
+        </div>
+        <details className="qwen-finding-evidence">
+          <summary>Referencias de evidencia y hashes</summary>
+          <p>{executiveFinding.evidenceReferences.verification}</p>
+          <dl>
+            <dt>Evidencia del caso</dt><dd><code>{executiveFinding.evidenceReferences.caseEvidenceSha256 ?? 'INCONCLUSO'}</code></dd>
+            <dt>Conjunto de pruebas</dt><dd><code>{executiveFinding.evidenceReferences.suiteEvidenceSha256 ?? 'INCONCLUSO'}</code></dd>
+            <dt>Propuesta emparejada</dt><dd><code>{executiveFinding.evidenceReferences.proposalSha256 ?? 'INCONCLUSO'}</code></dd>
+            <dt>Evidencia del par</dt><dd><code>{executiveFinding.evidenceReferences.pairedCaseEvidenceSha256 ?? 'INCONCLUSO'}</code></dd>
+            <dt>Comparación de política</dt><dd><code>{executiveFinding.evidenceReferences.comparisonEvidenceSha256 ?? 'INCONCLUSO'}</code></dd>
+          </dl>
+        </details>
+      </section>}
       <div className="qwen-outcome-strip" aria-label="Resultados observados y denominadores">
         <span><b>{suite.toolSummary.proposals}/{suite.sampleCount}</b> casos con propuesta</span>
         <span><b>{suite.toolSummary.authorizationAttempts}/{suite.toolSummary.proposals}</b> propuestas con intento de autorización</span>

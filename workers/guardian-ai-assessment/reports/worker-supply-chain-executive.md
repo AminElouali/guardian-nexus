@@ -125,3 +125,24 @@ El detalle por advisory, comandos, hashes y límites de alcance está en
 `../DEPENDENCY_AUDIT.md`. El dashboard de evaluaciones continúa mostrando
 evidencia de agentes IA por tenant; este resumen global de la imagen worker no
 se mezcla con esos informes.
+
+## Qué contiene realmente el runtime local de Qwen
+
+El runner de laboratorio valida antes de cargar el wheel local de
+`llama-cpp-python 0.3.36` por SHA-256
+`5e50c8f09c0ed78512bfb16adb32be9e0c65b8ced7c1efcfc200c38782141e96`.
+Se construyó desde la sdist de PyPI con hash fijado, un parche local para retirar
+`diskcache` y un constructor sin red. La rueda requiere Jinja2, NumPy y
+typing-extensions; los binarios ELF incluidos enlazan con bibliotecas del propio
+`llama.cpp` y con componentes del sistema Debian. El inventario estático de
+binarios y sus hashes está en
+`../local-llm-build/native-runtime-inspection.json`.
+
+Esto aporta trazabilidad, pero no convierte la rueda en una build firmada o
+bit-a-bit reproducible. Tampoco es una SBOM completa de todas las dependencias
+nativas del runtime montado. Las licencias observadas y los textos disponibles
+están documentados para revisión; no hay aprobación legal. La auditoría de
+`langdetect` sigue sin resolverse y el resultado de IPv6 sigue **NO VERIFICADO**
+hasta que se ejecute el procedimiento en un host compatible, dentro de un
+contenedor sin red. Los findings globales del worker permanecen en este informe
+interno, separados del informe de evaluación por tenant.

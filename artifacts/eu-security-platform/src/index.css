@@ -1369,6 +1369,23 @@ select.text-input { appearance: auto; }
 .qwen-outcome-strip { display: flex; flex-wrap: wrap; gap: 7px; }
 .qwen-outcome-strip span { display: grid; gap: 4px; min-width: 106px; padding: 8px 9px; border: 1px solid #dce5da; border-radius: 5px; color: #637469; background: #fffefa; font-size: 9px; line-height: 1.4; }
 .qwen-outcome-strip b { color: #355b46; font: 600 12px var(--font-mono); }
+.qwen-bank-finding { display: grid; gap: 9px; padding: 12px; border: 1px solid #d5dfd4; border-radius: 6px; background: #f8faf5; }
+.qwen-bank-finding-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: #365742; font-size: 10px; }
+.qwen-bank-finding-heading span { flex: 0 0 auto; padding: 4px 6px; border: 1px solid #d5dfd4; border-radius: 4px; color: #54745f; font: 9px var(--font-mono); }
+.qwen-bank-finding > p { max-width: 900px; margin: 0; color: #5e7065; font-size: 10px; line-height: 1.6; }
+.qwen-bank-finding .qwen-finding-caveat { color: #7b786d; font-size: 9px; }
+.qwen-finding-stages { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.qwen-finding-stages span { display: grid; align-content: start; gap: 4px; min-width: 0; padding: 7px; border: 1px solid #e0e7dc; border-radius: 4px; color: #617268; background: #fffefa; font-size: 9px; line-height: 1.4; overflow-wrap: anywhere; }
+.qwen-finding-stages b, .qwen-finding-footer b { color: #43644e; font-size: 8px; letter-spacing: .04em; text-transform: uppercase; }
+.qwen-finding-footer { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; padding-top: 8px; border-top: 1px solid #dce5da; }
+.qwen-finding-footer > div { display: grid; gap: 4px; color: #64746a; font-size: 9px; line-height: 1.5; }
+.qwen-finding-evidence { color: #66756b; font-size: 9px; }
+.qwen-finding-evidence summary { cursor: pointer; color: #4e705a; font-weight: 700; }
+.qwen-finding-evidence p { margin: 7px 0; line-height: 1.5; }
+.qwen-finding-evidence dl { display: grid; grid-template-columns: minmax(120px, auto) minmax(0, 1fr); gap: 4px 10px; margin: 0; }
+.qwen-finding-evidence dt { color: #77827a; }
+.qwen-finding-evidence dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.qwen-finding-evidence code { color: #53695b; font: 8px var(--font-mono); }
 .qwen-limitations { margin: 0 !important; color: #7b786d !important; font-size: 9px !important; line-height: 1.55 !important; }
 .guardian-verification[data-testid="native-tool-suite-result"] > .guardian-verification-disclaimer { font-size: 10px; line-height: 1.7; }
 .guardian-verification[data-testid="native-tool-suite-result"] > .guardian-verification-stats span { font-size: 9px; }
@@ -1400,4 +1417,8 @@ select.text-input { appearance: auto; }
   .ai-evaluation-checks li em { margin-left: 24px; }
   .qwen-summary-footer { grid-template-columns: 1fr; }
   .qwen-executive-summary { padding: 14px; }
+  .qwen-finding-stages { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .qwen-finding-footer { grid-template-columns: 1fr; }
+  .qwen-bank-finding-heading { align-items: flex-start; flex-direction: column; }
+  .qwen-finding-evidence dl { grid-template-columns: 1fr; gap: 2px; }
 }

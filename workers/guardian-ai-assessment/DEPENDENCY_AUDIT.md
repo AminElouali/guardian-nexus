@@ -727,3 +727,74 @@ replace `guardian-ai-assessment:local`, which remains the API's existing image.
   contract and dashboard report tests above do not replace those DB tests.
   No API/database code changed. No production data, customers, credentials,
   external services, or paid infrastructure were used.
+
+## Inspección estática de runtime nativo local — 2026-11-02
+
+Esta comprobación reconcilia artefactos locales sin volver a construir la imagen
+worker ni repetir OSV. Los binarios ELF se inspeccionaron con `readelf -d`; no se
+ejecutó ningún `.so` ni se usó egress. El inventario máquina-legible está en
+`local-llm-build/native-runtime-inspection.json`, SHA-256
+`5dfe95f9cc8e1a7876e43a3aee6a8d8e305a53508b19f23540b14d9fdea968f2`.
+The local verifier checked 23 wheel, manifest, ELF and license-file hashes;
+its successful output SHA-256 is
+`facb336673e2b843f71c59fc07a330dd2d76c282400367afedf9d4676c872846`.
+The first verifier attempt failed because its expected archive path for
+`libllama-common.so` was wrong; that log is retained separately
+(`e01cd3427a44073e1ad534b7f85775acc6ac202376024bee6fa365a7611044f5`).
+The archive path was corrected to `lib/libllama-common.so`, then all 23 checks
+passed. The failure was in the inventory verifier, not in the wheel or runtime.
+
+- **Wheel que valida el runner configurado:** el script
+  `scripts/run-local-llm.sh` verifica y monta
+  `generated-artifacts/guardian-llm-lab/wheelhouse/llama_cpp_python-0.3.36-py3-none-linux_x86_64.whl`.
+  El archivo local mide 24,140,277 bytes y su SHA-256
+  `5e50c8f09c0ed78512bfb16adb32be9e0c65b8ced7c1efcfc200c38782141e96`
+  coincide con el wheel fijado por `local-llm-manifest.json` y el
+  `source-manifest.json`. El wheel declara MIT y requiere
+  `typing-extensions`, `numpy` y `jinja2`; no declara `diskcache`. Jinja2 3.1.6
+  y MarkupSafe 3.0.4 completan el wheelhouse montado. NumPy 2.3.4 y
+  typing-extensions 4.16.0 proceden de la imagen worker existente.
+- **Artefactos que no deben confundirse con el wheel activo:**
+  `llama-source-built-wheel` SHA `a71a5a2e…` tiene un manifiesto vecino cuya
+  metadata declara `diskcache 5.6.3`; no es la ruta configurada por el runner.
+  El build offline posterior SHA `7bd646f4…` tampoco se promovió ni lo monta el
+  runner. La rueda precompilada PyPI SHA `c8a3e980…` es una descarga oficial
+  verificada en el análisis previo, no la rueda activa, y declara diskcache como
+  dependencia. Las tres permanecen como artefactos de auditoría separados.
+- **Fuente y build:** la sdist oficial `llama-cpp-python 0.3.36` tiene hash
+  `832db069…`; el commit vendorizado de `llama.cpp` es
+  `0c1e57098bba43ac29e6e3b677cdceebdd22334f`. El constructor local fue
+  `sha256:1190b243…`, con base Python 3.13/Trixie fijada por digest y snapshot
+  Debian `20261027T000000Z`. Dentro de ese constructor se verificaron GCC/G++
+  `14.2.0-19`, CMake `3.31.6` y Ninja `1.11.1.4`; CMake y Ninja proceden de
+  wheels fijadas, no de paquetes Debian instalados. El build usa
+  `--network=none`, usuario `65532`, límites del manifiesto y los argumentos
+  CMake allí registrados (AVX/AVX2/FMA sí; AVX512/OpenMP desactivados).
+- Los artefactos de build son scikit-build-core 0.11.6 (Apache), pathspec
+  0.12.1 (MPL-2.0), packaging 25.0 (Apache/BSD), CMake 3.31.6 (Apache/BSD) y
+  Ninja 1.11.1.4 (clasificadores Apache/BSD). Sus hashes de wheel y los hashes
+  locales de los textos de licencia se incluyen en el JSON de inspección y en
+  `build-inputs.json` (SHA-256 `dd10ed8b…`). Los metadatos y ficheros disponibles
+  sirven para trazabilidad; no equivalen a revisión legal de las licencias
+  anidadas de CMake/Ninja.
+- Se identificaron seis objetos ELF `llama.cpp/ggml` en el wheel activo,
+  incluidos hashes individuales y `DT_NEEDED` en el JSON. Sus dependencias
+  dinámicas incluyen las bibliotecas internas `libggml*`/`libllama*` y SONAMEs
+  del sistema `libc`, `libm`, `libstdc++`, `libgcc_s` y el cargador ELF.
+  MarkupSafe incluye además `_speedups` nativo BSD-3-Clause. Los componentes
+  `libc6 2.41-12+deb13u4`, `libgcc-s1 14.2.0-19` y `libstdc++6 14.2.0-19`
+  aparecen en el SBOM candidato de 124 componentes; este paso no consultó
+  propiedad de archivos dentro de la imagen ni creó una SBOM completa para el
+  runtime LLM montado.
+- La rueda activa corresponde a la salida fijada; una reconstrucción offline
+  posterior difirió en build-id ELF, prefijo temporal de `llama.pc` y hashes
+  `RECORD`. Por tanto, la trazabilidad de entradas está ampliada, pero la
+  reproducibilidad bit a bit y una atestación firmada **no están demostradas**.
+  Los hashes no prueban por sí solos una firma del publicador. Los componentes
+  nativos comparten la licencia declarada MIT del código vendorizado, pero la
+  revisión de obligaciones transitivas sigue abierta. No se declara aprobación
+  legal; la discrepancia de `langdetect` continúa pendiente.
+- No se generó un nuevo SBOM ni OSV scan porque la imagen y sus paquetes no
+  cambiaron. La SBOM del worker no sustituye al inventario nativo local adjunto.
+  Las condiciones de compatibilidad fuera del hardware x86_64 configurado
+  tampoco se probaron.
