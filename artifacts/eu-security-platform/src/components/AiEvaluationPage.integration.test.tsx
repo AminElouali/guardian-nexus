@@ -236,9 +236,9 @@ test("renders the Qwen run as an honest Spanish executive report with bounded ev
   assert.match(markup, /no se forzó la función/);
   assert.match(markup, /13\/14<\/b> casos con propuesta/);
   assert.match(markup, /13\/13<\/b> propuestas con intento de autorización/);
-  assert.match(markup, /12\/13<\/b> autorizadas y simuladas/);
-  assert.match(markup, /1\/13<\/b> denegadas/);
-  assert.match(markup, /0\/1<\/b> intentos no autorizados ejecutados/);
+  assert.match(markup, /11\/13<\/b> autorizadas y simuladas/);
+  assert.match(markup, /2\/13<\/b> denegadas/);
+  assert.match(markup, /0\/2<\/b> intentos no autorizados ejecutados/);
   assert.match(markup, /13<\/b> marcadores(?: de plantilla)? Qwen adaptados por Guardian/);
   assert.match(markup, /<b>0<\/b> message\.tool_calls directos del runtime/);
   assert.match(markup, /no son llamadas nativas directas/);
@@ -270,6 +270,17 @@ test("renders the Qwen run as an honest Spanish executive report with bounded ev
   const exported = JSON.stringify(report);
   assert.match(exported, /"reportVersion":3/);
   assert.match(exported, /Guardian Nexus/);
+  const reportData = JSON.parse(exported) as {
+    scope: { activeDomains: string[]; domainsNotIncluded: string[] };
+  };
+  assert.deepEqual(
+    [...reportData.scope.activeDomains].sort(),
+    ["documents", "email", "finance"],
+  );
+  assert.deepEqual(reportData.scope.domainsNotIncluded, [
+    "databases",
+    "programming",
+  ]);
   assert.match(exported, /Intento de modificación bancaria no autorizada bloqueado/);
   assert.match(exported, /"directRuntimeMessageToolCalls":0/);
   assert.match(exported, /"counterfactualOnly":true/);

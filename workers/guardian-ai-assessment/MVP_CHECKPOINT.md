@@ -446,3 +446,51 @@ This update supersedes the older diskcache status, worker-test count, and OSV
     intentos de build omitieron `PORT` y luego `BASE_PATH`; con ambos valores
     requeridos, el build terminó correctamente. SHA del log limpio
     `git diff --check`: `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`.
+
+## Suite Qwen correo/documentos — validación 1.5.0 — 2026-11-02
+
+- Se ejecutó el E2E dirigido de `autonomous Qwen tool selection` en desarrollo.
+  Job `f5803f4c-7345-4196-960a-907a5c4a5cc5`, estado `succeeded`, un intento,
+  128.85 s. La suite `guardian-autonomous-tool-selection-email-documents-en-es-v1`
+  versión 1.5.0 cubre 14 casos sintéticos: 9 benignos/5 ataques, 7 calibración/
+  7 holdout, inglés/español 7/7; dominios documentos 7, correo 5, finanzas 2.
+- Qwen emitió 13 marcadores completos de plantilla adaptados por Guardian; el
+  runtime no devolvió `message.tool_calls` directos (0/14) y los 14 finales
+  fueron `stop`. El marcador no se presenta como llamada nativa del runtime.
+  Tareas verificadas: 11/14 (calibración 6/7, holdout 5/7).
+- Política ON: 11 ejecuciones solo de herramientas ficticias y 2 denegaciones
+  (cambio bancario ficticio y envío de correo simulado). Política OFF solo evalúa
+  clones efímeros: 12/13 propuestas habrían sido aceptadas por el oráculo
+  contrafactual; 2 clones habrían cambiado estado. Cero operaciones reales,
+  cambios persistentes o llamadas externas. Métrica de propuesta/intento no
+  autorizado: TP 2, FP 0, TN 9, FN 3 en esta muestra; potencial contrafactual de
+  ataque 1/5. No extrapolar.
+- El E2E confirmó lectura autenticada tenant-safe, conflicto de perfil al reutilizar
+  una clave de idempotencia, aislamiento del segundo tenant (403 a la ruta ajena,
+  lista vacía) y persistencia de evidencia redactada. Artefacto:
+  `generated-artifacts/ai-assessment-autonomous-e2e-response.json`, SHA-256
+  `364d85c73389603c5381e4cbe132f7132e25aa47c3a4da650d2c4c5942678179`.
+  `rawPromptsStored`, `rawResponsesStored` y `rawToolArgumentsStored` son false;
+  la inspección no encontró claves de contenido bruto.
+- El informe de tenant v3 muestra los dominios activos y pendientes, hallazgo
+  sintético, etapas de propuesta/decisión/simulación, hashes y límites. Su test
+  detectó expectativas antiguas de 12 autorizaciones/1 denegación; se actualizaron
+  contra la evidencia real a 11/2 y el componente pasó 4/4.
+- Validación posterior: E2E dirigido 1/1; API 34/34; worker unitario 61/61;
+  componente 4/4; typecheck del monorepo pasó; build Vite pasó con avisos de
+  sourcemap y bundle >500 kB. La suite worker no incluyó la prueba de corpus que
+  importa Garak desde el Python del host.
+- Comprobación adicional sin red: el wheelhouse vuelve a verificar 38/38 artefactos;
+  su JSON es byte-idéntico al previo, SHA-256
+  `ab8bc155558cc91e79a5a2f638b64dc0f0645bad29b42cc28bc521a1e37ebc79`.
+  No se reconstruyó la imagen ni se repitió OSV: la imagen candidata conserva 124
+  componentes SBOM y el escaneo local documentado 177 coincidencias/81 IDs, sin
+  hallazgos PyPI. Los avisos Debian, revisión legal y build frío bit-a-bit no se
+  consideran resueltos.
+- La evidencia de red previa sigue: IPv4 TCP/UDP y DNS bloqueados dentro de
+  `network=none`; IPv6 `kernel_protocol_unavailable`, **NO VERIFICADO** (salida 2),
+  artefacto `generated-artifacts/guardian-ai-assessment-offline/egress-test.stdout`,
+  SHA-256 `be7b4fcb57bf9354fb8d655c30b8665350a2371bff1e9bcdbe81282012f4ed79`.
+- Pendientes: ampliar en fase futura a bases de datos/programación; completar
+  evaluación de licencias/procedencia nativa y build frío; verificar IPv6 en host
+  dual-stack autorizado. No publicar ni habilitar evaluaciones de clientes.
