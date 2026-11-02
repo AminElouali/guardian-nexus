@@ -1,0 +1,43 @@
+FROM python:3.13-slim-trixie@sha256:2d44738ebf4ce5f63b9d9ea871e9c7cfdc0426f7b0c97cac915fd88ded1d86bb AS dependencies
+
+ARG GARAK_VERSION=0.17.1
+ENV PIP_CONFIG_FILE=/dev/null \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /tmp/guardian-build
+
+COPY source/requirements-runtime.txt ./requirements-runtime.txt
+COPY source/requirements-build.txt ./requirements-build.txt
+COPY wheelhouse/ /tmp/wheelhouse/
+
+# All package bytes come from the verified context wheelhouse. This stage has no
+# network and its temporary build tools and wheelhouse are not copied to runtime.
+RUN set -eu; \
+    python -m pip install --no-cache-dir --disable-pip-version-check \
+      --no-index --find-links=/tmp/wheelhouse \
+      --no-deps --require-hashes --only-binary=:all: \
+      --target=/tmp/guardian-build-tools -r requirements-build.txt; \
+    PYTHONPATH=/tmp/guardian-build-tools python -m pip install \
+      --no-cache-dir --disable-pip-version-check --no-index \
+      --find-links=/tmp/wheelhouse --no-deps --require-hashes \
+      --no-build-isolation -r requirements-runtime.txt; \
+    rm -rf /tmp/guardian-build-tools /tmp/wheelhouse; \
+    python -c "import importlib.metadata as m; assert m.version('garak') == '${GARAK_VERSION}'; assert m.version('aiohttp') == '3.14.5'; assert m.version('nltk') == '3.10.4'; assert m.version('requests') == '2.34.2'; assert m.version('langdetect') == '1.0.9'; assert m.version('numpy') == '2.3.4'"
+
+FROM python:3.13-slim-trixie@sha256:2d44738ebf4ce5f63b9d9ea871e9c7cfdc0426f7b0c97cac915fd88ded1d86bb
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    HOME=/tmp/guardian-home \
+    TMPDIR=/tmp
+
+WORKDIR /opt/guardian-assessment
+
+COPY --from=dependencies /usr/local/lib/python3.13/site-packages/ /usr/local/lib/python3.13/site-packages/
+COPY --chown=65532:65532 source/ /opt/guardian-assessment/
+
+RUN python -c "import importlib.metadata as m; assert m.version('garak') == '0.17.1'; assert m.version('aiohttp') == '3.14.5'; assert m.version('langdetect') == '1.0.9'; assert m.version('numpy') == '2.3.4'; assert 'setuptools' not in {d.metadata.get('Name', '').lower() for d in m.distributions() if d.version == '84.2.1'}"
+
+USER 65532:65532
+ENTRYPOINT ["python", "-m", "guardian_ai_assessment"]

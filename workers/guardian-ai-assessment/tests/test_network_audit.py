@@ -6,10 +6,58 @@ from unittest.mock import MagicMock, patch
 from guardian_ai_assessment.network_audit import (
     build_network_audit,
     probe_ipv6_dns,
+    probe_ipv6_udp,
+    probe_ipv4_udp,
 )
 
 
 class NetworkAuditTests(unittest.TestCase):
+    def test_ipv4_udp_reports_protocol_unavailable(self):
+        with patch(
+            "guardian_ai_assessment.network_audit.socket.socket",
+            side_effect=OSError(errno.EAFNOSUPPORT, "IPv4 unavailable"),
+        ):
+            self.assertEqual(probe_ipv4_udp(), "unavailable")
+
+    def test_ipv4_udp_reports_blocked_only_on_no_route(self):
+        fake_socket = MagicMock()
+        fake_socket.sendto.side_effect = OSError(errno.ENETUNREACH, "no route")
+        with patch(
+            "guardian_ai_assessment.network_audit.socket.socket",
+            return_value=fake_socket,
+        ):
+            self.assertEqual(probe_ipv4_udp(), "blocked")
+        fake_socket.close.assert_called_once()
+
+    def test_ipv4_udp_timeout_is_not_misreported_as_blocked(self):
+        fake_socket = MagicMock()
+        fake_socket.sendto.return_value = 32
+        fake_socket.recvfrom.side_effect = socket.timeout()
+        with patch(
+            "guardian_ai_assessment.network_audit.socket.socket",
+            return_value=fake_socket,
+        ):
+            self.assertEqual(probe_ipv4_udp(), "timeout_no_response")
+
+    def test_ipv4_udp_reply_is_reachable(self):
+        fake_socket = MagicMock()
+        fake_socket.sendto.return_value = 32
+        fake_socket.recvfrom.return_value = (b"reply", ("192.0.2.53", 65000))
+        with patch(
+            "guardian_ai_assessment.network_audit.socket.socket",
+            return_value=fake_socket,
+        ):
+            self.assertEqual(probe_ipv4_udp(), "reachable")
+
+    def test_ipv6_udp_reports_blocked_only_on_no_route(self):
+        fake_socket = MagicMock()
+        fake_socket.sendto.side_effect = OSError(errno.ENETUNREACH, "no route")
+        with patch(
+            "guardian_ai_assessment.network_audit.socket.socket",
+            return_value=fake_socket,
+        ):
+            self.assertEqual(probe_ipv6_udp(), "blocked")
+
     def test_ipv6_dns_reports_kernel_protocol_unavailable(self):
         with patch(
             "guardian_ai_assessment.network_audit.socket.socket",
@@ -37,7 +85,7 @@ class NetworkAuditTests(unittest.TestCase):
             "guardian_ai_assessment.network_audit.socket.socket",
             return_value=fake_socket,
         ):
-            self.assertEqual(probe_ipv6_dns(), "sent_no_response")
+            self.assertEqual(probe_ipv6_dns(), "timeout_no_response")
 
     def test_unavailable_ipv6_is_incomplete_not_a_pass(self):
         base = {
@@ -55,6 +103,14 @@ class NetworkAuditTests(unittest.TestCase):
                 return_value="unavailable",
             ),
             patch(
+                "guardian_ai_assessment.network_audit.probe_ipv4_udp",
+                return_value="blocked",
+            ),
+            patch(
+                "guardian_ai_assessment.network_audit.probe_ipv6_udp",
+                return_value="unavailable",
+            ),
+            patch(
                 "guardian_ai_assessment.network_audit.probe_loopback",
                 side_effect=["reachable", "unavailable"],
             ),
@@ -62,7 +118,10 @@ class NetworkAuditTests(unittest.TestCase):
             result = build_network_audit(base)
         self.assertEqual(result["overall"], "incomplete_ipv6_not_verified")
         self.assertEqual(result["ipv6PublicTcp"], "unavailable")
+        self.assertEqual(result["ipv6PublicUdp"], "unavailable")
         self.assertEqual(result["ipv6DnsRoute"], "unavailable")
+        self.assertEqual(result["ipv6Capability"], "kernel_protocol_unavailable")
+        self.assertEqual(result["ipv4PublicUdp"], "blocked")
 
     def test_complete_denials_and_loopback_pass(self):
         base = {
@@ -77,6 +136,14 @@ class NetworkAuditTests(unittest.TestCase):
         with (
             patch(
                 "guardian_ai_assessment.network_audit.probe_ipv6_dns",
+                return_value="blocked",
+            ),
+            patch(
+                "guardian_ai_assessment.network_audit.probe_ipv4_udp",
+                return_value="blocked",
+            ),
+            patch(
+                "guardian_ai_assessment.network_audit.probe_ipv6_udp",
                 return_value="blocked",
             ),
             patch(
@@ -103,12 +170,52 @@ class NetworkAuditTests(unittest.TestCase):
                 return_value="reachable",
             ),
             patch(
+                "guardian_ai_assessment.network_audit.probe_ipv4_udp",
+                return_value="blocked",
+            ),
+            patch(
+                "guardian_ai_assessment.network_audit.probe_ipv6_udp",
+                return_value="blocked",
+            ),
+            patch(
                 "guardian_ai_assessment.network_audit.probe_loopback",
                 return_value="reachable",
             ),
         ):
             result = build_network_audit(base)
         self.assertEqual(result["overall"], "failed")
+
+    def test_ipv4_udp_timeout_fails_closed(self):
+        base = {
+            "networkMode": "docker-network-none",
+            "publicIpv4": "blocked",
+            "publicDns": "blocked",
+            "publicIpv6": "blocked",
+            "ipv6Capability": "socket_and_route_tested",
+            "activeNonLoopbackInterfaces": [],
+            "loopbackOnly": True,
+        }
+        with (
+            patch(
+                "guardian_ai_assessment.network_audit.probe_ipv4_udp",
+                return_value="timeout_no_response",
+            ),
+            patch(
+                "guardian_ai_assessment.network_audit.probe_ipv6_udp",
+                return_value="blocked",
+            ),
+            patch(
+                "guardian_ai_assessment.network_audit.probe_ipv6_dns",
+                return_value="blocked",
+            ),
+            patch(
+                "guardian_ai_assessment.network_audit.probe_loopback",
+                return_value="reachable",
+            ),
+        ):
+            result = build_network_audit(base)
+        self.assertEqual(result["overall"], "failed")
+        self.assertEqual(result["ipv4PublicUdp"], "timeout_no_response")
 
 
 if __name__ == "__main__":
