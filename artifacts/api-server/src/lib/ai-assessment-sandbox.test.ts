@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import {
   ASSESSMENT_EXECUTION_LIMITS,
+  POLICY_LAB_PROFILE_IDS,
   getAssessmentImageReference,
   launchWithPinnedAssessmentImage,
   parseAssessmentImageLock,
@@ -246,6 +247,37 @@ test("Garak and Qwen Docker argument contracts retain isolation and profile-spec
   assert.equal(ASSESSMENT_EXECUTION_LIMITS.maxStdoutBytes, 64 * 1024);
   assert.equal(ASSESSMENT_EXECUTION_LIMITS.garak.timeoutMs, 135_000);
   assert.equal(ASSESSMENT_EXECUTION_LIMITS.qwen.timeoutMs, 180_000);
+});
+
+test("eight policy lab profiles use the pinned offline image with minimal read-only inputs", () => {
+  assert.equal(POLICY_LAB_PROFILE_IDS.length, 8);
+  for (const [index, profileId] of POLICY_LAB_PROFILE_IDS.entries()) {
+    const args = launchWithPinnedAssessmentImage(
+      profileId,
+      `guardian-ai-lab-00000000-0000-4000-8000-${String(index + 20).padStart(12, "0")}`,
+      inspection("qwen"),
+      lock,
+      mounts,
+      (value) => value,
+    );
+    assert.ok(args.includes("--network=none"));
+    assert.ok(args.includes("--pull=never"));
+    assert.ok(args.includes("--read-only"));
+    assert.ok(args.includes("--cap-drop=ALL"));
+    assert.ok(args.includes("--security-opt=no-new-privileges"));
+    assert.ok(args.includes("--user=65532:65532"));
+    assert.ok(args.includes("--cpus=0.25"));
+    assert.ok(args.includes("--memory=256m"));
+    assert.ok(args.includes("--memory-swap=256m"));
+    assert.ok(args.includes("--pids-limit=64"));
+    assert.ok(args.includes(ASSESSMENT_EXECUTION_LIMITS.policyLab.tmpfs));
+    assert.ok(args.some((arg) => arg.endsWith("/guardian_ai_assessment,readonly")));
+    assert.equal(args.some((arg) => arg.includes("/models/")), false);
+    assert.equal(args.some((arg) => arg.includes("/wheelhouse")), false);
+    assert.equal(args.some((arg) => arg.includes("docker.sock")), false);
+    assert.equal(args.at(-1), profileId);
+    assert.ok(args.includes("exec python -B -m guardian_ai_assessment.policy_lab --profile-id \"$1\""));
+  }
 });
 
 test("profile image lock cannot be redirected to an arbitrary image or command", () => {

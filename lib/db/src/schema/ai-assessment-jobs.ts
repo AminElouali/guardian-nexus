@@ -783,11 +783,163 @@ export type GuardianLocalLlmAutonomousToolSelectionEvidence = Omit<
   taskId: "autonomous_tool_selection_en_es_v1";
 };
 
+export type GuardianAgentPolicyLabEvidence = {
+  evidenceVersion: 1;
+  source: "synthetic_policy_scenarios";
+  engine: "guardian_policy_lab";
+  engineVersion: "guardian-agent-policy-lab-v1";
+  profileId:
+    | "guardian-agent-lab-email-v1"
+    | "guardian-agent-lab-database-v1"
+    | "guardian-agent-lab-finance-v1"
+    | "guardian-agent-lab-programming-v1"
+    | "guardian-agent-lab-customer-service-v1"
+    | "guardian-agent-lab-browser-v1"
+    | "guardian-agent-lab-infrastructure-v1"
+    | "guardian-agent-lab-multiagent-v1";
+  verticalId:
+    | "email"
+    | "database"
+    | "finance"
+    | "programming"
+    | "customer_service"
+    | "browser"
+    | "infrastructure"
+    | "multiagent";
+  verticalLabel: string;
+  executionMode: "deterministic_fixture";
+  proposalOrigin: "controlled_fixture_not_llm";
+  modelInference: false;
+  agentIdentity: {
+    agentId: string;
+    agentType: "deterministic_synthetic_agent";
+    actorId: "SYNTHETIC-LAB-OPERATOR";
+    actorType: "synthetic_user";
+    tenantContext: "SYNTHETIC-WORKSPACE";
+    parentAgentId: string | null;
+    permissions: string[];
+    identityPreservedAcrossDelegation: true;
+  };
+  versions: { policy: string; corpus: string; oracle: string };
+  seed: number;
+  sampleCount: 2;
+  cases: Array<{
+    caseId: string;
+    label: "benign" | "adversarial";
+    language: "en" | "es";
+    tool: string;
+    operation: string;
+    resourceType: string;
+    resourceId: string;
+    resourceWorkspaceId: string;
+    sensitivity: "public" | "internal" | "confidential" | "restricted";
+    instructionProvenance:
+      | "trusted_user_request"
+      | "untrusted_email"
+      | "untrusted_document"
+      | "untrusted_ticket"
+      | "untrusted_web_content"
+      | "delegated_agent";
+    agentId: string;
+    actorId: "SYNTHETIC-LAB-OPERATOR";
+    actorType: "synthetic_user" | "delegated_agent";
+    grantedPermissions: string[];
+    requestedPermissions: string[];
+    requiredPermissions: string[];
+    actionSha256: string;
+    proposalSha256: string;
+    policyOn: {
+      decision: "allow" | "deny" | "require_approval";
+      reasonCode: string;
+      proposed: true;
+      attempted: true;
+      authorized: boolean;
+      executed: boolean;
+      simulatedOnly: true;
+      stateChanged: boolean;
+      stateBeforeSha256: string;
+      stateAfterSha256: string;
+      eventPhases: Array<
+        | "proposed"
+        | "attempted"
+        | "authorization_check"
+        | "allow"
+        | "deny"
+        | "require_approval"
+        | "authorized"
+        | "executed"
+      >;
+    };
+    policyOff: {
+      mode: "counterfactual_clone_only";
+      decision: "bypassed_counterfactual";
+      proposed: true;
+      attempted: true;
+      authorized: null;
+      executed: false;
+      counterfactualWouldExecute: true;
+      counterfactualCloneStateChanged: boolean;
+      stateBeforeSha256: string;
+      stateAfterSha256: string;
+      simulatedOnly: true;
+      eventPhases: string[];
+    };
+    delegation: {
+      isDelegatedAction: boolean;
+      originalActorPreserved: true;
+      parentAgentId: string | null;
+      permissionElevationRequested: boolean;
+      permissionElevationAllowed: false;
+    };
+    unauthorizedActionExecuted: false;
+    rawArgumentsStored: false;
+    rawInstructionStored: false;
+    caseEvidenceSha256: string;
+  }>;
+  summary: {
+    sampleCount: number;
+    benignCases: number;
+    adversarialCases: number;
+    proposed: number;
+    attempted: number;
+    allowed: number;
+    denied: number;
+    requiresApproval: number;
+    simulatedExecutions: number;
+    unauthorizedExecutions: 0;
+    policyOffCounterfactualWouldExecute: number;
+    policyOffCloneStateChanges: number;
+    actualOperations: 0;
+    persistentStateChanges: 0;
+    externalCalls: 0;
+  };
+  selfChecks: Record<string, boolean>;
+  selfCheckStatus: "passed" | "failed";
+  suiteEvidenceSha256: string;
+  startedAt: string;
+  completedAt: string;
+  durationMs: number;
+  limits: {
+    network: "docker-network-none";
+    concurrency: 1;
+    maxCases: 2;
+    customerDataUsed: false;
+    externalCalls: 0;
+    actualOperations: 0;
+    rawPromptsStored: false;
+    rawResponsesStored: false;
+    rawArgumentsStored: false;
+  };
+  interpretation: string;
+  evidenceSha256: string;
+};
+
 export type AiAssessmentJobEvidence =
   | AiAssessmentEvidence
   | GuardianLocalLlmEvidence
   | GuardianLocalLlmNativeToolSuiteEvidence
-  | GuardianLocalLlmAutonomousToolSelectionEvidence;
+  | GuardianLocalLlmAutonomousToolSelectionEvidence
+  | GuardianAgentPolicyLabEvidence;
 
 const memberScope = (workspaceId: SQLWrapper) => sql`
   ${workspaceId}::text = NULLIF(current_setting('app.workspace_id', true), '')
@@ -864,7 +1016,7 @@ export const aiAssessmentJobsTable = pgTable(
     ),
     check(
       "ai_assessment_jobs_profile_check",
-      sql`${table.profileId} IN ('guardian-local-agent-v1', 'guardian-local-llm-qwen3-0.6b-v1', 'guardian-local-llm-native-tools-v1', 'guardian-local-llm-autonomous-tools-v1')`,
+      sql`${table.profileId} IN ('guardian-local-agent-v1', 'guardian-local-llm-qwen3-0.6b-v1', 'guardian-local-llm-native-tools-v1', 'guardian-local-llm-autonomous-tools-v1', 'guardian-agent-lab-email-v1', 'guardian-agent-lab-database-v1', 'guardian-agent-lab-finance-v1', 'guardian-agent-lab-programming-v1', 'guardian-agent-lab-customer-service-v1', 'guardian-agent-lab-browser-v1', 'guardian-agent-lab-infrastructure-v1', 'guardian-agent-lab-multiagent-v1')`,
     ),
     check(
       "ai_assessment_jobs_attempts_check",
@@ -914,7 +1066,7 @@ export const aiAssessmentJobsTable = pgTable(
         )
       `,
       withCheck: sql`
-        ${table.profileId} IN ('guardian-local-agent-v1', 'guardian-local-llm-qwen3-0.6b-v1', 'guardian-local-llm-native-tools-v1', 'guardian-local-llm-autonomous-tools-v1')
+        ${table.profileId} IN ('guardian-local-agent-v1', 'guardian-local-llm-qwen3-0.6b-v1', 'guardian-local-llm-native-tools-v1', 'guardian-local-llm-autonomous-tools-v1', 'guardian-agent-lab-email-v1', 'guardian-agent-lab-database-v1', 'guardian-agent-lab-finance-v1', 'guardian-agent-lab-programming-v1', 'guardian-agent-lab-customer-service-v1', 'guardian-agent-lab-browser-v1', 'guardian-agent-lab-infrastructure-v1', 'guardian-agent-lab-multiagent-v1')
         AND ${table.status} IN ('running', 'failed')
         AND (
           ${table.status} = 'failed'

@@ -470,8 +470,8 @@ export const GetWorkspaceAiAssessmentLabAvailabilityResponse = zod.object({
   "workerVersion": zod.string(),
   "reasonCode": zod.string().nullable(),
   "profiles": zod.array(zod.object({
-  "profileId": zod.enum(['guardian-local-agent-v1', 'guardian-local-llm-qwen3-0.6b-v1', 'guardian-local-llm-native-tools-v1', 'guardian-local-llm-autonomous-tools-v1']),
-  "engine": zod.enum(['garak', 'local_llm_lab']),
+  "profileId": zod.enum(['guardian-local-agent-v1', 'guardian-local-llm-qwen3-0.6b-v1', 'guardian-local-llm-native-tools-v1', 'guardian-local-llm-autonomous-tools-v1', 'guardian-agent-lab-email-v1', 'guardian-agent-lab-database-v1', 'guardian-agent-lab-finance-v1', 'guardian-agent-lab-programming-v1', 'guardian-agent-lab-customer-service-v1', 'guardian-agent-lab-browser-v1', 'guardian-agent-lab-infrastructure-v1', 'guardian-agent-lab-multiagent-v1']),
+  "engine": zod.enum(['garak', 'local_llm_lab', 'guardian_policy_lab']),
   "status": zod.enum(['ready', 'unavailable', 'disabled']),
   "reasonCode": zod.string().nullable()
 }))
@@ -1385,12 +1385,78 @@ export const listWorkspaceAiAssessmentLabJobsResponseResultFourOneDurationSecond
 export const listWorkspaceAiAssessmentLabJobsResponseResultFourOneInterpretationMax = 500;
 
 export const listWorkspaceAiAssessmentLabJobsResponseResultFourOneEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const listWorkspaceAiAssessmentLabJobsResponseResultFiveVerticalLabelMax = 80;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultFiveAgentIdentityAgentIdMax = 100;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultFiveAgentIdentityParentAgentIdMax = 100;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultFiveAgentIdentityPermissionsItemMax = 80;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultFiveAgentIdentityPermissionsMax = 16;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultFiveCasesItemCaseIdMax = 100;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultFiveCasesItemToolMax = 100;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultFiveCasesItemOperationMax = 100;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultFiveCasesItemResourceTypeMax = 80;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultFiveCasesItemResourceIdMax = 180;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultFiveCasesItemRequestedPermissionsItemMax = 80;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultFiveCasesItemRequestedPermissionsMax = 8;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultFiveCasesItemRequiredPermissionsItemMax = 80;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultFiveCasesItemRequiredPermissionsMax = 8;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultFiveCasesItemActionSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const listWorkspaceAiAssessmentLabJobsResponseResultFiveCasesItemProposalSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const listWorkspaceAiAssessmentLabJobsResponseResultFiveCasesItemPolicyOnReasonCodeMax = 80;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultFiveCasesItemPolicyOnStateBeforeSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const listWorkspaceAiAssessmentLabJobsResponseResultFiveCasesItemPolicyOnStateAfterSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const listWorkspaceAiAssessmentLabJobsResponseResultFiveCasesItemPolicyOnEventPhasesMax = 6;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultFiveCasesItemPolicyOffStateBeforeSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const listWorkspaceAiAssessmentLabJobsResponseResultFiveCasesItemPolicyOffStateAfterSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const listWorkspaceAiAssessmentLabJobsResponseResultFiveCasesItemPolicyOffEventPhasesMax = 5;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultFiveCasesItemCaseEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const listWorkspaceAiAssessmentLabJobsResponseResultFiveCasesMin = 2;
+export const listWorkspaceAiAssessmentLabJobsResponseResultFiveCasesMax = 2;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultFiveSummaryAllowedMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultFiveSummaryAllowedMax = 2;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultFiveSummaryDeniedMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultFiveSummaryDeniedMax = 2;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultFiveSummaryRequiresApprovalMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultFiveSummaryRequiresApprovalMax = 2;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultFiveSummarySimulatedExecutionsMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultFiveSummarySimulatedExecutionsMax = 2;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultFiveSummaryPolicyOffCloneStateChangesMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultFiveSummaryPolicyOffCloneStateChangesMax = 2;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultFiveSuiteEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const listWorkspaceAiAssessmentLabJobsResponseResultFiveDurationMsMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultFiveDurationMsMax = 30000;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultFiveInterpretationMax = 500;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultFiveEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 
 
 export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "id": zod.uuid(),
   "status": zod.enum(['queued', 'running', 'succeeded', 'failed']),
-  "profileId": zod.enum(['guardian-local-agent-v1', 'guardian-local-llm-qwen3-0.6b-v1', 'guardian-local-llm-native-tools-v1', 'guardian-local-llm-autonomous-tools-v1']),
+  "profileId": zod.enum(['guardian-local-agent-v1', 'guardian-local-llm-qwen3-0.6b-v1', 'guardian-local-llm-native-tools-v1', 'guardian-local-llm-autonomous-tools-v1', 'guardian-agent-lab-email-v1', 'guardian-agent-lab-database-v1', 'guardian-agent-lab-finance-v1', 'guardian-agent-lab-programming-v1', 'guardian-agent-lab-customer-service-v1', 'guardian-agent-lab-browser-v1', 'guardian-agent-lab-infrastructure-v1', 'guardian-agent-lab-multiagent-v1']),
   "workerVersion": zod.string(),
   "attempts": zod.int(),
   "engineVersion": zod.string().nullable(),
@@ -2499,7 +2565,132 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "engineVersion": zod.enum(['guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1', 'guardian-autonomous-tool-selection-v1.2', 'guardian-autonomous-tool-selection-v1.3', 'guardian-autonomous-tool-selection-v1.4']),
   "profileId": zod.literal("guardian-local-llm-autonomous-tools-v1"),
   "taskId": zod.literal("autonomous_tool_selection_en_es_v1")
-})),zod.null()]),
+})),zod.object({
+  "evidenceVersion": zod.literal(1),
+  "source": zod.literal("synthetic_policy_scenarios"),
+  "engine": zod.literal("guardian_policy_lab"),
+  "engineVersion": zod.literal("guardian-agent-policy-lab-v1"),
+  "profileId": zod.enum(['guardian-agent-lab-email-v1', 'guardian-agent-lab-database-v1', 'guardian-agent-lab-finance-v1', 'guardian-agent-lab-programming-v1', 'guardian-agent-lab-customer-service-v1', 'guardian-agent-lab-browser-v1', 'guardian-agent-lab-infrastructure-v1', 'guardian-agent-lab-multiagent-v1']),
+  "verticalId": zod.enum(['email', 'database', 'finance', 'programming', 'customer_service', 'browser', 'infrastructure', 'multiagent']),
+  "verticalLabel": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultFiveVerticalLabelMax),
+  "executionMode": zod.literal("deterministic_fixture"),
+  "proposalOrigin": zod.literal("controlled_fixture_not_llm"),
+  "modelInference": zod.literal(false),
+  "agentIdentity": zod.object({
+  "agentId": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultFiveAgentIdentityAgentIdMax),
+  "agentType": zod.literal("deterministic_synthetic_agent"),
+  "actorId": zod.literal("SYNTHETIC-LAB-OPERATOR"),
+  "actorType": zod.literal("synthetic_user"),
+  "tenantContext": zod.literal("SYNTHETIC-WORKSPACE"),
+  "parentAgentId": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultFiveAgentIdentityParentAgentIdMax).nullable(),
+  "permissions": zod.array(zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultFiveAgentIdentityPermissionsItemMax)).max(listWorkspaceAiAssessmentLabJobsResponseResultFiveAgentIdentityPermissionsMax),
+  "identityPreservedAcrossDelegation": zod.literal(true)
+}),
+  "versions": zod.object({
+  "policy": zod.literal("guardian-policy-engine-synthetic-v1"),
+  "corpus": zod.literal("guardian-agent-lab-corpus-v1"),
+  "oracle": zod.literal("guardian-policy-oracle-v1")
+}),
+  "seed": zod.literal(20261102),
+  "sampleCount": zod.literal(2),
+  "cases": zod.array(zod.object({
+  "caseId": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultFiveCasesItemCaseIdMax),
+  "label": zod.enum(['benign', 'adversarial']),
+  "language": zod.enum(['en', 'es']),
+  "tool": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultFiveCasesItemToolMax),
+  "operation": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultFiveCasesItemOperationMax),
+  "resourceType": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultFiveCasesItemResourceTypeMax),
+  "resourceId": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultFiveCasesItemResourceIdMax),
+  "sensitivity": zod.enum(['public', 'internal', 'confidential', 'restricted']),
+  "instructionProvenance": zod.enum(['trusted_user_request', 'untrusted_email', 'untrusted_document', 'untrusted_ticket', 'untrusted_web_content', 'delegated_agent']),
+  "requestedPermissions": zod.array(zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultFiveCasesItemRequestedPermissionsItemMax)).max(listWorkspaceAiAssessmentLabJobsResponseResultFiveCasesItemRequestedPermissionsMax),
+  "requiredPermissions": zod.array(zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultFiveCasesItemRequiredPermissionsItemMax)).max(listWorkspaceAiAssessmentLabJobsResponseResultFiveCasesItemRequiredPermissionsMax),
+  "actionSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultFiveCasesItemActionSha256RegExp),
+  "proposalSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultFiveCasesItemProposalSha256RegExp),
+  "policyOn": zod.object({
+  "decision": zod.enum(['allow', 'deny', 'require_approval']),
+  "reasonCode": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultFiveCasesItemPolicyOnReasonCodeMax),
+  "proposed": zod.literal(true),
+  "attempted": zod.literal(true),
+  "authorized": zod.boolean(),
+  "executed": zod.boolean(),
+  "simulatedOnly": zod.literal(true),
+  "stateChanged": zod.boolean(),
+  "stateBeforeSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultFiveCasesItemPolicyOnStateBeforeSha256RegExp),
+  "stateAfterSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultFiveCasesItemPolicyOnStateAfterSha256RegExp),
+  "eventPhases": zod.array(zod.enum(['proposed', 'attempted', 'allow', 'deny', 'require_approval', 'executed'])).max(listWorkspaceAiAssessmentLabJobsResponseResultFiveCasesItemPolicyOnEventPhasesMax)
+}),
+  "policyOff": zod.object({
+  "mode": zod.literal("counterfactual_clone_only"),
+  "decision": zod.literal("bypassed_counterfactual"),
+  "proposed": zod.literal(true),
+  "attempted": zod.literal(true),
+  "authorized": zod.null(),
+  "executed": zod.literal(false),
+  "counterfactualWouldExecute": zod.literal(true),
+  "counterfactualCloneStateChanged": zod.boolean(),
+  "stateBeforeSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultFiveCasesItemPolicyOffStateBeforeSha256RegExp),
+  "stateAfterSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultFiveCasesItemPolicyOffStateAfterSha256RegExp),
+  "simulatedOnly": zod.literal(true),
+  "eventPhases": zod.array(zod.enum(['proposed', 'attempted', 'policy_bypassed', 'counterfactual_would_execute'])).max(listWorkspaceAiAssessmentLabJobsResponseResultFiveCasesItemPolicyOffEventPhasesMax)
+}),
+  "delegation": zod.object({
+  "isDelegatedAction": zod.boolean(),
+  "originalActorPreserved": zod.literal(true),
+  "permissionElevationRequested": zod.boolean(),
+  "permissionElevationAllowed": zod.literal(false)
+}),
+  "unauthorizedActionExecuted": zod.literal(false),
+  "rawArgumentsStored": zod.literal(false),
+  "rawInstructionStored": zod.literal(false),
+  "caseEvidenceSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultFiveCasesItemCaseEvidenceSha256RegExp)
+})).min(listWorkspaceAiAssessmentLabJobsResponseResultFiveCasesMin).max(listWorkspaceAiAssessmentLabJobsResponseResultFiveCasesMax),
+  "summary": zod.object({
+  "sampleCount": zod.literal(2),
+  "benignCases": zod.literal(1),
+  "adversarialCases": zod.literal(1),
+  "proposed": zod.literal(2),
+  "attempted": zod.literal(2),
+  "allowed": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultFiveSummaryAllowedMin).max(listWorkspaceAiAssessmentLabJobsResponseResultFiveSummaryAllowedMax),
+  "denied": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultFiveSummaryDeniedMin).max(listWorkspaceAiAssessmentLabJobsResponseResultFiveSummaryDeniedMax),
+  "requiresApproval": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultFiveSummaryRequiresApprovalMin).max(listWorkspaceAiAssessmentLabJobsResponseResultFiveSummaryRequiresApprovalMax),
+  "simulatedExecutions": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultFiveSummarySimulatedExecutionsMin).max(listWorkspaceAiAssessmentLabJobsResponseResultFiveSummarySimulatedExecutionsMax),
+  "unauthorizedExecutions": zod.literal(0),
+  "policyOffCounterfactualWouldExecute": zod.literal(2),
+  "policyOffCloneStateChanges": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultFiveSummaryPolicyOffCloneStateChangesMin).max(listWorkspaceAiAssessmentLabJobsResponseResultFiveSummaryPolicyOffCloneStateChangesMax),
+  "actualOperations": zod.literal(0),
+  "persistentStateChanges": zod.literal(0),
+  "externalCalls": zod.literal(0)
+}),
+  "selfChecks": zod.object({
+  "hasBenignAndAdversarialCases": zod.literal(true),
+  "everyProposalHasIndependentPolicyDecision": zod.literal(true),
+  "noUnauthorizedActionExecuted": zod.literal(true),
+  "policyOffNeverExecutes": zod.literal(true),
+  "policyOffUsesClonesOnly": zod.literal(true),
+  "delegationCannotElevatePermissions": zod.literal(true),
+  "noPersistentOrExternalEffects": zod.literal(true),
+  "rawPromptsArgumentsAndInstructionsNotStored": zod.literal(true)
+}),
+  "selfCheckStatus": zod.literal("passed"),
+  "suiteEvidenceSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultFiveSuiteEvidenceSha256RegExp),
+  "startedAt": zod.coerce.date(),
+  "completedAt": zod.coerce.date(),
+  "durationMs": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultFiveDurationMsMin).max(listWorkspaceAiAssessmentLabJobsResponseResultFiveDurationMsMax),
+  "limits": zod.object({
+  "network": zod.literal("docker-network-none"),
+  "concurrency": zod.literal(1),
+  "maxCases": zod.literal(2),
+  "customerDataUsed": zod.literal(false),
+  "externalCalls": zod.literal(0),
+  "actualOperations": zod.literal(0),
+  "rawPromptsStored": zod.literal(false),
+  "rawResponsesStored": zod.literal(false),
+  "rawArgumentsStored": zod.literal(false)
+}),
+  "interpretation": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultFiveInterpretationMax),
+  "evidenceSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultFiveEvidenceSha256RegExp)
+}),zod.null()]),
   "errorCode": zod.string().nullable(),
   "createdAt": zod.coerce.date(),
   "startedAt": zod.coerce.date().nullable(),
@@ -2523,7 +2714,7 @@ export const createWorkspaceAiAssessmentLabJobBodyProfileIdDefault = `guardian-l
 
 export const CreateWorkspaceAiAssessmentLabJobBody = zod.object({
   "idempotencyKey": zod.string().min(createWorkspaceAiAssessmentLabJobBodyIdempotencyKeyMin).max(createWorkspaceAiAssessmentLabJobBodyIdempotencyKeyMax),
-  "profileId": zod.enum(['guardian-local-agent-v1', 'guardian-local-llm-qwen3-0.6b-v1', 'guardian-local-llm-native-tools-v1', 'guardian-local-llm-autonomous-tools-v1']).default(createWorkspaceAiAssessmentLabJobBodyProfileIdDefault)
+  "profileId": zod.enum(['guardian-local-agent-v1', 'guardian-local-llm-qwen3-0.6b-v1', 'guardian-local-llm-native-tools-v1', 'guardian-local-llm-autonomous-tools-v1', 'guardian-agent-lab-email-v1', 'guardian-agent-lab-database-v1', 'guardian-agent-lab-finance-v1', 'guardian-agent-lab-programming-v1', 'guardian-agent-lab-customer-service-v1', 'guardian-agent-lab-browser-v1', 'guardian-agent-lab-infrastructure-v1', 'guardian-agent-lab-multiagent-v1']).default(createWorkspaceAiAssessmentLabJobBodyProfileIdDefault)
 })
 
 export const createWorkspaceAiAssessmentLabJobResponseResultOneReportSha256RegExp = new RegExp('^[a-f0-9]{64}$');
@@ -3426,12 +3617,78 @@ export const createWorkspaceAiAssessmentLabJobResponseResultFourOneDurationSecon
 export const createWorkspaceAiAssessmentLabJobResponseResultFourOneInterpretationMax = 500;
 
 export const createWorkspaceAiAssessmentLabJobResponseResultFourOneEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceAiAssessmentLabJobResponseResultFiveVerticalLabelMax = 80;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultFiveAgentIdentityAgentIdMax = 100;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultFiveAgentIdentityParentAgentIdMax = 100;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultFiveAgentIdentityPermissionsItemMax = 80;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultFiveAgentIdentityPermissionsMax = 16;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemCaseIdMax = 100;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemToolMax = 100;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemOperationMax = 100;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemResourceTypeMax = 80;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemResourceIdMax = 180;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemRequestedPermissionsItemMax = 80;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemRequestedPermissionsMax = 8;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemRequiredPermissionsItemMax = 80;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemRequiredPermissionsMax = 8;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemActionSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemProposalSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemPolicyOnReasonCodeMax = 80;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemPolicyOnStateBeforeSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemPolicyOnStateAfterSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemPolicyOnEventPhasesMax = 6;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemPolicyOffStateBeforeSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemPolicyOffStateAfterSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemPolicyOffEventPhasesMax = 5;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemCaseEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceAiAssessmentLabJobResponseResultFiveCasesMin = 2;
+export const createWorkspaceAiAssessmentLabJobResponseResultFiveCasesMax = 2;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultFiveSummaryAllowedMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultFiveSummaryAllowedMax = 2;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultFiveSummaryDeniedMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultFiveSummaryDeniedMax = 2;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultFiveSummaryRequiresApprovalMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultFiveSummaryRequiresApprovalMax = 2;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultFiveSummarySimulatedExecutionsMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultFiveSummarySimulatedExecutionsMax = 2;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultFiveSummaryPolicyOffCloneStateChangesMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultFiveSummaryPolicyOffCloneStateChangesMax = 2;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultFiveSuiteEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceAiAssessmentLabJobResponseResultFiveDurationMsMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultFiveDurationMsMax = 30000;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultFiveInterpretationMax = 500;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultFiveEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 
 
 export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "id": zod.uuid(),
   "status": zod.enum(['queued', 'running', 'succeeded', 'failed']),
-  "profileId": zod.enum(['guardian-local-agent-v1', 'guardian-local-llm-qwen3-0.6b-v1', 'guardian-local-llm-native-tools-v1', 'guardian-local-llm-autonomous-tools-v1']),
+  "profileId": zod.enum(['guardian-local-agent-v1', 'guardian-local-llm-qwen3-0.6b-v1', 'guardian-local-llm-native-tools-v1', 'guardian-local-llm-autonomous-tools-v1', 'guardian-agent-lab-email-v1', 'guardian-agent-lab-database-v1', 'guardian-agent-lab-finance-v1', 'guardian-agent-lab-programming-v1', 'guardian-agent-lab-customer-service-v1', 'guardian-agent-lab-browser-v1', 'guardian-agent-lab-infrastructure-v1', 'guardian-agent-lab-multiagent-v1']),
   "workerVersion": zod.string(),
   "attempts": zod.int(),
   "engineVersion": zod.string().nullable(),
@@ -4540,7 +4797,132 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "engineVersion": zod.enum(['guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1', 'guardian-autonomous-tool-selection-v1.2', 'guardian-autonomous-tool-selection-v1.3', 'guardian-autonomous-tool-selection-v1.4']),
   "profileId": zod.literal("guardian-local-llm-autonomous-tools-v1"),
   "taskId": zod.literal("autonomous_tool_selection_en_es_v1")
-})),zod.null()]),
+})),zod.object({
+  "evidenceVersion": zod.literal(1),
+  "source": zod.literal("synthetic_policy_scenarios"),
+  "engine": zod.literal("guardian_policy_lab"),
+  "engineVersion": zod.literal("guardian-agent-policy-lab-v1"),
+  "profileId": zod.enum(['guardian-agent-lab-email-v1', 'guardian-agent-lab-database-v1', 'guardian-agent-lab-finance-v1', 'guardian-agent-lab-programming-v1', 'guardian-agent-lab-customer-service-v1', 'guardian-agent-lab-browser-v1', 'guardian-agent-lab-infrastructure-v1', 'guardian-agent-lab-multiagent-v1']),
+  "verticalId": zod.enum(['email', 'database', 'finance', 'programming', 'customer_service', 'browser', 'infrastructure', 'multiagent']),
+  "verticalLabel": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultFiveVerticalLabelMax),
+  "executionMode": zod.literal("deterministic_fixture"),
+  "proposalOrigin": zod.literal("controlled_fixture_not_llm"),
+  "modelInference": zod.literal(false),
+  "agentIdentity": zod.object({
+  "agentId": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultFiveAgentIdentityAgentIdMax),
+  "agentType": zod.literal("deterministic_synthetic_agent"),
+  "actorId": zod.literal("SYNTHETIC-LAB-OPERATOR"),
+  "actorType": zod.literal("synthetic_user"),
+  "tenantContext": zod.literal("SYNTHETIC-WORKSPACE"),
+  "parentAgentId": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultFiveAgentIdentityParentAgentIdMax).nullable(),
+  "permissions": zod.array(zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultFiveAgentIdentityPermissionsItemMax)).max(createWorkspaceAiAssessmentLabJobResponseResultFiveAgentIdentityPermissionsMax),
+  "identityPreservedAcrossDelegation": zod.literal(true)
+}),
+  "versions": zod.object({
+  "policy": zod.literal("guardian-policy-engine-synthetic-v1"),
+  "corpus": zod.literal("guardian-agent-lab-corpus-v1"),
+  "oracle": zod.literal("guardian-policy-oracle-v1")
+}),
+  "seed": zod.literal(20261102),
+  "sampleCount": zod.literal(2),
+  "cases": zod.array(zod.object({
+  "caseId": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemCaseIdMax),
+  "label": zod.enum(['benign', 'adversarial']),
+  "language": zod.enum(['en', 'es']),
+  "tool": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemToolMax),
+  "operation": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemOperationMax),
+  "resourceType": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemResourceTypeMax),
+  "resourceId": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemResourceIdMax),
+  "sensitivity": zod.enum(['public', 'internal', 'confidential', 'restricted']),
+  "instructionProvenance": zod.enum(['trusted_user_request', 'untrusted_email', 'untrusted_document', 'untrusted_ticket', 'untrusted_web_content', 'delegated_agent']),
+  "requestedPermissions": zod.array(zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemRequestedPermissionsItemMax)).max(createWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemRequestedPermissionsMax),
+  "requiredPermissions": zod.array(zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemRequiredPermissionsItemMax)).max(createWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemRequiredPermissionsMax),
+  "actionSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemActionSha256RegExp),
+  "proposalSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemProposalSha256RegExp),
+  "policyOn": zod.object({
+  "decision": zod.enum(['allow', 'deny', 'require_approval']),
+  "reasonCode": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemPolicyOnReasonCodeMax),
+  "proposed": zod.literal(true),
+  "attempted": zod.literal(true),
+  "authorized": zod.boolean(),
+  "executed": zod.boolean(),
+  "simulatedOnly": zod.literal(true),
+  "stateChanged": zod.boolean(),
+  "stateBeforeSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemPolicyOnStateBeforeSha256RegExp),
+  "stateAfterSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemPolicyOnStateAfterSha256RegExp),
+  "eventPhases": zod.array(zod.enum(['proposed', 'attempted', 'allow', 'deny', 'require_approval', 'executed'])).max(createWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemPolicyOnEventPhasesMax)
+}),
+  "policyOff": zod.object({
+  "mode": zod.literal("counterfactual_clone_only"),
+  "decision": zod.literal("bypassed_counterfactual"),
+  "proposed": zod.literal(true),
+  "attempted": zod.literal(true),
+  "authorized": zod.null(),
+  "executed": zod.literal(false),
+  "counterfactualWouldExecute": zod.literal(true),
+  "counterfactualCloneStateChanged": zod.boolean(),
+  "stateBeforeSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemPolicyOffStateBeforeSha256RegExp),
+  "stateAfterSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemPolicyOffStateAfterSha256RegExp),
+  "simulatedOnly": zod.literal(true),
+  "eventPhases": zod.array(zod.enum(['proposed', 'attempted', 'policy_bypassed', 'counterfactual_would_execute'])).max(createWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemPolicyOffEventPhasesMax)
+}),
+  "delegation": zod.object({
+  "isDelegatedAction": zod.boolean(),
+  "originalActorPreserved": zod.literal(true),
+  "permissionElevationRequested": zod.boolean(),
+  "permissionElevationAllowed": zod.literal(false)
+}),
+  "unauthorizedActionExecuted": zod.literal(false),
+  "rawArgumentsStored": zod.literal(false),
+  "rawInstructionStored": zod.literal(false),
+  "caseEvidenceSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemCaseEvidenceSha256RegExp)
+})).min(createWorkspaceAiAssessmentLabJobResponseResultFiveCasesMin).max(createWorkspaceAiAssessmentLabJobResponseResultFiveCasesMax),
+  "summary": zod.object({
+  "sampleCount": zod.literal(2),
+  "benignCases": zod.literal(1),
+  "adversarialCases": zod.literal(1),
+  "proposed": zod.literal(2),
+  "attempted": zod.literal(2),
+  "allowed": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultFiveSummaryAllowedMin).max(createWorkspaceAiAssessmentLabJobResponseResultFiveSummaryAllowedMax),
+  "denied": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultFiveSummaryDeniedMin).max(createWorkspaceAiAssessmentLabJobResponseResultFiveSummaryDeniedMax),
+  "requiresApproval": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultFiveSummaryRequiresApprovalMin).max(createWorkspaceAiAssessmentLabJobResponseResultFiveSummaryRequiresApprovalMax),
+  "simulatedExecutions": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultFiveSummarySimulatedExecutionsMin).max(createWorkspaceAiAssessmentLabJobResponseResultFiveSummarySimulatedExecutionsMax),
+  "unauthorizedExecutions": zod.literal(0),
+  "policyOffCounterfactualWouldExecute": zod.literal(2),
+  "policyOffCloneStateChanges": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultFiveSummaryPolicyOffCloneStateChangesMin).max(createWorkspaceAiAssessmentLabJobResponseResultFiveSummaryPolicyOffCloneStateChangesMax),
+  "actualOperations": zod.literal(0),
+  "persistentStateChanges": zod.literal(0),
+  "externalCalls": zod.literal(0)
+}),
+  "selfChecks": zod.object({
+  "hasBenignAndAdversarialCases": zod.literal(true),
+  "everyProposalHasIndependentPolicyDecision": zod.literal(true),
+  "noUnauthorizedActionExecuted": zod.literal(true),
+  "policyOffNeverExecutes": zod.literal(true),
+  "policyOffUsesClonesOnly": zod.literal(true),
+  "delegationCannotElevatePermissions": zod.literal(true),
+  "noPersistentOrExternalEffects": zod.literal(true),
+  "rawPromptsArgumentsAndInstructionsNotStored": zod.literal(true)
+}),
+  "selfCheckStatus": zod.literal("passed"),
+  "suiteEvidenceSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultFiveSuiteEvidenceSha256RegExp),
+  "startedAt": zod.coerce.date(),
+  "completedAt": zod.coerce.date(),
+  "durationMs": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultFiveDurationMsMin).max(createWorkspaceAiAssessmentLabJobResponseResultFiveDurationMsMax),
+  "limits": zod.object({
+  "network": zod.literal("docker-network-none"),
+  "concurrency": zod.literal(1),
+  "maxCases": zod.literal(2),
+  "customerDataUsed": zod.literal(false),
+  "externalCalls": zod.literal(0),
+  "actualOperations": zod.literal(0),
+  "rawPromptsStored": zod.literal(false),
+  "rawResponsesStored": zod.literal(false),
+  "rawArgumentsStored": zod.literal(false)
+}),
+  "interpretation": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultFiveInterpretationMax),
+  "evidenceSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultFiveEvidenceSha256RegExp)
+}),zod.null()]),
   "errorCode": zod.string().nullable(),
   "createdAt": zod.coerce.date(),
   "startedAt": zod.coerce.date().nullable(),
@@ -5456,12 +5838,78 @@ export const retryWorkspaceAiAssessmentLabJobResponseResultFourOneDurationSecond
 export const retryWorkspaceAiAssessmentLabJobResponseResultFourOneInterpretationMax = 500;
 
 export const retryWorkspaceAiAssessmentLabJobResponseResultFourOneEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const retryWorkspaceAiAssessmentLabJobResponseResultFiveVerticalLabelMax = 80;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultFiveAgentIdentityAgentIdMax = 100;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultFiveAgentIdentityParentAgentIdMax = 100;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultFiveAgentIdentityPermissionsItemMax = 80;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultFiveAgentIdentityPermissionsMax = 16;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemCaseIdMax = 100;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemToolMax = 100;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemOperationMax = 100;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemResourceTypeMax = 80;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemResourceIdMax = 180;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemRequestedPermissionsItemMax = 80;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemRequestedPermissionsMax = 8;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemRequiredPermissionsItemMax = 80;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemRequiredPermissionsMax = 8;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemActionSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const retryWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemProposalSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const retryWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemPolicyOnReasonCodeMax = 80;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemPolicyOnStateBeforeSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const retryWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemPolicyOnStateAfterSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const retryWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemPolicyOnEventPhasesMax = 6;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemPolicyOffStateBeforeSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const retryWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemPolicyOffStateAfterSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const retryWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemPolicyOffEventPhasesMax = 5;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemCaseEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const retryWorkspaceAiAssessmentLabJobResponseResultFiveCasesMin = 2;
+export const retryWorkspaceAiAssessmentLabJobResponseResultFiveCasesMax = 2;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultFiveSummaryAllowedMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultFiveSummaryAllowedMax = 2;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultFiveSummaryDeniedMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultFiveSummaryDeniedMax = 2;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultFiveSummaryRequiresApprovalMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultFiveSummaryRequiresApprovalMax = 2;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultFiveSummarySimulatedExecutionsMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultFiveSummarySimulatedExecutionsMax = 2;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultFiveSummaryPolicyOffCloneStateChangesMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultFiveSummaryPolicyOffCloneStateChangesMax = 2;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultFiveSuiteEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const retryWorkspaceAiAssessmentLabJobResponseResultFiveDurationMsMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultFiveDurationMsMax = 30000;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultFiveInterpretationMax = 500;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultFiveEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 
 
 export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "id": zod.uuid(),
   "status": zod.enum(['queued', 'running', 'succeeded', 'failed']),
-  "profileId": zod.enum(['guardian-local-agent-v1', 'guardian-local-llm-qwen3-0.6b-v1', 'guardian-local-llm-native-tools-v1', 'guardian-local-llm-autonomous-tools-v1']),
+  "profileId": zod.enum(['guardian-local-agent-v1', 'guardian-local-llm-qwen3-0.6b-v1', 'guardian-local-llm-native-tools-v1', 'guardian-local-llm-autonomous-tools-v1', 'guardian-agent-lab-email-v1', 'guardian-agent-lab-database-v1', 'guardian-agent-lab-finance-v1', 'guardian-agent-lab-programming-v1', 'guardian-agent-lab-customer-service-v1', 'guardian-agent-lab-browser-v1', 'guardian-agent-lab-infrastructure-v1', 'guardian-agent-lab-multiagent-v1']),
   "workerVersion": zod.string(),
   "attempts": zod.int(),
   "engineVersion": zod.string().nullable(),
@@ -6570,7 +7018,132 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "engineVersion": zod.enum(['guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1', 'guardian-autonomous-tool-selection-v1.2', 'guardian-autonomous-tool-selection-v1.3', 'guardian-autonomous-tool-selection-v1.4']),
   "profileId": zod.literal("guardian-local-llm-autonomous-tools-v1"),
   "taskId": zod.literal("autonomous_tool_selection_en_es_v1")
-})),zod.null()]),
+})),zod.object({
+  "evidenceVersion": zod.literal(1),
+  "source": zod.literal("synthetic_policy_scenarios"),
+  "engine": zod.literal("guardian_policy_lab"),
+  "engineVersion": zod.literal("guardian-agent-policy-lab-v1"),
+  "profileId": zod.enum(['guardian-agent-lab-email-v1', 'guardian-agent-lab-database-v1', 'guardian-agent-lab-finance-v1', 'guardian-agent-lab-programming-v1', 'guardian-agent-lab-customer-service-v1', 'guardian-agent-lab-browser-v1', 'guardian-agent-lab-infrastructure-v1', 'guardian-agent-lab-multiagent-v1']),
+  "verticalId": zod.enum(['email', 'database', 'finance', 'programming', 'customer_service', 'browser', 'infrastructure', 'multiagent']),
+  "verticalLabel": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultFiveVerticalLabelMax),
+  "executionMode": zod.literal("deterministic_fixture"),
+  "proposalOrigin": zod.literal("controlled_fixture_not_llm"),
+  "modelInference": zod.literal(false),
+  "agentIdentity": zod.object({
+  "agentId": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultFiveAgentIdentityAgentIdMax),
+  "agentType": zod.literal("deterministic_synthetic_agent"),
+  "actorId": zod.literal("SYNTHETIC-LAB-OPERATOR"),
+  "actorType": zod.literal("synthetic_user"),
+  "tenantContext": zod.literal("SYNTHETIC-WORKSPACE"),
+  "parentAgentId": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultFiveAgentIdentityParentAgentIdMax).nullable(),
+  "permissions": zod.array(zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultFiveAgentIdentityPermissionsItemMax)).max(retryWorkspaceAiAssessmentLabJobResponseResultFiveAgentIdentityPermissionsMax),
+  "identityPreservedAcrossDelegation": zod.literal(true)
+}),
+  "versions": zod.object({
+  "policy": zod.literal("guardian-policy-engine-synthetic-v1"),
+  "corpus": zod.literal("guardian-agent-lab-corpus-v1"),
+  "oracle": zod.literal("guardian-policy-oracle-v1")
+}),
+  "seed": zod.literal(20261102),
+  "sampleCount": zod.literal(2),
+  "cases": zod.array(zod.object({
+  "caseId": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemCaseIdMax),
+  "label": zod.enum(['benign', 'adversarial']),
+  "language": zod.enum(['en', 'es']),
+  "tool": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemToolMax),
+  "operation": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemOperationMax),
+  "resourceType": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemResourceTypeMax),
+  "resourceId": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemResourceIdMax),
+  "sensitivity": zod.enum(['public', 'internal', 'confidential', 'restricted']),
+  "instructionProvenance": zod.enum(['trusted_user_request', 'untrusted_email', 'untrusted_document', 'untrusted_ticket', 'untrusted_web_content', 'delegated_agent']),
+  "requestedPermissions": zod.array(zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemRequestedPermissionsItemMax)).max(retryWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemRequestedPermissionsMax),
+  "requiredPermissions": zod.array(zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemRequiredPermissionsItemMax)).max(retryWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemRequiredPermissionsMax),
+  "actionSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemActionSha256RegExp),
+  "proposalSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemProposalSha256RegExp),
+  "policyOn": zod.object({
+  "decision": zod.enum(['allow', 'deny', 'require_approval']),
+  "reasonCode": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemPolicyOnReasonCodeMax),
+  "proposed": zod.literal(true),
+  "attempted": zod.literal(true),
+  "authorized": zod.boolean(),
+  "executed": zod.boolean(),
+  "simulatedOnly": zod.literal(true),
+  "stateChanged": zod.boolean(),
+  "stateBeforeSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemPolicyOnStateBeforeSha256RegExp),
+  "stateAfterSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemPolicyOnStateAfterSha256RegExp),
+  "eventPhases": zod.array(zod.enum(['proposed', 'attempted', 'allow', 'deny', 'require_approval', 'executed'])).max(retryWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemPolicyOnEventPhasesMax)
+}),
+  "policyOff": zod.object({
+  "mode": zod.literal("counterfactual_clone_only"),
+  "decision": zod.literal("bypassed_counterfactual"),
+  "proposed": zod.literal(true),
+  "attempted": zod.literal(true),
+  "authorized": zod.null(),
+  "executed": zod.literal(false),
+  "counterfactualWouldExecute": zod.literal(true),
+  "counterfactualCloneStateChanged": zod.boolean(),
+  "stateBeforeSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemPolicyOffStateBeforeSha256RegExp),
+  "stateAfterSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemPolicyOffStateAfterSha256RegExp),
+  "simulatedOnly": zod.literal(true),
+  "eventPhases": zod.array(zod.enum(['proposed', 'attempted', 'policy_bypassed', 'counterfactual_would_execute'])).max(retryWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemPolicyOffEventPhasesMax)
+}),
+  "delegation": zod.object({
+  "isDelegatedAction": zod.boolean(),
+  "originalActorPreserved": zod.literal(true),
+  "permissionElevationRequested": zod.boolean(),
+  "permissionElevationAllowed": zod.literal(false)
+}),
+  "unauthorizedActionExecuted": zod.literal(false),
+  "rawArgumentsStored": zod.literal(false),
+  "rawInstructionStored": zod.literal(false),
+  "caseEvidenceSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultFiveCasesItemCaseEvidenceSha256RegExp)
+})).min(retryWorkspaceAiAssessmentLabJobResponseResultFiveCasesMin).max(retryWorkspaceAiAssessmentLabJobResponseResultFiveCasesMax),
+  "summary": zod.object({
+  "sampleCount": zod.literal(2),
+  "benignCases": zod.literal(1),
+  "adversarialCases": zod.literal(1),
+  "proposed": zod.literal(2),
+  "attempted": zod.literal(2),
+  "allowed": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultFiveSummaryAllowedMin).max(retryWorkspaceAiAssessmentLabJobResponseResultFiveSummaryAllowedMax),
+  "denied": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultFiveSummaryDeniedMin).max(retryWorkspaceAiAssessmentLabJobResponseResultFiveSummaryDeniedMax),
+  "requiresApproval": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultFiveSummaryRequiresApprovalMin).max(retryWorkspaceAiAssessmentLabJobResponseResultFiveSummaryRequiresApprovalMax),
+  "simulatedExecutions": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultFiveSummarySimulatedExecutionsMin).max(retryWorkspaceAiAssessmentLabJobResponseResultFiveSummarySimulatedExecutionsMax),
+  "unauthorizedExecutions": zod.literal(0),
+  "policyOffCounterfactualWouldExecute": zod.literal(2),
+  "policyOffCloneStateChanges": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultFiveSummaryPolicyOffCloneStateChangesMin).max(retryWorkspaceAiAssessmentLabJobResponseResultFiveSummaryPolicyOffCloneStateChangesMax),
+  "actualOperations": zod.literal(0),
+  "persistentStateChanges": zod.literal(0),
+  "externalCalls": zod.literal(0)
+}),
+  "selfChecks": zod.object({
+  "hasBenignAndAdversarialCases": zod.literal(true),
+  "everyProposalHasIndependentPolicyDecision": zod.literal(true),
+  "noUnauthorizedActionExecuted": zod.literal(true),
+  "policyOffNeverExecutes": zod.literal(true),
+  "policyOffUsesClonesOnly": zod.literal(true),
+  "delegationCannotElevatePermissions": zod.literal(true),
+  "noPersistentOrExternalEffects": zod.literal(true),
+  "rawPromptsArgumentsAndInstructionsNotStored": zod.literal(true)
+}),
+  "selfCheckStatus": zod.literal("passed"),
+  "suiteEvidenceSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultFiveSuiteEvidenceSha256RegExp),
+  "startedAt": zod.coerce.date(),
+  "completedAt": zod.coerce.date(),
+  "durationMs": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultFiveDurationMsMin).max(retryWorkspaceAiAssessmentLabJobResponseResultFiveDurationMsMax),
+  "limits": zod.object({
+  "network": zod.literal("docker-network-none"),
+  "concurrency": zod.literal(1),
+  "maxCases": zod.literal(2),
+  "customerDataUsed": zod.literal(false),
+  "externalCalls": zod.literal(0),
+  "actualOperations": zod.literal(0),
+  "rawPromptsStored": zod.literal(false),
+  "rawResponsesStored": zod.literal(false),
+  "rawArgumentsStored": zod.literal(false)
+}),
+  "interpretation": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultFiveInterpretationMax),
+  "evidenceSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultFiveEvidenceSha256RegExp)
+}),zod.null()]),
   "errorCode": zod.string().nullable(),
   "createdAt": zod.coerce.date(),
   "startedAt": zod.coerce.date().nullable(),

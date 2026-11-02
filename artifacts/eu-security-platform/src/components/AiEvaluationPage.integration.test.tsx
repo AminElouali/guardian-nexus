@@ -6,6 +6,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { AiAssessmentLabJob } from "@workspace/api-client-react";
 import { LabJobCard } from "./AiEvaluationPage";
 import {
+  AGENT_POLICY_LABS,
+  AgentPolicyLabCatalog,
+  AgentPolicyLabResult,
+} from "./GuardianAgentPolicyLab";
+import {
   buildQwenExecutiveReport,
   deriveQwenBankChangeFinding,
   downloadQwenExecutiveReport,
@@ -42,7 +47,11 @@ test("renders the real API lab response in the authenticated dashboard card", ()
   assert.match(markup, /controlled_deny_bank_change/);
   assert.match(markup, /Habría ocurrido en el clon/);
   assert.match(markup, /Hash del conjunto emparejado/);
-  if (job.result?.network.publicIpv6 === "unavailable") {
+  if (
+    job.result &&
+    "network" in job.result &&
+    job.result.network.publicIpv6 === "unavailable"
+  ) {
     assert.match(markup, /IPv6 no verificado/);
   } else {
     assert.match(markup, /IPv6 bloqueado/);
@@ -67,6 +76,53 @@ test("renders the real API lab response in the authenticated dashboard card", ()
   assert.match(localMarkup, /no es function calling nativo/);
   assert.match(localMarkup, /No disponible para clientes/);
   assert.match(localMarkup, /Qwen\/Qwen3-0\.6B-GGUF/);
+});
+
+test("renders all eight synthetic agent verticals and an API-persisted policy lab report", () => {
+  const artifactPath = new URL(
+    "../../../../generated-artifacts/guardian-agent-policy-labs-e2e.json",
+    import.meta.url,
+  );
+  const jobs = JSON.parse(readFileSync(artifactPath, "utf8")) as AiAssessmentLabJob[];
+  assert.equal(jobs.length, 8);
+  const policyJob = jobs.find(
+    (candidate) =>
+      candidate.status === "succeeded" &&
+      candidate.result?.engine === "guardian_policy_lab",
+  );
+  assert.ok(policyJob);
+  if (policyJob.result?.engine !== "guardian_policy_lab") {
+    assert.fail("E2E artifact must contain policy lab evidence");
+  }
+  const resultMarkup = renderToStaticMarkup(
+    createElement(AgentPolicyLabResult, { evidence: policyJob.result }),
+  );
+  assert.match(resultMarkup, /propuestas fixture deterministas/);
+  assert.match(resultMarkup, /No es inferencia de LLM/);
+  assert.match(resultMarkup, /Contrafactual OFF/);
+  assert.match(resultMarkup, /0 ejecución real/);
+  assert.match(resultMarkup, /Hash de suite/);
+  assert.match(resultMarkup, /Inyección dentro de un correo sintético|Intento de envío externo no autorizado/);
+  assert.equal(resultMarkup.includes("prompt text"), false);
+
+  const catalogMarkup = renderToStaticMarkup(
+    createElement(AgentPolicyLabCatalog, {
+      profiles: AGENT_POLICY_LABS.map((lab) => ({
+        profileId: lab.profileId,
+        status: "ready",
+        reasonCode: null,
+      })),
+      canRun: true,
+      pending: false,
+      onRequest: () => undefined,
+    }),
+  );
+  assert.equal(AGENT_POLICY_LABS.length, 8);
+  assert.equal((catalogMarkup.match(/data-testid="agent-policy-lab-/g) ?? []).length, 8);
+  assert.match(catalogMarkup, /data-testid="button-run-agent-lab-email"/);
+  assert.match(catalogMarkup, /data-testid="button-run-agent-lab-database"/);
+  assert.match(catalogMarkup, /multiagente/);
+  assert.match(catalogMarkup, /No es inferencia de Qwen/);
 });
 
 test("downloads the allow-listed Qwen JSON report without raw case data", async () => {

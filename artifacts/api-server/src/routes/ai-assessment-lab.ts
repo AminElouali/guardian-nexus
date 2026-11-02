@@ -25,6 +25,7 @@ import {
   enqueueLocalAssessmentJob,
   getLocalWorkerAvailability,
   isAiAssessmentJobRetryable,
+  type AssessmentProfileId,
 } from "../lib/ai-assessment-worker";
 import { withWorkspaceUserTransaction } from "../lib/tenant-db";
 import { UsageQuotaError, reserveWorkspaceUsageInTransaction } from "../lib/usage";
@@ -312,11 +313,7 @@ routes.post(
         if (!job) return { kind: "missing" as const };
         if (
           !isAssessmentProfileAvailable(
-            job.profileId as
-              | "guardian-local-agent-v1"
-              | "guardian-local-llm-qwen3-0.6b-v1"
-              | "guardian-local-llm-native-tools-v1"
-              | "guardian-local-llm-autonomous-tools-v1",
+            job.profileId as AssessmentProfileId,
           )
         ) {
           return { kind: "worker_unavailable" as const };

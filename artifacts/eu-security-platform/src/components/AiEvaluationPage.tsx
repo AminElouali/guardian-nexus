@@ -20,6 +20,10 @@ import {
   deriveQwenBankChangeFinding,
   downloadQwenExecutiveReport,
 } from './qwenExecutiveReport';
+import {
+  AgentPolicyLabCatalog,
+  AgentPolicyLabResult,
+} from './GuardianAgentPolicyLab';
 
 const reasonLabels: Record<string, string> = {
   mock_refused_untrusted_instruction: 'El fixture rechazó una instrucción no confiable',
@@ -707,11 +711,15 @@ export function LabJobCard({
     evidence?.profileId === 'guardian-local-llm-autonomous-tools-v1'
       ? evidence
       : null;
+  const policyLabEvidence =
+    evidence?.engine === 'guardian_policy_lab' ? evidence : null;
   return <article className="ai-evaluation-run" data-testid="ai-lab-job">
     <div className="ai-evaluation-run-head">
       <div>
         <span className="ai-evaluation-run-label">
-          {job.profileId === 'guardian-local-llm-autonomous-tools-v1'
+          {job.profileId.startsWith('guardian-agent-lab-')
+            ? 'POLICY ENGINE · FIXTURES DETERMINISTAS'
+            : job.profileId === 'guardian-local-llm-autonomous-tools-v1'
             ? 'LLM REAL · SELECCIÓN AUTÓNOMA'
             : job.profileId === 'guardian-local-llm-native-tools-v1'
             ? 'LLM REAL · TOOL CALLS NATIVAS'
@@ -746,6 +754,7 @@ export function LabJobCard({
     </div>}
     {localLlmEvidence && <LocalLlmResult evidence={localLlmEvidence} />}
     {nativeToolEvidence && <NativeToolSuiteResult evidence={nativeToolEvidence} job={job} />}
+    {policyLabEvidence && <AgentPolicyLabResult evidence={policyLabEvidence} />}
     {job.status === 'failed' && <p className="ai-lab-error">No se completó la evaluación. Código: {job.errorCode ?? 'worker_failed'}. No se guardaron salidas del agente.</p>}
     {canRun && job.status === 'failed' && job.attempts < 2 && <Button variant="outline" onClick={() => onRetry(job.id)} disabled={retryPending} data-testid="button-retry-ai-lab">
       {retryPending ? 'Reintentando…' : 'Reintentar una vez'}
@@ -831,7 +840,7 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
       <div>
         <div className="eyebrow">GUARDIAN AI SECURITY ASSESSMENT · LABORATORIO</div>
         <h1>Evaluación de Seguridad de IA</h1>
-        <p>El perfil de pruebas ejecuta verificaciones deterministas con fixtures. Los perfiles de LLM ejecutan inferencia local real: una tarea sintética acotada y una suite experimental de llamadas nativas a herramientas. Ninguno está habilitado como servicio para clientes.</p>
+        <p>Los ocho laboratorios de verticales usan propuestas fixture y un Policy Engine determinista, separados de la inferencia real de Qwen y Garak. Ninguno está habilitado como servicio para clientes.</p>
       </div>
       <span className="ai-evaluation-badge"><FlaskConical size={14} /> LABORATORIO INTERNO</span>
     </div>
@@ -849,6 +858,12 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
         <span className={`ai-evaluation-state ${availability.data?.status === 'ready' ? '' : 'ai-state-pending'}`}><i />{availability.isLoading ? 'Comprobando' : availability.data?.status === 'ready' ? 'Disponible en desarrollo' : 'No disponible'}</span>
       </div>
        <p>Garak/GVE conserva el flujo local existente con fixtures. Qwen ejecuta una tarea sintética; la suite nativa anterior mantiene su evidencia separada. La evidencia guardada del perfil autónomo contiene 14 casos mixtos (controles benignos e inyección documental), con selección automática y sin forzar funciones. Los trabajos usan 1 CPU, 1.536 MiB, concurrencia global 1 y red deshabilitada. Ningún perfil está habilitado para clientes.</p>
+       <AgentPolicyLabCatalog
+         profiles={availability.data?.profiles ?? []}
+         canRun={canRun}
+         pending={createLabJob.isPending}
+         onRequest={(profileId) => void requestLabAssessment(profileId)}
+       />
       {availability.data?.status !== 'ready' && <div className="ai-lab-unavailable"><LockKeyhole size={15} />{availability.data?.reasonCode === 'development_only' ? 'Deshabilitado fuera del entorno de desarrollo.' : 'El worker local no está preparado. No se iniciará ni simulará una evaluación.'}</div>}
       <div className="ai-evaluation-actions">
         <Button onClick={() => void requestLabAssessment('guardian-local-agent-v1')} disabled={!canRun || !garakAvailable || createLabJob.isPending} data-testid="button-run-ai-lab">

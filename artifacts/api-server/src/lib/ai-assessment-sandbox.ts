@@ -6,7 +6,21 @@ export type AssessmentProfileId =
   | "guardian-local-agent-v1"
   | "guardian-local-llm-qwen3-0.6b-v1"
   | "guardian-local-llm-native-tools-v1"
-  | "guardian-local-llm-autonomous-tools-v1";
+  | "guardian-local-llm-autonomous-tools-v1"
+  | PolicyLabProfileId;
+
+export const POLICY_LAB_PROFILE_IDS = [
+  "guardian-agent-lab-email-v1",
+  "guardian-agent-lab-database-v1",
+  "guardian-agent-lab-finance-v1",
+  "guardian-agent-lab-programming-v1",
+  "guardian-agent-lab-customer-service-v1",
+  "guardian-agent-lab-browser-v1",
+  "guardian-agent-lab-infrastructure-v1",
+  "guardian-agent-lab-multiagent-v1",
+] as const;
+
+export type PolicyLabProfileId = (typeof POLICY_LAB_PROFILE_IDS)[number];
 
 export type AssessmentImageKey = "garak" | "qwen";
 
@@ -61,6 +75,13 @@ export const ASSESSMENT_EXECUTION_LIMITS = {
     executableRuntimeTmpfs:
       "--tmpfs=/opt/llm-runtime:rw,exec,nosuid,nodev,size=128m,mode=1777",
   },
+  policyLab: {
+    cpus: "0.25",
+    memory: "256m",
+    memorySwap: "256m",
+    timeoutMs: 30_000,
+    tmpfs: "--tmpfs=/tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777",
+  },
 } as const;
 
 const PROFILE_IMAGE_REFERENCE: Record<AssessmentImageKey, string> = {
@@ -74,6 +95,7 @@ const PROFILE_IDS: Record<AssessmentImageKey, readonly AssessmentProfileId[]> = 
     "guardian-local-llm-qwen3-0.6b-v1",
     "guardian-local-llm-native-tools-v1",
     "guardian-local-llm-autonomous-tools-v1",
+    ...POLICY_LAB_PROFILE_IDS,
   ],
 };
 
@@ -94,6 +116,12 @@ function imageKeyForProfile(profileId: AssessmentProfileId): AssessmentImageKey 
   if (PROFILE_IDS.garak.includes(profileId)) return "garak";
   if (PROFILE_IDS.qwen.includes(profileId)) return "qwen";
   throw new Error("invalid_assessment_profile");
+}
+
+export function isPolicyLabProfile(
+  profileId: AssessmentProfileId,
+): profileId is PolicyLabProfileId {
+  return (POLICY_LAB_PROFILE_IDS as readonly string[]).includes(profileId);
 }
 
 export function parseAssessmentImageLock(value: unknown): AssessmentImageLock {
@@ -256,6 +284,23 @@ export function buildAssessmentDockerRunArgs(
       `--memory-swap=${ASSESSMENT_EXECUTION_LIMITS.garak.memorySwap}`,
       ASSESSMENT_EXECUTION_LIMITS.garak.tmpfs,
       imageId,
+    ];
+  }
+  if (isPolicyLabProfile(profileId)) {
+    return [
+      ...common,
+      `--cpus=${ASSESSMENT_EXECUTION_LIMITS.policyLab.cpus}`,
+      `--memory=${ASSESSMENT_EXECUTION_LIMITS.policyLab.memory}`,
+      `--memory-swap=${ASSESSMENT_EXECUTION_LIMITS.policyLab.memorySwap}`,
+      ASSESSMENT_EXECUTION_LIMITS.policyLab.tmpfs,
+      `--mount=type=bind,src=${mounts.sourcePath},dst=/opt/guardian-assessment/guardian_ai_assessment,readonly`,
+      "--workdir=/opt/guardian-assessment",
+      "--entrypoint=/bin/sh",
+      imageId,
+      "-ceu",
+      'exec python -B -m guardian_ai_assessment.policy_lab --profile-id "$1"',
+      "--",
+      profileId,
     ];
   }
   return [

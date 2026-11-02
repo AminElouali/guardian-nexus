@@ -14,4 +14,12 @@ export const AiAssessmentLabJobProfileId = {
   'guardian-local-llm-qwen3-06b-v1': 'guardian-local-llm-qwen3-0.6b-v1',
   'guardian-local-llm-native-tools-v1': 'guardian-local-llm-native-tools-v1',
   'guardian-local-llm-autonomous-tools-v1': 'guardian-local-llm-autonomous-tools-v1',
+  'guardian-agent-lab-email-v1': 'guardian-agent-lab-email-v1',
+  'guardian-agent-lab-database-v1': 'guardian-agent-lab-database-v1',
+  'guardian-agent-lab-finance-v1': 'guardian-agent-lab-finance-v1',
+  'guardian-agent-lab-programming-v1': 'guardian-agent-lab-programming-v1',
+  'guardian-agent-lab-customer-service-v1': 'guardian-agent-lab-customer-service-v1',
+  'guardian-agent-lab-browser-v1': 'guardian-agent-lab-browser-v1',
+  'guardian-agent-lab-infrastructure-v1': 'guardian-agent-lab-infrastructure-v1',
+  'guardian-agent-lab-multiagent-v1': 'guardian-agent-lab-multiagent-v1',
 } as const;

@@ -835,8 +835,8 @@ components:
       properties:
         profileId:
           type: string
-          enum: [guardian-local-agent-v1, guardian-local-llm-qwen3-0.6b-v1, guardian-local-llm-native-tools-v1, guardian-local-llm-autonomous-tools-v1]
-        engine: { type: string, enum: [garak, local_llm_lab] }
+          enum: [guardian-local-agent-v1, guardian-local-llm-qwen3-0.6b-v1, guardian-local-llm-native-tools-v1, guardian-local-llm-autonomous-tools-v1, guardian-agent-lab-email-v1, guardian-agent-lab-database-v1, guardian-agent-lab-finance-v1, guardian-agent-lab-programming-v1, guardian-agent-lab-customer-service-v1, guardian-agent-lab-browser-v1, guardian-agent-lab-infrastructure-v1, guardian-agent-lab-multiagent-v1]
+        engine: { type: string, enum: [garak, local_llm_lab, guardian_policy_lab] }
         status: { type: string, enum: [ready, unavailable, disabled] }
         reasonCode: { type: ["string", "null"] }
       required: [profileId, engine, status, reasonCode]
@@ -846,7 +846,7 @@ components:
         idempotencyKey: { type: string, minLength: 16, maxLength: 128 }
         profileId:
           type: string
-          enum: [guardian-local-agent-v1, guardian-local-llm-qwen3-0.6b-v1, guardian-local-llm-native-tools-v1, guardian-local-llm-autonomous-tools-v1]
+          enum: [guardian-local-agent-v1, guardian-local-llm-qwen3-0.6b-v1, guardian-local-llm-native-tools-v1, guardian-local-llm-autonomous-tools-v1, guardian-agent-lab-email-v1, guardian-agent-lab-database-v1, guardian-agent-lab-finance-v1, guardian-agent-lab-programming-v1, guardian-agent-lab-customer-service-v1, guardian-agent-lab-browser-v1, guardian-agent-lab-infrastructure-v1, guardian-agent-lab-multiagent-v1]
           default: guardian-local-agent-v1
       required: [idempotencyKey]
     AiAssessmentLabJob:
@@ -856,7 +856,7 @@ components:
         status: { type: string, enum: [queued, running, succeeded, failed] }
         profileId:
           type: string
-          enum: [guardian-local-agent-v1, guardian-local-llm-qwen3-0.6b-v1, guardian-local-llm-native-tools-v1, guardian-local-llm-autonomous-tools-v1]
+          enum: [guardian-local-agent-v1, guardian-local-llm-qwen3-0.6b-v1, guardian-local-llm-native-tools-v1, guardian-local-llm-autonomous-tools-v1, guardian-agent-lab-email-v1, guardian-agent-lab-database-v1, guardian-agent-lab-finance-v1, guardian-agent-lab-programming-v1, guardian-agent-lab-customer-service-v1, guardian-agent-lab-browser-v1, guardian-agent-lab-infrastructure-v1, guardian-agent-lab-multiagent-v1]
         workerVersion: { type: string }
         attempts: { type: integer }
         engineVersion: { type: ["string", "null"] }
@@ -866,6 +866,7 @@ components:
             - { $ref: "#/components/schemas/GuardianLocalLlmEvidence" }
             - { $ref: "#/components/schemas/GuardianLocalLlmNativeToolSuiteEvidence" }
             - { $ref: "#/components/schemas/GuardianLocalLlmAutonomousToolSelectionEvidence" }
+            - { $ref: "#/components/schemas/GuardianAgentPolicyLabEvidence" }
             - { type: "null" }
         errorCode: { type: ["string", "null"] }
         createdAt: { type: string, format: date-time }
@@ -1204,6 +1205,194 @@ components:
             profileId: { type: string, const: guardian-local-llm-autonomous-tools-v1 }
             taskId: { type: string, const: autonomous_tool_selection_en_es_v1 }
           required: [engineVersion, profileId, taskId]
+    GuardianAgentPolicyLabEvidence:
+      type: object
+      additionalProperties: false
+      properties:
+        evidenceVersion: { type: integer, const: 1 }
+        source: { type: string, const: synthetic_policy_scenarios }
+        engine: { type: string, const: guardian_policy_lab }
+        engineVersion: { type: string, const: guardian-agent-policy-lab-v1 }
+        profileId:
+          type: string
+          enum: [guardian-agent-lab-email-v1, guardian-agent-lab-database-v1, guardian-agent-lab-finance-v1, guardian-agent-lab-programming-v1, guardian-agent-lab-customer-service-v1, guardian-agent-lab-browser-v1, guardian-agent-lab-infrastructure-v1, guardian-agent-lab-multiagent-v1]
+        verticalId:
+          type: string
+          enum: [email, database, finance, programming, customer_service, browser, infrastructure, multiagent]
+        verticalLabel: { type: string, maxLength: 80 }
+        executionMode: { type: string, const: deterministic_fixture }
+        proposalOrigin: { type: string, const: controlled_fixture_not_llm }
+        modelInference: { type: boolean, const: false }
+        agentIdentity:
+          type: object
+          additionalProperties: false
+          properties:
+            agentId: { type: string, maxLength: 100 }
+            agentType: { type: string, const: deterministic_synthetic_agent }
+            actorId: { type: string, const: SYNTHETIC-LAB-OPERATOR }
+            actorType: { type: string, const: synthetic_user }
+            tenantContext: { type: string, const: SYNTHETIC-WORKSPACE }
+            parentAgentId: { type: ["string", "null"], maxLength: 100 }
+            permissions:
+              type: array
+              maxItems: 16
+              items: { type: string, maxLength: 80 }
+            identityPreservedAcrossDelegation: { type: boolean, const: true }
+          required: [agentId, agentType, actorId, actorType, tenantContext, parentAgentId, permissions, identityPreservedAcrossDelegation]
+        versions:
+          type: object
+          additionalProperties: false
+          properties:
+            policy: { type: string, const: guardian-policy-engine-synthetic-v1 }
+            corpus: { type: string, const: guardian-agent-lab-corpus-v1 }
+            oracle: { type: string, const: guardian-policy-oracle-v1 }
+          required: [policy, corpus, oracle]
+        seed: { type: integer, const: 20261102 }
+        sampleCount: { type: integer, const: 2 }
+        cases:
+          type: array
+          minItems: 2
+          maxItems: 2
+          items:
+            type: object
+            additionalProperties: false
+            properties:
+              caseId: { type: string, maxLength: 100 }
+              label: { type: string, enum: [benign, adversarial] }
+              language: { type: string, enum: [en, es] }
+              tool: { type: string, maxLength: 100 }
+              operation: { type: string, maxLength: 100 }
+              resourceType: { type: string, maxLength: 80 }
+              resourceId: { type: string, maxLength: 180 }
+              resourceWorkspaceId: { type: string, const: SYNTHETIC-WORKSPACE }
+              sensitivity: { type: string, enum: [public, internal, confidential, restricted] }
+              instructionProvenance: { type: string, enum: [trusted_user_request, untrusted_email, untrusted_document, untrusted_ticket, untrusted_web_content, delegated_agent] }
+              agentId: { type: string, maxLength: 100 }
+              actorId: { type: string, const: SYNTHETIC-LAB-OPERATOR }
+              actorType: { type: string, enum: [synthetic_user, delegated_agent] }
+              grantedPermissions:
+                type: array
+                maxItems: 16
+                items: { type: string, maxLength: 80 }
+              requestedPermissions:
+                type: array
+                maxItems: 8
+                items: { type: string, maxLength: 80 }
+              requiredPermissions:
+                type: array
+                maxItems: 8
+                items: { type: string, maxLength: 80 }
+              actionSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+              proposalSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+              policyOn:
+                type: object
+                additionalProperties: false
+                properties:
+                  decision: { type: string, enum: [allow, deny, require_approval] }
+                  reasonCode: { type: string, maxLength: 80 }
+                  proposed: { type: boolean, const: true }
+                  attempted: { type: boolean, const: true }
+                  authorized: { type: boolean }
+                  executed: { type: boolean }
+                  simulatedOnly: { type: boolean, const: true }
+                  stateChanged: { type: boolean }
+                  stateBeforeSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+                  stateAfterSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+                  eventPhases:
+                    type: array
+                    maxItems: 6
+                    items: { type: string, enum: [proposed, attempted, authorization_check, allow, deny, require_approval, authorized, executed] }
+                required: [decision, reasonCode, proposed, attempted, authorized, executed, simulatedOnly, stateChanged, stateBeforeSha256, stateAfterSha256, eventPhases]
+              policyOff:
+                type: object
+                additionalProperties: false
+                properties:
+                  mode: { type: string, const: counterfactual_clone_only }
+                  decision: { type: string, const: bypassed_counterfactual }
+                  proposed: { type: boolean, const: true }
+                  attempted: { type: boolean, const: true }
+                  authorized: { type: "null" }
+                  executed: { type: boolean, const: false }
+                  counterfactualWouldExecute: { type: boolean, const: true }
+                  counterfactualCloneStateChanged: { type: boolean }
+                  stateBeforeSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+                  stateAfterSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+                  simulatedOnly: { type: boolean, const: true }
+                  eventPhases:
+                    type: array
+                    maxItems: 5
+                    items: { type: string, enum: [proposed, attempted, policy_bypassed, counterfactual_would_execute] }
+                required: [mode, decision, proposed, attempted, authorized, executed, counterfactualWouldExecute, counterfactualCloneStateChanged, stateBeforeSha256, stateAfterSha256, simulatedOnly, eventPhases]
+              delegation:
+                type: object
+                additionalProperties: false
+                properties:
+                  isDelegatedAction: { type: boolean }
+                  originalActorPreserved: { type: boolean, const: true }
+                  parentAgentId: { type: ["string", "null"], maxLength: 100 }
+                  permissionElevationRequested: { type: boolean }
+                  permissionElevationAllowed: { type: boolean, const: false }
+                required: [isDelegatedAction, originalActorPreserved, parentAgentId, permissionElevationRequested, permissionElevationAllowed]
+              unauthorizedActionExecuted: { type: boolean, const: false }
+              rawArgumentsStored: { type: boolean, const: false }
+              rawInstructionStored: { type: boolean, const: false }
+              caseEvidenceSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+            required: [caseId, label, language, tool, operation, resourceType, resourceId, resourceWorkspaceId, sensitivity, instructionProvenance, agentId, actorId, actorType, grantedPermissions, requestedPermissions, requiredPermissions, actionSha256, proposalSha256, policyOn, policyOff, delegation, unauthorizedActionExecuted, rawArgumentsStored, rawInstructionStored, caseEvidenceSha256]
+        summary:
+          type: object
+          additionalProperties: false
+          properties:
+            sampleCount: { type: integer, const: 2 }
+            benignCases: { type: integer, const: 1 }
+            adversarialCases: { type: integer, const: 1 }
+            proposed: { type: integer, const: 2 }
+            attempted: { type: integer, const: 2 }
+            allowed: { type: integer, minimum: 0, maximum: 2 }
+            denied: { type: integer, minimum: 0, maximum: 2 }
+            requiresApproval: { type: integer, minimum: 0, maximum: 2 }
+            simulatedExecutions: { type: integer, minimum: 0, maximum: 2 }
+            unauthorizedExecutions: { type: integer, const: 0 }
+            policyOffCounterfactualWouldExecute: { type: integer, const: 2 }
+            policyOffCloneStateChanges: { type: integer, minimum: 0, maximum: 2 }
+            actualOperations: { type: integer, const: 0 }
+            persistentStateChanges: { type: integer, const: 0 }
+            externalCalls: { type: integer, const: 0 }
+          required: [sampleCount, benignCases, adversarialCases, proposed, attempted, allowed, denied, requiresApproval, simulatedExecutions, unauthorizedExecutions, policyOffCounterfactualWouldExecute, policyOffCloneStateChanges, actualOperations, persistentStateChanges, externalCalls]
+        selfChecks:
+          type: object
+          additionalProperties: false
+          properties:
+            hasBenignAndAdversarialCases: { type: boolean, const: true }
+            everyProposalHasIndependentPolicyDecision: { type: boolean, const: true }
+            noUnauthorizedActionExecuted: { type: boolean, const: true }
+            policyOffNeverExecutes: { type: boolean, const: true }
+            policyOffUsesClonesOnly: { type: boolean, const: true }
+            delegationCannotElevatePermissions: { type: boolean, const: true }
+            noPersistentOrExternalEffects: { type: boolean, const: true }
+            rawPromptsArgumentsAndInstructionsNotStored: { type: boolean, const: true }
+          required: [hasBenignAndAdversarialCases, everyProposalHasIndependentPolicyDecision, noUnauthorizedActionExecuted, policyOffNeverExecutes, policyOffUsesClonesOnly, delegationCannotElevatePermissions, noPersistentOrExternalEffects, rawPromptsArgumentsAndInstructionsNotStored]
+        selfCheckStatus: { type: string, const: passed }
+        suiteEvidenceSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        startedAt: { type: string, format: date-time }
+        completedAt: { type: string, format: date-time }
+        durationMs: { type: integer, minimum: 0, maximum: 30000 }
+        limits:
+          type: object
+          additionalProperties: false
+          properties:
+            network: { type: string, const: docker-network-none }
+            concurrency: { type: integer, const: 1 }
+            maxCases: { type: integer, const: 2 }
+            customerDataUsed: { type: boolean, const: false }
+            externalCalls: { type: integer, const: 0 }
+            actualOperations: { type: integer, const: 0 }
+            rawPromptsStored: { type: boolean, const: false }
+            rawResponsesStored: { type: boolean, const: false }
+            rawArgumentsStored: { type: boolean, const: false }
+          required: [network, concurrency, maxCases, customerDataUsed, externalCalls, actualOperations, rawPromptsStored, rawResponsesStored, rawArgumentsStored]
+        interpretation: { type: string, maxLength: 500 }
+        evidenceSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+      required: [evidenceVersion, source, engine, engineVersion, profileId, verticalId, verticalLabel, executionMode, proposalOrigin, modelInference, agentIdentity, versions, seed, sampleCount, cases, summary, selfChecks, selfCheckStatus, suiteEvidenceSha256, startedAt, completedAt, durationMs, limits, interpretation, evidenceSha256]
     GuardianNativeToolTraceEvent:
       type: object
       additionalProperties: false

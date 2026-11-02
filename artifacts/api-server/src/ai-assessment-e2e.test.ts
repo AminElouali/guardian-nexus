@@ -23,6 +23,7 @@ import {
   getLocalWorkerAvailability,
   stopLocalAssessmentQueueWorker,
 } from "./lib/ai-assessment-worker";
+import { POLICY_LAB_PROFILE_IDS } from "./lib/ai-assessment-sandbox";
 import { createAiAssessmentLabRouter } from "./routes/ai-assessment-lab";
 import {
   AI_ASSESSMENT_LAB_JOB_ROUTE,
@@ -66,6 +67,7 @@ let nativeToolJobId = "";
 let autonomousToolJobId = "";
 let server: Server | undefined;
 let baseUrl = "";
+const policyLabJobIds: string[] = [];
 
 if (
   process.env.NODE_ENV !== "development" ||
@@ -140,6 +142,7 @@ after(async () => {
     localLlmJobId,
     nativeToolJobId,
     autonomousToolJobId,
+    ...policyLabJobIds,
   ].filter(Boolean)) {
     spawnSync(
       "docker",
@@ -304,7 +307,7 @@ test(
         );
         assert.equal(job.status, "succeeded", `worker failed: ${job.errorCode}`);
         assert.equal(job.attempts, 1);
-        assert.equal(job.workerVersion, "guardian-ai-assessment-lab-0.4.1");
+        assert.equal(job.workerVersion, "guardian-ai-assessment-lab-0.5.0");
         assert.ok(job.result);
         assert.equal(job.result.engine, "garak");
         assert.equal(job.result.engineVersion, "0.17.1");
@@ -426,7 +429,7 @@ test(
         assert.equal(localJob.attempts, 1);
         assert.equal(
           localJob.workerVersion,
-          "guardian-ai-assessment-lab-0.4.1",
+          "guardian-ai-assessment-lab-0.5.0",
         );
         assert.equal(localJob.result?.engine, "local_llm_lab");
         if (localJob.result?.engine !== "local_llm_lab") {
@@ -709,6 +712,124 @@ test(
     );
     mkdirSync(dirname(artifactPath), { recursive: true });
     writeFileSync(artifactPath, JSON.stringify(rawJob, null, 2));
+  },
+);
+
+test(
+  "eight deterministic agent policy labs use the authenticated tenant queue and persist redacted evidence",
+  { timeout: TIMEOUT_MS },
+  async () => {
+    const pathA = `/api/workspaces/${workspaceA}/ai-security-assessments/lab/jobs`;
+    const pathB = `/api/workspaces/${workspaceB}/ai-security-assessments/lab/jobs`;
+    const artifactJobs: Record<string, unknown>[] = [];
+
+    for (const [index, profileId] of POLICY_LAB_PROFILE_IDS.entries()) {
+      assert.equal(
+        getLocalWorkerAvailability().profiles.find(
+          (profile) => profile.profileId === profileId,
+        )?.status,
+        "ready",
+        `${profileId} must be available through the pinned local policy-lab profile`,
+      );
+      if (index === 0) {
+        assert.equal(
+          (
+            await apiRequest(viewerA, pathA, "POST", {
+              idempotencyKey: `policy-viewer-denied-${randomUUID()}`,
+              profileId,
+            })
+          ).status,
+          403,
+          "viewer cannot request a policy lab",
+        );
+      }
+
+      const idempotencyKey = `policy-lab-${randomUUID()}`;
+      const accepted = await apiRequest(userA, pathA, "POST", {
+        idempotencyKey,
+        profileId,
+      });
+      assert.equal(
+        accepted.status,
+        202,
+        `${profileId} request rejected: ${await accepted.clone().text()}`,
+      );
+      const acceptedJob = (await accepted.json()) as {
+        id: string;
+        status: string;
+        profileId: string;
+      };
+      policyLabJobIds.push(acceptedJob.id);
+      assert.equal(acceptedJob.status, "queued");
+      assert.equal(acceptedJob.profileId, profileId);
+
+      const duplicate = await apiRequest(userA, pathA, "POST", {
+        idempotencyKey,
+        profileId,
+      });
+      assert.equal(duplicate.status, 202);
+      const duplicateJob = (await duplicate.json()) as { id: string };
+      assert.equal(duplicateJob.id, acceptedJob.id);
+
+      let completedRaw: Record<string, unknown> | undefined;
+      const deadline = Date.now() + 60_000;
+      while (Date.now() < deadline) {
+        const response = await apiRequest(userA, pathA);
+        assert.equal(response.status, 200);
+        const rawJobs = (await response.json()) as Record<string, unknown>[];
+        const parsedJobs = ListWorkspaceAiAssessmentLabJobsResponse.parse(rawJobs);
+        const job = parsedJobs.find((candidate) => candidate.id === acceptedJob.id);
+        if (job?.status === "succeeded" || job?.status === "failed") {
+          completedRaw = rawJobs.find((candidate) => candidate.id === acceptedJob.id);
+          assert.equal(job.status, "succeeded", `${profileId}: ${job.errorCode}`);
+          assert.equal(job.attempts, 1);
+          assert.equal(job.workerVersion, "guardian-ai-assessment-lab-0.5.0");
+          assert.equal(job.result?.engine, "guardian_policy_lab");
+          if (job.result?.engine !== "guardian_policy_lab") {
+            assert.fail("policy lab must retain its explicit engine discriminator");
+          }
+          assert.equal(job.result.profileId, profileId);
+          assert.equal(job.result.executionMode, "deterministic_fixture");
+          assert.equal(job.result.proposalOrigin, "controlled_fixture_not_llm");
+          assert.equal(job.result.modelInference, false);
+          assert.equal(job.result.sampleCount, 2);
+          assert.equal(job.result.summary.unauthorizedExecutions, 0);
+          assert.equal(job.result.summary.actualOperations, 0);
+          assert.equal(job.result.summary.persistentStateChanges, 0);
+          assert.equal(job.result.summary.externalCalls, 0);
+          assert.equal(job.result.cases[0]?.policyOn.decision, "allow");
+          assert.ok(
+            ["deny", "require_approval"].includes(
+              job.result.cases[1]!.policyOn.decision,
+            ),
+          );
+          assert.equal(job.result.cases[1]?.policyOn.executed, false);
+          assert.ok(job.result.cases.every((item) => item.policyOff.executed === false));
+          assert.ok(/^[a-f0-9]{64}$/.test(job.result.evidenceSha256));
+          assert.ok(/^[a-f0-9]{64}$/.test(job.result.suiteEvidenceSha256));
+          assert.ok(
+            job.result.cases.every(
+              (item) => !item.rawArgumentsStored && !item.rawInstructionStored,
+            ),
+          );
+          break;
+        }
+        await delay(POLL_INTERVAL_MS);
+      }
+      assert.ok(completedRaw, `${profileId} did not reach a terminal state`);
+      artifactJobs.push(completedRaw);
+    }
+
+    assert.equal((await apiRequest(userB, pathA)).status, 403);
+    assert.deepEqual(await (await apiRequest(userB, pathB)).json(), []);
+    const artifactPath = fileURLToPath(
+      new URL(
+        "../../../generated-artifacts/guardian-agent-policy-labs-e2e.json",
+        import.meta.url,
+      ),
+    );
+    mkdirSync(dirname(artifactPath), { recursive: true });
+    writeFileSync(artifactPath, JSON.stringify(artifactJobs, null, 2));
   },
 );
 

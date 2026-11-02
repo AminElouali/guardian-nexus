@@ -12,4 +12,5 @@ export type AiAssessmentLabProfileAvailabilityEngine = typeof AiAssessmentLabPro
 export const AiAssessmentLabProfileAvailabilityEngine = {
   garak: 'garak',
   local_llm_lab: 'local_llm_lab',
+  guardian_policy_lab: 'guardian_policy_lab',
 } as const;

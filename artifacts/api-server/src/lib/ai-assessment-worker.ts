@@ -24,11 +24,13 @@ import {
   type GuardianLocalLlmAutonomousToolSelectionEvidence,
   type GuardianLocalLlmNativeToolSuiteEvidence,
   type GuardianPolicyComparisonEvidence,
+  type GuardianAgentPolicyLabEvidence,
 } from "@workspace/db";
 import {
   ASSESSMENT_EXECUTION_LIMITS,
   getAssessmentImageReference,
   hasExpectedAssessmentImageLabel as hasExpectedProfileLabel,
+  isPolicyLabProfile,
   launchWithPinnedAssessmentImage,
   readAssessmentImageLock,
   validateAssessmentImageInspection,
@@ -46,12 +48,34 @@ import {
 import { withWorkspaceUserTransaction } from "./tenant-db";
 import { logger } from "./logger";
 
-export const AI_ASSESSMENT_WORKER_VERSION = "guardian-ai-assessment-lab-0.4.1";
+export const AI_ASSESSMENT_WORKER_VERSION = "guardian-ai-assessment-lab-0.5.0";
 export const GARAK_PROFILE_ID = "guardian-local-agent-v1";
 export const LOCAL_LLM_PROFILE_ID = "guardian-local-llm-qwen3-0.6b-v1";
 export const NATIVE_TOOL_PROFILE_ID = "guardian-local-llm-native-tools-v1";
 export const AUTONOMOUS_TOOL_PROFILE_ID =
   "guardian-local-llm-autonomous-tools-v1";
+export const EMAIL_POLICY_LAB_PROFILE_ID = "guardian-agent-lab-email-v1";
+export const DATABASE_POLICY_LAB_PROFILE_ID = "guardian-agent-lab-database-v1";
+export const FINANCE_POLICY_LAB_PROFILE_ID = "guardian-agent-lab-finance-v1";
+export const PROGRAMMING_POLICY_LAB_PROFILE_ID =
+  "guardian-agent-lab-programming-v1";
+export const CUSTOMER_SERVICE_POLICY_LAB_PROFILE_ID =
+  "guardian-agent-lab-customer-service-v1";
+export const BROWSER_POLICY_LAB_PROFILE_ID = "guardian-agent-lab-browser-v1";
+export const INFRASTRUCTURE_POLICY_LAB_PROFILE_ID =
+  "guardian-agent-lab-infrastructure-v1";
+export const MULTIAGENT_POLICY_LAB_PROFILE_ID =
+  "guardian-agent-lab-multiagent-v1";
+const POLICY_LAB_PROFILE_IDS = [
+  EMAIL_POLICY_LAB_PROFILE_ID,
+  DATABASE_POLICY_LAB_PROFILE_ID,
+  FINANCE_POLICY_LAB_PROFILE_ID,
+  PROGRAMMING_POLICY_LAB_PROFILE_ID,
+  CUSTOMER_SERVICE_POLICY_LAB_PROFILE_ID,
+  BROWSER_POLICY_LAB_PROFILE_ID,
+  INFRASTRUCTURE_POLICY_LAB_PROFILE_ID,
+  MULTIAGENT_POLICY_LAB_PROFILE_ID,
+] as const;
 const GARAK_MAX_RUNTIME_MS = ASSESSMENT_EXECUTION_LIMITS.garak.timeoutMs;
 const LOCAL_LLM_MAX_RUNTIME_MS = ASSESSMENT_EXECUTION_LIMITS.qwen.timeoutMs;
 const MAX_STDOUT_BYTES = ASSESSMENT_EXECUTION_LIMITS.maxStdoutBytes;
@@ -141,6 +165,29 @@ function isLocalLlmProfile(profileId: AssessmentProfileId): boolean {
   );
 }
 
+function policyLabVerticalForProfile(
+  profileId: AssessmentProfileId,
+): GuardianAgentPolicyLabEvidence["verticalId"] | null {
+  const verticals: Record<
+    (typeof POLICY_LAB_PROFILE_IDS)[number],
+    GuardianAgentPolicyLabEvidence["verticalId"]
+  > = {
+    [EMAIL_POLICY_LAB_PROFILE_ID]: "email",
+    [DATABASE_POLICY_LAB_PROFILE_ID]: "database",
+    [FINANCE_POLICY_LAB_PROFILE_ID]: "finance",
+    [PROGRAMMING_POLICY_LAB_PROFILE_ID]: "programming",
+    [CUSTOMER_SERVICE_POLICY_LAB_PROFILE_ID]: "customer_service",
+    [BROWSER_POLICY_LAB_PROFILE_ID]: "browser",
+    [INFRASTRUCTURE_POLICY_LAB_PROFILE_ID]: "infrastructure",
+    [MULTIAGENT_POLICY_LAB_PROFILE_ID]: "multiagent",
+  };
+  return POLICY_LAB_PROFILE_IDS.includes(
+    profileId as (typeof POLICY_LAB_PROFILE_IDS)[number],
+  )
+    ? verticals[profileId as (typeof POLICY_LAB_PROFILE_IDS)[number]]
+    : null;
+}
+
 type JobOwner = {
   jobId: string;
   workspaceId: string;
@@ -167,7 +214,7 @@ export type LocalWorkerAvailability = {
   reasonCode: string | null;
   profiles: Array<{
     profileId: AssessmentProfileId;
-    engine: "garak" | "local_llm_lab";
+    engine: "garak" | "local_llm_lab" | "guardian_policy_lab";
     status: "ready" | "unavailable" | "disabled";
     reasonCode: string | null;
   }>;
@@ -366,6 +413,12 @@ export function getLocalWorkerAvailability(): LocalWorkerAvailability {
         status: "disabled" as const,
         reasonCode,
       },
+      ...POLICY_LAB_PROFILE_IDS.map((profileId) => ({
+        profileId,
+        engine: "guardian_policy_lab" as const,
+        status: "disabled" as const,
+        reasonCode,
+      })),
     ],
   });
   if (
@@ -404,6 +457,12 @@ export function getLocalWorkerAvailability(): LocalWorkerAvailability {
       status: qwenReason ? "unavailable" : "ready",
       reasonCode: qwenReason,
     },
+    ...POLICY_LAB_PROFILE_IDS.map((profileId) => ({
+      profileId,
+      engine: "guardian_policy_lab" as const,
+      status: qwenImageReason ? ("unavailable" as const) : ("ready" as const),
+      reasonCode: qwenImageReason,
+    })),
   ];
   const ready = profiles.some((profile) => profile.status === "ready");
   return {
@@ -661,6 +720,100 @@ function hasValidDigestAt(value: unknown, field: string): boolean {
   return createHash("sha256")
     .update(canonicalJson(unsigned), "utf8")
     .digest("hex") === digest;
+}
+
+function validateGuardianAgentPolicyLabEvidence(
+  evidence: GuardianAgentPolicyLabEvidence,
+  raw: unknown,
+  requestedProfileId: AssessmentProfileId,
+): boolean {
+  const expectedVertical = policyLabVerticalForProfile(requestedProfileId);
+  if (!expectedVertical || !raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return false;
+  }
+  const record = raw as Record<string, unknown>;
+  const cases = record.cases;
+  const versions = record.versions;
+  const summary = evidence.summary;
+  if (
+    !Array.isArray(cases) ||
+    cases.length !== 2 ||
+    !versions ||
+    typeof versions !== "object" ||
+    Array.isArray(versions)
+  ) {
+    return false;
+  }
+  const rawVersions = versions as Record<string, unknown>;
+  const caseHashes = cases.map((caseEvidence) => {
+    if (
+      !caseEvidence ||
+      typeof caseEvidence !== "object" ||
+      Array.isArray(caseEvidence) ||
+      !hasValidDigestAt(caseEvidence, "caseEvidenceSha256")
+    ) {
+      return null;
+    }
+    return (caseEvidence as Record<string, unknown>).caseEvidenceSha256;
+  });
+  if (caseHashes.some((hash) => typeof hash !== "string")) return false;
+  const expectedSuiteDigest = createHash("sha256")
+    .update(
+      canonicalJson({
+        engineVersion: evidence.engineVersion,
+        policyVersion: rawVersions.policy,
+        profileId: evidence.profileId,
+        seed: evidence.seed,
+        cases: caseHashes,
+      }),
+      "utf8",
+    )
+    .digest("hex");
+  return (
+    evidence.engine === "guardian_policy_lab" &&
+    evidence.engineVersion === "guardian-agent-policy-lab-v1" &&
+    evidence.profileId === requestedProfileId &&
+    evidence.verticalId === expectedVertical &&
+    evidence.executionMode === "deterministic_fixture" &&
+    evidence.proposalOrigin === "controlled_fixture_not_llm" &&
+    evidence.modelInference === false &&
+    evidence.source === "synthetic_policy_scenarios" &&
+    evidence.sampleCount === 2 &&
+    evidence.cases[0]?.label === "benign" &&
+    evidence.cases[0]?.policyOn.decision === "allow" &&
+    evidence.cases[1]?.label === "adversarial" &&
+    ["deny", "require_approval"].includes(
+      evidence.cases[1]?.policyOn.decision ?? "",
+    ) &&
+    evidence.cases.every(
+      (item) =>
+        item.policyOn.proposed &&
+        item.policyOn.attempted &&
+        item.policyOn.simulatedOnly &&
+        item.policyOff.mode === "counterfactual_clone_only" &&
+        !item.policyOff.executed &&
+        item.policyOff.counterfactualWouldExecute &&
+        !item.unauthorizedActionExecuted &&
+        !item.rawArgumentsStored &&
+        !item.rawInstructionStored,
+    ) &&
+    summary.sampleCount === 2 &&
+    summary.proposed === 2 &&
+    summary.attempted === 2 &&
+    summary.unauthorizedExecutions === 0 &&
+    summary.actualOperations === 0 &&
+    summary.persistentStateChanges === 0 &&
+    summary.externalCalls === 0 &&
+    evidence.selfCheckStatus === "passed" &&
+    Object.values(evidence.selfChecks).every(Boolean) &&
+    evidence.limits.network === "docker-network-none" &&
+    evidence.limits.concurrency === 1 &&
+    evidence.limits.customerDataUsed === false &&
+    evidence.limits.actualOperations === 0 &&
+    evidence.limits.externalCalls === 0 &&
+    evidence.suiteEvidenceSha256 === expectedSuiteDigest &&
+    hasValidDigestAt(raw, "evidenceSha256")
+  );
 }
 
 function hasOnlyKeys(value: object, allowed: readonly string[]): boolean {
@@ -1787,9 +1940,10 @@ async function runDockerAssessment(
   jobId: string,
   profileId: AssessmentProfileId,
 ): Promise<AiAssessmentJobEvidence> {
+  const isPolicyLab = isPolicyLabProfile(profileId);
   if (isLocalLlmProfile(profileId)) {
     await verifyLocalLlmRuntimeWheels();
-  } else if (profileId !== GARAK_PROFILE_ID) {
+  } else if (!isPolicyLab && profileId !== GARAK_PROFILE_ID) {
     throw new Error("invalid_assessment_profile");
   }
   const containerName = getContainerName(jobId);
@@ -1848,9 +2002,11 @@ async function runDockerAssessment(
     );
 
     const timeout = createAssessmentTimeout(
-      isLocalLlmProfile(profileId)
-        ? LOCAL_LLM_MAX_RUNTIME_MS
-        : GARAK_MAX_RUNTIME_MS,
+      isPolicyLab
+        ? ASSESSMENT_EXECUTION_LIMITS.policyLab.timeoutMs
+        : isLocalLlmProfile(profileId)
+          ? LOCAL_LLM_MAX_RUNTIME_MS
+          : GARAK_MAX_RUNTIME_MS,
       requestStop,
     );
 
@@ -1966,13 +2122,38 @@ async function runDockerAssessment(
         const parsedEvidence = parsedResult.data;
         if (
           (isLocalLlm && parsedEvidence.engine !== "local_llm_lab") ||
-          (!isLocalLlm && parsedEvidence.engine !== "garak")
+          (isPolicyLab && parsedEvidence.engine !== "guardian_policy_lab") ||
+          (!isLocalLlm &&
+            !isPolicyLab &&
+            parsedEvidence.engine !== "garak")
         ) {
           reject(new Error("worker_engine_profile_mismatch"));
           return;
         }
         let evidence: AiAssessmentJobEvidence;
-        if (
+        if (parsedEvidence.engine === "guardian_policy_lab") {
+          const policyLab =
+            parsedEvidence as unknown as GuardianAgentPolicyLabEvidence & {
+              startedAt: Date;
+              completedAt: Date;
+            };
+          if (
+            !isPolicyLab ||
+            !validateGuardianAgentPolicyLabEvidence(
+              policyLab,
+              output,
+              profileId,
+            )
+          ) {
+            reject(new Error("worker_policy_lab_evidence_failed_validation"));
+            return;
+          }
+          evidence = {
+            ...policyLab,
+            startedAt: policyLab.startedAt.toISOString(),
+            completedAt: policyLab.completedAt.toISOString(),
+          };
+        } else if (
           parsedEvidence.engine === "local_llm_lab" &&
           profileId === AUTONOMOUS_TOOL_PROFILE_ID
         ) {

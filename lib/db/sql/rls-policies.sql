@@ -350,6 +350,14 @@ BEGIN
      OR position('guardian-local-llm-qwen3-0.6b-v1' IN existing_definition) = 0
      OR position('guardian-local-llm-native-tools-v1' IN existing_definition) = 0
      OR position('guardian-local-llm-autonomous-tools-v1' IN existing_definition) = 0
+      OR position('guardian-agent-lab-email-v1' IN existing_definition) = 0
+      OR position('guardian-agent-lab-database-v1' IN existing_definition) = 0
+      OR position('guardian-agent-lab-finance-v1' IN existing_definition) = 0
+      OR position('guardian-agent-lab-programming-v1' IN existing_definition) = 0
+      OR position('guardian-agent-lab-customer-service-v1' IN existing_definition) = 0
+      OR position('guardian-agent-lab-browser-v1' IN existing_definition) = 0
+      OR position('guardian-agent-lab-infrastructure-v1' IN existing_definition) = 0
+      OR position('guardian-agent-lab-multiagent-v1' IN existing_definition) = 0
   THEN
     ALTER TABLE public.ai_assessment_jobs
       DROP CONSTRAINT IF EXISTS ai_assessment_jobs_profile_check;
@@ -360,7 +368,15 @@ BEGIN
           'guardian-local-agent-v1',
           'guardian-local-llm-qwen3-0.6b-v1',
           'guardian-local-llm-native-tools-v1',
-          'guardian-local-llm-autonomous-tools-v1'
+          'guardian-local-llm-autonomous-tools-v1',
+          'guardian-agent-lab-email-v1',
+          'guardian-agent-lab-database-v1',
+          'guardian-agent-lab-finance-v1',
+          'guardian-agent-lab-programming-v1',
+          'guardian-agent-lab-customer-service-v1',
+          'guardian-agent-lab-browser-v1',
+          'guardian-agent-lab-infrastructure-v1',
+          'guardian-agent-lab-multiagent-v1'
         )
       );
   END IF;
@@ -390,7 +406,15 @@ ALTER POLICY ai_assessment_jobs_worker_update_queue
       'guardian-local-agent-v1',
       'guardian-local-llm-qwen3-0.6b-v1',
       'guardian-local-llm-native-tools-v1',
-      'guardian-local-llm-autonomous-tools-v1'
+      'guardian-local-llm-autonomous-tools-v1',
+      'guardian-agent-lab-email-v1',
+      'guardian-agent-lab-database-v1',
+      'guardian-agent-lab-finance-v1',
+      'guardian-agent-lab-programming-v1',
+      'guardian-agent-lab-customer-service-v1',
+      'guardian-agent-lab-browser-v1',
+      'guardian-agent-lab-infrastructure-v1',
+      'guardian-agent-lab-multiagent-v1'
     )
     AND status IN ('running', 'failed')
     AND (
