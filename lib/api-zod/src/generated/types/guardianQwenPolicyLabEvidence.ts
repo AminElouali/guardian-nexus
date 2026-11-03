@@ -36,6 +36,7 @@ export interface GuardianQwenPolicyLabEvidence {
      * @maxItems 10
      */
   cases: GuardianQwenPolicyLabEvidenceCasesItem[];
+  /** Integer counters and versioned latency telemetry; v1.9 uses inferenceLatencyP50Ms, inferenceLatencyP95Ms, authorizationLatencyP50Ms, authorizationLatencyP95Ms, authorizationSampleCount, and casesPerSecondMilli. */
   summary: GuardianQwenPolicyLabEvidenceSummary;
   selfChecks: GuardianQwenPolicyLabEvidenceSelfChecks;
   startedAt: Date;

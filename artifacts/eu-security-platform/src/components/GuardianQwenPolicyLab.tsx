@@ -211,8 +211,10 @@ export function QwenPolicyLabResult({ evidence }: { evidence: QwenPolicyEvidence
       item.toolCallOrigin === 'no_tool_call' ||
       item.toolCallOrigin === 'unparsed_qwen_native_markup',
   ).length;
-  const countLabel = (value: number | undefined) =>
-    Number.isSafeInteger(value) ? value : 'sin desglose';
+  const countLabel = (value: unknown) =>
+    typeof value === 'number' && Number.isSafeInteger(value)
+      ? value
+      : 'sin desglose';
   return (
     <section className="agent-policy-lab-result" data-testid="qwen-policy-lab-result">
       <div className="ai-lab-result-summary">

@@ -1574,17 +1574,7 @@ export const listWorkspaceAiAssessmentLabJobsResponseResultSixCasesItemCaseEvide
 export const listWorkspaceAiAssessmentLabJobsResponseResultSixCasesMin = 2;
 export const listWorkspaceAiAssessmentLabJobsResponseResultSixCasesMax = 10;
 
-export const listWorkspaceAiAssessmentLabJobsResponseResultSixSummaryInferenceLatencyP50MsMin = 0;
-
-export const listWorkspaceAiAssessmentLabJobsResponseResultSixSummaryInferenceLatencyP95MsMin = 0;
-
-export const listWorkspaceAiAssessmentLabJobsResponseResultSixSummaryAuthorizationLatencyP50MsMin = 0;
-
-export const listWorkspaceAiAssessmentLabJobsResponseResultSixSummaryAuthorizationLatencyP95MsMin = 0;
-
-export const listWorkspaceAiAssessmentLabJobsResponseResultSixSummaryAuthorizationSampleCountMin = 0;
-
-export const listWorkspaceAiAssessmentLabJobsResponseResultSixSummaryCasesPerSecondMilliMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultSixSummaryMinOne = 0;
 
 export const listWorkspaceAiAssessmentLabJobsResponseResultSixDurationSecondsMin = 0;
 export const listWorkspaceAiAssessmentLabJobsResponseResultSixDurationSecondsMax = 180;
@@ -2979,14 +2969,7 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "rawArgumentsStored": zod.literal(false),
   "caseEvidenceSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultSixCasesItemCaseEvidenceSha256RegExp)
 })).min(listWorkspaceAiAssessmentLabJobsResponseResultSixCasesMin).max(listWorkspaceAiAssessmentLabJobsResponseResultSixCasesMax),
-  "summary": zod.object({
-  "inferenceLatencyP50Ms": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultSixSummaryInferenceLatencyP50MsMin).optional(),
-  "inferenceLatencyP95Ms": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultSixSummaryInferenceLatencyP95MsMin).optional(),
-  "authorizationLatencyP50Ms": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultSixSummaryAuthorizationLatencyP50MsMin).optional(),
-  "authorizationLatencyP95Ms": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultSixSummaryAuthorizationLatencyP95MsMin).optional(),
-  "authorizationSampleCount": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultSixSummaryAuthorizationSampleCountMin).optional(),
-  "casesPerSecondMilli": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultSixSummaryCasesPerSecondMilliMin).optional()
-}),
+  "summary": zod.record(zod.string(), zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultSixSummaryMinOne)).describe('Integer counters and versioned latency telemetry; v1.9 uses inferenceLatencyP50Ms, inferenceLatencyP95Ms, authorizationLatencyP50Ms, authorizationLatencyP95Ms, authorizationSampleCount, and casesPerSecondMilli.\n'),
   "selfChecks": zod.object({
   "allCallsUsedAuto": zod.literal(true),
   "noForcedToolSelection": zod.literal(true),
@@ -4117,17 +4100,7 @@ export const createWorkspaceAiAssessmentLabJobResponseResultSixCasesItemCaseEvid
 export const createWorkspaceAiAssessmentLabJobResponseResultSixCasesMin = 2;
 export const createWorkspaceAiAssessmentLabJobResponseResultSixCasesMax = 10;
 
-export const createWorkspaceAiAssessmentLabJobResponseResultSixSummaryInferenceLatencyP50MsMin = 0;
-
-export const createWorkspaceAiAssessmentLabJobResponseResultSixSummaryInferenceLatencyP95MsMin = 0;
-
-export const createWorkspaceAiAssessmentLabJobResponseResultSixSummaryAuthorizationLatencyP50MsMin = 0;
-
-export const createWorkspaceAiAssessmentLabJobResponseResultSixSummaryAuthorizationLatencyP95MsMin = 0;
-
-export const createWorkspaceAiAssessmentLabJobResponseResultSixSummaryAuthorizationSampleCountMin = 0;
-
-export const createWorkspaceAiAssessmentLabJobResponseResultSixSummaryCasesPerSecondMilliMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultSixSummaryMinOne = 0;
 
 export const createWorkspaceAiAssessmentLabJobResponseResultSixDurationSecondsMin = 0;
 export const createWorkspaceAiAssessmentLabJobResponseResultSixDurationSecondsMax = 180;
@@ -5522,14 +5495,7 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "rawArgumentsStored": zod.literal(false),
   "caseEvidenceSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultSixCasesItemCaseEvidenceSha256RegExp)
 })).min(createWorkspaceAiAssessmentLabJobResponseResultSixCasesMin).max(createWorkspaceAiAssessmentLabJobResponseResultSixCasesMax),
-  "summary": zod.object({
-  "inferenceLatencyP50Ms": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultSixSummaryInferenceLatencyP50MsMin).optional(),
-  "inferenceLatencyP95Ms": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultSixSummaryInferenceLatencyP95MsMin).optional(),
-  "authorizationLatencyP50Ms": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultSixSummaryAuthorizationLatencyP50MsMin).optional(),
-  "authorizationLatencyP95Ms": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultSixSummaryAuthorizationLatencyP95MsMin).optional(),
-  "authorizationSampleCount": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultSixSummaryAuthorizationSampleCountMin).optional(),
-  "casesPerSecondMilli": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultSixSummaryCasesPerSecondMilliMin).optional()
-}),
+  "summary": zod.record(zod.string(), zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultSixSummaryMinOne)).describe('Integer counters and versioned latency telemetry; v1.9 uses inferenceLatencyP50Ms, inferenceLatencyP95Ms, authorizationLatencyP50Ms, authorizationLatencyP95Ms, authorizationSampleCount, and casesPerSecondMilli.\n'),
   "selfChecks": zod.object({
   "allCallsUsedAuto": zod.literal(true),
   "noForcedToolSelection": zod.literal(true),
@@ -6649,17 +6615,7 @@ export const getWorkspaceAiAssessmentLabJobResponseResultSixCasesItemCaseEvidenc
 export const getWorkspaceAiAssessmentLabJobResponseResultSixCasesMin = 2;
 export const getWorkspaceAiAssessmentLabJobResponseResultSixCasesMax = 10;
 
-export const getWorkspaceAiAssessmentLabJobResponseResultSixSummaryInferenceLatencyP50MsMin = 0;
-
-export const getWorkspaceAiAssessmentLabJobResponseResultSixSummaryInferenceLatencyP95MsMin = 0;
-
-export const getWorkspaceAiAssessmentLabJobResponseResultSixSummaryAuthorizationLatencyP50MsMin = 0;
-
-export const getWorkspaceAiAssessmentLabJobResponseResultSixSummaryAuthorizationLatencyP95MsMin = 0;
-
-export const getWorkspaceAiAssessmentLabJobResponseResultSixSummaryAuthorizationSampleCountMin = 0;
-
-export const getWorkspaceAiAssessmentLabJobResponseResultSixSummaryCasesPerSecondMilliMin = 0;
+export const getWorkspaceAiAssessmentLabJobResponseResultSixSummaryMinOne = 0;
 
 export const getWorkspaceAiAssessmentLabJobResponseResultSixDurationSecondsMin = 0;
 export const getWorkspaceAiAssessmentLabJobResponseResultSixDurationSecondsMax = 180;
@@ -8054,14 +8010,7 @@ export const GetWorkspaceAiAssessmentLabJobResponse = zod.object({
   "rawArgumentsStored": zod.literal(false),
   "caseEvidenceSha256": zod.string().regex(getWorkspaceAiAssessmentLabJobResponseResultSixCasesItemCaseEvidenceSha256RegExp)
 })).min(getWorkspaceAiAssessmentLabJobResponseResultSixCasesMin).max(getWorkspaceAiAssessmentLabJobResponseResultSixCasesMax),
-  "summary": zod.object({
-  "inferenceLatencyP50Ms": zod.int().min(getWorkspaceAiAssessmentLabJobResponseResultSixSummaryInferenceLatencyP50MsMin).optional(),
-  "inferenceLatencyP95Ms": zod.int().min(getWorkspaceAiAssessmentLabJobResponseResultSixSummaryInferenceLatencyP95MsMin).optional(),
-  "authorizationLatencyP50Ms": zod.int().min(getWorkspaceAiAssessmentLabJobResponseResultSixSummaryAuthorizationLatencyP50MsMin).optional(),
-  "authorizationLatencyP95Ms": zod.int().min(getWorkspaceAiAssessmentLabJobResponseResultSixSummaryAuthorizationLatencyP95MsMin).optional(),
-  "authorizationSampleCount": zod.int().min(getWorkspaceAiAssessmentLabJobResponseResultSixSummaryAuthorizationSampleCountMin).optional(),
-  "casesPerSecondMilli": zod.int().min(getWorkspaceAiAssessmentLabJobResponseResultSixSummaryCasesPerSecondMilliMin).optional()
-}),
+  "summary": zod.record(zod.string(), zod.int().min(getWorkspaceAiAssessmentLabJobResponseResultSixSummaryMinOne)).describe('Integer counters and versioned latency telemetry; v1.9 uses inferenceLatencyP50Ms, inferenceLatencyP95Ms, authorizationLatencyP50Ms, authorizationLatencyP95Ms, authorizationSampleCount, and casesPerSecondMilli.\n'),
   "selfChecks": zod.object({
   "allCallsUsedAuto": zod.literal(true),
   "noForcedToolSelection": zod.literal(true),
@@ -9247,17 +9196,7 @@ export const retryWorkspaceAiAssessmentLabJobResponseResultSixCasesItemCaseEvide
 export const retryWorkspaceAiAssessmentLabJobResponseResultSixCasesMin = 2;
 export const retryWorkspaceAiAssessmentLabJobResponseResultSixCasesMax = 10;
 
-export const retryWorkspaceAiAssessmentLabJobResponseResultSixSummaryInferenceLatencyP50MsMin = 0;
-
-export const retryWorkspaceAiAssessmentLabJobResponseResultSixSummaryInferenceLatencyP95MsMin = 0;
-
-export const retryWorkspaceAiAssessmentLabJobResponseResultSixSummaryAuthorizationLatencyP50MsMin = 0;
-
-export const retryWorkspaceAiAssessmentLabJobResponseResultSixSummaryAuthorizationLatencyP95MsMin = 0;
-
-export const retryWorkspaceAiAssessmentLabJobResponseResultSixSummaryAuthorizationSampleCountMin = 0;
-
-export const retryWorkspaceAiAssessmentLabJobResponseResultSixSummaryCasesPerSecondMilliMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultSixSummaryMinOne = 0;
 
 export const retryWorkspaceAiAssessmentLabJobResponseResultSixDurationSecondsMin = 0;
 export const retryWorkspaceAiAssessmentLabJobResponseResultSixDurationSecondsMax = 180;
@@ -10652,14 +10591,7 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "rawArgumentsStored": zod.literal(false),
   "caseEvidenceSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultSixCasesItemCaseEvidenceSha256RegExp)
 })).min(retryWorkspaceAiAssessmentLabJobResponseResultSixCasesMin).max(retryWorkspaceAiAssessmentLabJobResponseResultSixCasesMax),
-  "summary": zod.object({
-  "inferenceLatencyP50Ms": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultSixSummaryInferenceLatencyP50MsMin).optional(),
-  "inferenceLatencyP95Ms": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultSixSummaryInferenceLatencyP95MsMin).optional(),
-  "authorizationLatencyP50Ms": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultSixSummaryAuthorizationLatencyP50MsMin).optional(),
-  "authorizationLatencyP95Ms": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultSixSummaryAuthorizationLatencyP95MsMin).optional(),
-  "authorizationSampleCount": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultSixSummaryAuthorizationSampleCountMin).optional(),
-  "casesPerSecondMilli": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultSixSummaryCasesPerSecondMilliMin).optional()
-}),
+  "summary": zod.record(zod.string(), zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultSixSummaryMinOne)).describe('Integer counters and versioned latency telemetry; v1.9 uses inferenceLatencyP50Ms, inferenceLatencyP95Ms, authorizationLatencyP50Ms, authorizationLatencyP95Ms, authorizationSampleCount, and casesPerSecondMilli.\n'),
   "selfChecks": zod.object({
   "allCallsUsedAuto": zod.literal(true),
   "noForcedToolSelection": zod.literal(true),

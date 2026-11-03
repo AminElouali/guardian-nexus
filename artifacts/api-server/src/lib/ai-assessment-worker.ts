@@ -989,6 +989,100 @@ function hasOnlyKeys(value: object, allowed: readonly string[]): boolean {
   return Object.keys(value).every((key) => allowed.includes(key));
 }
 
+type SafeSchemaIssue = { code: string; path: string };
+
+/**
+ * Extracts schema paths only. Never include received values or issue messages,
+ * because the rejected worker output may contain model-generated content.
+ */
+export function summarizeSchemaValidationBranches(
+  error: unknown,
+): Array<{
+  branchIndex: number;
+  variant: string;
+  issueCount: number;
+  issues: SafeSchemaIssue[];
+}> {
+  const variants = [
+    "garak",
+    "local_llm",
+    "native_tool_suite",
+    "autonomous_tool_selection",
+    "guardian_policy_lab",
+    "qwen_policy_lab",
+    "null",
+  ] as const;
+  const errorRecord =
+    error && typeof error === "object" && !Array.isArray(error)
+      ? (error as Record<string, unknown>)
+      : null;
+  const topLevelIssues = Array.isArray(errorRecord?.issues)
+    ? errorRecord.issues
+    : [];
+  const unionIssue = topLevelIssues.find(
+    (item) =>
+      !!item &&
+      typeof item === "object" &&
+      !Array.isArray(item) &&
+      Array.isArray((item as Record<string, unknown>).errors),
+  ) as Record<string, unknown> | undefined;
+  const branches = Array.isArray(unionIssue?.errors)
+    ? unionIssue.errors
+    : [topLevelIssues];
+
+  const flatten = (value: unknown, output: SafeSchemaIssue[]): void => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return;
+    const issue = value as Record<string, unknown>;
+    if (Array.isArray(issue.errors)) {
+      for (const nested of issue.errors) {
+        if (Array.isArray(nested)) {
+          for (const item of nested) flatten(item, output);
+        } else {
+          flatten(nested, output);
+        }
+      }
+      return;
+    }
+    const code =
+      typeof issue.code === "string" && /^[a-z_]{1,40}$/.test(issue.code)
+        ? issue.code
+        : "unknown";
+    const path = Array.isArray(issue.path)
+      ? issue.path
+          .map((part) => {
+            if (typeof part === "number") return "[]";
+            if (
+              typeof part === "string" &&
+              /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(part)
+            ) {
+              return part;
+            }
+            return "[key]";
+          })
+          .join(".")
+      : "";
+    output.push({ code, path });
+  };
+
+  return branches.map((branch, branchIndex) => {
+    const allIssues: SafeSchemaIssue[] = [];
+    if (Array.isArray(branch)) {
+      for (const item of branch) flatten(item, allIssues);
+    } else {
+      flatten(branch, allIssues);
+    }
+    const unique = new Map(
+      allIssues.map((item) => [`${item.code}:${item.path}`, item]),
+    );
+    return {
+      branchIndex,
+      variant: variants[branchIndex] ?? "unknown",
+      issueCount: allIssues.length,
+      issues: [...unique.values()].slice(0, 24),
+    };
+  });
+}
+
 export function validateGuardianQwenPolicyLabEvidence(
   evidence: GuardianQwenPolicyLabEvidence,
   raw: unknown,
@@ -2987,6 +3081,9 @@ async function runDockerAssessment(
                 issueCount: issueSummaries.length,
                 issues: issueSummaries.slice(0, 40),
                 issueTail: issueSummaries.slice(-20),
+                schemaBranches: isQwenPolicyLabProfile(profileId)
+                  ? summarizeSchemaValidationBranches(parsedResult.error)
+                  : undefined,
               },
               "AI assessment worker output failed schema validation",
             );

@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { test } from "node:test";
 import { CreateWorkspaceAiAssessmentLabJobResponse } from "@workspace/api-zod";
-import { validateGuardianQwenPolicyLabEvidence } from "./ai-assessment-worker";
+import {
+  summarizeSchemaValidationBranches,
+  validateGuardianQwenPolicyLabEvidence,
+} from "./ai-assessment-worker";
 import {
   createSyntheticApprovalSimulationReceipt,
   getAllowlistedSyntheticApprovalAction,
@@ -13,6 +16,26 @@ type QwenEvidence = Parameters<
 >[0];
 
 const HASH = "a".repeat(64);
+
+test("schema diagnostics identify the Qwen result branch without retaining rejected values", () => {
+  const parsed = CreateWorkspaceAiAssessmentLabJobResponse.shape.result.safeParse({
+    engine: "guardian_qwen_policy_lab",
+    secretSentinel: "must-not-appear-in-diagnostics",
+  });
+  assert.equal(parsed.success, false);
+  if (parsed.success) return;
+
+  const branches = summarizeSchemaValidationBranches(parsed.error);
+  assert.equal(branches[5]?.variant, "qwen_policy_lab");
+  assert.ok(branches[5]!.issueCount > 0);
+  assert.ok(
+    branches[5]!.issues.some((issue) => issue.path === "evidenceVersion"),
+  );
+  assert.doesNotMatch(
+    JSON.stringify(branches),
+    /must-not-appear-in-diagnostics|secretSentinel/,
+  );
+});
 
 function canonicalJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;

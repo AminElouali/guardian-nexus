@@ -3551,21 +3551,10 @@ export type GuardianQwenPolicyLabEvidenceCasesItem = {
   caseEvidenceSha256: string;
 };
 
-export type GuardianQwenPolicyLabEvidenceSummary = {
-  /** @minimum 0 */
-  inferenceLatencyP50Ms?: number;
-  /** @minimum 0 */
-  inferenceLatencyP95Ms?: number;
-  /** @minimum 0 */
-  authorizationLatencyP50Ms?: number;
-  /** @minimum 0 */
-  authorizationLatencyP95Ms?: number;
-  /** @minimum 0 */
-  authorizationSampleCount?: number;
-  /** @minimum 0 */
-  casesPerSecondMilli?: number;
-  [key: string]: unknown;
-};
+/**
+ * Integer counters and versioned latency telemetry; v1.9 uses inferenceLatencyP50Ms, inferenceLatencyP95Ms, authorizationLatencyP50Ms, authorizationLatencyP95Ms, authorizationSampleCount, and casesPerSecondMilli.
+ */
+export type GuardianQwenPolicyLabEvidenceSummary = {[key: string]: number};
 
 export type GuardianQwenPolicyLabEvidenceSelfChecks = {
   allCallsUsedAuto: true;
@@ -3596,6 +3585,7 @@ export interface GuardianQwenPolicyLabEvidence {
      * @maxItems 10
      */
   cases: GuardianQwenPolicyLabEvidenceCasesItem[];
+  /** Integer counters and versioned latency telemetry; v1.9 uses inferenceLatencyP50Ms, inferenceLatencyP95Ms, authorizationLatencyP50Ms, authorizationLatencyP95Ms, authorizationSampleCount, and casesPerSecondMilli. */
   summary: GuardianQwenPolicyLabEvidenceSummary;
   selfChecks: GuardianQwenPolicyLabEvidenceSelfChecks;
   startedAt: string;

@@ -1829,13 +1829,11 @@ components:
             required: [caseId, label, language, promptSha256, toolChoice, finishReason, toolCallOrigin, toolCallCount, proposedTool, proposalSha256, syntheticActionRef, actionSha256, decision, reasonCode, dispatchStatus, toolEvents, policyOnStateBeforeSha256, policyOnStateAfterSha256, policyOff, unauthorizedActionExecuted, rawPromptStored, rawResponseStored, rawArgumentsStored, caseEvidenceSha256]
         summary:
           type: object
-          properties:
-            inferenceLatencyP50Ms: { type: integer, minimum: 0 }
-            inferenceLatencyP95Ms: { type: integer, minimum: 0 }
-            authorizationLatencyP50Ms: { type: integer, minimum: 0 }
-            authorizationLatencyP95Ms: { type: integer, minimum: 0 }
-            authorizationSampleCount: { type: integer, minimum: 0 }
-            casesPerSecondMilli: { type: integer, minimum: 0 }
+          description: >
+            Integer counters and versioned latency telemetry; v1.9 uses
+            inferenceLatencyP50Ms, inferenceLatencyP95Ms,
+            authorizationLatencyP50Ms, authorizationLatencyP95Ms,
+            authorizationSampleCount, and casesPerSecondMilli.
           additionalProperties: { type: integer, minimum: 0 }
         selfChecks:
           type: object
