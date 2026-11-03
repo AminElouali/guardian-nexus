@@ -1307,7 +1307,7 @@ export const aiAssessmentApprovalRequestsTable = pgTable(
     ),
     check(
       "ai_assessment_approval_decision_check",
-      sql`(${table.status} = 'pending' AND ${table.decidedByUserId} IS NULL AND ${table.decidedAt} IS NULL) OR (${table.status} IN ('approved', 'denied') AND ${table.decidedByUserId} IS NOT NULL AND ${table.decidedAt} IS NOT NULL) OR (${table.status} = 'expired' AND ${table.decidedByUserId} IS NULL)`,
+      sql`(${table.status} = 'pending' AND ${table.decidedByUserId} IS NULL AND ${table.decidedByRole} IS NULL AND ${table.decidedAt} IS NULL) OR (${table.status} IN ('approved', 'denied') AND ${table.decidedByUserId} IS NOT NULL AND ${table.decidedAt} IS NOT NULL AND (${table.bindingVersion} = 1 OR ${table.decidedByRole} IN ('owner', 'admin'))) OR (${table.status} = 'expired' AND ${table.decidedByUserId} IS NULL AND ${table.decidedByRole} IS NULL)`,
     ),
     check(
       "ai_assessment_approval_no_self_approval_check",
@@ -1327,6 +1327,7 @@ export const aiAssessmentApprovalRequestsTable = pgTable(
         AND ${table.status} = 'pending'
         AND ${table.bindingVersion} IN (1, 2)
         AND ${table.decidedByUserId} IS NULL
+        AND ${table.decidedByRole} IS NULL
         AND ${table.decidedAt} IS NULL
         AND EXISTS (
           SELECT 1
@@ -1335,6 +1336,16 @@ export const aiAssessmentApprovalRequestsTable = pgTable(
             AND job.workspace_id = ${table.workspaceId}
             AND job.requested_by_user_id = ${table.requestedByUserId}
             AND job.status = 'succeeded'
+        )
+        AND (
+          ${table.bindingVersion} = 1
+          OR EXISTS (
+            SELECT 1
+            FROM ${membershipsTable} AS requester
+            WHERE requester.workspace_id = ${table.workspaceId}
+              AND requester.user_id = ${table.requestedByUserId}
+              AND requester.role = ${table.requestedByRole}
+          )
         )
       `,
     }),
@@ -1357,10 +1368,18 @@ export const aiAssessmentApprovalRequestsTable = pgTable(
            AND ${table.decidedByUserId} = NULLIF(current_setting('app.user_id', true), '')
            AND ${table.decidedAt} IS NOT NULL
            AND ${table.decidedByRole} IN ('owner', 'admin')
+            AND EXISTS (
+              SELECT 1
+              FROM ${membershipsTable} AS approver
+              WHERE approver.workspaceId = ${table.workspaceId}
+                AND approver.userId = ${table.decidedByUserId}
+                AND approver.role = ${table.decidedByRole}
+            )
            AND ${table.requestedByUserId} <> ${table.decidedByUserId})
           OR (${table.status} = 'expired'
               AND ${table.expiresAt} <= now()
               AND ${table.decidedByUserId} IS NULL
+              AND ${table.decidedByRole} IS NULL
               AND ${table.decidedAt} IS NULL)
         )
       `,

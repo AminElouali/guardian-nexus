@@ -25,6 +25,7 @@ import {
 } from "@workspace/db";
 import {
   canonicalApprovalJson,
+  createSyntheticApprovalSimulationReceipt,
   computeApprovalProposalBindingV2,
   computeApprovalReplayBinding,
   getAllowlistedSyntheticApprovalAction,
@@ -91,10 +92,19 @@ function formatApproval(
     replayBindingSha256: string | null;
     createdAt: Date;
   },
+  execution: "not_performed" | "simulated_once" = "not_performed",
   canCurrentUserDecide = false,
 ) {
   return {
     ...approval,
+    execution:
+      execution === "simulated_once" ||
+      (approval.simulatedAt !== null &&
+        approval.simulationResultCode !== null &&
+        approval.simulationResultSha256 !== null &&
+        approval.replayBindingSha256 !== null)
+        ? "synthetic_action_simulated_once"
+        : "not_performed",
     status:
       approval.status === "pending" && approval.expiresAt <= new Date()
         ? "expired"
@@ -320,6 +330,7 @@ routes.get(
           approvals: approvals.map((approval) =>
             formatApproval(
               approval,
+              approval.simulatedAt ? "simulated_once" : "not_performed",
               canDecide && approval.requestedByUserId !== req.authUserId,
             ),
           ),
@@ -334,7 +345,7 @@ routes.get(
     res.json(
       ListWorkspaceAiAssessmentApprovalsResponse.parse({
         ...access.value,
-        execution: "not_performed_laboratory_approval_only",
+        execution: "laboratory_only",
       }),
     );
   },
@@ -413,12 +424,55 @@ routes.post(
           return { kind: "binding_mismatch" as const };
         }
         const status = body.data.decision === "approve" ? "approved" : "denied";
+        let simulationReceipt:
+          | ReturnType<typeof createSyntheticApprovalSimulationReceipt>
+          | null = null;
+        let replayBindingSha256: string | null = null;
+        if (
+          status === "approved" &&
+          approval.bindingVersion === 2 &&
+          approval.syntheticActionRef &&
+          approval.actionSha256
+        ) {
+          const [job] = await tx
+            .select()
+            .from(aiAssessmentJobsTable)
+            .where(
+              and(
+                eq(aiAssessmentJobsTable.id, approval.jobId),
+                eq(aiAssessmentJobsTable.workspaceId, workspaceId),
+              ),
+            )
+            .limit(1);
+          const proof = verifyPersistedApprovalEvidence(approval, job);
+          if (!proof) return { kind: "evidence_invalid" as const };
+          simulationReceipt = createSyntheticApprovalSimulationReceipt(proof);
+          replayBindingSha256 = computeApprovalReplayBinding({
+            proposalBindingSha256: expectedBinding,
+            decision: "approved",
+            decidedByUserId: req.authUserId!,
+            decidedByRole: membership.role,
+            decidedAt: now,
+            simulationResultCode: simulationReceipt.resultCode,
+            simulationResultSha256: simulationReceipt.resultSha256,
+          });
+        } else if (
+          status === "approved" &&
+          approval.bindingVersion === 2
+        ) {
+          return { kind: "evidence_invalid" as const };
+        }
         const [updated] = await tx
           .update(aiAssessmentApprovalRequestsTable)
           .set({
             status,
             decidedByUserId: req.authUserId!,
+            decidedByRole: membership.role,
             decidedAt: now,
+            simulatedAt: simulationReceipt ? now : null,
+            simulationResultCode: simulationReceipt?.resultCode ?? null,
+            simulationResultSha256: simulationReceipt?.resultSha256 ?? null,
+            replayBindingSha256,
             updatedAt: now,
           })
           .where(
@@ -431,6 +485,7 @@ routes.post(
                 expectedBinding,
               ),
               gt(aiAssessmentApprovalRequestsTable.expiresAt, now),
+              isNull(aiAssessmentApprovalRequestsTable.simulatedAt),
             ),
           )
           .returning();
@@ -446,9 +501,21 @@ routes.post(
             caseId: approval.caseId,
             proposalSha256: approval.proposalSha256,
             proposalBindingSha256: expectedBinding,
+            decidedByRole: membership.role,
+            syntheticActionRef: approval.syntheticActionRef,
+            simulationResultCode: simulationReceipt?.resultCode ?? null,
+            simulationResultSha256: simulationReceipt?.resultSha256 ?? null,
+            simulationBeforeStateSha256: simulationReceipt?.beforeStateSha256 ?? null,
+            simulationAfterStateSha256: simulationReceipt?.afterStateSha256 ?? null,
+            replayBindingSha256,
+            externalSideEffect: false,
           },
         });
-        return { kind: "decided" as const, approval: updated };
+        return {
+          kind: "decided" as const,
+          approval: updated,
+          execution: simulationReceipt ? "synthetic_action_simulated_once" : "decision_only",
+        };
       },
     );
     if (!access.authorized) {
@@ -466,7 +533,8 @@ routes.post(
     if (
       access.value.kind === "already_decided" ||
       access.value.kind === "expired" ||
-      access.value.kind === "binding_mismatch"
+      access.value.kind === "binding_mismatch" ||
+      access.value.kind === "evidence_invalid"
     ) {
       res.status(409).json({ error: `Approval is ${access.value.kind}` });
       return;
@@ -477,8 +545,13 @@ routes.post(
     }
     res.json(
       DecideWorkspaceAiAssessmentApprovalResponse.parse({
-        approval: formatApproval(access.value.approval),
-        execution: "not_performed_laboratory_approval_only",
+        approval: formatApproval(
+          access.value.approval,
+          access.value.execution === "synthetic_action_simulated_once"
+            ? "simulated_once"
+            : "not_performed",
+        ),
+        execution: access.value.execution,
       }),
     );
   },

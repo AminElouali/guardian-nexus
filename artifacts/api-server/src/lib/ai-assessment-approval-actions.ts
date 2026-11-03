@@ -139,6 +139,24 @@ export function getAllowlistedSyntheticApprovalAction(
   };
 }
 
+export function createSyntheticApprovalSimulationReceipt(
+  action: NonNullable<
+    ReturnType<typeof getAllowlistedSyntheticApprovalAction>
+  >,
+): {
+  resultCode: string;
+  resultSha256: string;
+  beforeStateSha256: string;
+  afterStateSha256: string;
+} {
+  return {
+    resultCode: action.resultCode,
+    resultSha256: action.simulationResultSha256,
+    beforeStateSha256: action.beforeStateSha256,
+    afterStateSha256: action.afterStateSha256,
+  };
+}
+
 export function computeApprovalProposalBindingV2(approval: {
   workspaceId: string;
   jobId: string;

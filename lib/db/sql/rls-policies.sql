@@ -56,10 +56,13 @@ CREATE TABLE IF NOT EXISTS public.ai_assessment_approval_requests (
       AND simulation_result_sha256 IS NOT NULL AND replay_binding_sha256 IS NOT NULL)
   ),
   CONSTRAINT ai_assessment_approval_decision_check CHECK (
-    (status = 'pending' AND decided_by_user_id IS NULL AND decided_at IS NULL)
+    (status = 'pending' AND decided_by_user_id IS NULL
+      AND decided_by_role IS NULL AND decided_at IS NULL)
     OR (status IN ('approved', 'denied')
-        AND decided_by_user_id IS NOT NULL AND decided_at IS NOT NULL)
-    OR (status = 'expired' AND decided_by_user_id IS NULL)
+        AND decided_by_user_id IS NOT NULL AND decided_at IS NOT NULL
+        AND (binding_version = 1 OR decided_by_role IN ('owner', 'admin')))
+    OR (status = 'expired' AND decided_by_user_id IS NULL
+        AND decided_by_role IS NULL AND decided_at IS NULL)
   ),
   CONSTRAINT ai_assessment_approval_no_self_approval_check CHECK (
     decided_by_user_id IS NULL OR decided_by_user_id <> requested_by_user_id
@@ -110,6 +113,7 @@ CREATE POLICY ai_assessment_approvals_insert_owner
     AND requested_by_user_id = NULLIF(current_setting('app.user_id', true), '')
     AND status = 'pending'
     AND decided_by_user_id IS NULL
+    AND decided_by_role IS NULL
     AND decided_at IS NULL
     AND binding_version IN (1, 2)
     AND EXISTS (
@@ -124,6 +128,15 @@ CREATE POLICY ai_assessment_approvals_insert_owner
         AND job.workspace_id = ai_assessment_approval_requests.workspace_id
         AND job.requested_by_user_id = ai_assessment_approval_requests.requested_by_user_id
         AND job.status = 'succeeded'
+    )
+    AND (
+      binding_version = 1
+      OR EXISTS (
+        SELECT 1 FROM public.workspace_memberships AS requester
+        WHERE requester.workspace_id = ai_assessment_approval_requests.workspace_id
+          AND requester.user_id = ai_assessment_approval_requests.requested_by_user_id
+          AND requester.role = ai_assessment_approval_requests.requested_by_role
+      )
     )
   );
 
@@ -159,10 +172,17 @@ CREATE POLICY ai_assessment_approvals_update_approver
        AND decided_by_user_id = NULLIF(current_setting('app.user_id', true), '')
        AND decided_at IS NOT NULL
        AND decided_by_role IN ('owner', 'admin')
+       AND EXISTS (
+         SELECT 1 FROM public.workspace_memberships AS approver
+         WHERE approver.workspace_id = ai_assessment_approval_requests.workspace_id
+           AND approver.user_id = ai_assessment_approval_requests.decided_by_user_id
+           AND approver.role = ai_assessment_approval_requests.decided_by_role
+       )
        AND requested_by_user_id <> decided_by_user_id)
       OR (status = 'expired'
           AND expires_at <= now()
           AND decided_by_user_id IS NULL
+           AND decided_by_role IS NULL
           AND decided_at IS NULL)
     )
   );
