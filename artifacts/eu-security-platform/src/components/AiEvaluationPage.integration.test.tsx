@@ -170,7 +170,7 @@ test("renders the real API lab response in the authenticated dashboard card", ()
 
 test("renders real Qwen profiles separately from fixture evidence", () => {
   const artifactPath = new URL(
-    "../../../../generated-artifacts/guardian-qwen-policy-labs-e2e-v1.7.0.json",
+    "../../../../generated-artifacts/guardian-qwen-policy-labs-e2e-v1.8.0.json",
     import.meta.url,
   );
   const jobs = JSON.parse(readFileSync(artifactPath, "utf8")) as AiAssessmentLabJob[];

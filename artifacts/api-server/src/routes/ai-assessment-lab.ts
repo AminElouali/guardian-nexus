@@ -435,6 +435,16 @@ function verifyPersistedApprovalEvidence(
   ) {
     return null;
   }
+  if (
+    isQwenEvidence &&
+    ((raw.versions as Record<string, unknown> | null)?.policy !==
+      "guardian-policy-engine-synthetic-v2" ||
+      raw.executionMode !== "real_local_qwen_inference" ||
+      raw.proposalOriginScope !==
+        "qwen_marker_adapter_or_runtime_tool_calls_only")
+  ) {
+    return null;
+  }
   const { evidenceSha256, ...unsigned } = raw;
   if (
     createHash("sha256")

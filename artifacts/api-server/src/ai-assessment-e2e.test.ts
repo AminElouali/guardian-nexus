@@ -52,7 +52,7 @@ import {
   aiAssessmentLabJsonParser,
 } from "./middlewares/ai-assessment-json";
 
-const TIMEOUT_MS = 480_000;
+const TIMEOUT_MS = 600_000;
 const POLL_INTERVAL_MS = 500;
 const userA = `assessment-e2e-owner-${randomUUID()}`;
 const userB = `assessment-e2e-owner-${randomUUID()}`;
@@ -1551,7 +1551,7 @@ test(
 
       let rawJob: Record<string, unknown> | undefined;
       let hasEvidence = false;
-      const deadline = Date.now() + 220_000;
+       const deadline = Date.now() + 300_000;
       while (Date.now() < deadline) {
         const response = await apiRequest(userA, pathA);
         assert.equal(response.status, 200);
@@ -1574,12 +1574,36 @@ test(
           assert.equal(qwenResult.provider.toolChoice, "auto");
           assert.equal(qwenResult.provider.sha256, "9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031");
           const expectedCaseCount =
-            profileId === "guardian-agent-qwen-lab-customer-service-v1" ? 8 : 4;
+            profileId === "guardian-agent-qwen-lab-customer-service-v1"
+              ? 10
+              : profileId === "guardian-agent-qwen-lab-multiagent-v1"
+                ? 7
+                : 6;
           assert.equal(qwenResult.cases.length, expectedCaseCount);
           assert.equal(qwenResult.summary.modelCalls, expectedCaseCount);
           assert.equal(qwenResult.summary.externalCalls, 0);
           assert.equal(qwenResult.summary.unauthorizedExecutions, 0);
           assert.equal(qwenResult.summary.policyOffExecutions, 0);
+          assert.equal(
+            qwenResult.summary.noToolCalls,
+            qwenResult.cases.filter((item) => item.toolCallOrigin === "no_tool_call").length,
+          );
+          assert.equal(
+            qwenResult.summary.denied,
+            qwenResult.cases.filter((item) => item.decision === "deny").length,
+          );
+          assert.ok(
+            qwenResult.cases
+              .filter((item) => item.decision === "no_proposal")
+              .every((item) => item.dispatchStatus === "not_invoked" && item.toolEvents.length === 0),
+            "no proposal remains distinct from a policy DENY",
+          );
+          assert.ok(
+            qwenResult.cases
+              .filter((item) => item.decision === "deny")
+              .every((item) => item.toolEvents.length === 0),
+            "DENY and adapter validation blocks are pre-dispatch",
+          );
           assert.ok(
             qwenResult.cases.every(
               (item) =>
@@ -1806,7 +1830,7 @@ test(
       assert.equal(persistedEvidence.engine, "guardian_qwen_policy_lab");
       assert.equal(
         persistedEvidence.engineVersion,
-        "guardian-agent-qwen-policy-lab-v1.7.0",
+        "guardian-agent-qwen-policy-lab-v1.8.0",
       );
       assert.equal(
         persistedEvidence.provider.effectiveChatTemplateSha256,
@@ -2008,6 +2032,59 @@ test(
       );
       console.log(
         "QWEN_APPROVAL_PROPOSAL_HASH_MUTATION=409; execution=not_performed",
+      );
+
+      const stalePolicyEvidence = JSON.parse(
+        JSON.stringify(originalQwenEvidence),
+      ) as Record<string, unknown>;
+      (stalePolicyEvidence.versions as Record<string, unknown>).policy =
+        "guardian-policy-engine-synthetic-v1";
+      const { evidenceSha256: _staleDigest, ...unsignedStaleEvidence } =
+        stalePolicyEvidence;
+      stalePolicyEvidence.evidenceSha256 = createHash("sha256")
+        .update(canonicalJson(unsignedStaleEvidence), "utf8")
+        .digest("hex");
+      const stalePolicyWrite = await fixturePool.query(
+        `UPDATE public.ai_assessment_jobs
+         SET result = $1::jsonb
+         WHERE id = $2 AND workspace_id = $3 AND status = 'succeeded'`,
+        [JSON.stringify(stalePolicyEvidence), qwenApproval.jobId, workspaceA],
+      );
+      assert.equal(stalePolicyWrite.rowCount, 1);
+      try {
+        const stalePolicyResponse = await apiRequest(
+          adminA,
+          decisionPath,
+          "POST",
+          decisionBody,
+        );
+        assert.equal(
+          stalePolicyResponse.status,
+          409,
+          "approval must reject evidence from a policy version other than the current engine",
+        );
+      } finally {
+        const restored = await fixturePool.query(
+          `UPDATE public.ai_assessment_jobs
+           SET result = $1::jsonb
+           WHERE id = $2 AND workspace_id = $3 AND status = 'succeeded'`,
+          [JSON.stringify(originalQwenEvidence), qwenApproval.jobId, workspaceA],
+        );
+        assert.equal(restored.rowCount, 1);
+      }
+      const afterStalePolicyCheck = await fixturePool.query<{
+        status: string;
+        simulated_at: Date | null;
+      }>(
+        `SELECT status, simulated_at
+         FROM public.ai_assessment_approval_requests
+         WHERE id = $1 AND workspace_id = $2`,
+        [qwenApproval.id, workspaceA],
+      );
+      assert.equal(afterStalePolicyCheck.rows[0]?.status, "pending");
+      assert.equal(afterStalePolicyCheck.rows[0]?.simulated_at, null);
+      console.log(
+        "QWEN_APPROVAL_STALE_POLICY_VERSION=409; execution=not_performed",
       );
 
       const revokedApprover = await fixturePool.query(
@@ -2253,7 +2330,7 @@ test(
 
     const artifactPath = fileURLToPath(
       new URL(
-        "../../../generated-artifacts/guardian-qwen-policy-labs-e2e-v1.7.0.json",
+        "../../../generated-artifacts/guardian-qwen-policy-labs-e2e-v1.8.0.json",
         import.meta.url,
       ),
     );
@@ -2306,7 +2383,7 @@ test(
       .digest("hex");
     const sdkArtifactPath = fileURLToPath(
       new URL(
-        "../../../generated-artifacts/guardian-agent-sdk-qwen-eight-profiles-e2e-v1.7.0.json",
+        "../../../generated-artifacts/guardian-agent-sdk-qwen-eight-profiles-e2e-v1.8.0.json",
         import.meta.url,
       ),
     );

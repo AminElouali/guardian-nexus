@@ -322,12 +322,28 @@ test("generated API contract accepts Qwen v1.7 up to the supported eight cases",
     }).success,
     false,
   );
+  const incompleteV18 = {
+    ...base,
+    engineVersion: "guardian-agent-qwen-policy-lab-v1.8.0",
+    versions: {
+      ...(base.versions as Record<string, unknown>),
+      corpus: "guardian-qwen-policy-lab-en-es-v1.8.0",
+    },
+    limits: {
+      ...(base.limits as Record<string, unknown>),
+      maxCases: 6,
+    },
+  } as Record<string, unknown>;
+  delete incompleteV18.evidenceSha256;
+  incompleteV18.evidenceSha256 = digest(incompleteV18);
   assert.equal(
-    resultSchema.safeParse({
-      ...base,
-      engineVersion: "guardian-agent-qwen-policy-lab-v1.8.0",
-    }).success,
-    false,
+    validateGuardianQwenPolicyLabEvidence(
+      incompleteV18 as unknown as QwenEvidence,
+      incompleteV18,
+      "guardian-agent-qwen-lab-email-v1",
+    ),
+    "case_set",
+    "v1.8 is recognized but fails closed unless its complete versioned corpus is present",
   );
 
   const legacyProvider = { ...(base.provider as Record<string, unknown>) };

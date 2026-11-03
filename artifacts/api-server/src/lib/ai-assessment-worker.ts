@@ -1016,6 +1016,8 @@ export function validateGuardianQwenPolicyLabEvidence(
         "qwen_email_indirect_injection_en",
         "qwen_email_indirect_injection_es",
         "qwen_email_attachment_injection_en",
+        "qwen_email_benign_quoted_instruction_es",
+        "qwen_email_injection_recipient_es",
       ],
     },
     [QWEN_DATABASE_POLICY_PROFILE_ID]: {
@@ -1025,6 +1027,8 @@ export function validateGuardianQwenPolicyLabEvidence(
         "qwen_database_indirect_injection_es",
         "qwen_database_indirect_injection_en",
         "qwen_database_export_injection_en",
+        "qwen_database_benign_quoted_instruction_en",
+        "qwen_database_cross_tenant_delete_es",
       ],
     },
     [QWEN_FINANCE_POLICY_PROFILE_ID]: {
@@ -1034,6 +1038,8 @@ export function validateGuardianQwenPolicyLabEvidence(
         "qwen_finance_indirect_bank_change_en",
         "qwen_finance_indirect_payment_es",
         "qwen_finance_beneficiary_injection_es",
+        "qwen_finance_benign_quoted_instruction_en",
+        "qwen_finance_hidden_beneficiary_es",
       ],
     },
     [QWEN_CUSTOMER_SERVICE_POLICY_PROFILE_ID]: {
@@ -1047,6 +1053,8 @@ export function validateGuardianQwenPolicyLabEvidence(
         "qwen_support_ticket_injection_es",
         "qwen_support_ticket_injection_en",
         "qwen_support_identity_injection_es",
+        "qwen_support_benign_quoted_instruction_en",
+        "qwen_support_refund_identity_injection_en",
       ],
     },
     [QWEN_PROGRAMMING_POLICY_PROFILE_ID]: {
@@ -1056,6 +1064,8 @@ export function validateGuardianQwenPolicyLabEvidence(
         "qwen_programming_indirect_injection_en",
         "qwen_programming_indirect_injection_es",
         "qwen_programming_comment_injection_en",
+        "qwen_programming_benign_quoted_instruction_en",
+        "qwen_programming_secret_command_injection_es",
       ],
     },
     [QWEN_BROWSER_POLICY_PROFILE_ID]: {
@@ -1065,6 +1075,8 @@ export function validateGuardianQwenPolicyLabEvidence(
         "qwen_browser_indirect_injection_en",
         "qwen_browser_indirect_injection_es",
         "qwen_browser_form_injection_en",
+        "qwen_browser_benign_quoted_instruction_en",
+        "qwen_browser_external_form_injection_es",
       ],
     },
     [QWEN_INFRASTRUCTURE_POLICY_PROFILE_ID]: {
@@ -1074,6 +1086,8 @@ export function validateGuardianQwenPolicyLabEvidence(
         "qwen_infra_indirect_injection_en",
         "qwen_infra_indirect_injection_es",
         "qwen_infra_deployment_note_injection_en",
+        "qwen_infra_benign_quoted_instruction_en",
+        "qwen_infra_privilege_injection_es",
       ],
     },
     [QWEN_MULTIAGENT_POLICY_PROFILE_ID]: {
@@ -1083,14 +1097,44 @@ export function validateGuardianQwenPolicyLabEvidence(
         "qwen_multiagent_indirect_injection_en",
         "qwen_multiagent_indirect_injection_es",
         "qwen_multiagent_child_escalation_en",
+        "qwen_multiagent_benign_quoted_instruction_en",
+        "qwen_multiagent_cross_tenant_escalation_es",
+        "qwen_multiagent_permission_laundering_en",
       ],
     },
   };
-  const expected = profileMap[requestedProfileId];
-  if (!expected || !raw || typeof raw !== "object" || Array.isArray(raw)) {
+  const profileDefinition = profileMap[requestedProfileId];
+  if (!profileDefinition || !raw || typeof raw !== "object" || Array.isArray(raw)) {
     return "profile_or_shape";
   }
   const rawEvidence = raw as Record<string, unknown>;
+  const isExpandedCorpus =
+    evidence.engineVersion === "guardian-agent-qwen-policy-lab-v1.8.0";
+  const v18CaseIds = new Set([
+    "qwen_email_benign_quoted_instruction_es",
+    "qwen_email_injection_recipient_es",
+    "qwen_database_benign_quoted_instruction_en",
+    "qwen_database_cross_tenant_delete_es",
+    "qwen_finance_benign_quoted_instruction_en",
+    "qwen_finance_hidden_beneficiary_es",
+    "qwen_support_benign_quoted_instruction_en",
+    "qwen_support_refund_identity_injection_en",
+    "qwen_programming_benign_quoted_instruction_en",
+    "qwen_programming_secret_command_injection_es",
+    "qwen_browser_benign_quoted_instruction_en",
+    "qwen_browser_external_form_injection_es",
+    "qwen_infra_benign_quoted_instruction_en",
+    "qwen_infra_privilege_injection_es",
+    "qwen_multiagent_benign_quoted_instruction_en",
+    "qwen_multiagent_cross_tenant_escalation_es",
+    "qwen_multiagent_permission_laundering_en",
+  ]);
+  const expected = {
+    ...profileDefinition,
+    cases: isExpandedCorpus
+      ? profileDefinition.cases
+      : profileDefinition.cases.filter((caseId) => !v18CaseIds.has(caseId)),
+  };
   const rawNetwork = rawEvidence.network;
   const rawLimits = rawEvidence.limits;
   const rawProvider = rawEvidence.provider;
@@ -1124,8 +1168,10 @@ export function validateGuardianQwenPolicyLabEvidence(
   const expectedEffectiveTemplateSha256 =
     "ec01f905b506faf0146fedd9efc747fd863dd87f4ddab4771b0c072e17021aa1";
   const effectiveTemplateSha256 = provider.effectiveChatTemplateSha256;
-  const effectiveTemplateIsRequired =
-    evidence.engineVersion === "guardian-agent-qwen-policy-lab-v1.7.0";
+  const effectiveTemplateIsRequired = [
+    "guardian-agent-qwen-policy-lab-v1.7.0",
+    "guardian-agent-qwen-policy-lab-v1.8.0",
+  ].includes(evidence.engineVersion);
   const effectiveTemplateSha256Valid =
     (effectiveTemplateIsRequired ||
       effectiveTemplateSha256 === undefined ||
@@ -1146,6 +1192,7 @@ export function validateGuardianQwenPolicyLabEvidence(
       "guardian-agent-qwen-policy-lab-v1.5.0",
       "guardian-agent-qwen-policy-lab-v1.6.0",
       "guardian-agent-qwen-policy-lab-v1.7.0",
+      "guardian-agent-qwen-policy-lab-v1.8.0",
     ].includes(evidence.engineVersion) ||
     evidence.profileId !== requestedProfileId ||
     evidence.verticalId !== expected.verticalId ||
@@ -1165,6 +1212,7 @@ export function validateGuardianQwenPolicyLabEvidence(
       "guardian-qwen-policy-lab-en-es-v1.5.0",
       "guardian-qwen-policy-lab-en-es-v1.6.0",
       "guardian-qwen-policy-lab-en-es-v1.7.0",
+      "guardian-qwen-policy-lab-en-es-v1.8.0",
     ].includes(evidence.versions.corpus) ||
     evidence.versions.toolMarkupAdapter !== "guardian-qwen-native-markup-v1" ||
     provider.id !== "local_qwen_gguf" ||
