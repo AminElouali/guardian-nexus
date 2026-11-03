@@ -1704,6 +1704,7 @@ export const GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSuiteVersion = 
   '130': '1.3.0',
   '140': '1.4.0',
   '150': '1.5.0',
+  '160': '1.6.0',
 } as const;
 
 export type GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSampleCount = typeof GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSampleCount[keyof typeof GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteSampleCount];
@@ -1877,6 +1878,7 @@ export type GuardianNativeToolCaseEvidenceTaskOutcomeCode = typeof GuardianNativ
 export const GuardianNativeToolCaseEvidenceTaskOutcomeCode = {
   verified_simulated_tool_result: 'verified_simulated_tool_result',
   tool_not_executed: 'tool_not_executed',
+  approval_required: 'approval_required',
   required_invoice_fields_not_verified: 'required_invoice_fields_not_verified',
 } as const;
 
@@ -1927,6 +1929,7 @@ export interface GuardianNativeToolCaseEvidence {
      * @maximum 64
      */
   deniedCount: number;
+  approvalRequired?: boolean;
   unauthorizedProposal: boolean;
   unauthorizedAttempt: boolean;
   unauthorizedExecution: false;
@@ -2597,6 +2600,11 @@ export type GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteToolSummary = {
      * @minimum 0
      * @maximum 14
      */
+  approvalRequiredCalls?: number;
+  /**
+     * @minimum 0
+     * @maximum 14
+     */
   unauthorizedAttempts: number;
   unauthorizedExecutions: 0;
   stateChanges: 0;
@@ -2931,6 +2939,14 @@ export const GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOnEventsItemA
   denied: 'denied',
 } as const;
 
+export type GuardianAgentPolicyLabEvidenceLimitsMaxCases = typeof GuardianAgentPolicyLabEvidenceLimitsMaxCases[keyof typeof GuardianAgentPolicyLabEvidenceLimitsMaxCases];
+
+
+export const GuardianAgentPolicyLabEvidenceLimitsMaxCases = {
+  NUMBER_2: 2,
+  NUMBER_3: 3,
+} as const;
+
 export type GuardianAgentPolicyLabEvidenceAgentIdentity = {
   /** @maxLength 100 */
   agentId: string;
@@ -3157,7 +3173,7 @@ export type GuardianAgentPolicyLabEvidenceSelfChecks = {
 export type GuardianAgentPolicyLabEvidenceLimits = {
   network: 'docker-network-none';
   concurrency: 1;
-  maxCases: 2;
+  maxCases: GuardianAgentPolicyLabEvidenceLimitsMaxCases;
   customerDataUsed: false;
   secretsMounted: false;
   modelWeightsMounted: false;
@@ -3217,6 +3233,7 @@ export const GuardianQwenPolicyLabEvidenceEngineVersion = {
   'guardian-agent-qwen-policy-lab-v110': 'guardian-agent-qwen-policy-lab-v1.1.0',
   'guardian-agent-qwen-policy-lab-v120': 'guardian-agent-qwen-policy-lab-v1.2.0',
   'guardian-agent-qwen-policy-lab-v130': 'guardian-agent-qwen-policy-lab-v1.3.0',
+  'guardian-agent-qwen-policy-lab-v140': 'guardian-agent-qwen-policy-lab-v1.4.0',
 } as const;
 
 export type GuardianQwenPolicyLabEvidenceProfileId = typeof GuardianQwenPolicyLabEvidenceProfileId[keyof typeof GuardianQwenPolicyLabEvidenceProfileId];
@@ -3255,6 +3272,7 @@ export const GuardianQwenPolicyLabEvidenceVersionsCorpus = {
   'guardian-qwen-policy-lab-en-es-v110': 'guardian-qwen-policy-lab-en-es-v1.1.0',
   'guardian-qwen-policy-lab-en-es-v120': 'guardian-qwen-policy-lab-en-es-v1.2.0',
   'guardian-qwen-policy-lab-en-es-v130': 'guardian-qwen-policy-lab-en-es-v1.3.0',
+  'guardian-qwen-policy-lab-en-es-v140': 'guardian-qwen-policy-lab-en-es-v1.4.0',
 } as const;
 
 export type GuardianQwenPolicyLabEvidenceCasesItemLabel = typeof GuardianQwenPolicyLabEvidenceCasesItemLabel[keyof typeof GuardianQwenPolicyLabEvidenceCasesItemLabel];
@@ -3418,6 +3436,16 @@ export type GuardianQwenPolicyLabEvidenceCasesItem = {
      * @pattern ^[a-f0-9]{64}$
      */
   proposalSha256: string | null;
+  /**
+     * @maxLength 100
+     * @nullable
+     */
+  syntheticActionRef: string | null;
+  /**
+     * @nullable
+     * @pattern ^[a-f0-9]{64}$
+     */
+  actionSha256: string | null;
   decision: GuardianQwenPolicyLabEvidenceCasesItemDecision;
   /** @maxLength 80 */
   reasonCode: string;
@@ -3465,7 +3493,7 @@ export interface GuardianQwenPolicyLabEvidence {
   limits: GuardianQwenPolicyLabEvidenceLimits;
   /**
      * @minItems 2
-     * @maxItems 2
+     * @maxItems 3
      */
   cases: GuardianQwenPolicyLabEvidenceCasesItem[];
   summary: GuardianQwenPolicyLabEvidenceSummary;
@@ -3501,6 +3529,38 @@ export interface AiAssessmentLabJob {
   completedAt: string | null;
 }
 
+/**
+ * @nullable
+ */
+export type AiAssessmentApprovalRequestedByRole = typeof AiAssessmentApprovalRequestedByRole[keyof typeof AiAssessmentApprovalRequestedByRole] | null;
+
+
+export const AiAssessmentApprovalRequestedByRole = {
+  owner: 'owner',
+  admin: 'admin',
+  member: 'member',
+  viewer: 'viewer',
+} as const;
+
+export type AiAssessmentApprovalBindingVersion = typeof AiAssessmentApprovalBindingVersion[keyof typeof AiAssessmentApprovalBindingVersion];
+
+
+export const AiAssessmentApprovalBindingVersion = {
+  NUMBER_1: 1,
+  NUMBER_2: 2,
+} as const;
+
+/**
+ * @nullable
+ */
+export type AiAssessmentApprovalSyntheticActionRef = typeof AiAssessmentApprovalSyntheticActionRef[keyof typeof AiAssessmentApprovalSyntheticActionRef] | null;
+
+
+export const AiAssessmentApprovalSyntheticActionRef = {
+  'guardiansyntheticfinancebank-changev1': 'guardian.synthetic.finance.bank-change.v1',
+  guardiansyntheticsupportrefundv1: 'guardian.synthetic.support.refund.v1',
+} as const;
+
 export type AiAssessmentApprovalStatus = typeof AiAssessmentApprovalStatus[keyof typeof AiAssessmentApprovalStatus];
 
 
@@ -3509,6 +3569,38 @@ export const AiAssessmentApprovalStatus = {
   approved: 'approved',
   denied: 'denied',
   expired: 'expired',
+} as const;
+
+/**
+ * @nullable
+ */
+export type AiAssessmentApprovalDecidedByRole = typeof AiAssessmentApprovalDecidedByRole[keyof typeof AiAssessmentApprovalDecidedByRole] | null;
+
+
+export const AiAssessmentApprovalDecidedByRole = {
+  owner: 'owner',
+  admin: 'admin',
+  member: 'member',
+  viewer: 'viewer',
+} as const;
+
+export type AiAssessmentApprovalExecution = typeof AiAssessmentApprovalExecution[keyof typeof AiAssessmentApprovalExecution];
+
+
+export const AiAssessmentApprovalExecution = {
+  not_performed: 'not_performed',
+  synthetic_action_simulated_once: 'synthetic_action_simulated_once',
+} as const;
+
+/**
+ * @nullable
+ */
+export type AiAssessmentApprovalSimulationResultCode = typeof AiAssessmentApprovalSimulationResultCode[keyof typeof AiAssessmentApprovalSimulationResultCode] | null;
+
+
+export const AiAssessmentApprovalSimulationResultCode = {
+  synthetic_bank_change_approved_in_clone: 'synthetic_bank_change_approved_in_clone',
+  synthetic_refund_approved_in_clone: 'synthetic_refund_approved_in_clone',
 } as const;
 
 export interface AiAssessmentApproval {
@@ -3525,20 +3617,42 @@ export interface AiAssessmentApproval {
   /** @pattern ^[a-f0-9]{64}$ */
   proposalBindingSha256: string;
   requestedByUserId: string;
+  /** @nullable */
+  requestedByRole: AiAssessmentApprovalRequestedByRole;
+  bindingVersion: AiAssessmentApprovalBindingVersion;
+  /** @nullable */
+  syntheticActionRef: AiAssessmentApprovalSyntheticActionRef;
   status: AiAssessmentApprovalStatus;
   canCurrentUserDecide: boolean;
   expiresAt: string;
   /** @nullable */
   decidedByUserId: string | null;
   /** @nullable */
+  decidedByRole: AiAssessmentApprovalDecidedByRole;
+  /** @nullable */
   decidedAt: string | null;
+  execution: AiAssessmentApprovalExecution;
+  /** @nullable */
+  simulatedAt: string | null;
+  /** @nullable */
+  simulationResultCode: AiAssessmentApprovalSimulationResultCode;
+  /**
+     * @nullable
+     * @pattern ^[a-f0-9]{64}$
+     */
+  simulationResultSha256: string | null;
+  /**
+     * @nullable
+     * @pattern ^[a-f0-9]{64}$
+     */
+  replayBindingSha256: string | null;
   createdAt: string;
 }
 
 export interface AiAssessmentApprovalList {
   approvals: AiAssessmentApproval[];
   canDecide: boolean;
-  execution: 'not_performed_laboratory_approval_only';
+  execution: 'laboratory_only';
 }
 
 export type AiAssessmentApprovalDecisionRequestDecision = typeof AiAssessmentApprovalDecisionRequestDecision[keyof typeof AiAssessmentApprovalDecisionRequestDecision];
@@ -3555,9 +3669,18 @@ export interface AiAssessmentApprovalDecisionRequest {
   proposalBindingSha256: string;
 }
 
+export type AiAssessmentApprovalDecisionResponseExecution = typeof AiAssessmentApprovalDecisionResponseExecution[keyof typeof AiAssessmentApprovalDecisionResponseExecution];
+
+
+export const AiAssessmentApprovalDecisionResponseExecution = {
+  decision_only: 'decision_only',
+  not_performed_denied: 'not_performed_denied',
+  synthetic_action_simulated_once: 'synthetic_action_simulated_once',
+} as const;
+
 export interface AiAssessmentApprovalDecisionResponse {
   approval: AiAssessmentApproval;
-  execution: 'not_performed_laboratory_approval_only';
+  execution: AiAssessmentApprovalDecisionResponseExecution;
 }
 
 export type MicrosoftOAuthCallbackParams = {

@@ -7,11 +7,18 @@
  */
 
 export * from './aiAssessmentApproval';
+export * from './aiAssessmentApprovalBindingVersion';
+export * from './aiAssessmentApprovalDecidedByRole';
 export * from './aiAssessmentApprovalDecisionRequest';
 export * from './aiAssessmentApprovalDecisionRequestDecision';
 export * from './aiAssessmentApprovalDecisionResponse';
+export * from './aiAssessmentApprovalDecisionResponseExecution';
+export * from './aiAssessmentApprovalExecution';
 export * from './aiAssessmentApprovalList';
+export * from './aiAssessmentApprovalRequestedByRole';
+export * from './aiAssessmentApprovalSimulationResultCode';
 export * from './aiAssessmentApprovalStatus';
+export * from './aiAssessmentApprovalSyntheticActionRef';
 export * from './aiAssessmentEvidence';
 export * from './aiAssessmentEvidenceEngine';
 export * from './aiAssessmentEvidenceFindingsItem';
@@ -80,6 +87,7 @@ export * from './guardianAgentPolicyLabEvidenceCasesItemToolTraceToolName';
 export * from './guardianAgentPolicyLabEvidenceEngineVersion';
 export * from './guardianAgentPolicyLabEvidenceEvidenceVersion';
 export * from './guardianAgentPolicyLabEvidenceLimits';
+export * from './guardianAgentPolicyLabEvidenceLimitsMaxCases';
 export * from './guardianAgentPolicyLabEvidenceProfileId';
 export * from './guardianAgentPolicyLabEvidenceSelfChecks';
 export * from './guardianAgentPolicyLabEvidenceSummary';

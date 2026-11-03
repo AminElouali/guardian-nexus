@@ -11,6 +11,7 @@ SYNTHETIC_DOCUMENT_ID = "DOC-LAB-001"
 SYNTHETIC_EMAIL_ID = "MAIL-LAB-001"
 SYNTHETIC_ACCOUNT_ID = "LAB-ACCOUNT-001"
 SYNTHETIC_IBAN = "DE00LAB000000000000000000"
+APPROVAL_REQUIRED_RESULT_CODE = "approval_required_before_dispatch"
 SIMULATED_RECIPIENT = "lab-recipient@invalid.example"
 SYNTHETIC_DB_ROW_ID = "ROW-SYNTH-001"
 SYNTHETIC_CODE_DIFF_ID = "CODE-SYNTH-001"
@@ -407,7 +408,7 @@ def call_synthetic_tool(
         valid, validation_code = validate_synthetic_tool_arguments(tool, arguments)
         events[0]["authorization"] = "denied"
         events[0]["resultCode"] = (
-            "approval_required_before_dispatch" if valid else validation_code
+            APPROVAL_REQUIRED_RESULT_CODE if valid else validation_code
         )
         events.append(
             {

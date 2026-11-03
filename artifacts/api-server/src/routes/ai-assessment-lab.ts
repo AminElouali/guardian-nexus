@@ -447,6 +447,7 @@ routes.post(
           const proof = verifyPersistedApprovalEvidence(approval, job);
           if (!proof) return { kind: "evidence_invalid" as const };
           simulationReceipt = createSyntheticApprovalSimulationReceipt(proof);
+          if (!simulationReceipt) return { kind: "evidence_invalid" as const };
           replayBindingSha256 = computeApprovalReplayBinding({
             proposalBindingSha256: expectedBinding,
             decision: "approved",
@@ -514,7 +515,11 @@ routes.post(
         return {
           kind: "decided" as const,
           approval: updated,
-          execution: simulationReceipt ? "synthetic_action_simulated_once" : "decision_only",
+          execution: simulationReceipt
+            ? "synthetic_action_simulated_once"
+            : status === "denied"
+              ? "not_performed_denied"
+              : "decision_only",
         };
       },
     );

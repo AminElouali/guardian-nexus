@@ -620,7 +620,7 @@ paths:
       operationId: listWorkspaceAiAssessmentApprovals
       tags: [ai-evaluations]
       summary: List tenant-scoped simulated action approvals
-      description: Approval decisions record an authorization decision only; they never dispatch an external action.
+      description: Lists tenant-scoped human decisions. Exact allow-listed version 2 laboratory proposals may be simulated once against a fresh in-memory clone after approval; no external action is dispatched.
       security: [{ bearerAuth: [] }]
       parameters:
         - in: path
@@ -640,7 +640,7 @@ paths:
       operationId: decideWorkspaceAiAssessmentApproval
       tags: [ai-evaluations]
       summary: Approve or deny one exact simulated proposal
-      description: Requires a distinct workspace owner/admin. The immutable proposal binding prevents replay or altered proposals; this endpoint never runs tools.
+      description: Requires a different workspace owner/admin. The immutable proposal binding prevents replay or altered proposals. An exact allow-listed version 2 synthetic action may be replayed once against an ephemeral in-memory clone; external tools and systems are never called.
       security: [{ bearerAuth: [] }]
       parameters:
         - in: path
@@ -658,7 +658,7 @@ paths:
             schema: { $ref: "#/components/schemas/AiAssessmentApprovalDecisionRequest" }
       responses:
         "200":
-          description: Decision recorded; no action was executed
+          description: Decision recorded; any eligible replay is confined to an ephemeral synthetic clone, with no external side effect
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AiAssessmentApprovalDecisionResponse" }
@@ -940,13 +940,26 @@ components:
         actionSha256: { type: ["string", "null"], pattern: "^[a-f0-9]{64}$" }
         proposalBindingSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
         requestedByUserId: { type: string }
+        requestedByRole: { type: ["string", "null"], enum: [owner, admin, member, viewer, null] }
+        bindingVersion: { type: integer, enum: [1, 2] }
+        syntheticActionRef:
+          type: ["string", "null"]
+          enum: [guardian.synthetic.finance.bank-change.v1, guardian.synthetic.support.refund.v1, null]
         status: { type: string, enum: [pending, approved, denied, expired] }
         canCurrentUserDecide: { type: boolean }
         expiresAt: { type: string, format: date-time }
         decidedByUserId: { type: ["string", "null"] }
+        decidedByRole: { type: ["string", "null"], enum: [owner, admin, member, viewer, null] }
         decidedAt: { type: ["string", "null"], format: date-time }
+        execution: { type: string, enum: [not_performed, synthetic_action_simulated_once] }
+        simulatedAt: { type: ["string", "null"], format: date-time }
+        simulationResultCode:
+          type: ["string", "null"]
+          enum: [synthetic_bank_change_approved_in_clone, synthetic_refund_approved_in_clone, null]
+        simulationResultSha256: { type: ["string", "null"], pattern: "^[a-f0-9]{64}$" }
+        replayBindingSha256: { type: ["string", "null"], pattern: "^[a-f0-9]{64}$" }
         createdAt: { type: string, format: date-time }
-      required: [id, jobId, caseId, proposalSha256, actionSha256, proposalBindingSha256, requestedByUserId, status, canCurrentUserDecide, expiresAt, decidedByUserId, decidedAt, createdAt]
+      required: [id, jobId, caseId, proposalSha256, actionSha256, proposalBindingSha256, requestedByUserId, requestedByRole, bindingVersion, syntheticActionRef, status, canCurrentUserDecide, expiresAt, decidedByUserId, decidedByRole, decidedAt, execution, simulatedAt, simulationResultCode, simulationResultSha256, replayBindingSha256, createdAt]
     AiAssessmentApprovalList:
       type: object
       additionalProperties: false
@@ -955,7 +968,7 @@ components:
           type: array
           items: { $ref: "#/components/schemas/AiAssessmentApproval" }
         canDecide: { type: boolean }
-        execution: { type: string, const: not_performed_laboratory_approval_only }
+        execution: { type: string, const: laboratory_only }
       required: [approvals, canDecide, execution]
     AiAssessmentApprovalDecisionRequest:
       type: object
@@ -969,7 +982,7 @@ components:
       additionalProperties: false
       properties:
         approval: { $ref: "#/components/schemas/AiAssessmentApproval" }
-        execution: { type: string, const: not_performed_laboratory_approval_only }
+        execution: { type: string, enum: [decision_only, not_performed_denied, synthetic_action_simulated_once] }
       required: [approval, execution]
     GuardianLocalLlmEvidence:
       type: object
@@ -1177,7 +1190,7 @@ components:
           additionalProperties: false
           properties:
             suiteId: { type: string, enum: [guardian-native-tool-call-en-es-v1, guardian-autonomous-tool-selection-en-es-v1, guardian-autonomous-tool-selection-email-documents-en-es-v1] }
-            suiteVersion: { type: string, enum: ["1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0"] }
+            suiteVersion: { type: string, enum: ["1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0"] }
             sampleCount: { type: integer, enum: [6, 12, 14] }
             splitSampleCounts:
               type: object
@@ -1223,6 +1236,7 @@ components:
                 authorizationAttempts: { type: integer, minimum: 0, maximum: 64 }
                 authorizedExecutions: { type: integer, minimum: 0, maximum: 14 }
                 deniedCalls: { type: integer, minimum: 0, maximum: 64 }
+                approvalRequiredCalls: { type: integer, minimum: 0, maximum: 14 }
                 unauthorizedAttempts: { type: integer, minimum: 0, maximum: 14 }
                 unauthorizedExecutions: { type: integer, const: 0 }
                 stateChanges: { type: integer, const: 0 }
@@ -1536,7 +1550,7 @@ components:
           properties:
             network: { type: string, const: docker-network-none }
             concurrency: { type: integer, const: 1 }
-            maxCases: { type: integer, const: 2 }
+            maxCases: { type: integer, enum: [2, 3] }
             customerDataUsed: { type: boolean, const: false }
             secretsMounted: { type: boolean, const: false }
             modelWeightsMounted: { type: boolean, const: false }
@@ -1559,7 +1573,7 @@ components:
         engine: { type: string, const: guardian_qwen_policy_lab }
         engineVersion:
           type: string
-          enum: [guardian-agent-qwen-policy-lab-v1, guardian-agent-qwen-policy-lab-v1.1.0, guardian-agent-qwen-policy-lab-v1.2.0, guardian-agent-qwen-policy-lab-v1.3.0]
+          enum: [guardian-agent-qwen-policy-lab-v1, guardian-agent-qwen-policy-lab-v1.1.0, guardian-agent-qwen-policy-lab-v1.2.0, guardian-agent-qwen-policy-lab-v1.3.0, guardian-agent-qwen-policy-lab-v1.4.0]
         profileId:
           type: string
           enum: [guardian-agent-qwen-lab-email-v1, guardian-agent-qwen-lab-database-v1, guardian-agent-qwen-lab-finance-v1, guardian-agent-qwen-lab-customer-service-v1, guardian-agent-qwen-lab-programming-v1, guardian-agent-qwen-lab-browser-v1, guardian-agent-qwen-lab-infrastructure-v1, guardian-agent-qwen-lab-multiagent-v1]
@@ -1584,7 +1598,7 @@ components:
             toolAdapter: { type: string, const: guardian-synthetic-tool-adapter-v1 }
             corpus:
               type: string
-              enum: [guardian-qwen-policy-lab-en-es-v1, guardian-qwen-policy-lab-en-es-v1.1.0, guardian-qwen-policy-lab-en-es-v1.2.0, guardian-qwen-policy-lab-en-es-v1.3.0]
+              enum: [guardian-qwen-policy-lab-en-es-v1, guardian-qwen-policy-lab-en-es-v1.1.0, guardian-qwen-policy-lab-en-es-v1.2.0, guardian-qwen-policy-lab-en-es-v1.3.0, guardian-qwen-policy-lab-en-es-v1.4.0]
             modelRuntime: { type: string, maxLength: 100 }
             toolMarkupAdapter: { type: string, const: guardian-qwen-native-markup-v1 }
           required: [policy, toolAdapter, corpus, modelRuntime, toolMarkupAdapter]
@@ -1608,7 +1622,7 @@ components:
         cases:
           type: array
           minItems: 2
-          maxItems: 2
+          maxItems: 3
           items:
             type: object
             additionalProperties: false
@@ -1623,6 +1637,8 @@ components:
               toolCallCount: { type: integer, minimum: 0, maximum: 16 }
               proposedTool: { type: ["string", "null"], maxLength: 100 }
               proposalSha256: { type: ["string", "null"], pattern: "^[a-f0-9]{64}$" }
+              syntheticActionRef: { type: ["string", "null"], maxLength: 100 }
+              actionSha256: { type: ["string", "null"], pattern: "^[a-f0-9]{64}$" }
               decision: { type: string, enum: [allow, deny, require_approval, no_proposal] }
               reasonCode: { type: string, maxLength: 80 }
               dispatchStatus: { type: string, enum: [not_invoked, simulated_execution, blocked_by_policy_before_dispatch, approval_required_before_dispatch, blocked_by_adapter_validation, blocked_by_parser] }
@@ -1658,7 +1674,7 @@ components:
               rawResponseStored: { type: boolean, const: false }
               rawArgumentsStored: { type: boolean, const: false }
               caseEvidenceSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
-            required: [caseId, label, language, promptSha256, toolChoice, finishReason, toolCallOrigin, toolCallCount, proposedTool, proposalSha256, decision, reasonCode, dispatchStatus, toolEvents, policyOnStateBeforeSha256, policyOnStateAfterSha256, policyOff, unauthorizedActionExecuted, rawPromptStored, rawResponseStored, rawArgumentsStored, caseEvidenceSha256]
+            required: [caseId, label, language, promptSha256, toolChoice, finishReason, toolCallOrigin, toolCallCount, proposedTool, proposalSha256, syntheticActionRef, actionSha256, decision, reasonCode, dispatchStatus, toolEvents, policyOnStateBeforeSha256, policyOnStateAfterSha256, policyOff, unauthorizedActionExecuted, rawPromptStored, rawResponseStored, rawArgumentsStored, caseEvidenceSha256]
         summary: { type: object, additionalProperties: { type: integer, minimum: 0 } }
         selfChecks:
           type: object
@@ -1727,12 +1743,13 @@ components:
         authorizationAttemptCount: { type: integer, minimum: 0, maximum: 64 }
         authorizedExecutionCount: { type: integer, minimum: 0, maximum: 1 }
         deniedCount: { type: integer, minimum: 0, maximum: 64 }
+        approvalRequired: { type: boolean }
         unauthorizedProposal: { type: boolean }
         unauthorizedAttempt: { type: boolean }
         unauthorizedExecution: { type: boolean, const: false }
         taskSuccessEligible: { type: boolean }
         taskSucceeded: { type: ["boolean", "null"] }
-        taskOutcomeCode: { type: ["string", "null"], enum: [verified_simulated_tool_result, tool_not_executed, required_invoice_fields_not_verified, null] }
+        taskOutcomeCode: { type: ["string", "null"], enum: [verified_simulated_tool_result, tool_not_executed, approval_required, required_invoice_fields_not_verified, null] }
         benignControlSucceeded: { type: ["boolean", "null"] }
         finalResponsePresent: { type: boolean }
         responseSha256: { type: string, pattern: "^[a-f0-9]{64}$" }

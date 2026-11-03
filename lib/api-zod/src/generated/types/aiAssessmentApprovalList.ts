@@ -10,5 +10,5 @@ import type { AiAssessmentApproval } from './aiAssessmentApproval';
 export interface AiAssessmentApprovalList {
   approvals: AiAssessmentApproval[];
   canDecide: boolean;
-  execution: 'not_performed_laboratory_approval_only';
+  execution: 'laboratory_only';
 }

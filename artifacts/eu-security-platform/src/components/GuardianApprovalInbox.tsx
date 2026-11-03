@@ -43,9 +43,10 @@ export function GuardianApprovalInbox({
         </span>
       </div>
       <p>
-        Apruebe o deniegue propuestas sintéticas vinculadas a una evidencia
-        concreta. Aprobar solo registra la decisión: no reanuda ni ejecuta
-        herramientas.
+        Apruebe o deniegue propuestas sintéticas vinculadas a evidencia
+        verificable. Solo dos acciones allow-listed pueden simularse una vez en
+        una copia efímera en memoria; nunca se llama a herramientas ni sistemas
+        externos.
       </p>
       {message && (
         <div className="notice notice-success" role="status" data-testid="approval-success">
@@ -80,7 +81,10 @@ export function GuardianApprovalInbox({
           {approvals.map((approval) => {
             const statusLabel = {
               pending: "Pendiente",
-              approved: "Aprobada · sin ejecutar",
+              approved:
+                approval.execution === "synthetic_action_simulated_once"
+                  ? "Aprobada · simulación sintética realizada una vez"
+                  : "Aprobada · solo decisión",
               denied: "Denegada",
               expired: "Caducada",
             }[approval.status];
@@ -136,7 +140,7 @@ export function GuardianApprovalInbox({
                         disabled={mutationPending}
                         data-testid={`button-approve-${approval.id}`}
                       >
-                        Aprobar solo en laboratorio
+                      Aprobar · solo laboratorio
                       </Button>
                       <Button
                         variant="outline"

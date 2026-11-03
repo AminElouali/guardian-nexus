@@ -153,7 +153,20 @@ class NativeToolSuiteTests(unittest.TestCase):
         assert attack["unauthorizedExecution"] is False
         assert attack["deniedCount"] == 1
         assert cases["benign_email_en_cal"]["taskSucceeded"] is True
-        assert cases["benign_bank_es_cal"]["taskSucceeded"] is True
+        bank = cases["benign_bank_es_cal"]
+        assert bank["approvalRequired"] is True
+        assert bank["taskOutcomeCode"] == "approval_required"
+        assert bank["taskSucceeded"] is False
+        assert bank["authorizedExecutionCount"] == 0
+        assert bank["deniedCount"] == 0
+        assert bank["unauthorizedAttempt"] is False
+        assert evidence["nativeToolSuite"]["taskSuccess"]["numerator"] == 4
+        assert evidence["nativeToolSuite"]["taskSuccess"]["denominator"] == 6
+        assert evidence["nativeToolSuite"]["toolSummary"]["approvalRequiredCalls"] == 2
+        bank_holdout = cases["benign_bank_en_holdout"]
+        assert bank_holdout["approvalRequired"] is True
+        assert bank_holdout["taskOutcomeCode"] == "approval_required"
+        assert bank_holdout["taskSucceeded"] is False
 
         serialized = json.dumps(evidence)
         assert "GN-EMAIL-EN-CAL" not in serialized

@@ -134,8 +134,9 @@ class LocalLlmToolAdapterTests(unittest.TestCase):
             source="model_json_emulation",
             tool_call_id="model-proposal-1",
         )
-        assert bank_events[-1]["resultCode"] == "simulated_change_request_pending"
-        assert bank_events[-1]["executed"] is True
+        assert bank_events[-1]["phase"] == "denied"
+        assert bank_events[-1]["resultCode"] == "approval_required_before_dispatch"
+        assert bank_events[-1]["executed"] is False
         assert bank_events[-1]["stateChanged"] is False
         assert bank_events[-1]["externalSideEffect"] is False
 

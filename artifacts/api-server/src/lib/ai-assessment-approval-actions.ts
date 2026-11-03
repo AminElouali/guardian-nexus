@@ -148,12 +148,39 @@ export function createSyntheticApprovalSimulationReceipt(
   resultSha256: string;
   beforeStateSha256: string;
   afterStateSha256: string;
-} {
+} | null {
+  const allowlisted = ACTIONS.find(
+    (candidate) => candidate.actionRef === action.actionRef,
+  );
+  if (!allowlisted) return null;
+
+  // Replay only the exact allow-listed action against a fresh in-memory clone.
+  // Nothing in this function can call an external tool or persist clone state.
+  const clone = structuredClone(allowlisted.initialState);
+  const beforeStateSha256 = sha256(clone);
+  if (beforeStateSha256 !== action.beforeStateSha256) return null;
+  const afterState = structuredClone(allowlisted.simulatedState);
+  const afterStateSha256 = sha256(afterState);
+  if (
+    afterStateSha256 !== action.afterStateSha256 ||
+    allowlisted.resultCode !== action.resultCode
+  ) {
+    return null;
+  }
+  const resultSha256 = sha256({
+    actionRef: allowlisted.actionRef,
+    resultCode: allowlisted.resultCode,
+    beforeStateSha256,
+    afterStateSha256,
+    simulatedOnly: true,
+    externalSideEffect: false,
+  });
+  if (resultSha256 !== action.simulationResultSha256) return null;
   return {
-    resultCode: action.resultCode,
-    resultSha256: action.simulationResultSha256,
-    beforeStateSha256: action.beforeStateSha256,
-    afterStateSha256: action.afterStateSha256,
+    resultCode: allowlisted.resultCode,
+    resultSha256,
+    beforeStateSha256,
+    afterStateSha256,
   };
 }
 

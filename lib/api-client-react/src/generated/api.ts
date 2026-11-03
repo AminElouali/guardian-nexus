@@ -2461,7 +2461,7 @@ export const getListWorkspaceAiAssessmentApprovalsUrl = (workspaceId: string,) =
 }
 
 /**
- * Approval decisions record an authorization decision only; they never dispatch an external action.
+ * Lists tenant-scoped human decisions. Exact allow-listed version 2 laboratory proposals may be simulated once against a fresh in-memory clone after approval; no external action is dispatched.
  * @summary List tenant-scoped simulated action approvals
  */
 export const listWorkspaceAiAssessmentApprovals = async (workspaceId: string, options?: Parameters<typeof customFetch>[1]): Promise<AiAssessmentApprovalList> => {
@@ -2564,7 +2564,7 @@ export const getDecideWorkspaceAiAssessmentApprovalUrl = (workspaceId: string,
 }
 
 /**
- * Requires a distinct workspace owner/admin. The immutable proposal binding prevents replay or altered proposals; this endpoint never runs tools.
+ * Requires a different workspace owner/admin. The immutable proposal binding prevents replay or altered proposals. An exact allow-listed version 2 synthetic action may be replayed once against an ephemeral in-memory clone; external tools and systems are never called.
  * @summary Approve or deny one exact simulated proposal
  */
 export const decideWorkspaceAiAssessmentApproval = async (workspaceId: string,

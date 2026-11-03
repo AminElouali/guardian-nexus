@@ -5,11 +5,12 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { GuardianAgentPolicyLabEvidenceLimitsMaxCases } from './guardianAgentPolicyLabEvidenceLimitsMaxCases';
 
 export type GuardianAgentPolicyLabEvidenceLimits = {
   network: 'docker-network-none';
   concurrency: 1;
-  maxCases: 2;
+  maxCases: GuardianAgentPolicyLabEvidenceLimitsMaxCases;
   customerDataUsed: false;
   secretsMounted: false;
   modelWeightsMounted: false;

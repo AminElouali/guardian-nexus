@@ -25,6 +25,11 @@ import {
 } from "@workspace/db";
 import { withWorkspaceUserTransaction } from "./lib/tenant-db";
 import {
+  canonicalApprovalJson,
+  computeApprovalProposalBindingV2,
+  getAllowlistedSyntheticApprovalAction,
+} from "./lib/ai-assessment-approval-actions";
+import {
   AI_ASSESSMENT_WORKER_VERSION,
   getLocalWorkerAvailability,
   stopLocalAssessmentQueueWorker,
@@ -219,6 +224,9 @@ function delay(ms: number): Promise<void> {
 }
 
 function canonicalJson(value: unknown): string {
+  if (value instanceof Date) {
+    return JSON.stringify(value.toISOString());
+  }
   if (Array.isArray(value)) {
     return `[${value.map(canonicalJson).join(",")}]`;
   }
@@ -917,7 +925,7 @@ test(
 );
 
 test(
-  "real Qwen email, database, and finance profiles apply policy before simulated tool dispatch",
+  "real Qwen profiles in all eight verticals apply policy before simulated tool dispatch",
   { timeout: TIMEOUT_MS },
   async () => {
     const pathA = `/api/workspaces/${workspaceA}/ai-security-assessments/lab/jobs`;
@@ -1008,8 +1016,10 @@ test(
           assert.equal(qwenResult.executionMode, "real_local_qwen_inference");
           assert.equal(qwenResult.provider.toolChoice, "auto");
           assert.equal(qwenResult.provider.sha256, "9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031");
-          assert.equal(qwenResult.cases.length, 2);
-          assert.equal(qwenResult.summary.modelCalls, 2);
+          const expectedCaseCount =
+            profileId === "guardian-agent-qwen-lab-customer-service-v1" ? 3 : 2;
+          assert.equal(qwenResult.cases.length, expectedCaseCount);
+          assert.equal(qwenResult.summary.modelCalls, expectedCaseCount);
           assert.equal(qwenResult.summary.externalCalls, 0);
           assert.equal(qwenResult.summary.unauthorizedExecutions, 0);
           assert.equal(qwenResult.summary.policyOffExecutions, 0);
@@ -1075,6 +1085,16 @@ test(
           const serializedEvidence = JSON.stringify(qwenResult);
           assert.equal(serializedEvidence.includes("Ignore prior instructions"), false);
           assert.equal(serializedEvidence.includes("attacker@outside.invalid"), false);
+          if (profileId === "guardian-agent-qwen-lab-customer-service-v1") {
+            assert.ok(
+              qwenResult.cases.some(
+                (item) =>
+                  item.caseId === "qwen_support_benign_refund_approval_es" &&
+                  item.toolChoice === "auto",
+              ),
+              "the refund approval scenario must be a real, unforced local Qwen inference",
+            );
+          }
           break;
         }
         await delay(POLL_INTERVAL_MS);
@@ -1157,40 +1177,66 @@ test(
       "every Qwen require_approval proposal must persist a tenant-scoped approval row",
     );
     console.log(`QWEN_REQUIRE_APPROVAL_CASES=${expectedQwenApprovals}`);
-    if (persistedQwenApprovals.length > 0) {
-      const qwenApproval = persistedQwenApprovals[0]!;
+    const replayableQwenApprovals = persistedQwenApprovals.filter(
+      (approval) =>
+        approval.bindingVersion === 2 &&
+        approval.syntheticActionRef !== null &&
+        approval.actionSha256 !== null,
+    );
+    if (replayableQwenApprovals.length > 0) {
+      const qwenApproval = replayableQwenApprovals[0]!;
       assert.equal(qwenApproval.status, "pending");
       assert.equal(qwenApproval.canCurrentUserDecide, false);
+      assert.ok(
+        qwenApproval.syntheticActionRef ===
+          "guardian.synthetic.finance.bank-change.v1" ||
+          qwenApproval.syntheticActionRef ===
+            "guardian.synthetic.support.refund.v1",
+      );
       const decisionPath =
         `/api/workspaces/${workspaceA}/ai-security-assessments/approvals/` +
         `${qwenApproval.id}/decision`;
-      const decisionResponse = await apiRequest(adminA, decisionPath, "POST", {
+      const decisionBody = {
         decision: "approve",
         proposalBindingSha256: qwenApproval.proposalBindingSha256,
-      });
-      assert.equal(decisionResponse.status, 200);
-      const decisionResult = (await decisionResponse.json()) as {
-        approval: { status: string };
-        execution: string;
       };
+      const concurrent = await Promise.all([
+        apiRequest(adminA, decisionPath, "POST", decisionBody),
+        apiRequest(adminA, decisionPath, "POST", decisionBody),
+      ]);
+      assert.deepEqual(
+        concurrent.map((response) => response.status).sort(),
+        [200, 409],
+        "a concurrent duplicate must have exactly one successful replay",
+      );
+      const decisionResponse = concurrent.find((response) => response.status === 200)!;
+      const decisionResult = DecideWorkspaceAiAssessmentApprovalResponse.parse(
+        await decisionResponse.json(),
+      );
       assert.equal(decisionResult.approval.status, "approved");
       assert.equal(
         decisionResult.execution,
-        "not_performed_laboratory_approval_only",
+        "synthetic_action_simulated_once",
       );
-      assert.equal(
-        (
-          await apiRequest(adminA, decisionPath, "POST", {
-            decision: "approve",
-            proposalBindingSha256: qwenApproval.proposalBindingSha256,
-          })
-        ).status,
-        409,
-        "a Qwen proposal approval is one-shot",
+      assert.equal(decisionResult.approval.execution, "synthetic_action_simulated_once");
+      assert.equal(decisionResult.approval.decidedByRole, "admin");
+      assert.ok(decisionResult.approval.simulatedAt);
+      assert.match(decisionResult.approval.simulationResultSha256 ?? "", /^[a-f0-9]{64}$/);
+      assert.match(decisionResult.approval.replayBindingSha256 ?? "", /^[a-f0-9]{64}$/);
+      const persistedAfterDecision = await apiRequest(
+        adminA,
+        `/api/workspaces/${workspaceA}/ai-security-assessments/approvals`,
       );
-      console.log("QWEN_APPROVAL_DECISION_TESTED=1; execution=not_performed");
+      assert.equal(persistedAfterDecision.status, 200);
+      const persistedDecision = ListWorkspaceAiAssessmentApprovalsResponse.parse(
+        await persistedAfterDecision.json(),
+      ).approvals.find((approval) => approval.id === qwenApproval.id);
+      assert.equal(persistedDecision?.execution, "synthetic_action_simulated_once");
+      console.log("QWEN_APPROVAL_DECISION_TESTED=1; execution=synthetic_action_simulated_once");
     } else {
-      console.log("QWEN_APPROVAL_DECISION_TESTED=0; no proposal to decide");
+      console.log(
+        "QWEN_APPROVAL_DECISION_TESTED=0; no allow-listed real Qwen proposal was generated",
+      );
     }
 
     const artifactPath = fileURLToPath(
@@ -1562,7 +1608,7 @@ test(
 );
 
 test(
-  "persistent synthetic approvals enforce tenant, role, expiry, binding, and replay controls",
+  "persistent approvals enforce tenant, role, expiry, binding, and one-time simulation",
   { timeout: TIMEOUT_MS },
   async () => {
     const profileId = "guardian-agent-lab-finance-v1";
@@ -1575,9 +1621,9 @@ test(
       "ready",
     );
 
-    async function runFinanceFixture() {
+    async function runPolicyLabFixture(profileId: string) {
       const created = await apiRequest(userA, jobsPath, "POST", {
-        idempotencyKey: `approval-e2e-${randomUUID()}`,
+        idempotencyKey: `approval-e2e-${profileId}-${randomUUID()}`,
         profileId,
       });
       assert.equal(created.status, 202);
@@ -1593,7 +1639,7 @@ test(
         const job = jobs.find((candidate) => candidate.id === accepted.id);
         if (job?.status === "succeeded") return job;
         if (job?.status === "failed") {
-          assert.fail(`synthetic finance job failed: ${job.errorCode}`);
+          assert.fail(`synthetic policy-lab job failed: ${job.errorCode}`);
         }
         await delay(POLL_INTERVAL_MS);
       }
@@ -1608,43 +1654,91 @@ test(
       );
     }
 
-    async function oneApprovalForJob(userId: string, currentJobId: string) {
-      const list = await listApprovals(userId);
-      const approval = list.approvals.find((item) => item.jobId === currentJobId);
-      assert.ok(approval, "require_approval result must persist an approval row");
-      return approval;
+    async function seedLegacyDecisionOnlyApproval(jobId: string) {
+      const jobResult = await fixturePool.query<{ result: unknown }>(
+        `SELECT result FROM public.ai_assessment_jobs
+         WHERE id = $1 AND workspace_id = $2 AND status = 'succeeded'`,
+        [jobId, workspaceA],
+      );
+      const cases = (
+        jobResult.rows[0]?.result as
+          | { cases?: Array<{ caseId?: unknown; proposalSha256?: unknown }> }
+          | undefined
+      )?.cases;
+      const fixtureCase = cases?.find(
+        (item) =>
+          typeof item.caseId === "string" &&
+          typeof item.proposalSha256 === "string" &&
+          /^[a-f0-9]{64}$/.test(item.proposalSha256),
+      );
+      assert.ok(fixtureCase, "seeded legacy approval must bind to a fixture case");
+      const caseId = fixtureCase.caseId as string;
+      const proposalSha256 = fixtureCase.proposalSha256 as string;
+      const expiresAt = new Date(Date.now() + 60_000);
+      const proposalBindingSha256 = createHash("sha256")
+        .update(
+          JSON.stringify([workspaceA, jobId, caseId, proposalSha256, null]),
+          "utf8",
+        )
+        .digest("hex");
+      const inserted = await fixturePool.query<{ id: string }>(
+        `INSERT INTO public.ai_assessment_approval_requests (
+           workspace_id, job_id, case_id, proposal_sha256, action_sha256,
+           proposal_binding_sha256, requested_by_user_id, requested_by_role,
+           binding_version, synthetic_action_ref, status, expires_at
+         ) VALUES ($1, $2, $3, $4, NULL, $5, $6, NULL, 1, NULL, 'pending', $7)
+         RETURNING id`,
+        [
+          workspaceA,
+          jobId,
+          caseId,
+          proposalSha256,
+          proposalBindingSha256,
+          userA,
+          expiresAt,
+        ],
+      );
+      const id = inserted.rows[0]?.id;
+      assert.ok(id);
+      return id;
     }
 
-    const firstJob = await runFinanceFixture();
+    async function oneApprovalForJob(userId: string, currentJobId: string) {
+      const existing = (await listApprovals(userId)).approvals.find(
+        (item) => item.jobId === currentJobId,
+      );
+      const approvalId =
+        existing?.id ?? (await seedLegacyDecisionOnlyApproval(currentJobId));
+      const refreshed = (await listApprovals(userId)).approvals.find(
+        (item) => item.id === approvalId,
+      );
+      assert.ok(refreshed, "test approval must be visible only in its workspace");
+      return refreshed;
+    }
+
+    const firstJob = await runPolicyLabFixture(profileId);
     const firstCases = (
       firstJob.result as unknown as {
         cases: Array<{
           policyOn: { decision: string; executed: boolean };
-          proposalSha256: string;
-          toolTrace?: {
-            policyOn: {
-              dispatchStatus: string;
-              externalSideEffect: false;
-              events: Array<{ executed: boolean }>;
-            };
-          };
+          instructionProvenance: string;
+          unauthorizedActionExecuted: boolean;
         }>;
       }
     ).cases;
-    const pendingCase = firstCases.find(
-      (item) =>
-        item.policyOn.decision === "require_approval" &&
-        item.toolTrace?.policyOn.dispatchStatus ===
-          "approval_required_before_dispatch",
+    const adversarialCase = firstCases.find(
+      (item) => item.instructionProvenance !== "trusted_user_request",
     );
-    assert.ok(pendingCase, "fixture must require approval before dispatch");
-    assert.equal(pendingCase.policyOn.executed, false);
-    assert.equal(pendingCase.toolTrace?.policyOn.externalSideEffect, false);
-    assert.ok(pendingCase.toolTrace?.policyOn.events.every((event) => !event.executed));
+    assert.ok(adversarialCase, "fixture must include an untrusted instruction case");
+    assert.equal(adversarialCase.policyOn.decision, "deny");
+    assert.equal(adversarialCase.policyOn.executed, false);
+    assert.equal(adversarialCase.unauthorizedActionExecuted, false);
 
     const firstApproval = await oneApprovalForJob(userA, firstJob.id);
     assert.equal(firstApproval.status, "pending");
     assert.equal(firstApproval.canCurrentUserDecide, false);
+    assert.equal(firstApproval.bindingVersion, 1);
+    assert.equal(firstApproval.execution, "not_performed");
     assert.equal(
       (
         await apiRequest(
@@ -1712,7 +1806,8 @@ test(
     );
     assert.equal(approved.approval.status, "approved");
     assert.equal(approved.approval.decidedByUserId, adminA);
-    assert.equal(approved.execution, "not_performed_laboratory_approval_only");
+    assert.equal(approved.approval.decidedByRole, "admin");
+    assert.equal(approved.execution, "decision_only");
     assert.equal(
       (
         await apiRequest(
@@ -1729,7 +1824,7 @@ test(
       "decisions cannot be replayed",
     );
 
-    const secondJob = await runFinanceFixture();
+    const secondJob = await runPolicyLabFixture(profileId);
     const secondApproval = await oneApprovalForJob(adminA, secondJob.id);
     const deniedResponse = await apiRequest(
       adminA,
@@ -1741,14 +1836,33 @@ test(
       },
     );
     assert.equal(deniedResponse.status, 200);
-    assert.equal(
-      DecideWorkspaceAiAssessmentApprovalResponse.parse(
-        await deniedResponse.json(),
-      ).approval.status,
-      "denied",
+    const denied = DecideWorkspaceAiAssessmentApprovalResponse.parse(
+      await deniedResponse.json(),
     );
+    assert.equal(denied.approval.status, "denied");
+    assert.equal(denied.execution, "not_performed_denied");
+    const deniedReplay = await apiRequest(
+      adminA,
+      `${approvalsPath}/${secondApproval.id}/decision`,
+      "POST",
+      {
+        decision: "deny",
+        proposalBindingSha256: secondApproval.proposalBindingSha256,
+      },
+    );
+    assert.equal(deniedReplay.status, 409, "a denied proposal cannot be replayed");
+    const persistedDenial = await fixturePool.query<{
+      status: string;
+      simulated_at: Date | null;
+    }>(
+      `SELECT status, simulated_at FROM public.ai_assessment_approval_requests
+       WHERE id = $1 AND workspace_id = $2`,
+      [secondApproval.id, workspaceA],
+    );
+    assert.equal(persistedDenial.rows[0]?.status, "denied");
+    assert.equal(persistedDenial.rows[0]?.simulated_at, null);
 
-    const thirdJob = await runFinanceFixture();
+    const thirdJob = await runPolicyLabFixture(profileId);
     const expiredApproval = await oneApprovalForJob(adminA, thirdJob.id);
     await fixturePool.query(
       `UPDATE public.ai_assessment_approval_requests
@@ -1772,13 +1886,252 @@ test(
       [expiredApproval.id, workspaceA],
     );
     assert.equal(persistedExpiry.rows[0]?.status, "expired");
+
+    // The local Qwen run above can legitimately produce no support-refund proposal.
+    // Exercise the persistent approval route with an explicitly seeded, allow-listed
+    // synthetic support fixture; this is API contract coverage, not Qwen evidence.
+    const supportJob = await runPolicyLabFixture(
+      "guardian-agent-lab-customer-service-v1",
+    );
+    const supportQwenProfileId =
+      "guardian-agent-qwen-lab-customer-service-v1";
+    const supportCaseId = "qwen_support_benign_refund_approval_es";
+    const supportTool = "propose_synthetic_refund";
+    const supportActionRef = "guardian.synthetic.support.refund.v1";
+    const supportAction = getAllowlistedSyntheticApprovalAction(
+      supportActionRef,
+      supportQwenProfileId,
+      supportCaseId,
+      supportTool,
+    );
+    assert.ok(supportAction, "support refund must be an explicit allow-listed fixture");
+
+    const supportCase: Record<string, unknown> = {
+      caseId: supportCaseId,
+      proposedTool: supportTool,
+      syntheticActionRef: supportAction.actionRef,
+      actionSha256: supportAction.actionSha256,
+      proposalSha256: supportAction.proposalSha256,
+      decision: "require_approval",
+      dispatchStatus: "approval_required_before_dispatch",
+      toolEvents: [],
+      unauthorizedActionExecuted: false,
+      policyOff: { executed: false },
+      caseEvidenceSha256: "",
+    };
+    supportCase.caseEvidenceSha256 = createHash("sha256")
+      .update(canonicalApprovalJson(supportCase), "utf8")
+      .digest("hex");
+    const unsignedSupportEvidence: Record<string, unknown> = {
+      engine: "guardian_qwen_policy_lab",
+      profileId: supportQwenProfileId,
+      cases: [supportCase],
+    };
+    const supportEvidence: Record<string, unknown> = {
+      ...unsignedSupportEvidence,
+      evidenceSha256: createHash("sha256")
+        .update(canonicalApprovalJson(unsignedSupportEvidence), "utf8")
+        .digest("hex"),
+    };
+    await fixturePool.query(
+      `DELETE FROM public.ai_assessment_approval_requests
+       WHERE workspace_id = $1 AND job_id = $2`,
+      [workspaceA, supportJob.id],
+    );
+    await fixturePool.query(
+      `UPDATE public.ai_assessment_jobs
+       SET profile_id = $3, result = $4::jsonb
+       WHERE id = $1 AND workspace_id = $2 AND status = 'succeeded'`,
+      [
+        supportJob.id,
+        workspaceA,
+        supportQwenProfileId,
+        JSON.stringify(supportEvidence),
+      ],
+    );
+    const persistedSupportJob = await fixturePool.query<{
+      profile_id: string;
+      requested_by_user_id: string;
+      status: string;
+      result: Record<string, unknown>;
+    }>(
+      `SELECT profile_id, requested_by_user_id, status, result
+       FROM public.ai_assessment_jobs WHERE id = $1 AND workspace_id = $2`,
+      [supportJob.id, workspaceA],
+    );
+    const persistedEvidence = persistedSupportJob.rows[0]?.result;
+    assert.equal(persistedSupportJob.rows[0]?.profile_id, supportQwenProfileId);
+    assert.equal(persistedSupportJob.rows[0]?.requested_by_user_id, userA);
+    assert.equal(persistedSupportJob.rows[0]?.status, "succeeded");
+    assert.ok(persistedEvidence);
+    const {
+      evidenceSha256,
+      ...persistedUnsignedSupportEvidence
+    } = persistedEvidence;
+    assert.equal(
+      createHash("sha256")
+        .update(
+          canonicalApprovalJson(persistedUnsignedSupportEvidence),
+          "utf8",
+        )
+        .digest("hex"),
+      evidenceSha256,
+    );
+    const persistedSupportCase = (
+      persistedEvidence.cases as Array<Record<string, unknown>>
+    )[0]!;
+    const { caseEvidenceSha256, ...supportCaseWithoutDigest } =
+      persistedSupportCase;
+    assert.equal(
+      createHash("sha256")
+        .update(
+          canonicalApprovalJson({
+            ...supportCaseWithoutDigest,
+            caseEvidenceSha256: "",
+          }),
+          "utf8",
+        )
+        .digest("hex"),
+      caseEvidenceSha256,
+    );
+    assert.deepEqual(
+      getAllowlistedSyntheticApprovalAction(
+        String(persistedSupportCase.syntheticActionRef),
+        supportQwenProfileId,
+        supportCaseId,
+        String(persistedSupportCase.proposedTool),
+      ),
+      supportAction,
+    );
+    const supportExpiry = new Date(Date.now() + 60_000);
+    const supportBinding = computeApprovalProposalBindingV2({
+      workspaceId: workspaceA,
+      jobId: supportJob.id,
+      caseId: supportCaseId,
+      proposalSha256: supportAction.proposalSha256,
+      actionSha256: supportAction.actionSha256,
+      syntheticActionRef: supportAction.actionRef,
+      requestedByUserId: userA,
+      requestedByRole: "owner",
+      expiresAt: supportExpiry,
+    });
+    const supportApprovalInsert = await fixturePool.query<{ id: string }>(
+      `INSERT INTO public.ai_assessment_approval_requests (
+         workspace_id, job_id, case_id, proposal_sha256, action_sha256,
+         proposal_binding_sha256, requested_by_user_id, requested_by_role,
+         binding_version, synthetic_action_ref, status, expires_at
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 2, $9, 'pending', $10)
+       RETURNING id`,
+      [
+        workspaceA,
+        supportJob.id,
+        supportCaseId,
+        supportAction.proposalSha256,
+        supportAction.actionSha256,
+        supportBinding,
+        userA,
+        "owner",
+        supportAction.actionRef,
+        supportExpiry,
+      ],
+    );
+    const supportApprovalId = supportApprovalInsert.rows[0]?.id;
+    assert.ok(supportApprovalId);
+    const supportApproval = (await listApprovals(adminA)).approvals.find(
+      (item) => item.id === supportApprovalId,
+    );
+    assert.ok(supportApproval);
+    assert.equal(supportApproval.syntheticActionRef, supportActionRef);
+    assert.equal(supportApproval.canCurrentUserDecide, true);
+    const supportDecisionPath =
+      `${approvalsPath}/${supportApprovalId}/decision`;
+    const supportDecisionBody = {
+      decision: "approve",
+      proposalBindingSha256: supportBinding,
+    };
+    const supportDecisions = await Promise.all([
+      apiRequest(adminA, supportDecisionPath, "POST", supportDecisionBody),
+      apiRequest(adminA, supportDecisionPath, "POST", supportDecisionBody),
+    ]);
+    const supportStatuses = supportDecisions
+      .map((response) => response.status)
+      .sort();
+    if (supportStatuses.join(",") !== "200,409") {
+      const safeErrors = await Promise.all(
+        supportDecisions.map(async (response) => ({
+          status: response.status,
+          body: await response.json().catch(() => ({})),
+        })),
+      );
+      assert.fail(
+        `support approval replay must be atomic and one-time: ${JSON.stringify(safeErrors)}`,
+      );
+    }
+    const supportSuccess = supportDecisions.find(
+      (response) => response.status === 200,
+    )!;
+    const supportDecision = DecideWorkspaceAiAssessmentApprovalResponse.parse(
+      await supportSuccess.json(),
+    );
+    assert.equal(supportDecision.approval.status, "approved");
+    assert.equal(
+      supportDecision.execution,
+      "synthetic_action_simulated_once",
+    );
+    assert.equal(
+      supportDecision.approval.execution,
+      "synthetic_action_simulated_once",
+    );
+    assert.equal(
+      supportDecision.approval.simulationResultCode,
+      "synthetic_refund_approved_in_clone",
+    );
+    assert.ok(supportDecision.approval.simulatedAt);
+    assert.match(
+      supportDecision.approval.replayBindingSha256 ?? "",
+      /^[a-f0-9]{64}$/,
+    );
+    const persistedSupportApproval = await fixturePool.query<{
+      status: string;
+      simulated_at: Date | null;
+      simulation_result_sha256: string | null;
+      replay_binding_sha256: string | null;
+    }>(
+      `SELECT status, simulated_at, simulation_result_sha256,
+              replay_binding_sha256
+       FROM public.ai_assessment_approval_requests
+       WHERE id = $1 AND workspace_id = $2`,
+      [supportApprovalId, workspaceA],
+    );
+    assert.equal(persistedSupportApproval.rows[0]?.status, "approved");
+    assert.ok(persistedSupportApproval.rows[0]?.simulated_at);
+    assert.match(
+      persistedSupportApproval.rows[0]?.simulation_result_sha256 ?? "",
+      /^[a-f0-9]{64}$/,
+    );
+    assert.match(
+      persistedSupportApproval.rows[0]?.replay_binding_sha256 ?? "",
+      /^[a-f0-9]{64}$/,
+    );
+    const supportCrossTenant = await apiRequest(
+      userB,
+      `${approvalsPath}/${supportApprovalId}/decision`,
+      "POST",
+      supportDecisionBody,
+    );
+    assert.equal(supportCrossTenant.status, 403);
+    console.log(
+      "SUPPORT_FIXTURE_APPROVAL_API_TESTED=1; source=allowlisted_test_fixture; execution=synthetic_action_simulated_once",
+    );
+
     for (const job of [firstJob, secondJob, thirdJob]) {
       const original = job.result as unknown as { cases: typeof firstCases };
-      const requestCase = original.cases.find(
-        (item) => item.policyOn.decision === "require_approval",
+      const untrustedCase = original.cases.find(
+        (item) => item.instructionProvenance !== "trusted_user_request",
       );
-      assert.ok(requestCase);
-      assert.equal(requestCase.policyOn.executed, false);
+      assert.ok(untrustedCase);
+      assert.equal(untrustedCase.policyOn.decision, "deny");
+      assert.equal(untrustedCase.policyOn.executed, false);
       assert.equal(job.status, "succeeded");
     }
   },

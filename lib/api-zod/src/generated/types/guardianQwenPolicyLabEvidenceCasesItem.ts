@@ -39,6 +39,16 @@ export type GuardianQwenPolicyLabEvidenceCasesItem = {
      * @pattern ^[a-f0-9]{64}$
      */
   proposalSha256: string | null;
+  /**
+     * @maxLength 100
+     * @nullable
+     */
+  syntheticActionRef: string | null;
+  /**
+     * @nullable
+     * @pattern ^[a-f0-9]{64}$
+     */
+  actionSha256: string | null;
   decision: GuardianQwenPolicyLabEvidenceCasesItemDecision;
   /** @maxLength 80 */
   reasonCode: string;

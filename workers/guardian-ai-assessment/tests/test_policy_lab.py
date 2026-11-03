@@ -9,6 +9,7 @@ from guardian_ai_assessment.policy_lab import (
 from guardian_ai_assessment.qwen_policy_lab import (
     CASES as QWEN_POLICY_CASES,
     FINANCE_PROFILE as QWEN_FINANCE_PROFILE,
+    SUPPORT_PROFILE as QWEN_SUPPORT_PROFILE,
     _denied_call_never_dispatched,
     _digest,
     _js_iso_timestamp,
@@ -88,7 +89,7 @@ class GuardianAgentPolicyLabTests(unittest.TestCase):
         self.assertFalse(attack["policyOn"]["executed"])
         self.assertFalse(attack["policyOn"]["stateChanged"])
 
-    def test_high_impact_actions_require_approval_and_do_not_execute(self):
+    def test_untrusted_high_impact_actions_are_denied_before_dispatch(self):
         for profile_id in (
             "guardian-agent-lab-finance-v1",
             "guardian-agent-lab-customer-service-v1",
@@ -96,7 +97,10 @@ class GuardianAgentPolicyLabTests(unittest.TestCase):
             with self.subTest(profile_id=profile_id):
                 result = run_policy_lab(profile_id)
                 action = result["cases"][1]["policyOn"]
-                self.assertEqual(action["decision"], "require_approval")
+                self.assertEqual(action["decision"], "deny")
+                self.assertEqual(
+                    action["reasonCode"], "untrusted_content_cannot_authorize_action"
+                )
                 self.assertFalse(action["authorized"])
                 self.assertFalse(action["executed"])
 
@@ -183,11 +187,20 @@ class QwenPolicyLabDispatchSelfCheckTests(unittest.TestCase):
         self.assertEqual(
             [case["caseId"] for case in cases],
             [
-                "qwen_finance_benign_invoice_es",
+                "qwen_finance_benign_bank_change_request_es",
                 "qwen_finance_indirect_bank_change_en",
             ],
         )
         self.assertEqual([case["label"] for case in cases], ["benign", "adversarial"])
+
+    def test_support_qwen_profile_includes_refund_approval_inference_case(self):
+        cases = QWEN_POLICY_CASES[QWEN_SUPPORT_PROFILE]
+        self.assertEqual(len(cases), 3)
+        self.assertEqual(
+            cases[2]["caseId"],
+            "qwen_support_benign_refund_approval_es",
+        )
+        self.assertEqual(cases[2]["label"], "benign")
 
     def test_invalid_finance_arguments_cannot_become_an_approval_request(self):
         self.assertEqual(

@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { test } from "node:test";
 import { validateGuardianQwenPolicyLabEvidence } from "./ai-assessment-worker";
+import {
+  createSyntheticApprovalSimulationReceipt,
+  getAllowlistedSyntheticApprovalAction,
+} from "./ai-assessment-approval-actions";
 
 type QwenEvidence = Parameters<
   typeof validateGuardianQwenPolicyLabEvidence
@@ -257,4 +261,39 @@ test("Qwen evidence rejects invalid contracts with a safe reason code", () => {
     "guardian-agent-qwen-lab-email-v1",
   );
   assert.equal(reason, "identity_provider_network_or_limits");
+});
+
+test("human replay is confined to a verified allow-listed in-memory clone", () => {
+  const action = getAllowlistedSyntheticApprovalAction(
+    "guardian.synthetic.support.refund.v1",
+    "guardian-agent-qwen-lab-customer-service-v1",
+    "qwen_support_benign_refund_approval_es",
+    "propose_synthetic_refund",
+  );
+  assert.ok(action);
+  const receipt = createSyntheticApprovalSimulationReceipt(action);
+  assert.ok(receipt);
+  assert.equal(receipt.resultCode, "synthetic_refund_approved_in_clone");
+  assert.match(receipt.beforeStateSha256, /^[a-f0-9]{64}$/);
+  assert.match(receipt.afterStateSha256, /^[a-f0-9]{64}$/);
+  assert.match(receipt.resultSha256, /^[a-f0-9]{64}$/);
+
+  assert.equal(
+    createSyntheticApprovalSimulationReceipt({
+      ...action,
+      afterStateSha256: "0".repeat(64),
+    }),
+    null,
+    "altered target state must fail closed",
+  );
+  assert.equal(
+    getAllowlistedSyntheticApprovalAction(
+      "guardian.synthetic.support.refund.v1",
+      "guardian-agent-qwen-lab-customer-service-v1",
+      "qwen_support_benign_refund_approval_es",
+      "request_bank_account_change",
+    ),
+    null,
+    "a mismatched tool cannot be replayed",
+  );
 });

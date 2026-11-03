@@ -5,7 +5,13 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AiAssessmentApprovalBindingVersion } from './aiAssessmentApprovalBindingVersion';
+import type { AiAssessmentApprovalDecidedByRole } from './aiAssessmentApprovalDecidedByRole';
+import type { AiAssessmentApprovalExecution } from './aiAssessmentApprovalExecution';
+import type { AiAssessmentApprovalRequestedByRole } from './aiAssessmentApprovalRequestedByRole';
+import type { AiAssessmentApprovalSimulationResultCode } from './aiAssessmentApprovalSimulationResultCode';
 import type { AiAssessmentApprovalStatus } from './aiAssessmentApprovalStatus';
+import type { AiAssessmentApprovalSyntheticActionRef } from './aiAssessmentApprovalSyntheticActionRef';
 
 export interface AiAssessmentApproval {
   id: string;
@@ -21,12 +27,34 @@ export interface AiAssessmentApproval {
   /** @pattern ^[a-f0-9]{64}$ */
   proposalBindingSha256: string;
   requestedByUserId: string;
+  /** @nullable */
+  requestedByRole: AiAssessmentApprovalRequestedByRole;
+  bindingVersion: AiAssessmentApprovalBindingVersion;
+  /** @nullable */
+  syntheticActionRef: AiAssessmentApprovalSyntheticActionRef;
   status: AiAssessmentApprovalStatus;
   canCurrentUserDecide: boolean;
   expiresAt: Date;
   /** @nullable */
   decidedByUserId: string | null;
   /** @nullable */
+  decidedByRole: AiAssessmentApprovalDecidedByRole;
+  /** @nullable */
   decidedAt: Date | null;
+  execution: AiAssessmentApprovalExecution;
+  /** @nullable */
+  simulatedAt: Date | null;
+  /** @nullable */
+  simulationResultCode: AiAssessmentApprovalSimulationResultCode;
+  /**
+     * @nullable
+     * @pattern ^[a-f0-9]{64}$
+     */
+  simulationResultSha256: string | null;
+  /**
+     * @nullable
+     * @pattern ^[a-f0-9]{64}$
+     */
+  replayBindingSha256: string | null;
   createdAt: Date;
 }

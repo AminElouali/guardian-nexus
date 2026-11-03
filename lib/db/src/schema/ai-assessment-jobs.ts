@@ -12,7 +12,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { aiAssessmentWorkerRole, appRuntimeRole } from "./roles";
-import { workspacesTable } from "./workspaces";
+import { membershipsTable, workspacesTable } from "./workspaces";
 
 export type GuardianVerificationObjective =
   | "untrusted_text_present"

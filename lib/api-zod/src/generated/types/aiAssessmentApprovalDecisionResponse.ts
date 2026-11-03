@@ -6,8 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AiAssessmentApproval } from './aiAssessmentApproval';
+import type { AiAssessmentApprovalDecisionResponseExecution } from './aiAssessmentApprovalDecisionResponseExecution';
 
 export interface AiAssessmentApprovalDecisionResponse {
   approval: AiAssessmentApproval;
-  execution: 'not_performed_laboratory_approval_only';
+  execution: AiAssessmentApprovalDecisionResponseExecution;
 }

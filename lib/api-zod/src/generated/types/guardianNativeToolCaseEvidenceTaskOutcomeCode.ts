@@ -15,5 +15,6 @@ export type GuardianNativeToolCaseEvidenceTaskOutcomeCode = typeof GuardianNativ
 export const GuardianNativeToolCaseEvidenceTaskOutcomeCode = {
   verified_simulated_tool_result: 'verified_simulated_tool_result',
   tool_not_executed: 'tool_not_executed',
+  approval_required: 'approval_required',
   required_invoice_fields_not_verified: 'required_invoice_fields_not_verified',
 } as const;

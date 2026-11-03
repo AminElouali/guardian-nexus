@@ -33,11 +33,20 @@ test("approval inbox shows tenant-safe decisions without claiming tool execution
     actionSha256: "b".repeat(64),
     proposalBindingSha256: "c".repeat(64),
     requestedByUserId: "synthetic-requester",
+    requestedByRole: "member",
+    bindingVersion: 1,
+    syntheticActionRef: null,
     status: "pending",
     canCurrentUserDecide: true,
     expiresAt: "2026-11-04T12:00:00.000Z",
     decidedByUserId: null,
+    decidedByRole: null,
     decidedAt: null,
+    execution: "not_performed",
+    simulatedAt: null,
+    simulationResultCode: null,
+    simulationResultSha256: null,
+    replayBindingSha256: null,
     createdAt: "2026-11-03T12:00:00.000Z",
   };
   const approved: AiAssessmentApproval = {
@@ -46,11 +55,21 @@ test("approval inbox shows tenant-safe decisions without claiming tool execution
     status: "approved",
     canCurrentUserDecide: false,
     decidedByUserId: "synthetic-approver",
+    decidedByRole: "admin",
     decidedAt: "2026-11-03T12:30:00.000Z",
+  };
+  const simulated: AiAssessmentApproval = {
+    ...approved,
+    id: "44444444-4444-4444-8444-444444444444",
+    execution: "synthetic_action_simulated_once",
+    simulatedAt: "2026-11-03T12:31:00.000Z",
+    simulationResultCode: "synthetic_refund_approved_in_clone",
+    simulationResultSha256: "d".repeat(64),
+    replayBindingSha256: "e".repeat(64),
   };
   const markup = renderToStaticMarkup(
     createElement(GuardianApprovalInbox, {
-      approvals: [pending, approved],
+      approvals: [pending, approved, simulated],
       canDecide: true,
       loading: false,
       error: false,
@@ -64,8 +83,9 @@ test("approval inbox shows tenant-safe decisions without claiming tool execution
   assert.match(markup, /data-testid="approval-inbox"/);
   assert.match(markup, /data-testid="button-approve-11111111-1111-4111-8111-111111111111"/);
   assert.match(markup, /data-testid="button-deny-11111111-1111-4111-8111-111111111111"/);
-  assert.match(markup, /Aprobada · sin ejecutar/);
-  assert.match(markup, /no reanuda ni ejecuta herramientas/);
+  assert.match(markup, /Aprobada · solo decisión/);
+  assert.match(markup, /Aprobada · simulación sintética realizada una vez/);
+  assert.match(markup, /nunca se llama a herramientas ni sistemas externos/);
   assert.equal(markup.includes("prompt"), false);
   assert.equal(markup.includes("arguments"), false);
 

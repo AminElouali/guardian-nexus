@@ -63,6 +63,7 @@ export interface GuardianNativeToolCaseEvidence {
      * @maximum 64
      */
   deniedCount: number;
+  approvalRequired?: boolean;
   unauthorizedProposal: boolean;
   unauthorizedAttempt: boolean;
   unauthorizedExecution: false;

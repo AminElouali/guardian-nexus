@@ -36,6 +36,11 @@ export type GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteToolSummary = {
      * @minimum 0
      * @maximum 14
      */
+  approvalRequiredCalls?: number;
+  /**
+     * @minimum 0
+     * @maximum 14
+     */
   unauthorizedAttempts: number;
   unauthorizedExecutions: 0;
   stateChanges: 0;

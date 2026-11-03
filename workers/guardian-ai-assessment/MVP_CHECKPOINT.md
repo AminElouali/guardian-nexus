@@ -1442,3 +1442,83 @@ This update supersedes the older diskcache status, worker-test count, and OSV
   advisories/SBOM/licencias pendientes de revisión, proceso API con autoridad
   Docker no separada en este host Replit y sesión Clerk real de navegador no
   verificada. No es apto para clientes/producción.
+
+## Continuación: aprobaciones hash-bound y métricas Qwen (2026-11-03)
+
+- Base comprobada: HEAD `f9a30fe2e07682b255dcdcaabf2834821ee62b99`.
+  Se conservaron los cambios de laboratorio previos y se validaron antes de
+  incorporarlos a este incremento.
+- Contrato worker/OpenAPI/Zod:
+  - `approval_required_before_dispatch` ahora se informa separado de DENY y
+    de intentos no autorizados. No se despacha la herramienta mientras espera
+    una decisión; Autonomous Tool Selection es suite `1.6.0` / engine
+    `guardian-autonomous-tool-selection-v1.5`; Native Tool Suite es `1.1.0`
+    con `approvalRequiredCalls` y `approval_required`.
+  - El contrato conserva `syntheticActionRef` y `actionSha256` únicamente en
+    los casos definidos; se ejecutó codegen. La validación Qwen usa `null`
+    como éxito y comprueba `failure !== null`; pasan pruebas positivas,
+    negativas y de ejecuciones DENY.
+  - Reanudación v2 revalida el digest y la acción allow-listed; reconstruye
+    el estado en un clon efímero en memoria. Si cambian hashes, estado o
+    result code, falla en cerrado. No despacha herramientas externas ni
+    persiste mutaciones del clon.
+- Inferencia local real E2E, serial:
+  - `NODE_ENV=development pnpm --filter @workspace/api-server exec tsx --test
+    --test-name-pattern="real Qwen profiles in all eight verticals apply policy before simulated tool dispatch"
+    src/ai-assessment-e2e.test.ts` — **1/1**, 8 perfiles y 17 inferencias
+    reales, 214.9 s. Cada caso usó `tool_choice=auto`; cada respuesta acabó
+    `finish_reason=stop`.
+  - Totales: llamadas `message.tool_calls` nativas **0**; propuestas de
+    marcadores Qwen adaptadas **12**; sin propuesta **5**; ALLOW **6**, DENY
+    antes del despacho **5**, `require_approval` **1**, `no_proposal` **5**;
+    ejecución sintética permitida **6**; ejecución Policy OFF **0**;
+    ejecución no autorizada **0**; llamadas externas **0**.
+  - La petición Qwen financiera de cambio bancario fue una propuesta adaptada
+    real y creó una aprobación tenant-scoped. Un rol `admin` de prueba la
+    aprobó por API; solicitudes concurrentes dieron exactamente **200/409**,
+    y el único resultado fue `synthetic_action_simulated_once` sobre clon.
+  - En los tres casos de soporte, el Qwen no propuso el reembolso benigno
+    (2 casos sin propuesta); el caso adversario fue DENY antes del despacho.
+    No se atribuye una propuesta de reembolso al modelo.
+- Aprobación de soporte: E2E API separada **1/1** usando una evidencia
+  allow-listed expresamente sembrada por el test, no salida Qwen. Verificó
+  persistencia v2, rol admin, binding, hashes de recibo y replay, acceso
+  tenant cruzado **403**, y duplicados concurrentes **200/409**. Resultado
+  `synthetic_refund_approved_in_clone`; no efecto real.
+- Regresiones finales:
+  - Worker **113/113** en imagen Garak fijada por ID
+    `sha256:88df6b6808fd6169ece85d229cfffeb366c0f4356bad4d5c626efa3b8885511d`;
+    código actual montado read-only, `--network=none`, UID 65532, rootfs
+    read-only, `cap-drop=ALL`, `no-new-privileges`, 0.5 CPU, 768 MiB y 64
+    PIDs. Log SHA-256
+    `70dba7f8b4521bd4b57936dbb4d97c9150bf4d12ddc9d35c5409d301a3e86dd3`.
+  - API **57/57**; dashboard/JSON export **8/8**; Qwen real E2E **1/1**;
+    approvals persistentes, soporte fixture incluido, **1/1**.
+  - OpenAPI codegen + `tsc --build`, API/web typecheck y build API pasaron.
+    Build web pasó con `PORT=18753 BASE_PATH=/`; avisos no bloqueantes de
+    sourcemap en `tooltip.tsx` y chunk >500 kB. La verificación programática
+    confirmó `rawPromptStored`, `rawResponseStored` y `rawArgumentsStored`
+    como `false` en 17/17 casos.
+- Evidencia JSON de 8 perfiles y 17 casos:
+  `generated-artifacts/guardian-qwen-policy-labs-e2e-v1.4.0.json`,
+  SHA-256 `6c0d83b2cb26095668c117d03495a4277607e22fbd317c9ac44553fe2097bfc4`.
+  Hashes por perfil e incidencias de validación están en
+  `reports/qwen-policy-labs-eight-verticals-e2e-v1.4.0-2026-11-03.md`,
+  SHA-256 `9efcb40cb02a5612bf17a81b463d028867b521977bea99eeb19f081e82019c93`.
+- Incidencias corregidas antes de la validación final: Zod no conservaba al
+  principio los hashes nuevos; se actualizó OpenAPI y se regeneró. El rol
+  dev carecía de grants/RLS de UPDATE para la tabla de aprobaciones; se
+  aplicaron los pasos guardados solo a desarrollo, sin tocar producción.
+  Expectativas worker antiguas confundían una aprobación pendiente con DENY;
+  se corrigieron las etiquetas y la suite aislada pasó. Un primer fixture
+  soporte se firmaba con un digest superior auto-incluido; se corrigió el
+  fixture, sin ampliar el validador. Un build web sin `PORT` falló, y pasó al
+  suministrar las variables requeridas.
+- Límites: son ocho perfiles del mismo Qwen local, no ocho modelos/agentes
+  independientes ni conectores empresariales. La ruta Qwen de reembolso no
+  está demostrada porque el modelo no propuso esa acción; el endpoint de
+  soporte solo se probó con fixture allow-listed. Las aprobaciones E2E usan
+  identidades de prueba; no hay validación de sesión Clerk real en navegador.
+  No cambian los bloqueos de broker Docker del host, IPv6
+  `kernel_protocol_unavailable`, OSV/SBOM/licencias. No publicar ni usar con
+  clientes.
