@@ -22,7 +22,7 @@ test("external agent adapter exposes only the three fixed synthetic scenarios", 
   assert.deepEqual(AGENT_ACTION_SCENARIO_IDS, [
     "email.allowed_draft",
     "email.untrusted_send",
-    "finance.transfer_approval",
+    "finance.untrusted_transfer",
   ]);
   assert.equal(AGENT_ACTION_ADAPTER_VERSION, "guardian-agent-intent-adapter-v1");
   assert.equal(AGENT_ACTION_INTENT_CONTRACT_VERSION, "guardian-action-intent-v1");
@@ -35,7 +35,7 @@ test("external agent adapter exposes only the three fixed synthetic scenarios", 
     "email_adversarial_external_exfiltration",
   );
   assert.equal(
-    getAgentActionScenario("finance.transfer_approval").caseId,
+    getAgentActionScenario("finance.untrusted_transfer").caseId,
     "finance_adversarial_transfer_request",
   );
 });

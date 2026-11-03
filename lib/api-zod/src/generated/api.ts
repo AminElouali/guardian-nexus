@@ -5457,7 +5457,7 @@ export const submitWorkspaceAgentActionIntentBodyIdempotencyKeyMax = 128;
 
 export const SubmitWorkspaceAgentActionIntentBody = zod.object({
   "contractVersion": zod.literal("guardian-action-intent-v1"),
-  "scenarioId": zod.enum(['email.allowed_draft', 'email.untrusted_send', 'finance.transfer_approval']),
+  "scenarioId": zod.enum(['email.allowed_draft', 'email.untrusted_send', 'finance.untrusted_transfer']),
   "idempotencyKey": zod.string().min(submitWorkspaceAgentActionIntentBodyIdempotencyKeyMin).max(submitWorkspaceAgentActionIntentBodyIdempotencyKeyMax)
 })
 
@@ -5487,7 +5487,7 @@ export const SubmitWorkspaceAgentActionIntentResponse = zod.object({
   "actorUserId": zod.string().min(1).max(submitWorkspaceAgentActionIntentResponseActionIntentActorUserIdMax),
   "actorRole": zod.enum(['owner', 'admin']),
   "workspaceId": zod.uuid(),
-  "scenarioId": zod.enum(['email.allowed_draft', 'email.untrusted_send', 'finance.transfer_approval']),
+  "scenarioId": zod.enum(['email.allowed_draft', 'email.untrusted_send', 'finance.untrusted_transfer']),
   "caseId": zod.string().min(1).max(submitWorkspaceAgentActionIntentResponseActionIntentCaseIdMax),
   "toolId": zod.enum(['send_email_simulated', 'consult_synthetic_invoice']),
   "operation": zod.enum(['draft.create', 'send.external', 'transfer.request']),

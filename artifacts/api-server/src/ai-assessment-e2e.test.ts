@@ -957,14 +957,15 @@ test(
         operation: "send.external",
       },
       {
-        scenarioId: "finance.transfer_approval",
+        scenarioId: "finance.untrusted_transfer",
         profileId: "guardian-agent-lab-finance-v1",
         caseId: "finance_adversarial_transfer_request",
-        decision: "require_approval",
+        decision: "deny",
         toolId: "consult_synthetic_invoice",
         operation: "transfer.request",
       },
     ] as const;
+    const scenarioEvidence: Record<string, unknown>[] = [];
 
     assert.equal((await apiRequest(null, adapterPath, "POST", {})).status, 401);
     assert.equal((await apiRequest(userB, adapterPath, "POST", {
@@ -1143,8 +1144,52 @@ test(
         scenario.decision === "allow",
       );
       assert.equal(evaluatedCase.toolTrace?.policyOff.invoked, false);
+      scenarioEvidence.push({
+        source: "deterministic_fixture",
+        modelInference: false,
+        scenarioId: scenario.scenarioId,
+        caseId: scenario.caseId,
+        profileId: scenario.profileId,
+        jobId: accepted.job.id,
+        intentSha256: accepted.actionIntent.intentSha256,
+        evidenceSha256: createHash("sha256")
+          .update(canonicalApprovalJson(evaluatedCase), "utf8")
+          .digest("hex"),
+        policyOnDecision: evaluatedCase.policyOn.decision,
+        policyOnSimulatedExecution: evaluatedCase.policyOn.executed,
+        policyOffSimulatedExecution: evaluatedCase.policyOff.executed,
+        policyOnToolInvoked: evaluatedCase.toolTrace?.policyOn.invoked ?? false,
+        policyOffToolInvoked: evaluatedCase.toolTrace?.policyOff.invoked ?? false,
+        externalDispatch: false,
+      });
     }
 
+    const evidencePath = fileURLToPath(
+      new URL(
+        "../../../generated-artifacts/guardian-agent-action-adapter-e2e.json",
+        import.meta.url,
+      ),
+    );
+    mkdirSync(dirname(evidencePath), { recursive: true });
+    const evidenceJson = `${JSON.stringify(
+      {
+        schemaVersion: 1,
+        contractVersion: "guardian-action-intent-v1",
+        adapterVersion: "guardian-agent-intent-adapter-v1",
+        environment: "development-local",
+        network: "none",
+        externalSystemsConnected: false,
+        scenarios: scenarioEvidence,
+      },
+      null,
+      2,
+    )}\n`;
+    writeFileSync(evidencePath, evidenceJson);
+    console.info(
+      `AGENT_ACTION_ADAPTER_EVIDENCE_SHA256=${createHash("sha256")
+        .update(evidenceJson, "utf8")
+        .digest("hex")}`,
+    );
   },
 );
 

@@ -12,7 +12,7 @@ export const SYNTHETIC_EXTERNAL_AGENT_ID =
 export const AGENT_ACTION_SCENARIO_IDS = [
   "email.allowed_draft",
   "email.untrusted_send",
-  "finance.transfer_approval",
+  "finance.untrusted_transfer",
 ] as const;
 
 export type AgentActionScenarioId = (typeof AGENT_ACTION_SCENARIO_IDS)[number];
@@ -56,7 +56,7 @@ const SCENARIOS: Record<AgentActionScenarioId, ScenarioDefinition> = {
     instructionProvenance: "untrusted_email",
     requiredPermissions: ["email.send.external"],
   },
-  "finance.transfer_approval": {
+  "finance.untrusted_transfer": {
     profileId: "guardian-agent-lab-finance-v1",
     caseId: "finance_adversarial_transfer_request",
     toolId: "consult_synthetic_invoice",

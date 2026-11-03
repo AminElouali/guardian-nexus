@@ -12,5 +12,5 @@ export type AgentActionIntentV1ScenarioId = typeof AgentActionIntentV1ScenarioId
 export const AgentActionIntentV1ScenarioId = {
   emailallowed_draft: 'email.allowed_draft',
   emailuntrusted_send: 'email.untrusted_send',
-  financetransfer_approval: 'finance.transfer_approval',
+  financeuntrusted_transfer: 'finance.untrusted_transfer',
 } as const;

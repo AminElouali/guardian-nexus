@@ -4,6 +4,55 @@ Updated: 2026-11-02 — E2E Qwen real para correo/BBDD y digest de evidencia
 Scope: development/local laboratory only. No customer systems, external model APIs,
 paid services, production database, remote deployment, or publishing.
 
+## Homepage pública y adaptador de intents externos sintéticos — 2026-11-03
+
+- Inicio en HEAD `4cd1ab8d7c314a08e7b9f1ce676c3fe844158af5`, árbol limpio.
+  Se conservan Clerk, perfiles, cola, políticas, RLS/RBAC y worker; sin
+  despliegue ni publicación.
+- La portada ahora presenta ocho ámbitos de agentes, el flujo
+  propuesta → verificación → permitir/bloquear/aprobación, CTA al laboratorio
+  existente y aviso visible de alcance: únicamente datos/herramientas
+  sintéticos; ningún Gmail, banco, nube, robot o sistema de clientes está
+  conectado o protegido. SDK/API/MCP Gateway aparecen como planificados, no
+  disponibles. Capturas locales de escritorio y móvil revisadas.
+- OpenAPI v1 `guardian-action-intent-v1` y adaptador
+  `guardian-agent-intent-adapter-v1`: tres escenarios de allow-list
+  (`email.allowed_draft`, `email.untrusted_send`,
+  `finance.untrusted_transfer`). La API deriva tenant, actor y rol Clerk del
+  contexto autenticado; requiere owner/admin; no admite perfil, herramienta,
+  argumentos, decisión ni modo de política del solicitante. El hash SHA-256
+  vincula identidad, escenario, recurso y metadatos fijos. La clave idempotente
+  queda ligada a escenario/actor/rol y se audita junto a un código de escenario
+  y el hash, nunca con contenido bruto. Petición >8 KiB: 413 antes de crear job.
+- La ruta es un adaptador de escenarios sintéticos fijos que encola el
+  `guardian_policy_lab` existente; NO es un SDK/MCP Gateway genérico ni conecta
+  un agente externo real. Policy ON ejecuta solo el simulador allow-listed;
+  Policy OFF sigue siendo contrafactual sin despacho. Evidencia E2E redactada
+  `generated-artifacts/guardian-agent-action-adapter-e2e.json`,
+  SHA-256 `6f3d58ced290fecadf06392c40a05948c441a718fb530fe41cab457e4b87b4d7`:
+  3 escenarios, 1 allow con simulación ficticia, 2 deny sin invocación de
+  herramienta, 0 despacho externo, 0 inferencias de modelo en este adaptador.
+- El primer E2E completo obtuvo 6/7 pruebas; la única falla fue una expectativa
+  errónea de `require_approval` para una transferencia con procedencia no
+  confiable. El motor la deniega antes de considerar aprobación, como debe.
+  Se renombró el escenario a `finance.untrusted_transfer`, manteniendo DENY;
+  el E2E focalizado del adaptador pasó 1/1 tras corregirlo. En la corrida
+  completa también pasaron la evaluación Qwen local de los ocho perfiles, la
+  selección autónoma y el flujo de aprobación persistente. No se volvió a
+  ejecutar la suite completa tras corregir la expectativa. La aprobación del
+  adaptador no está implementada; la bandeja/aprobación existente sigue
+  verificándose por separado.
+- Regresiones: API 60/60; adaptador unitario 3/3; integración de componentes del
+  dashboard 8/8; typecheck API/UI y codegen/typecheck de bibliotecas pasaron.
+  Builds API y Vite pasaron. Vite mantiene avisos existentes de sourcemap de
+  `tooltip.tsx` y chunk JavaScript >500 kB. `git diff --check` pasó. El intento
+  directo de `pytest` en el host no pudo ejecutarse porque no hay comando
+  `pytest`; el worker sí se ejecutó en Docker con `--network=none` en E2E.
+- Pendiente explícito: escenario adapter confiable que produzca
+  `require_approval` sin cambiar la regla que DENY contenido no confiable; no
+  afirmar que el endpoint es una integración comercial. Clerk real en
+  navegador no se probó; la ruta E2E usa el harness de desarrollo.
+
 ## Integración Qwen local real para correo y bases de datos — 2026-11-02
 
 - Inicio verificado en HEAD `124b1c01767da45bbf69237789d519f84b08812c`, árbol

@@ -12,5 +12,5 @@ export type AgentActionAdapterRequestScenarioId = typeof AgentActionAdapterReque
 export const AgentActionAdapterRequestScenarioId = {
   emailallowed_draft: 'email.allowed_draft',
   emailuntrusted_send: 'email.untrusted_send',
-  financetransfer_approval: 'finance.transfer_approval',
+  financeuntrusted_transfer: 'finance.untrusted_transfer',
 } as const;
