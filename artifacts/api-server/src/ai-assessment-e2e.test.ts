@@ -1130,6 +1130,34 @@ test(
       artifactJobs.push(rawJob);
     }
 
+    const qwenApprovalResponse = await apiRequest(
+      userA,
+      `/api/workspaces/${workspaceA}/ai-security-assessments/approvals`,
+    );
+    assert.equal(qwenApprovalResponse.status, 200);
+    const qwenApprovalList = ListWorkspaceAiAssessmentApprovalsResponse.parse(
+      await qwenApprovalResponse.json(),
+    );
+    const expectedQwenApprovals = artifactJobs.reduce((count, item) => {
+      const result = item.result as GuardianQwenPolicyLabEvidence;
+      return (
+        count +
+        result.cases.filter(
+          (caseEvidence) =>
+            caseEvidence.decision === "require_approval",
+        ).length
+      );
+    }, 0);
+    const persistedQwenApprovals = qwenApprovalList.approvals.filter((item) =>
+      qwenPolicyLabJobIds.includes(item.jobId),
+    );
+    assert.equal(
+      persistedQwenApprovals.length,
+      expectedQwenApprovals,
+      "every Qwen require_approval proposal must persist a tenant-scoped approval row",
+    );
+    console.log(`QWEN_REQUIRE_APPROVAL_CASES=${expectedQwenApprovals}`);
+
     const artifactPath = fileURLToPath(
       new URL(
         "../../../generated-artifacts/guardian-qwen-policy-labs-e2e.json",

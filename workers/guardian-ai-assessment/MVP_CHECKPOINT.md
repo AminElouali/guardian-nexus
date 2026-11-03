@@ -1351,11 +1351,11 @@ This update supersedes the older diskcache status, worker-test count, and OSV
   1. IPv4/DNS públicos bloqueados; IPv6 `kernel_protocol_unavailable`, no
   verificado.
 - Evidencia JSON redactada:
-  `generated-artifacts/guardian-qwen-policy-labs-e2e.json`, SHA-256
+  `generated-artifacts/guardian-qwen-policy-labs-e2e-v1.2.0.json`, SHA-256
   `97edba6b905df330ddfe32d42eac61db9c8c99d8930b9e635f0908f42b8d3076`.
   Hashes por perfil y tabla de resultados:
   `reports/qwen-policy-labs-eight-verticals-e2e-2026-11-03.md`.
-  SHA-256 del informe: `92734f66009f7ba06a2c4f9a56e7e2c960f472762b5c02a480ee57a77f183192`.
+  SHA-256 del informe: `226c4130d5fa4e5fa35f7d514d2ee87c5f101be5662be99beb36363e6c650c96`.
   No se persisten prompts, respuestas ni argumentos en bruto.
 - Aprobaciones persistentes: regresión separada con fixtures **1/1 E2E**;
   3 solicitudes verificadas (aprobada, denegada, caducada) y controles de
@@ -1377,3 +1377,55 @@ This update supersedes the older diskcache status, worker-test count, and OSV
   IPv6 dual-stack y autenticación Clerk comprobada en navegador; además,
   falta una propuesta Qwen que alcance `require_approval` y una reanudación
   ficticia vinculada (la aprobación actual no ejecuta).
+
+## Continuación: aprobación Qwen persistida en laboratorio (2026-11-03)
+
+- Se conservó el artefacto v1.2.0 anterior en
+  `generated-artifacts/guardian-qwen-policy-labs-e2e-v1.2.0.json`,
+  SHA-256 `97edba6b905df330ddfe32d42eac61db9c8c99d8930b9e635f0908f42b8d3076`.
+- Actualizado el caso benigno de finanzas a una solicitud sintética de cambio
+  bancario con petición explícita de revisión humana. No se forzó herramienta:
+  se mantuvo `tool_choice=auto`; la muestra adversaria queda aparte.
+- E2E serial real:
+  `NODE_ENV=development pnpm --filter @workspace/api-server exec tsx --test
+  --test-name-pattern='real Qwen email, database, and finance profiles'
+  src/ai-assessment-e2e.test.ts` — **1/1**, 8 perfiles, 16 inferencias,
+  224.856 s. Las 16 terminaron con `finish_reason=stop`: 0 llamadas
+  `message.tool_calls` nativas, 11 propuestas completas de marcadores Qwen
+  adaptadas y 5 sin propuesta. Resultados: 6 ALLOW simulados, 4 DENY antes del
+  simulador, 1 `require_approval` antes del despacho y 5 `no_proposal`.
+- La solicitud financiera benigna fue adaptada desde marcador Qwen,
+  `require_approval`; la consulta autenticada del inbox encontró exactamente
+  una fila tenant-scoped para ese job. La prueba falla si el número de filas
+  no coincide con los casos `require_approval`. La solicitud adversaria
+  financiera no produjo propuesta. El flujo de aprobación no ejecutó ni
+  reanudó la herramienta. El E2E separado de permisos de aprobación pasó
+  **1/1** con tres solicitudes fixture (aprobada, denegada, caducada).
+- El modo `Policy OFF` siguió siendo contrafactual sobre clones: 0 ejecuciones.
+  Cero llamadas/operaciones externas, datos de clientes, secretos montados,
+  prompts/respuestas/argumentos brutos persistidos. 16/16 casos en
+  `tool_choice=auto`; 6 despachos solo a simuladores ficticios.
+- Evidencia:
+  `generated-artifacts/guardian-qwen-policy-labs-e2e-v1.3.0.json`,
+  SHA-256 `9461b369c15c3dff5d56772d6a804e78f733e2b65646994dba65e3f9892241f6`.
+  Informe:
+  `reports/qwen-policy-labs-eight-verticals-e2e-v1.3.0-2026-11-03.md`,
+  SHA-256 `2502defab62b20620d319ac9d4c1997f4bbc0936f780f223f2639346a32df762`.
+  No contiene prompts, respuestas ni argumentos crudos.
+- Regresiones tras el cambio: API **56/56**, worker **87/87**, dashboard/
+  informe/exportación **8/8**, E2E aprobación **1/1**, `pnpm run typecheck`,
+  API build y web build pasaron. La UI requiere `PORT`/`BASE_PATH` para build;
+  con `PORT=18753 BASE_PATH=/` pasó. Permanecen avisos del sourcemap
+  `tooltip.tsx` y chunk web >500 kB.
+- Estado: las ocho verticales tienen perfiles Qwen locales probados, pero no
+  son ocho agentes independientes ni conectores empresariales. Multiagente
+  sigue siendo una delegación sintética de un único Qwen. La aprobación Qwen
+  queda persistida y visible en API durante el E2E; la decisión humana se
+  probó por separado con fixture, no con una sesión Clerk real en navegador.
+  El inbox actual registra decisiones, no reanuda acciones. La reanudación
+  segura exige poder reconstruir y volver a validar atómicamente la acción
+  sintética exacta ligada al hash; no se habilitó un replay.
+- Límites previos sin cambios: IPv6 no verificado (`kernel_protocol_unavailable`),
+  advisories/SBOM/licencias pendientes de revisión, proceso API con autoridad
+  Docker no separada en este host Replit y sesión Clerk real de navegador no
+  verificada. No es apto para clientes/producción.

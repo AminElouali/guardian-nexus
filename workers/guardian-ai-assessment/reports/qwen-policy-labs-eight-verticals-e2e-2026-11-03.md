@@ -34,7 +34,7 @@ La evidencia confirma ejecución real del modelo local `Qwen/Qwen3-0.6B-GGUF` co
 
 ## Evidencias redactadas
 
-`generated-artifacts/guardian-qwen-policy-labs-e2e.json`  
+`generated-artifacts/guardian-qwen-policy-labs-e2e-v1.2.0.json`
 SHA-256: `97edba6b905df330ddfe32d42eac61db9c8c99d8930b9e635f0908f42b8d3076`
 
 SHA-256 por perfil:

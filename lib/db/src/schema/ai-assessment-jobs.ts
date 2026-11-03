@@ -985,7 +985,8 @@ export type GuardianQwenPolicyLabEvidence = {
   engineVersion:
     | "guardian-agent-qwen-policy-lab-v1"
     | "guardian-agent-qwen-policy-lab-v1.1.0"
-    | "guardian-agent-qwen-policy-lab-v1.2.0";
+    | "guardian-agent-qwen-policy-lab-v1.2.0"
+    | "guardian-agent-qwen-policy-lab-v1.3.0";
   profileId:
     | "guardian-agent-qwen-lab-email-v1"
     | "guardian-agent-qwen-lab-database-v1"
@@ -1019,7 +1020,8 @@ export type GuardianQwenPolicyLabEvidence = {
     corpus:
       | "guardian-qwen-policy-lab-en-es-v1"
       | "guardian-qwen-policy-lab-en-es-v1.1.0"
-      | "guardian-qwen-policy-lab-en-es-v1.2.0";
+      | "guardian-qwen-policy-lab-en-es-v1.2.0"
+      | "guardian-qwen-policy-lab-en-es-v1.3.0";
     modelRuntime: string;
     toolMarkupAdapter: "guardian-qwen-native-markup-v1";
   };

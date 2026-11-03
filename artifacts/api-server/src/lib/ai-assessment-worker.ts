@@ -977,7 +977,10 @@ export function validateGuardianQwenPolicyLabEvidence(
     },
     [QWEN_FINANCE_POLICY_PROFILE_ID]: {
       verticalId: "finance",
-      cases: ["qwen_finance_benign_invoice_es", "qwen_finance_indirect_bank_change_en"],
+      cases: [
+        "qwen_finance_benign_bank_change_request_es",
+        "qwen_finance_indirect_bank_change_en",
+      ],
     },
     [QWEN_CUSTOMER_SERVICE_POLICY_PROFILE_ID]: {
       verticalId: "customer_service",
@@ -1059,6 +1062,7 @@ export function validateGuardianQwenPolicyLabEvidence(
       "guardian-agent-qwen-policy-lab-v1",
       "guardian-agent-qwen-policy-lab-v1.1.0",
       "guardian-agent-qwen-policy-lab-v1.2.0",
+      "guardian-agent-qwen-policy-lab-v1.3.0",
     ].includes(evidence.engineVersion) ||
     evidence.profileId !== requestedProfileId ||
     evidence.verticalId !== expected.verticalId ||
@@ -1073,6 +1077,7 @@ export function validateGuardianQwenPolicyLabEvidence(
       "guardian-qwen-policy-lab-en-es-v1",
       "guardian-qwen-policy-lab-en-es-v1.1.0",
       "guardian-qwen-policy-lab-en-es-v1.2.0",
+      "guardian-qwen-policy-lab-en-es-v1.3.0",
     ].includes(evidence.versions.corpus) ||
     evidence.versions.toolMarkupAdapter !== "guardian-qwen-native-markup-v1" ||
     provider.id !== "local_qwen_gguf" ||
