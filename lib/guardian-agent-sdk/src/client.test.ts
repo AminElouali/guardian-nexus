@@ -414,6 +414,83 @@ test("Qwen evidence parser keeps native, adapted, and absent proposals distinct"
   assert.equal(unparsed.dispatchStatus, "blocked_by_parser");
 });
 
+test("Qwen SDK accepts the bounded v1.8 ten-case corpus and rejects eleven", async () => {
+  // Contract-only fixture; this is not model-inference evidence.
+  const profileId = "guardian-agent-qwen-lab-customer-service-v1";
+  const sizedEvidence = (size: number): Record<string, unknown> => {
+    const evidence = structuredClone(
+      sampleQwenEvidence(profileId),
+    ) as unknown as Record<string, unknown>;
+    const sourceCases = evidence.cases as Array<Record<string, unknown>>;
+    const cases = Array.from({ length: size }, (_, index) => ({
+      ...sourceCases[index % sourceCases.length]!,
+      caseId: `contract-case-${index}`,
+    }));
+    const originCount = (origin: string) =>
+      cases.filter((item) => item.toolCallOrigin === origin).length;
+    const decisionCount = (decision: string) =>
+      cases.filter((item) => item.decision === decision).length;
+    const limits = evidence.limits as Record<string, unknown>;
+    const summary = evidence.summary as Record<string, unknown>;
+    evidence.engineVersion = "guardian-agent-qwen-policy-lab-v1.8.0";
+    evidence.versions = {
+      ...(evidence.versions as Record<string, unknown>),
+      corpus: "guardian-qwen-policy-lab-en-es-v1.8.0",
+    };
+    evidence.cases = cases;
+    evidence.limits = { ...limits, maxCases: size };
+    evidence.summary = {
+      ...summary,
+      modelCalls: size,
+      sampleCount: size,
+      benignCases: cases.filter((item) => item.label === "benign").length,
+      adversarialCases: cases.filter((item) => item.label === "adversarial").length,
+      noToolCalls: originCount("no_tool_call"),
+      runtimeMessageToolCalls: originCount("runtime_message_tool_calls"),
+      adaptedQwenMarkupCalls: originCount(
+        "guardian_qwen_native_markup_adapter",
+      ),
+      simulatedExecutions: cases.filter((item) =>
+        (item.toolEvents as Array<Record<string, unknown>>).some(
+          (event) => event.executed === true,
+        ),
+      ).length,
+      allow: decisionCount("allow"),
+      deny: decisionCount("deny"),
+      requireApproval: decisionCount("require_approval"),
+      noProposal: decisionCount("no_proposal"),
+    };
+    return evidence;
+  };
+
+  const validEvidence = sizedEvidence(10);
+  const validClient = clientWith(async () =>
+    Response.json(
+      qwenJobResponse(profileId, validEvidence, "succeeded"),
+    ),
+  );
+  const result = await validClient.waitForQwenEvaluation(
+    jobId,
+    profileId,
+    { intervalMs: 50, maxAttempts: 1 },
+  );
+  assert.equal(result.report.counts.cases, 10);
+
+  const overLimitClient = clientWith(async () =>
+    Response.json(
+      qwenJobResponse(profileId, sizedEvidence(11), "succeeded"),
+    ),
+  );
+  await assert.rejects(
+    overLimitClient.waitForQwenEvaluation(
+      jobId,
+      profileId,
+      { intervalMs: 50, maxAttempts: 1 },
+    ),
+    { code: "invalid_qwen_policy_evidence" },
+  );
+});
+
 test("Qwen SDK rejects false dispatch or mismatched evidence summaries", async () => {
   const invalidDispatch = structuredClone(sampleQwenEvidence());
   const invalidCase = invalidDispatch.cases[1] as Record<string, unknown>;

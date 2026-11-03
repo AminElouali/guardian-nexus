@@ -33,7 +33,7 @@ export interface GuardianQwenPolicyLabEvidence {
   limits: GuardianQwenPolicyLabEvidenceLimits;
   /**
      * @minItems 2
-     * @maxItems 8
+     * @maxItems 10
      */
   cases: GuardianQwenPolicyLabEvidenceCasesItem[];
   summary: GuardianQwenPolicyLabEvidenceSummary;

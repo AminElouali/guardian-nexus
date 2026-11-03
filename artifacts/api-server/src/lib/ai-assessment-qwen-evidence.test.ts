@@ -267,7 +267,7 @@ function makeEvidence(executeDeniedProposal = false): QwenEvidence {
   return evidence as unknown as QwenEvidence;
 }
 
-test("generated API contract accepts Qwen v1.7 up to the supported eight cases", () => {
+test("generated API contract accepts legacy evidence and bounds the v1.8 corpus at ten cases", () => {
   const resultSchema = CreateWorkspaceAiAssessmentLabJobResponse.shape.result;
   const base = makeEvidence() as unknown as Record<string, unknown>;
   const baseParse = resultSchema.safeParse(base);
@@ -300,26 +300,38 @@ test("generated API contract accepts Qwen v1.7 up to the supported eight cases",
   );
 
   const cases = base.cases as Array<Record<string, unknown>>;
-  const eightCaseEvidence = {
+  const supportCorpusV18: Record<string, unknown> = {
     ...base,
-    cases: Array.from({ length: 8 }, (_, index) => ({
+    engineVersion: "guardian-agent-qwen-policy-lab-v1.8.0",
+    versions: {
+      ...(base.versions as Record<string, unknown>),
+      corpus: "guardian-qwen-policy-lab-en-es-v1.8.0",
+    },
+    cases: Array.from({ length: 10 }, (_, index) => ({
       ...cases[index % cases.length],
       caseId: `contract-case-${index}`,
     })),
     summary: {
       ...(base.summary as Record<string, number>),
-      sampleCount: 8,
+      sampleCount: 10,
     },
   };
-  assert.equal(resultSchema.safeParse(eightCaseEvidence).success, true);
+  delete supportCorpusV18.evidenceSha256;
+  supportCorpusV18.evidenceSha256 = digest(supportCorpusV18);
+  assert.equal(resultSchema.safeParse(supportCorpusV18).success, true);
+  const supportCorpusCases =
+    supportCorpusV18.cases as Array<Record<string, unknown>>;
+  const overLimitSupportEvidence: Record<string, unknown> = {
+    ...supportCorpusV18,
+    cases: [
+      ...supportCorpusCases,
+      { ...supportCorpusCases[0]!, caseId: "contract-case-over-limit" },
+    ],
+  };
+  delete overLimitSupportEvidence.evidenceSha256;
+  overLimitSupportEvidence.evidenceSha256 = digest(overLimitSupportEvidence);
   assert.equal(
-    resultSchema.safeParse({
-      ...eightCaseEvidence,
-      cases: [
-        ...eightCaseEvidence.cases,
-        { ...eightCaseEvidence.cases[0], caseId: "contract-case-over-limit" },
-      ],
-    }).success,
+    resultSchema.safeParse(overLimitSupportEvidence).success,
     false,
   );
   const incompleteV18 = {

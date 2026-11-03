@@ -3248,49 +3248,6 @@ test(
     );
     assert.ok(supportAction, "support refund must be an explicit allow-listed fixture");
 
-    const supportCase: Record<string, unknown> = {
-      caseId: supportCaseId,
-      proposedTool: supportTool,
-      syntheticActionRef: supportAction.actionRef,
-      actionSha256: supportAction.actionSha256,
-      proposalSha256: supportAction.proposalSha256,
-      decision: "require_approval",
-      dispatchStatus: "approval_required_before_dispatch",
-      toolEvents: [],
-      unauthorizedActionExecuted: false,
-      policyOff: { executed: false },
-      caseEvidenceSha256: "",
-    };
-    supportCase.caseEvidenceSha256 = createHash("sha256")
-      .update(canonicalApprovalJson(supportCase), "utf8")
-      .digest("hex");
-    const unsignedSupportEvidence: Record<string, unknown> = {
-      engine: "guardian_qwen_policy_lab",
-      profileId: supportQwenProfileId,
-      cases: [supportCase],
-    };
-    const supportEvidence: Record<string, unknown> = {
-      ...unsignedSupportEvidence,
-      evidenceSha256: createHash("sha256")
-        .update(canonicalApprovalJson(unsignedSupportEvidence), "utf8")
-        .digest("hex"),
-    };
-    await fixturePool.query(
-      `DELETE FROM public.ai_assessment_approval_requests
-       WHERE workspace_id = $1 AND job_id = $2`,
-      [workspaceA, supportJob.id],
-    );
-    await fixturePool.query(
-      `UPDATE public.ai_assessment_jobs
-       SET profile_id = $3, result = $4::jsonb
-       WHERE id = $1 AND workspace_id = $2 AND status = 'succeeded'`,
-      [
-        supportJob.id,
-        workspaceA,
-        supportQwenProfileId,
-        JSON.stringify(supportEvidence),
-      ],
-    );
     const persistedSupportJob = await fixturePool.query<{
       profile_id: string;
       requested_by_user_id: string;
@@ -3302,48 +3259,24 @@ test(
       [supportJob.id, workspaceA],
     );
     const persistedEvidence = persistedSupportJob.rows[0]?.result;
-    assert.equal(persistedSupportJob.rows[0]?.profile_id, supportQwenProfileId);
+    assert.equal(
+      persistedSupportJob.rows[0]?.profile_id,
+      "guardian-agent-lab-customer-service-v1",
+    );
     assert.equal(persistedSupportJob.rows[0]?.requested_by_user_id, userA);
     assert.equal(persistedSupportJob.rows[0]?.status, "succeeded");
     assert.ok(persistedEvidence);
-    const {
-      evidenceSha256,
-      ...persistedUnsignedSupportEvidence
-    } = persistedEvidence;
+    assert.equal(persistedEvidence.engine, "guardian_policy_lab");
+    assert.equal(persistedEvidence.executionMode, "deterministic_fixture");
+    assert.equal(persistedEvidence.modelInference, false);
+    const persistedSupportCases = persistedEvidence.cases as Array<
+      Record<string, unknown>
+    >;
+    assert.ok(Array.isArray(persistedSupportCases));
     assert.equal(
-      createHash("sha256")
-        .update(
-          canonicalApprovalJson(persistedUnsignedSupportEvidence),
-          "utf8",
-        )
-        .digest("hex"),
-      evidenceSha256,
-    );
-    const persistedSupportCase = (
-      persistedEvidence.cases as Array<Record<string, unknown>>
-    )[0]!;
-    const { caseEvidenceSha256, ...supportCaseWithoutDigest } =
-      persistedSupportCase;
-    assert.equal(
-      createHash("sha256")
-        .update(
-          canonicalApprovalJson({
-            ...supportCaseWithoutDigest,
-            caseEvidenceSha256: "",
-          }),
-          "utf8",
-        )
-        .digest("hex"),
-      caseEvidenceSha256,
-    );
-    assert.deepEqual(
-      getAllowlistedSyntheticApprovalAction(
-        String(persistedSupportCase.syntheticActionRef),
-        supportQwenProfileId,
-        supportCaseId,
-        String(persistedSupportCase.proposedTool),
-      ),
-      supportAction,
+      persistedSupportCases.some((item) => item.caseId === supportCaseId),
+      false,
+      "a deterministic fixture must not be relabeled as a Qwen case",
     );
     const supportExpiry = new Date(Date.now() + 60_000);
     const supportBinding = computeApprovalProposalBindingV2({
@@ -3398,72 +3331,29 @@ test(
     const supportStatuses = supportDecisions
       .map((response) => response.status)
       .sort();
-    if (supportStatuses.join(",") !== "200,409") {
-      const safeErrors = await Promise.all(
-        supportDecisions.map(async (response) => ({
-          status: response.status,
-          body: await response.json().catch(() => ({})),
-        })),
-      );
-      assert.fail(
-        `support approval replay must be atomic and one-time: ${JSON.stringify(safeErrors)}`,
-      );
-    }
-    const supportSuccess = supportDecisions.find(
-      (response) => response.status === 200,
-    )!;
-    const supportDecision = DecideWorkspaceAiAssessmentApprovalResponse.parse(
-      await supportSuccess.json(),
-    );
-    assert.equal(supportDecision.approval.status, "approved");
-    assert.equal(
-      supportDecision.execution,
-      "synthetic_action_simulated_once",
-    );
-    assert.equal(
-      supportDecision.approval.execution,
-      "synthetic_action_simulated_once",
-    );
-    assert.equal(
-      supportDecision.approval.simulationResultCode,
-      "synthetic_refund_approved_in_clone",
-    );
-    assert.ok(supportDecision.approval.simulatedAt);
-    assert.match(
-      supportDecision.approval.replayBindingSha256 ?? "",
-      /^[a-f0-9]{64}$/,
+    assert.deepEqual(
+      supportStatuses,
+      [409, 409],
+      "a Qwen-only action cannot be replayed from deterministic fixture evidence",
     );
     const persistedSupportApproval = await fixturePool.query<{
       status: string;
       simulated_at: Date | null;
       simulation_result_sha256: string | null;
-      replay_binding_sha256: string | null;
     }>(
-      `SELECT status, simulated_at, simulation_result_sha256,
-              replay_binding_sha256
+      `SELECT status, simulated_at, simulation_result_sha256
        FROM public.ai_assessment_approval_requests
        WHERE id = $1 AND workspace_id = $2`,
       [supportApprovalId, workspaceA],
     );
-    assert.equal(persistedSupportApproval.rows[0]?.status, "approved");
-    assert.ok(persistedSupportApproval.rows[0]?.simulated_at);
-    assert.match(
-      persistedSupportApproval.rows[0]?.simulation_result_sha256 ?? "",
-      /^[a-f0-9]{64}$/,
+    assert.equal(persistedSupportApproval.rows[0]?.status, "pending");
+    assert.equal(persistedSupportApproval.rows[0]?.simulated_at, null);
+    assert.equal(
+      persistedSupportApproval.rows[0]?.simulation_result_sha256,
+      null,
     );
-    assert.match(
-      persistedSupportApproval.rows[0]?.replay_binding_sha256 ?? "",
-      /^[a-f0-9]{64}$/,
-    );
-    const supportCrossTenant = await apiRequest(
-      userB,
-      `${approvalsPath}/${supportApprovalId}/decision`,
-      "POST",
-      supportDecisionBody,
-    );
-    assert.equal(supportCrossTenant.status, 403);
     console.log(
-      "SUPPORT_FIXTURE_APPROVAL_API_TESTED=1; source=allowlisted_test_fixture; execution=synthetic_action_simulated_once",
+      "QWEN_ACTION_ON_FIXTURE_REJECTED=2x409; source=deterministic_fixture; execution=not_performed",
     );
 
     for (const job of [firstJob, secondJob, thirdJob]) {

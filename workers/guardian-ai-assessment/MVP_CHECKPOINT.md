@@ -1958,3 +1958,54 @@ This update supersedes the older diskcache status, worker-test count, and OSV
   broker con identidad independiente, IPv6 dual-stack no disponible, triage/
   remediación de advisories y revisión legal de licencias/procedencia. No se
   publicó, desplegó ni conectó un sistema externo.
+
+## Validación de harness y corpus Qwen v1.8.0 — 2026-11-03
+
+- Base solicitada: `afeb452c41d14b8c7e02801cc548c0041d691498`. HEAD de trabajo al
+  comenzar este hito: `9b7b22f9c1935a40ac1a62cc8a3dfc7583d2ec2a`, descendiente
+  de la base solicitada. La corrección previa del harness ya está en esa base;
+  este hito cierra el contrato de evidencia v1.8, sincroniza OpenAPI/Zod/SDK a
+  10 casos máximos y deriva los límites del runner directamente del corpus
+  (6/10/7 por perfil).
+- El E2E ya no transforma una salida fixture en una ejecución Qwen. El caso
+  negativo conserva `deterministic_fixture` y rechaza dos replays de aprobación
+  Qwen sobre fixture con `409`, sin despacho ni simulación. Los diagnósticos de
+  evidencia inválida registran solo número y rutas/códigos acotados, nunca
+  valores de entradas o respuestas.
+- E2E serial final: 8 perfiles, **53 inferencias locales** con `tool_choice=auto`;
+  **35** propuestas por marcadores Qwen adaptados, **0** `message.tool_calls`
+  nativas, **18** `no_proposal` (no son DENY). Decisiones: **19 ALLOW**,
+  **14 DENY**, **2 REQUIRE_APPROVAL**. Se simularon 19 acciones ficticias;
+  **0** ejecuciones no autorizadas, llamadas externas o ejecuciones Policy OFF.
+  Muestra pequeña y sintética, sin inferir eficacia general.
+- Por perfil (casos; adaptadas/nativas/sin propuesta; allow/deny/aprobación):
+  correo 6; 4/0/2; 4/0/0. BBDD 6; 5/0/1; 5/0/0. Finanzas 6; 4/0/2; 3/0/1.
+  Soporte 10; 3/0/7; 1/1/1. Programación 6; 5/0/1; 1/4/0. Navegador 6;
+  3/0/3; 1/2/0. Infraestructura 6; 4/0/2; 2/2/0. Multiagente 7; 7/0/0;
+  2/5/0.
+- Evidencia de aprobación originada por inferencia Qwen: finanzas y soporte.
+  Una propuesta aprobada se simuló una vez; una expirada no se ejecutó.
+  Mutación del hash y versión de política obsoleta: `409`; revocación del rol:
+  `403`; reintento de propuesta financiera denegada: `409`, sin simulación.
+  Sonda fixture separada: `QWEN_ACTION_ON_FIXTURE_REJECTED=2x409`.
+- Verificaciones: worker **120/120**; API **63/63**; SDK **13/13**; E2E
+  API/worker **9/9** (823360 ms); UI/componentes **8/8** (2408 ms);
+  `pnpm run build` con `PORT=5000 BASE_PATH=/eu-security-platform/`, exit 0;
+  `git diff --check` limpio. El build sin `PORT` falló por requisito de
+  configuración de `mockup-sandbox`; el build repetido con entorno de desarrollo
+  pasó. Quedan avisos de sourcemap y chunk de 683.60 kB.
+- JSON local, fuera de Git: `generated-artifacts/
+  guardian-qwen-policy-labs-e2e-v1.8.0.json`, 136398 bytes, SHA-256
+  `bb4b7cacd9963340e29a58af04be5b134d2924fac262cdb3c3689dce74edccf4`.
+  Ocho perfiles, sin campos de prompt/respuesta/argumentos en bruto y todos los
+  indicadores de persistencia cruda en `false`. Informe de esta corrida:
+  `reports/guardian-qwen-policy-labs-v1.8.0-2026-11-03.md`.
+  SHA-256 del informe:
+  `d4e5450cc1239a5bc7e273bebbefe492a27c8636c5de4dabfe45667cca0ad64a`.
+- Límite: las pruebas UI son E2E/componentes con autenticación de prueba; no
+  verifican una sesión Clerk real en navegador. Sin proveedores empresariales
+  conectados ni efectos externos. Broker independiente, IPv6 dual-stack,
+  advisories, revisión legal y Clerk navegador permanecen como bloqueos
+  precliente. Una incidencia intermedia `worker_output_invalid` en
+  infraestructura no se reprodujo en la verificación enfocada ni en el E2E
+  final; su causa no se atribuye.

@@ -8,6 +8,7 @@ from guardian_ai_assessment.policy_lab import (
 )
 from guardian_ai_assessment.qwen_policy_lab import (
     CASES as QWEN_POLICY_CASES,
+    CASE_LIMITS as QWEN_POLICY_CASE_LIMITS,
     FINANCE_PROFILE as QWEN_FINANCE_PROFILE,
     MULTIAGENT_PROFILE as QWEN_MULTIAGENT_PROFILE,
     SUPPORT_PROFILE as QWEN_SUPPORT_PROFILE,
@@ -207,19 +208,21 @@ class GuardianAgentPolicyLabTests(unittest.TestCase):
 
 class QwenPolicyLabDispatchSelfCheckTests(unittest.TestCase):
     def test_qwen_profiles_add_bilingual_adversarial_cases(self):
+        expected_case_counts = {
+            profile: (
+                10
+                if profile == QWEN_SUPPORT_PROFILE
+                else 7
+                if profile == QWEN_MULTIAGENT_PROFILE
+                else 6
+            )
+            for profile in QWEN_POLICY_CASES
+        }
         self.assertEqual(
             {profile: len(cases) for profile, cases in QWEN_POLICY_CASES.items()},
-            {
-                profile: (
-                    10
-                    if profile == QWEN_SUPPORT_PROFILE
-                    else 7
-                    if profile == QWEN_MULTIAGENT_PROFILE
-                    else 6
-                )
-                for profile in QWEN_POLICY_CASES
-            },
+            expected_case_counts,
         )
+        self.assertEqual(QWEN_POLICY_CASE_LIMITS, expected_case_counts)
         for profile, cases in QWEN_POLICY_CASES.items():
             adversarial = [case for case in cases if case["label"] == "adversarial"]
             benign = [case for case in cases if case["label"] == "benign"]

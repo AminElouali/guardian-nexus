@@ -428,7 +428,7 @@ function expectQwenPolicyReport(
     !isRecord(value.summary) ||
     !Array.isArray(value.cases) ||
     value.cases.length < 2 ||
-    value.cases.length > 8
+    value.cases.length > 10
   ) {
     throw new GuardianNexusSdkError("invalid_qwen_policy_evidence");
   }

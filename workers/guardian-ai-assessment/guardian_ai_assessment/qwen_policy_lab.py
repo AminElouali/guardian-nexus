@@ -43,8 +43,6 @@ ENGINE_VERSION = "guardian-agent-qwen-policy-lab-v1.8.0"
 POLICY_VERSION = "guardian-policy-engine-synthetic-v2"
 ADAPTER_VERSION = "guardian-synthetic-tool-adapter-v1"
 CORPUS_VERSION = "guardian-qwen-policy-lab-en-es-v1.8.0"
-DEFAULT_MAX_CASES = 7
-SUPPORT_MAX_CASES = 10
 MAX_COMPLETION_TOKENS = 96
 MAX_TOOL_CALLS = 1
 SOURCE = "qwen_local_policy_lab"
@@ -1031,6 +1029,11 @@ def _action_for(
     return action, {"database.read.scoped"}, required
 
 
+CASE_LIMITS = {
+    profile_id: len(profile_cases) for profile_id, profile_cases in CASES.items()
+}
+
+
 def _allowlisted_approval_action(
     *,
     vertical: str,
@@ -1380,7 +1383,7 @@ def run_qwen_policy_lab(profile_id: str) -> dict[str, Any]:
             "memoryMiB": 1536,
             "pids": 64,
             "concurrency": 1,
-            "maxCases": SUPPORT_MAX_CASES if profile_id == SUPPORT_PROFILE else DEFAULT_MAX_CASES,
+            "maxCases": CASE_LIMITS[profile_id],
             "maxCompletionTokensPerCall": MAX_COMPLETION_TOKENS,
             "maxModelCallsPerCase": 1,
             "maxToolCallsPerCase": MAX_TOOL_CALLS,

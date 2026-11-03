@@ -2920,7 +2920,9 @@ async function runDockerAssessment(
                     : profileId === NATIVE_TOOL_PROFILE_ID
                       ? 288
                       : null,
-                issues: issueSummaries.slice(0, 60),
+                issueCount: issueSummaries.length,
+                issues: issueSummaries.slice(0, 40),
+                issueTail: issueSummaries.slice(-20),
               },
               "AI assessment worker output failed schema validation",
             );

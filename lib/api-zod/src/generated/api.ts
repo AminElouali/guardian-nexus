@@ -1566,7 +1566,7 @@ export const listWorkspaceAiAssessmentLabJobsResponseResultSixCasesItemPolicyOff
 export const listWorkspaceAiAssessmentLabJobsResponseResultSixCasesItemPolicyOffStateAfterSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const listWorkspaceAiAssessmentLabJobsResponseResultSixCasesItemCaseEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const listWorkspaceAiAssessmentLabJobsResponseResultSixCasesMin = 2;
-export const listWorkspaceAiAssessmentLabJobsResponseResultSixCasesMax = 8;
+export const listWorkspaceAiAssessmentLabJobsResponseResultSixCasesMax = 10;
 
 export const listWorkspaceAiAssessmentLabJobsResponseResultSixSummaryMinOne = 0;
 
@@ -4084,7 +4084,7 @@ export const createWorkspaceAiAssessmentLabJobResponseResultSixCasesItemPolicyOf
 export const createWorkspaceAiAssessmentLabJobResponseResultSixCasesItemPolicyOffStateAfterSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const createWorkspaceAiAssessmentLabJobResponseResultSixCasesItemCaseEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const createWorkspaceAiAssessmentLabJobResponseResultSixCasesMin = 2;
-export const createWorkspaceAiAssessmentLabJobResponseResultSixCasesMax = 8;
+export const createWorkspaceAiAssessmentLabJobResponseResultSixCasesMax = 10;
 
 export const createWorkspaceAiAssessmentLabJobResponseResultSixSummaryMinOne = 0;
 
@@ -6591,7 +6591,7 @@ export const getWorkspaceAiAssessmentLabJobResponseResultSixCasesItemPolicyOffSt
 export const getWorkspaceAiAssessmentLabJobResponseResultSixCasesItemPolicyOffStateAfterSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const getWorkspaceAiAssessmentLabJobResponseResultSixCasesItemCaseEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const getWorkspaceAiAssessmentLabJobResponseResultSixCasesMin = 2;
-export const getWorkspaceAiAssessmentLabJobResponseResultSixCasesMax = 8;
+export const getWorkspaceAiAssessmentLabJobResponseResultSixCasesMax = 10;
 
 export const getWorkspaceAiAssessmentLabJobResponseResultSixSummaryMinOne = 0;
 
@@ -9164,7 +9164,7 @@ export const retryWorkspaceAiAssessmentLabJobResponseResultSixCasesItemPolicyOff
 export const retryWorkspaceAiAssessmentLabJobResponseResultSixCasesItemPolicyOffStateAfterSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const retryWorkspaceAiAssessmentLabJobResponseResultSixCasesItemCaseEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const retryWorkspaceAiAssessmentLabJobResponseResultSixCasesMin = 2;
-export const retryWorkspaceAiAssessmentLabJobResponseResultSixCasesMax = 8;
+export const retryWorkspaceAiAssessmentLabJobResponseResultSixCasesMax = 10;
 
 export const retryWorkspaceAiAssessmentLabJobResponseResultSixSummaryMinOne = 0;
 

@@ -1772,7 +1772,7 @@ components:
         cases:
           type: array
           minItems: 2
-          maxItems: 8
+          maxItems: 10
           items:
             type: object
             additionalProperties: false
