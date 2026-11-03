@@ -1448,6 +1448,9 @@ This update supersedes the older diskcache status, worker-test count, and OSV
 - Base comprobada: HEAD `f9a30fe2e07682b255dcdcaabf2834821ee62b99`.
   Se conservaron los cambios de laboratorio previos y se validaron antes de
   incorporarlos a este incremento.
+- Commit validado de implementación, contratos, pruebas y reporte:
+  `2d95d7cf7b901d8037636390e1eb18cde464314f`. Este checkpoint se registra en
+  un commit separado inmediatamente después.
 - Contrato worker/OpenAPI/Zod:
   - `approval_required_before_dispatch` ahora se informa separado de DENY y
     de intentos no autorizados. No se despacha la herramienta mientras espera
