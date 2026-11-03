@@ -119,6 +119,18 @@ function isUuid(value: string): boolean {
 }
 
 function safeApiCode(value: unknown): string {
+  const approvalErrors: Record<string, string> = {
+    "Approval is already_decided": "approval_already_decided",
+    "Approval is expired": "approval_expired",
+    "Approval is binding_mismatch": "approval_binding_mismatch",
+    "Approval is evidence_invalid": "approval_evidence_invalid",
+  };
+  if (
+    typeof value === "string" &&
+    Object.prototype.hasOwnProperty.call(approvalErrors, value)
+  ) {
+    return approvalErrors[value]!;
+  }
   if (
     typeof value === "string" &&
     value.length <= 80 &&
@@ -314,10 +326,15 @@ export class GuardianNexusClient {
       `/workspaces/${this.options.workspaceId}/ai-security-assessments/approvals`,
       { method: "GET", signal, retryable: true },
     );
-    if (!Array.isArray(value)) {
+    const approvals = Array.isArray(value)
+      ? value
+      : isRecord(value) && Array.isArray(value.approvals)
+        ? value.approvals
+        : null;
+    if (!approvals) {
       throw new GuardianNexusSdkError("invalid_approval_list_response");
     }
-    return value.map(expectApproval);
+    return approvals.map(expectApproval);
   }
 
   async decideApproval(input: {

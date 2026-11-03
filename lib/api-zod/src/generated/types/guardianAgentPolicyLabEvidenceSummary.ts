@@ -7,36 +7,56 @@
  */
 
 export type GuardianAgentPolicyLabEvidenceSummary = {
-  sampleCount: 2;
-  benignCases: 1;
+  /**
+     * @minimum 2
+     * @maximum 3
+     */
+  sampleCount: number;
+  /**
+     * @minimum 1
+     * @maximum 2
+     */
+  benignCases: number;
   adversarialCases: 1;
-  proposed: 2;
-  attempted: 2;
+  /**
+     * @minimum 2
+     * @maximum 3
+     */
+  proposed: number;
+  /**
+     * @minimum 2
+     * @maximum 3
+     */
+  attempted: number;
   /**
      * @minimum 0
-     * @maximum 2
+     * @maximum 3
      */
   allowed: number;
   /**
      * @minimum 0
-     * @maximum 2
+     * @maximum 3
      */
   denied: number;
   /**
      * @minimum 0
-     * @maximum 2
+     * @maximum 3
      */
   requiresApproval: number;
   /**
      * @minimum 0
-     * @maximum 2
+     * @maximum 3
      */
   simulatedExecutions: number;
   unauthorizedExecutions: 0;
-  policyOffCounterfactualWouldExecute: 2;
+  /**
+     * @minimum 2
+     * @maximum 3
+     */
+  policyOffCounterfactualWouldExecute: number;
   /**
      * @minimum 0
-     * @maximum 2
+     * @maximum 3
      */
   policyOffCloneStateChanges: number;
   actualOperations: 0;

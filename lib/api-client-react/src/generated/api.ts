@@ -2378,6 +2378,115 @@ export const useCreateWorkspaceAiAssessmentLabJob = <TError = ErrorType<void>,
       return useMutation(getCreateWorkspaceAiAssessmentLabJobMutationOptions(options), queryClient);
     }
 
+export const getGetWorkspaceAiAssessmentLabJobUrl = (workspaceId: string,
+    jobId: string,) => {
+
+
+
+
+  return `/api/workspaces/${workspaceId}/ai-security-assessments/lab/jobs/${jobId}`
+}
+
+/**
+ * @summary Get one tenant-scoped laboratory job and its redacted evidence
+ */
+export const getWorkspaceAiAssessmentLabJob = async (workspaceId: string,
+    jobId: string, options?: Parameters<typeof customFetch>[1]): Promise<AiAssessmentLabJob> => {
+
+  return customFetch<AiAssessmentLabJob>(getGetWorkspaceAiAssessmentLabJobUrl(workspaceId,jobId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetWorkspaceAiAssessmentLabJobQueryKey = (workspaceId: string,
+    jobId: string,) => {
+    return [
+    `/api/workspaces/${workspaceId}/ai-security-assessments/lab/jobs/${jobId}`
+    ] as const;
+    }
+
+
+export const getGetWorkspaceAiAssessmentLabJobQueryOptions = <TData = Awaited<ReturnType<typeof getWorkspaceAiAssessmentLabJob>>, TError = ErrorType<void>>(workspaceId: string,
+    jobId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWorkspaceAiAssessmentLabJob>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetWorkspaceAiAssessmentLabJobQueryKey(workspaceId,jobId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getWorkspaceAiAssessmentLabJob>>> = ({ signal }) => getWorkspaceAiAssessmentLabJob(workspaceId,jobId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: workspaceId !== null && workspaceId !== undefined && jobId !== null && jobId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getWorkspaceAiAssessmentLabJob>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetWorkspaceAiAssessmentLabJobQueryResult = NonNullable<Awaited<ReturnType<typeof getWorkspaceAiAssessmentLabJob>>>
+export type GetWorkspaceAiAssessmentLabJobQueryError = ErrorType<void>
+
+
+export function useGetWorkspaceAiAssessmentLabJob<TData = Awaited<ReturnType<typeof getWorkspaceAiAssessmentLabJob>>, TError = ErrorType<void>>(
+ workspaceId: string,
+    jobId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWorkspaceAiAssessmentLabJob>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getWorkspaceAiAssessmentLabJob>>,
+          TError,
+          Awaited<ReturnType<typeof getWorkspaceAiAssessmentLabJob>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetWorkspaceAiAssessmentLabJob<TData = Awaited<ReturnType<typeof getWorkspaceAiAssessmentLabJob>>, TError = ErrorType<void>>(
+ workspaceId: string,
+    jobId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWorkspaceAiAssessmentLabJob>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getWorkspaceAiAssessmentLabJob>>,
+          TError,
+          Awaited<ReturnType<typeof getWorkspaceAiAssessmentLabJob>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetWorkspaceAiAssessmentLabJob<TData = Awaited<ReturnType<typeof getWorkspaceAiAssessmentLabJob>>, TError = ErrorType<void>>(
+ workspaceId: string,
+    jobId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWorkspaceAiAssessmentLabJob>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get one tenant-scoped laboratory job and its redacted evidence
+ */
+
+export function useGetWorkspaceAiAssessmentLabJob<TData = Awaited<ReturnType<typeof getWorkspaceAiAssessmentLabJob>>, TError = ErrorType<void>>(
+ workspaceId: string,
+    jobId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWorkspaceAiAssessmentLabJob>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetWorkspaceAiAssessmentLabJobQueryOptions(workspaceId,jobId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getSubmitWorkspaceAgentActionIntentUrl = (workspaceId: string,) => {
 
 

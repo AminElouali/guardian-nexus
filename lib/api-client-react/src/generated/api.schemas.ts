@@ -2883,6 +2883,14 @@ export const GuardianAgentPolicyLabEvidenceCasesItemActorType = {
   delegated_agent: 'delegated_agent',
 } as const;
 
+export type GuardianAgentPolicyLabEvidenceCasesItemSyntheticActionRef = typeof GuardianAgentPolicyLabEvidenceCasesItemSyntheticActionRef[keyof typeof GuardianAgentPolicyLabEvidenceCasesItemSyntheticActionRef];
+
+
+export const GuardianAgentPolicyLabEvidenceCasesItemSyntheticActionRef = {
+  'guardiansyntheticfinancebank-changev1': 'guardian.synthetic.finance.bank-change.v1',
+  guardiansyntheticsupportrefundv1: 'guardian.synthetic.support.refund.v1',
+} as const;
+
 export type GuardianAgentPolicyLabEvidenceCasesItemPolicyOnDecision = typeof GuardianAgentPolicyLabEvidenceCasesItemPolicyOnDecision[keyof typeof GuardianAgentPolicyLabEvidenceCasesItemPolicyOnDecision];
 
 
@@ -2923,6 +2931,7 @@ export const GuardianAgentPolicyLabEvidenceCasesItemToolTraceToolName = {
   send_email_simulated: 'send_email_simulated',
   query_synthetic_database: 'query_synthetic_database',
   consult_synthetic_invoice: 'consult_synthetic_invoice',
+  request_bank_account_change: 'request_bank_account_change',
   propose_synthetic_code_diff: 'propose_synthetic_code_diff',
   draft_synthetic_support_reply: 'draft_synthetic_support_reply',
   read_local_synthetic_page: 'read_local_synthetic_page',
@@ -3126,6 +3135,7 @@ export type GuardianAgentPolicyLabEvidenceCasesItem = {
   actionSha256: string;
   /** @pattern ^[a-f0-9]{64}$ */
   proposalSha256: string;
+  syntheticActionRef?: GuardianAgentPolicyLabEvidenceCasesItemSyntheticActionRef;
   policyOn: GuardianAgentPolicyLabEvidenceCasesItemPolicyOn;
   policyOff: GuardianAgentPolicyLabEvidenceCasesItemPolicyOff;
   toolTrace?: GuardianAgentPolicyLabEvidenceCasesItemToolTrace;
@@ -3138,36 +3148,56 @@ export type GuardianAgentPolicyLabEvidenceCasesItem = {
 };
 
 export type GuardianAgentPolicyLabEvidenceSummary = {
-  sampleCount: 2;
-  benignCases: 1;
+  /**
+     * @minimum 2
+     * @maximum 3
+     */
+  sampleCount: number;
+  /**
+     * @minimum 1
+     * @maximum 2
+     */
+  benignCases: number;
   adversarialCases: 1;
-  proposed: 2;
-  attempted: 2;
+  /**
+     * @minimum 2
+     * @maximum 3
+     */
+  proposed: number;
+  /**
+     * @minimum 2
+     * @maximum 3
+     */
+  attempted: number;
   /**
      * @minimum 0
-     * @maximum 2
+     * @maximum 3
      */
   allowed: number;
   /**
      * @minimum 0
-     * @maximum 2
+     * @maximum 3
      */
   denied: number;
   /**
      * @minimum 0
-     * @maximum 2
+     * @maximum 3
      */
   requiresApproval: number;
   /**
      * @minimum 0
-     * @maximum 2
+     * @maximum 3
      */
   simulatedExecutions: number;
   unauthorizedExecutions: 0;
-  policyOffCounterfactualWouldExecute: 2;
+  /**
+     * @minimum 2
+     * @maximum 3
+     */
+  policyOffCounterfactualWouldExecute: number;
   /**
      * @minimum 0
-     * @maximum 2
+     * @maximum 3
      */
   policyOffCloneStateChanges: number;
   actualOperations: 0;
@@ -3219,10 +3249,14 @@ export interface GuardianAgentPolicyLabEvidence {
   agentIdentity: GuardianAgentPolicyLabEvidenceAgentIdentity;
   versions: GuardianAgentPolicyLabEvidenceVersions;
   seed: 20261102;
-  sampleCount: 2;
+  /**
+     * @minimum 2
+     * @maximum 3
+     */
+  sampleCount: number;
   /**
      * @minItems 2
-     * @maxItems 2
+     * @maxItems 3
      */
   cases: GuardianAgentPolicyLabEvidenceCasesItem[];
   summary: GuardianAgentPolicyLabEvidenceSummary;
@@ -3230,7 +3264,17 @@ export interface GuardianAgentPolicyLabEvidence {
   selfCheckStatus: 'passed';
   /** @pattern ^[a-f0-9]{64}$ */
   suiteEvidenceSha256: string;
+  /**
+     * @minLength 20
+     * @maxLength 40
+     * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$
+     */
   startedAt: string;
+  /**
+     * @minLength 20
+     * @maxLength 40
+     * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$
+     */
   completedAt: string;
   /**
      * @minimum 0
@@ -3559,6 +3603,7 @@ export const AgentActionAdapterRequestScenarioId = {
   emailallowed_draft: 'email.allowed_draft',
   emailuntrusted_send: 'email.untrusted_send',
   financeuntrusted_transfer: 'finance.untrusted_transfer',
+  financetrusted_bank_change_approval: 'finance.trusted_bank_change_approval',
 } as const;
 
 export interface AgentActionAdapterRequest {
@@ -3586,6 +3631,7 @@ export const AgentActionIntentV1ScenarioId = {
   emailallowed_draft: 'email.allowed_draft',
   emailuntrusted_send: 'email.untrusted_send',
   financeuntrusted_transfer: 'finance.untrusted_transfer',
+  financetrusted_bank_change_approval: 'finance.trusted_bank_change_approval',
 } as const;
 
 export type AgentActionIntentV1ToolId = typeof AgentActionIntentV1ToolId[keyof typeof AgentActionIntentV1ToolId];
@@ -3594,6 +3640,7 @@ export type AgentActionIntentV1ToolId = typeof AgentActionIntentV1ToolId[keyof t
 export const AgentActionIntentV1ToolId = {
   send_email_simulated: 'send_email_simulated',
   consult_synthetic_invoice: 'consult_synthetic_invoice',
+  request_bank_account_change: 'request_bank_account_change',
 } as const;
 
 export type AgentActionIntentV1Operation = typeof AgentActionIntentV1Operation[keyof typeof AgentActionIntentV1Operation];

@@ -131,7 +131,7 @@ class GuardianAgentPolicyLabTests(unittest.TestCase):
         for profile_id in PROFILE_TO_VERTICAL:
             with self.subTest(profile_id=profile_id):
                 result = run_policy_lab(profile_id)
-                benign, adversarial = result["cases"]
+                benign, adversarial = result["cases"][:2]
                 benign_trace = benign["toolTrace"]
                 adversarial_trace = adversarial["toolTrace"]
 

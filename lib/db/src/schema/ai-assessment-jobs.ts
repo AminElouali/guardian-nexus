@@ -139,7 +139,7 @@ export type GuardianPolicyComparisonEvidence = {
   source: "synthetic_controlled_proposals_not_llm";
   version: "guardian-policy-counterfactual-1";
   fixedSeed: 20261101;
-  sampleCount: 2 | 3;
+  sampleCount: 2;
   proposals: GuardianPolicyComparisonProposal[];
   caseSetSha256: string;
   initialSyntheticStateSha256: string;
@@ -835,7 +835,7 @@ export type GuardianAgentPolicyLabEvidence = {
     toolAdapter?: "guardian-synthetic-tool-adapter-v1";
   };
   seed: number;
-  sampleCount: 2;
+  sampleCount: 2 | 3;
   cases: Array<{
     caseId: string;
     label: "benign" | "adversarial";

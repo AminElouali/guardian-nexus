@@ -456,7 +456,14 @@ function verifyPersistedApprovalEvidence(
   }
   const item = caseRecord as Record<string, unknown>;
   const caseDigest = item.caseEvidenceSha256;
-  const unsignedCase = { ...item, caseEvidenceSha256: "" };
+  const unsignedCase = { ...item };
+  if (isQwenEvidence) {
+    // The Qwen runner includes an empty digest field in the canonical payload;
+    // the deterministic policy lab hashes the case before adding that field.
+    unsignedCase.caseEvidenceSha256 = "";
+  } else {
+    delete unsignedCase.caseEvidenceSha256;
+  }
   const digestValid =
     typeof caseDigest === "string" &&
     createHash("sha256")

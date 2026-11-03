@@ -19,6 +19,21 @@ pnpm --filter @workspace/guardian-agent-sdk run build
 pnpm --filter @workspace/guardian-agent-sdk run test
 ```
 
+## Consume from a local application without publishing
+
+Build and pack the SDK from this repository, then install the resulting tarball
+in a separate local consumer project:
+
+```sh
+pnpm --filter @workspace/guardian-agent-sdk run build
+pnpm --filter @workspace/guardian-agent-sdk pack --pack-destination /tmp/guardian-sdk-dist
+cd /path/to/consumer
+pnpm add /tmp/guardian-sdk-dist/workspace-guardian-agent-sdk-0.1.0.tgz
+```
+
+This is a local file install only; it does not publish the package or contact a
+registry. The packed artifact contains the compiled client, README, and example.
+
 ## Use from an application
 
 Pass a callback that obtains a short-lived access token from the host

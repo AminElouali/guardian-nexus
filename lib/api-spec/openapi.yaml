@@ -1682,8 +1682,16 @@ components:
           required: [hasBenignAndAdversarialCases, everyProposalHasIndependentPolicyDecision, resourceScopeIsEnforced, noUnauthorizedActionExecuted, policyOffNeverExecutes, policyOffUsesClonesOnly, delegationCannotElevatePermissions, noPersistentOrExternalEffects, rawPromptsArgumentsAndInstructionsNotStored]
         selfCheckStatus: { type: string, const: passed }
         suiteEvidenceSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
-        startedAt: { type: string, format: date-time }
-        completedAt: { type: string, format: date-time }
+        startedAt:
+          type: string
+          minLength: 20
+          maxLength: 40
+          pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$'
+        completedAt:
+          type: string
+          minLength: 20
+          maxLength: 40
+          pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$'
         durationMs: { type: integer, minimum: 0, maximum: 30000 }
         limits:
           type: object

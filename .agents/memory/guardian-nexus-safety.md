@@ -104,3 +104,15 @@ description: Product boundaries for security integrations, claims, and productio
 **Why:** Counting a valid approval hold as DENY made worker/API/UI metrics disagree and obscured the action state, even though dispatch correctly never occurred.
 
 **How to apply:** Derive approval state from the verified trace result code, require matching pair and summary fields in v2, and ensure the hold remains unauthorized and unexecuted. Do not change policy outcomes merely to fit the report.
+
+**Rule:** The laboratory SDK may submit only versioned, server-allowlisted scenario IDs; tenant, actor, role, tool, resource, policy decision, and action binding are derived or verified server-side. Never accept caller-selected policy outcomes or arbitrary tool dispatch.
+
+**Why:** SDK callers are untrusted inputs; accepting their identity or policy claims would bypass the independent policy engine and tenant boundary.
+
+**How to apply:** Keep the lab adapter fixed and synthetic. Any future general action SDK must bind authenticated identity to workspace membership and pass server-side policy before dispatch; DENY and approval-required actions never dispatch directly.
+
+**Rule:** Verify evidence digests against the exact canonical wire representation and the versioned engine convention; do not normalize timestamp strings before validation.
+
+**Why:** Deterministic policy-lab cases omit the digest field when hashing, while Qwen evidence hashes an empty-field sentinel. Zod date coercion also rewrites timestamp precision/offsets, which changes signed bytes without changing the represented instant.
+
+**How to apply:** Keep engine-specific digest conventions explicit, preserve raw timestamp strings through verification, and test both valid evidence and altered-digest rejection.

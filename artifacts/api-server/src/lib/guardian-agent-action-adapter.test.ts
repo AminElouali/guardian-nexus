@@ -18,11 +18,12 @@ const baseIdentity = {
   workspaceId: "10000000-0000-4000-8000-000000000001",
 };
 
-test("external agent adapter exposes only the three fixed synthetic scenarios", () => {
+test("external agent adapter exposes only the four fixed synthetic scenarios", () => {
   assert.deepEqual(AGENT_ACTION_SCENARIO_IDS, [
     "email.allowed_draft",
     "email.untrusted_send",
     "finance.untrusted_transfer",
+    "finance.trusted_bank_change_approval",
   ]);
   assert.equal(AGENT_ACTION_ADAPTER_VERSION, "guardian-agent-intent-adapter-v1");
   assert.equal(AGENT_ACTION_INTENT_CONTRACT_VERSION, "guardian-action-intent-v1");

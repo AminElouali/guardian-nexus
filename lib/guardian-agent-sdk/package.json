@@ -8,9 +8,16 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist", "README.md", "examples"],
+  "files": [
+    "dist",
+    "README.md",
+    "examples"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "tsx --test src/client.test.ts"
+  },
+  "devDependencies": {
+    "tsx": "catalog:"
   }
 }

@@ -31,10 +31,14 @@ export interface GuardianAgentPolicyLabEvidence {
   agentIdentity: GuardianAgentPolicyLabEvidenceAgentIdentity;
   versions: GuardianAgentPolicyLabEvidenceVersions;
   seed: 20261102;
-  sampleCount: 2;
+  /**
+     * @minimum 2
+     * @maximum 3
+     */
+  sampleCount: number;
   /**
      * @minItems 2
-     * @maxItems 2
+     * @maxItems 3
      */
   cases: GuardianAgentPolicyLabEvidenceCasesItem[];
   summary: GuardianAgentPolicyLabEvidenceSummary;
@@ -42,8 +46,18 @@ export interface GuardianAgentPolicyLabEvidence {
   selfCheckStatus: 'passed';
   /** @pattern ^[a-f0-9]{64}$ */
   suiteEvidenceSha256: string;
-  startedAt: Date;
-  completedAt: Date;
+  /**
+     * @minLength 20
+     * @maxLength 40
+     * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$
+     */
+  startedAt: string;
+  /**
+     * @minLength 20
+     * @maxLength 40
+     * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$
+     */
+  completedAt: string;
   /**
      * @minimum 0
      * @maximum 30000

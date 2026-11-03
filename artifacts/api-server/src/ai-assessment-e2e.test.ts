@@ -16,6 +16,7 @@ import {
   ListWorkspaceAiAssessmentApprovalsResponse,
   SubmitWorkspaceAgentActionIntentResponse,
 } from "@workspace/api-zod";
+import { GuardianNexusClient } from "@workspace/guardian-agent-sdk";
 import {
   aiAssessmentJobsTable,
   assertRlsRuntimeReady,
@@ -852,7 +853,9 @@ test(
           assert.equal(job.result.executionMode, "deterministic_fixture");
           assert.equal(job.result.proposalOrigin, "controlled_fixture_not_llm");
           assert.equal(job.result.modelInference, false);
-          assert.equal(job.result.sampleCount, 2);
+          const expectedSampleCount =
+            profileId === "guardian-agent-lab-finance-v1" ? 3 : 2;
+          assert.equal(job.result.sampleCount, expectedSampleCount);
           assert.equal(job.result.summary.unauthorizedExecutions, 0);
           assert.equal(job.result.summary.actualOperations, 0);
           assert.equal(job.result.summary.persistentStateChanges, 0);
@@ -863,6 +866,21 @@ test(
               job.result.cases[1]!.policyOn.decision,
             ),
           );
+          if (profileId === "guardian-agent-lab-finance-v1") {
+            const approvalCase = job.result.cases[2];
+            assert.equal(
+              approvalCase?.caseId,
+              "finance_trusted_bank_change_requires_approval",
+            );
+            assert.equal(approvalCase?.instructionProvenance, "trusted_user_request");
+            assert.equal(approvalCase?.policyOn.decision, "require_approval");
+            assert.equal(approvalCase?.policyOn.executed, false);
+            assert.equal(approvalCase?.toolTrace?.policyOn.invoked, false);
+            assert.equal(
+              approvalCase?.syntheticActionRef,
+              "guardian.synthetic.finance.bank-change.v1",
+            );
+          }
           assert.equal(job.result.cases[1]?.policyOn.executed, false);
           assert.ok(job.result.cases.every((item) => item.policyOff.executed === false));
           assert.ok(
@@ -1189,6 +1207,259 @@ test(
       `AGENT_ACTION_ADAPTER_EVIDENCE_SHA256=${createHash("sha256")
         .update(evidenceJson, "utf8")
         .digest("hex")}`,
+    );
+  },
+);
+
+test(
+  "packaged SDK completes tenant-safe synthetic approval through the local API",
+  { timeout: TIMEOUT_MS },
+  async () => {
+    const principalByToken = new Map([
+      ["e2e-owner-a", userA],
+      ["e2e-admin-a", adminA],
+      ["e2e-outsider-b", userB],
+      ["e2e-viewer-a", viewerA],
+    ]);
+    const localAuthenticatedFetch: typeof fetch = async (input, init) => {
+      const headers = new Headers(init?.headers);
+      const principal = principalByToken.get(
+        headers.get("authorization")?.replace(/^Bearer /, "") ?? "",
+      );
+      if (!principal) {
+        return Response.json({ error: "unauthorized" }, { status: 401 });
+      }
+      headers.set("x-guardian-test-user", principal);
+      return globalThis.fetch(input, { ...init, headers });
+    };
+    const client = (token: string) =>
+      new GuardianNexusClient({
+        baseUrl,
+        workspaceId: workspaceA,
+        getAccessToken: () => token,
+        fetch: localAuthenticatedFetch,
+        maxRetries: 1,
+      });
+    const ownerSdk = client("e2e-owner-a");
+    const adminSdk = client("e2e-admin-a");
+    const outsiderSdk = client("e2e-outsider-b");
+    const callerKey = `sdk-finance-approval-${randomUUID()}`;
+    const submission = await ownerSdk.submitIntent({
+      scenarioId: "finance.trusted_bank_change_approval",
+      idempotencyKey: callerKey,
+    });
+    const duplicate = await ownerSdk.submitIntent({
+      scenarioId: "finance.trusted_bank_change_approval",
+      idempotencyKey: callerKey,
+    });
+    assert.equal(duplicate.job.id, submission.job.id);
+    assert.equal(submission.externalDispatch, false);
+    assert.equal(
+      submission.actionIntent.instructionProvenance,
+      "trusted_user_request",
+    );
+
+    const completed = await ownerSdk.waitForJob(submission.job.id, {
+      intervalMs: POLL_INTERVAL_MS,
+      maxAttempts: 120,
+    });
+    assert.equal(completed.status, "succeeded", completed.errorCode ?? undefined);
+    assert.equal(completed.profileId, "guardian-agent-lab-finance-v1");
+    assert.equal(completed.result && (completed.result as { engine?: string }).engine, "guardian_policy_lab");
+    const financeEvidence = completed.result as {
+      sampleCount: number;
+      summary: { actualOperations: number; externalCalls: number };
+      cases: Array<{
+        caseId: string;
+        instructionProvenance: string;
+        policyOn: { decision: string; executed: boolean };
+        toolTrace?: { policyOn: { invoked: boolean; events: unknown[] } };
+        syntheticActionRef?: string;
+      }>;
+    };
+    const proposal = financeEvidence.cases.find(
+      (item) =>
+        item.caseId === "finance_trusted_bank_change_requires_approval",
+    );
+    assert.equal(financeEvidence.sampleCount, 3);
+    assert.equal(financeEvidence.summary.actualOperations, 0);
+    assert.equal(financeEvidence.summary.externalCalls, 0);
+    assert.equal(proposal?.instructionProvenance, "trusted_user_request");
+    assert.equal(proposal?.policyOn.decision, "require_approval");
+    assert.equal(proposal?.policyOn.executed, false);
+    assert.equal(proposal?.toolTrace?.policyOn.invoked, false);
+    assert.deepEqual(proposal?.toolTrace?.policyOn.events, []);
+    assert.equal(
+      proposal?.syntheticActionRef,
+      "guardian.synthetic.finance.bank-change.v1",
+    );
+
+    await assert.rejects(outsiderSdk.getJob(submission.job.id), (error: unknown) =>
+      error instanceof Error &&
+      "status" in error &&
+      error.status === 403,
+    );
+    await assert.rejects(
+      client("e2e-viewer-a").submitIntent({
+        scenarioId: "finance.trusted_bank_change_approval",
+        idempotencyKey: `sdk-viewer-${randomUUID()}`,
+      }),
+      (error: unknown) =>
+        error instanceof Error &&
+        "status" in error &&
+        error.status === 403,
+    );
+
+    const ownerApprovals = await ownerSdk.listApprovals();
+    const approval = ownerApprovals.find(
+      (item) =>
+        item.jobId === submission.job.id &&
+        item.caseId === "finance_trusted_bank_change_requires_approval",
+    );
+    assert.ok(approval);
+    if (!approval) assert.fail("tenant-scoped approval was not persisted");
+    assert.equal(approval.status, "pending");
+    assert.equal(approval.bindingVersion, 2);
+    assert.match(approval.proposalBindingSha256, /^[a-f0-9]{64}$/);
+    const trustedBankChange = getAllowlistedSyntheticApprovalAction(
+      "guardian.synthetic.finance.bank-change.v1",
+      "guardian-agent-lab-finance-v1",
+      "finance_trusted_bank_change_requires_approval",
+      "request_bank_account_change",
+    );
+    assert.ok(trustedBankChange);
+    assert.equal(approval.syntheticActionRef, trustedBankChange.actionRef);
+    assert.equal(approval.actionSha256, trustedBankChange.actionSha256);
+    assert.equal(approval.proposalSha256, trustedBankChange.proposalSha256);
+    assert.equal(approval.requestedByUserId, userA);
+    const financeEvidenceRecord = completed.result as Record<string, unknown>;
+    const {
+      evidenceSha256: resultEvidenceDigest,
+      ...unsignedFinanceEvidence
+    } = financeEvidenceRecord;
+    assert.equal(
+      resultEvidenceDigest,
+      createHash("sha256")
+        .update(canonicalApprovalJson(unsignedFinanceEvidence), "utf8")
+        .digest("hex"),
+    );
+    const financeCase = (
+      financeEvidenceRecord.cases as Array<Record<string, unknown>>
+    ).find((item) => item.caseId === approval.caseId);
+    assert.ok(financeCase);
+    assert.equal(financeCase.syntheticActionRef, approval.syntheticActionRef);
+    assert.equal(financeCase.actionSha256, approval.actionSha256);
+    assert.equal(financeCase.proposalSha256, approval.proposalSha256);
+    const {
+      caseEvidenceSha256: financeCaseDigest,
+      ...unsignedFinanceCase
+    } = financeCase;
+    assert.equal(
+      financeCaseDigest,
+      createHash("sha256")
+        .update(canonicalApprovalJson(unsignedFinanceCase), "utf8")
+        .digest("hex"),
+    );
+    await assert.rejects(
+      ownerSdk.decideApproval({
+        approvalId: approval.id,
+        decision: "approve",
+        proposalBindingSha256: approval.proposalBindingSha256,
+      }),
+      (error: unknown) =>
+        error instanceof Error &&
+        "status" in error &&
+        error.status === 403,
+      "requester cannot approve their own proposal",
+    );
+    const decision = await adminSdk.decideApproval({
+      approvalId: approval.id,
+      decision: "approve",
+      proposalBindingSha256: approval.proposalBindingSha256,
+    });
+    assert.equal(decision.approval.status, "approved");
+    assert.equal(decision.approval.decidedByUserId, adminA);
+    assert.equal(decision.approval.decidedByRole, "admin");
+    assert.equal(decision.execution, "synthetic_action_simulated_once");
+    assert.equal(decision.approval.simulationResultCode, "synthetic_bank_change_approved_in_clone");
+    assert.match(decision.approval.simulationResultSha256 ?? "", /^[a-f0-9]{64}$/);
+    await assert.rejects(
+      adminSdk.decideApproval({
+        approvalId: approval.id,
+        decision: "approve",
+        proposalBindingSha256: approval.proposalBindingSha256,
+      }),
+      (error: unknown) =>
+        error instanceof Error &&
+        "status" in error &&
+        error.status === 409,
+      "one-shot approval cannot be replayed",
+    );
+
+    const expirableSubmission = await ownerSdk.submitIntent({
+      scenarioId: "finance.trusted_bank_change_approval",
+      idempotencyKey: `sdk-finance-expiry-${randomUUID()}`,
+    });
+    const expirableJob = await ownerSdk.waitForJob(expirableSubmission.job.id, {
+      intervalMs: POLL_INTERVAL_MS,
+      maxAttempts: 120,
+    });
+    assert.equal(expirableJob.status, "succeeded");
+    const expirable = (await ownerSdk.listApprovals()).find(
+      (item) => item.jobId === expirableJob.id,
+    );
+    assert.ok(expirable);
+    if (!expirable) assert.fail("expirable approval was not persisted");
+    await fixturePool.query(
+      `UPDATE public.ai_assessment_approval_requests
+       SET expires_at = now() - interval '1 second'
+       WHERE workspace_id = $1 AND id = $2 AND status = 'pending'`,
+      [workspaceA, expirable.id],
+    );
+    await assert.rejects(
+      adminSdk.decideApproval({
+        approvalId: expirable.id,
+        decision: "approve",
+        proposalBindingSha256: expirable.proposalBindingSha256,
+      }),
+      (error: unknown) =>
+        error instanceof Error &&
+        "status" in error &&
+        error.status === 409,
+      "expired approval remains fail-closed",
+    );
+    const expired = (await adminSdk.listApprovals()).find(
+      (item) => item.id === expirable.id,
+    );
+    assert.equal(expired?.status, "expired");
+    assert.equal(expired?.simulatedAt, null);
+
+    const evidenceSummary = {
+      source: "guardian_agent_sdk_local_e2e",
+      sdkVersion: "0.1.0",
+      jobId: submission.job.id,
+      jobStatus: completed.status,
+      profileId: completed.profileId,
+      sampleCount: financeEvidence.sampleCount,
+      approvalId: approval.id,
+      approvedByRole: decision.approval.decidedByRole,
+      execution: decision.execution,
+      externalDispatch: false,
+      expirationObserved: expired?.status === "expired",
+    };
+    const evidenceSha256 = createHash("sha256")
+      .update(canonicalApprovalJson(evidenceSummary), "utf8")
+      .digest("hex");
+    const artifactPath = fileURLToPath(
+      new URL(
+        "../../../generated-artifacts/guardian-agent-sdk-e2e.json",
+        import.meta.url,
+      ),
+    );
+    mkdirSync(dirname(artifactPath), { recursive: true });
+    writeFileSync(
+      artifactPath,
+      JSON.stringify({ ...evidenceSummary, evidenceSha256 }, null, 2),
     );
   },
 );
@@ -2188,7 +2459,11 @@ test(
     const firstApproval = await oneApprovalForJob(userA, firstJob.id);
     assert.equal(firstApproval.status, "pending");
     assert.equal(firstApproval.canCurrentUserDecide, false);
-    assert.equal(firstApproval.bindingVersion, 1);
+    assert.equal(
+      firstApproval.caseId,
+      "finance_trusted_bank_change_requires_approval",
+    );
+    assert.equal(firstApproval.bindingVersion, 2);
     assert.equal(firstApproval.execution, "not_performed");
     assert.equal(
       (
@@ -2258,7 +2533,15 @@ test(
     assert.equal(approved.approval.status, "approved");
     assert.equal(approved.approval.decidedByUserId, adminA);
     assert.equal(approved.approval.decidedByRole, "admin");
-    assert.equal(approved.execution, "decision_only");
+    assert.equal(approved.execution, "synthetic_action_simulated_once");
+    assert.equal(
+      approved.approval.simulationResultCode,
+      "synthetic_bank_change_approved_in_clone",
+    );
+    assert.match(
+      approved.approval.simulationResultSha256 ?? "",
+      /^[a-f0-9]{64}$/,
+    );
     assert.equal(
       (
         await apiRequest(

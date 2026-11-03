@@ -130,6 +130,23 @@ test("SDK performs bounded direct job lookup and rejects malformed responses", a
   });
 });
 
+test("approval list accepts the API envelope and validates each tenant record", async () => {
+  const approval = {
+    id: approvalId,
+    jobId,
+    caseId: "finance_trusted_bank_change_requires_approval",
+    proposalSha256: binding,
+    proposalBindingSha256: binding,
+    requestedByUserId: "user-requester",
+    status: "pending",
+    expiresAt: "2026-11-03T00:05:00.000Z",
+  };
+  const client = clientWith(async () =>
+    Response.json({ approvals: [approval] }),
+  );
+  assert.deepEqual(await client.listApprovals(), [approval]);
+});
+
 test("approval decisions are bound, typed and never automatically retried", async () => {
   let requests = 0;
   const client = clientWith(async (_input, init) => {
@@ -152,6 +169,33 @@ test("approval decisions are bound, typed and never automatically retried", asyn
       error.code === "approval_already_decided",
   );
   assert.equal(requests, 1);
+});
+
+test("SDK maps approval evidence conflicts to a stable non-sensitive code", async () => {
+  const client = clientWith(async () =>
+    Response.json({ error: "Approval is evidence_invalid" }, { status: 409 }),
+  );
+  await assert.rejects(
+    client.listApprovals(),
+    (error: unknown) =>
+      error instanceof GuardianNexusSdkError &&
+      error.status === 409 &&
+      error.code === "approval_evidence_invalid",
+  );
+});
+
+test("SDK treats inherited property names as plain sanitized API error codes", async () => {
+  const client = clientWith(async () =>
+    Response.json({ error: "toString" }, { status: 409 }),
+  );
+  await assert.rejects(
+    client.listApprovals(),
+    (error: unknown) =>
+      error instanceof GuardianNexusSdkError &&
+      error.status === 409 &&
+      typeof error.code === "string" &&
+      error.code === "toString",
+  );
 });
 
 test("idempotency key helper uses secure UUIDs", () => {

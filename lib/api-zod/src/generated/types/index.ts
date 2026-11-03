@@ -89,6 +89,7 @@ export * from './guardianAgentPolicyLabEvidenceCasesItemPolicyOnDecision';
 export * from './guardianAgentPolicyLabEvidenceCasesItemPolicyOnEventPhasesItem';
 export * from './guardianAgentPolicyLabEvidenceCasesItemResourceWorkspaceId';
 export * from './guardianAgentPolicyLabEvidenceCasesItemSensitivity';
+export * from './guardianAgentPolicyLabEvidenceCasesItemSyntheticActionRef';
 export * from './guardianAgentPolicyLabEvidenceCasesItemToolTrace';
 export * from './guardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOff';
 export * from './guardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOffEventsItem';

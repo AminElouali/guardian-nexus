@@ -12,4 +12,5 @@ export type AgentActionIntentV1ToolId = typeof AgentActionIntentV1ToolId[keyof t
 export const AgentActionIntentV1ToolId = {
   send_email_simulated: 'send_email_simulated',
   consult_synthetic_invoice: 'consult_synthetic_invoice',
+  request_bank_account_change: 'request_bank_account_change',
 } as const;

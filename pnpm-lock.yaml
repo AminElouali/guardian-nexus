@@ -685,7 +685,11 @@ importers:
         specifier: ^0.31.11
         version: 0.31.11
 
-  lib/guardian-agent-sdk: {}
+  lib/guardian-agent-sdk:
+    devDependencies:
+      tsx:
+        specifier: 'catalog:'
+        version: 4.23.15
 
   scripts:
     devDependencies:

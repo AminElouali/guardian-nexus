@@ -1,7 +1,7 @@
 import {
   createIdempotencyKey,
   GuardianNexusClient,
-} from "../src/index.js";
+} from "@workspace/guardian-agent-sdk";
 
 // The embedding application supplies its existing session-token callback.
 declare const getHostSessionAccessToken: () => Promise<string | null>;

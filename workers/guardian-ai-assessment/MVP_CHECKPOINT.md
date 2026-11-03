@@ -1709,3 +1709,69 @@ This update supersedes the older diskcache status, worker-test count, and OSV
   sesión Clerk real, sin publicación ni producción. Siguen pendientes
   dual-stack IPv6, aislamiento real API/broker y riesgos OSV/licencias antes
   de clientes.
+
+## SDK local de agentes y flujo de aprobación — 2026-11-03
+
+- Base verificada al iniciar: HEAD `2429d1ded881c7c077c8c75991903aeda3dd92ba`
+  (su padre era `62e381d`). El paquete `@workspace/guardian-agent-sdk`
+  v0.1.0 queda en el workspace, con cliente tipado, README y ejemplo. Se puede
+  empaquetar como tarball e importar desde un consumidor local; no se publicó
+  ni se contactó un registry.
+- Alcance intencionalmente limitado: el SDK envía un `scenarioId` fijo y una
+  clave de idempotencia. No admite herramientas, argumentos, política, actor,
+  rol, workspace ni destinos elegidos por el cliente. La API obtiene o valida
+  identidad y permisos desde la sesión autenticada, crea la intención
+  allow-listed y aplica Guardian Policy antes del simulador.
+- E2E de finanzas sintéticas: el trabajo persistió; un administrador aprobó la
+  propuesta vinculada al hash y se observó `synthetic_action_simulated_once`
+  en el clon efímero. Se comprobó expiración en el conjunto del E2E y no hubo
+  despacho externo. La evidencia SDK indica `sampleCount=3`,
+  `externalDispatch=false`, expiración observada y SHA de evidencia
+  `c72c518dc59f871c8ab3dc18d2d0fe90a2c18fe3ff08ff8737542809b5056cf1`.
+- La regresión completa, ejecutada serialmente con
+  `pnpm --filter @workspace/api-server run test:ai-assessment-e2e`, terminó con
+  API/worker **8/8**, 0 fallos, exit 0 (607.161 s); su integración de
+  componentes del dashboard terminó **8/8**, exit 0. Incluyó el E2E
+  `packaged SDK` y la aprobación persistente. La prueba específica de
+  aprobación persistente también pasó **1/1**.
+- En la misma regresión, Qwen real de los ocho perfiles pasó. La sonda nativa
+  registró `QWEN_NATIVE_TOOL_TRACE_COUNT=24/288`; la suite autónoma registró
+  `QWEN_AUTONOMOUS_TOOL_TRACE_COUNT=39/42`. Se comprobaron dos propuestas que
+  requerían aprobación: una simulada una sola vez y otra expirada sin
+  ejecución. Estas pruebas son del laboratorio Qwen existente, no del flujo
+  determinista del SDK.
+- Regresiones adicionales: API **60/60**; worker Python `test_policy_lab.py`
+  **16/16**; SDK build correcto y tests **8/8**; typecheck API, typecheck de
+  librerías y typecheck web correctos; build API correcto. El build web sin
+  `PORT` falló por configuración requerida de Vite; al repetir con
+  `PORT=18753 BASE_PATH=/` pasó. Persisten avisos de sourcemap en
+  `tooltip.tsx` y bundle >500 kB.
+- Tras reiniciar los workflows de desarrollo, API `/api/healthz` respondió
+  HTTP 200 y la home web respondió HTTP 200.
+- Después del E2E completo se corrigió un borde del mapeo de errores SDK para
+  que solo se consulten propiedades propias. Tras ese cambio final se repitió
+  SDK build/tests **8/8** y E2E dirigido SDK→API **1/1**. La suite E2E completa
+  8/8 no se volvió a ejecutar después de ese pequeño cambio.
+- Se corrigió `worker_policy_lab_evidence_failed_validation` sin relajar la
+  validación: los timestamps firmados permanecen strings RFC3339 para no
+  reserializar bytes, y la comprobación del digest de caso conserva el
+  convenio versionado del motor (campo ausente en policy fixture; sentinel
+  vacío en Qwen). Se regeneró OpenAPI/Zod. El SDK también devuelve errores
+  sanitizados y busca claves conocidas como propiedades propias.
+- Evidencias SHA-256:
+  - `generated-artifacts/guardian-agent-sdk-e2e.json`:
+    `4aa9b485bce050d9d689245c07ff8a723e98ef769548d8b8985aa34d96b7d391`.
+  - `generated-artifacts/guardian-qwen-policy-labs-e2e.json`:
+    `1e6dd1a6a075b7a20c0ab51cd1bc600f09e1bfdbaea6110a9fb18ea07bf18142`.
+  - `generated-artifacts/ai-assessment-autonomous-e2e-response.json`:
+    `3166970725017e6df31b2f3111a500652d662cf00ff1cf4698ab6bc252235756`.
+  - Tarball local `@workspace/guardian-agent-sdk@0.1.0`:
+    `1614022614996784b3186ac013cf27ea6950e657b06458aac5729f7fd84de90d`.
+  - Log completo de E2E en `/tmp`:
+    `5ea6e7f7cd33d503830c3bdace25b86c76265e9e30d69233021d0bb004c1d4b8`.
+- Informe reproducible: `reports/guardian-agent-sdk-lab-2026-11-03.md`, SHA-256
+  `ab8987ff584ba57c5daa48340c606a084768c000694867a0693899304a8ddd7c`.
+  No hubo sesión Clerk real en navegador; las pruebas usan el harness local.
+  No hay conectores reales ni efectos externos. La comprobación de IPv6,
+  broker y supply chain no forma parte de este hito y sigue pendiente antes de
+  pilotos/clientes.

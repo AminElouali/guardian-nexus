@@ -14,6 +14,7 @@ import type { GuardianAgentPolicyLabEvidenceCasesItemPolicyOff } from './guardia
 import type { GuardianAgentPolicyLabEvidenceCasesItemPolicyOn } from './guardianAgentPolicyLabEvidenceCasesItemPolicyOn';
 import type { GuardianAgentPolicyLabEvidenceCasesItemResourceWorkspaceId } from './guardianAgentPolicyLabEvidenceCasesItemResourceWorkspaceId';
 import type { GuardianAgentPolicyLabEvidenceCasesItemSensitivity } from './guardianAgentPolicyLabEvidenceCasesItemSensitivity';
+import type { GuardianAgentPolicyLabEvidenceCasesItemSyntheticActionRef } from './guardianAgentPolicyLabEvidenceCasesItemSyntheticActionRef';
 import type { GuardianAgentPolicyLabEvidenceCasesItemToolTrace } from './guardianAgentPolicyLabEvidenceCasesItemToolTrace';
 
 export type GuardianAgentPolicyLabEvidenceCasesItem = {
@@ -55,6 +56,7 @@ export type GuardianAgentPolicyLabEvidenceCasesItem = {
   actionSha256: string;
   /** @pattern ^[a-f0-9]{64}$ */
   proposalSha256: string;
+  syntheticActionRef?: GuardianAgentPolicyLabEvidenceCasesItemSyntheticActionRef;
   policyOn: GuardianAgentPolicyLabEvidenceCasesItemPolicyOn;
   policyOff: GuardianAgentPolicyLabEvidenceCasesItemPolicyOff;
   toolTrace?: GuardianAgentPolicyLabEvidenceCasesItemToolTrace;

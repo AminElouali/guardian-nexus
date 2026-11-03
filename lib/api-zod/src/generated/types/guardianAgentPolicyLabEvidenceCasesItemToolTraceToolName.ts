@@ -13,6 +13,7 @@ export const GuardianAgentPolicyLabEvidenceCasesItemToolTraceToolName = {
   send_email_simulated: 'send_email_simulated',
   query_synthetic_database: 'query_synthetic_database',
   consult_synthetic_invoice: 'consult_synthetic_invoice',
+  request_bank_account_change: 'request_bank_account_change',
   propose_synthetic_code_diff: 'propose_synthetic_code_diff',
   draft_synthetic_support_reply: 'draft_synthetic_support_reply',
   read_local_synthetic_page: 'read_local_synthetic_page',

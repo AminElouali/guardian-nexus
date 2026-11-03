@@ -13,4 +13,5 @@ export const AgentActionIntentV1ScenarioId = {
   emailallowed_draft: 'email.allowed_draft',
   emailuntrusted_send: 'email.untrusted_send',
   financeuntrusted_transfer: 'finance.untrusted_transfer',
+  financetrusted_bank_change_approval: 'finance.trusted_bank_change_approval',
 } as const;

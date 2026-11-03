@@ -687,6 +687,16 @@ function canonicalJson(value: unknown): string {
   return JSON.stringify(value) ?? "null";
 }
 
+function isIsoTimestampString(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})$/.test(
+      value,
+    ) &&
+    Number.isFinite(Date.parse(value))
+  );
+}
+
 function hasValidLocalLlmEvidenceDigest(value: unknown): boolean {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
@@ -857,6 +867,8 @@ export function validateGuardianAgentPolicyLabEvidence(
     evidence.proposalOrigin === "controlled_fixture_not_llm" &&
     evidence.modelInference === false &&
     evidence.source === "synthetic_policy_scenarios" &&
+    isIsoTimestampString(evidence.startedAt) &&
+    isIsoTimestampString(evidence.completedAt) &&
     evidence.sampleCount === expectedSampleCount &&
     evidence.cases[0]?.label === "benign" &&
     evidence.cases[0]?.policyOn.decision === "allow" &&
@@ -2831,11 +2843,7 @@ async function runDockerAssessment(
         }
         let evidence: AiAssessmentJobEvidence;
         if (parsedEvidence.engine === "guardian_policy_lab") {
-          const policyLab =
-            parsedEvidence as unknown as GuardianAgentPolicyLabEvidence & {
-              startedAt: Date;
-              completedAt: Date;
-            };
+          const policyLab = parsedEvidence as GuardianAgentPolicyLabEvidence;
           if (
             !isPolicyLab ||
             !validateGuardianAgentPolicyLabEvidence(
@@ -2847,11 +2855,7 @@ async function runDockerAssessment(
             reject(new Error("worker_policy_lab_evidence_failed_validation"));
             return;
           }
-          evidence = {
-            ...policyLab,
-            startedAt: policyLab.startedAt.toISOString(),
-            completedAt: policyLab.completedAt.toISOString(),
-          };
+          evidence = policyLab;
         } else if (parsedEvidence.engine === "guardian_qwen_policy_lab") {
           const qwenPolicy =
             parsedEvidence as unknown as GuardianQwenPolicyLabEvidence & {
