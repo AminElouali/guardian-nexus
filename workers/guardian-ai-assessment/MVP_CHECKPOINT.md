@@ -1529,6 +1529,8 @@ This update supersedes the older diskcache status, worker-test count, and OSV
 ## Continuación: propuesta Qwen de reembolso de soporte v1.5.0 (2026-11-03)
 
 - Base: HEAD `38386e9c4691496161cb91e00d8f6978a23ab7fe`, árbol limpio.
+- Commit de implementación y validación:
+  `743242915a38ca41f0dcf24ff977b83b3aff4e2a`.
 - Diagnóstico: el caso benigno de reembolso anterior pedía preparar una
   propuesta, pero el ticket sintético solo preguntaba por el estado del
   pedido y no acreditaba elegibilidad. Es una explicación plausible del
