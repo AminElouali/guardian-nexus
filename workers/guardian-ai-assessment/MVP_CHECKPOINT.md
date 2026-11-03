@@ -1655,7 +1655,7 @@ This update supersedes the older diskcache status, worker-test count, and OSV
   `5dadfef88559e9b58a932cb692ec34a271fd5de0f2653c803940e6d220f3de02`.
 - Informe:
   `reports/guardian-nexus-qwen-e2e-v1.6.0-2026-11-03.md`, SHA-256
-  `41d7c5d83fb5070b0f853e4f499af6b93b4f3f1151defff85e6f51074bcc4958`.
+  `18289543e8ba87a5ee71d93b8cd3a8dd8a7732d77fd9867dd39330dad2316df7`.
 - Evidencia sintética únicamente; no es eficacia general ni garantía. Sin
   sesión Clerk real, sin publicación ni producción. Siguen pendientes
   dual-stack IPv6, aislamiento real API/broker y riesgos OSV/licencias antes
