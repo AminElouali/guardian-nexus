@@ -1555,6 +1555,12 @@ export const listWorkspaceAiAssessmentLabJobsResponseResultSixCasesItemSynthetic
 export const listWorkspaceAiAssessmentLabJobsResponseResultSixCasesItemActionSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const listWorkspaceAiAssessmentLabJobsResponseResultSixCasesItemReasonCodeMax = 80;
 
+export const listWorkspaceAiAssessmentLabJobsResponseResultSixCasesItemInferenceDurationMsMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultSixCasesItemInferenceDurationMsMax = 180000;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultSixCasesItemAuthorizationDurationMsMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultSixCasesItemAuthorizationDurationMsMax = 180000;
+
 export const listWorkspaceAiAssessmentLabJobsResponseResultSixCasesItemToolEventsItemArgumentsSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const listWorkspaceAiAssessmentLabJobsResponseResultSixCasesItemToolEventsItemResultCodeMax = 100;
 
@@ -1568,7 +1574,17 @@ export const listWorkspaceAiAssessmentLabJobsResponseResultSixCasesItemCaseEvide
 export const listWorkspaceAiAssessmentLabJobsResponseResultSixCasesMin = 2;
 export const listWorkspaceAiAssessmentLabJobsResponseResultSixCasesMax = 10;
 
-export const listWorkspaceAiAssessmentLabJobsResponseResultSixSummaryMinOne = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultSixSummaryInferenceLatencyP50MsMin = 0;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultSixSummaryInferenceLatencyP95MsMin = 0;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultSixSummaryAuthorizationLatencyP50MsMin = 0;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultSixSummaryAuthorizationLatencyP95MsMin = 0;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultSixSummaryAuthorizationSampleCountMin = 0;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultSixSummaryCasesPerSecondMilliMin = 0;
 
 export const listWorkspaceAiAssessmentLabJobsResponseResultSixDurationSecondsMin = 0;
 export const listWorkspaceAiAssessmentLabJobsResponseResultSixDurationSecondsMax = 180;
@@ -2887,7 +2903,7 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "evidenceVersion": zod.literal(1),
   "source": zod.literal("qwen_local_policy_lab"),
   "engine": zod.literal("guardian_qwen_policy_lab"),
-  "engineVersion": zod.enum(['guardian-agent-qwen-policy-lab-v1', 'guardian-agent-qwen-policy-lab-v1.1.0', 'guardian-agent-qwen-policy-lab-v1.2.0', 'guardian-agent-qwen-policy-lab-v1.3.0', 'guardian-agent-qwen-policy-lab-v1.4.0', 'guardian-agent-qwen-policy-lab-v1.5.0', 'guardian-agent-qwen-policy-lab-v1.6.0', 'guardian-agent-qwen-policy-lab-v1.7.0', 'guardian-agent-qwen-policy-lab-v1.8.0']),
+  "engineVersion": zod.enum(['guardian-agent-qwen-policy-lab-v1', 'guardian-agent-qwen-policy-lab-v1.1.0', 'guardian-agent-qwen-policy-lab-v1.2.0', 'guardian-agent-qwen-policy-lab-v1.3.0', 'guardian-agent-qwen-policy-lab-v1.4.0', 'guardian-agent-qwen-policy-lab-v1.5.0', 'guardian-agent-qwen-policy-lab-v1.6.0', 'guardian-agent-qwen-policy-lab-v1.7.0', 'guardian-agent-qwen-policy-lab-v1.8.0', 'guardian-agent-qwen-policy-lab-v1.9.0']),
   "profileId": zod.enum(['guardian-agent-qwen-lab-email-v1', 'guardian-agent-qwen-lab-database-v1', 'guardian-agent-qwen-lab-finance-v1', 'guardian-agent-qwen-lab-customer-service-v1', 'guardian-agent-qwen-lab-programming-v1', 'guardian-agent-qwen-lab-browser-v1', 'guardian-agent-qwen-lab-infrastructure-v1', 'guardian-agent-qwen-lab-multiagent-v1']),
   "verticalId": zod.enum(['email', 'database', 'finance', 'customer_service', 'programming', 'browser', 'infrastructure', 'multiagent']),
   "executionMode": zod.literal("real_local_qwen_inference"),
@@ -2902,7 +2918,7 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "versions": zod.object({
   "policy": zod.literal("guardian-policy-engine-synthetic-v2"),
   "toolAdapter": zod.literal("guardian-synthetic-tool-adapter-v1"),
-  "corpus": zod.enum(['guardian-qwen-policy-lab-en-es-v1', 'guardian-qwen-policy-lab-en-es-v1.1.0', 'guardian-qwen-policy-lab-en-es-v1.2.0', 'guardian-qwen-policy-lab-en-es-v1.3.0', 'guardian-qwen-policy-lab-en-es-v1.4.0', 'guardian-qwen-policy-lab-en-es-v1.5.0', 'guardian-qwen-policy-lab-en-es-v1.6.0', 'guardian-qwen-policy-lab-en-es-v1.7.0', 'guardian-qwen-policy-lab-en-es-v1.8.0']),
+  "corpus": zod.enum(['guardian-qwen-policy-lab-en-es-v1', 'guardian-qwen-policy-lab-en-es-v1.1.0', 'guardian-qwen-policy-lab-en-es-v1.2.0', 'guardian-qwen-policy-lab-en-es-v1.3.0', 'guardian-qwen-policy-lab-en-es-v1.4.0', 'guardian-qwen-policy-lab-en-es-v1.5.0', 'guardian-qwen-policy-lab-en-es-v1.6.0', 'guardian-qwen-policy-lab-en-es-v1.7.0', 'guardian-qwen-policy-lab-en-es-v1.8.0', 'guardian-qwen-policy-lab-en-es-v1.9.0']),
   "modelRuntime": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultSixVersionsModelRuntimeMax),
   "toolMarkupAdapter": zod.literal("guardian-qwen-native-markup-v1")
 }),
@@ -2937,6 +2953,8 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "decision": zod.enum(['allow', 'deny', 'require_approval', 'no_proposal']),
   "reasonCode": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultSixCasesItemReasonCodeMax),
   "dispatchStatus": zod.enum(['not_invoked', 'simulated_execution', 'blocked_by_policy_before_dispatch', 'approval_required_before_dispatch', 'blocked_by_adapter_validation', 'blocked_by_parser']),
+  "inferenceDurationMs": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultSixCasesItemInferenceDurationMsMin).max(listWorkspaceAiAssessmentLabJobsResponseResultSixCasesItemInferenceDurationMsMax).optional(),
+  "authorizationDurationMs": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultSixCasesItemAuthorizationDurationMsMin).max(listWorkspaceAiAssessmentLabJobsResponseResultSixCasesItemAuthorizationDurationMsMax).nullish(),
   "toolEvents": zod.array(zod.object({
   "phase": zod.enum(['authorization_attempt', 'denied', 'executed']),
   "authorization": zod.enum(['not_checked', 'allowed', 'denied']),
@@ -2961,7 +2979,14 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "rawArgumentsStored": zod.literal(false),
   "caseEvidenceSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultSixCasesItemCaseEvidenceSha256RegExp)
 })).min(listWorkspaceAiAssessmentLabJobsResponseResultSixCasesMin).max(listWorkspaceAiAssessmentLabJobsResponseResultSixCasesMax),
-  "summary": zod.record(zod.string(), zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultSixSummaryMinOne)),
+  "summary": zod.object({
+  "inferenceLatencyP50Ms": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultSixSummaryInferenceLatencyP50MsMin).optional(),
+  "inferenceLatencyP95Ms": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultSixSummaryInferenceLatencyP95MsMin).optional(),
+  "authorizationLatencyP50Ms": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultSixSummaryAuthorizationLatencyP50MsMin).optional(),
+  "authorizationLatencyP95Ms": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultSixSummaryAuthorizationLatencyP95MsMin).optional(),
+  "authorizationSampleCount": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultSixSummaryAuthorizationSampleCountMin).optional(),
+  "casesPerSecondMilli": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultSixSummaryCasesPerSecondMilliMin).optional()
+}),
   "selfChecks": zod.object({
   "allCallsUsedAuto": zod.literal(true),
   "noForcedToolSelection": zod.literal(true),
@@ -4073,6 +4098,12 @@ export const createWorkspaceAiAssessmentLabJobResponseResultSixCasesItemSyntheti
 export const createWorkspaceAiAssessmentLabJobResponseResultSixCasesItemActionSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const createWorkspaceAiAssessmentLabJobResponseResultSixCasesItemReasonCodeMax = 80;
 
+export const createWorkspaceAiAssessmentLabJobResponseResultSixCasesItemInferenceDurationMsMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultSixCasesItemInferenceDurationMsMax = 180000;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultSixCasesItemAuthorizationDurationMsMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultSixCasesItemAuthorizationDurationMsMax = 180000;
+
 export const createWorkspaceAiAssessmentLabJobResponseResultSixCasesItemToolEventsItemArgumentsSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const createWorkspaceAiAssessmentLabJobResponseResultSixCasesItemToolEventsItemResultCodeMax = 100;
 
@@ -4086,7 +4117,17 @@ export const createWorkspaceAiAssessmentLabJobResponseResultSixCasesItemCaseEvid
 export const createWorkspaceAiAssessmentLabJobResponseResultSixCasesMin = 2;
 export const createWorkspaceAiAssessmentLabJobResponseResultSixCasesMax = 10;
 
-export const createWorkspaceAiAssessmentLabJobResponseResultSixSummaryMinOne = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultSixSummaryInferenceLatencyP50MsMin = 0;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultSixSummaryInferenceLatencyP95MsMin = 0;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultSixSummaryAuthorizationLatencyP50MsMin = 0;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultSixSummaryAuthorizationLatencyP95MsMin = 0;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultSixSummaryAuthorizationSampleCountMin = 0;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultSixSummaryCasesPerSecondMilliMin = 0;
 
 export const createWorkspaceAiAssessmentLabJobResponseResultSixDurationSecondsMin = 0;
 export const createWorkspaceAiAssessmentLabJobResponseResultSixDurationSecondsMax = 180;
@@ -5405,7 +5446,7 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "evidenceVersion": zod.literal(1),
   "source": zod.literal("qwen_local_policy_lab"),
   "engine": zod.literal("guardian_qwen_policy_lab"),
-  "engineVersion": zod.enum(['guardian-agent-qwen-policy-lab-v1', 'guardian-agent-qwen-policy-lab-v1.1.0', 'guardian-agent-qwen-policy-lab-v1.2.0', 'guardian-agent-qwen-policy-lab-v1.3.0', 'guardian-agent-qwen-policy-lab-v1.4.0', 'guardian-agent-qwen-policy-lab-v1.5.0', 'guardian-agent-qwen-policy-lab-v1.6.0', 'guardian-agent-qwen-policy-lab-v1.7.0', 'guardian-agent-qwen-policy-lab-v1.8.0']),
+  "engineVersion": zod.enum(['guardian-agent-qwen-policy-lab-v1', 'guardian-agent-qwen-policy-lab-v1.1.0', 'guardian-agent-qwen-policy-lab-v1.2.0', 'guardian-agent-qwen-policy-lab-v1.3.0', 'guardian-agent-qwen-policy-lab-v1.4.0', 'guardian-agent-qwen-policy-lab-v1.5.0', 'guardian-agent-qwen-policy-lab-v1.6.0', 'guardian-agent-qwen-policy-lab-v1.7.0', 'guardian-agent-qwen-policy-lab-v1.8.0', 'guardian-agent-qwen-policy-lab-v1.9.0']),
   "profileId": zod.enum(['guardian-agent-qwen-lab-email-v1', 'guardian-agent-qwen-lab-database-v1', 'guardian-agent-qwen-lab-finance-v1', 'guardian-agent-qwen-lab-customer-service-v1', 'guardian-agent-qwen-lab-programming-v1', 'guardian-agent-qwen-lab-browser-v1', 'guardian-agent-qwen-lab-infrastructure-v1', 'guardian-agent-qwen-lab-multiagent-v1']),
   "verticalId": zod.enum(['email', 'database', 'finance', 'customer_service', 'programming', 'browser', 'infrastructure', 'multiagent']),
   "executionMode": zod.literal("real_local_qwen_inference"),
@@ -5420,7 +5461,7 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "versions": zod.object({
   "policy": zod.literal("guardian-policy-engine-synthetic-v2"),
   "toolAdapter": zod.literal("guardian-synthetic-tool-adapter-v1"),
-  "corpus": zod.enum(['guardian-qwen-policy-lab-en-es-v1', 'guardian-qwen-policy-lab-en-es-v1.1.0', 'guardian-qwen-policy-lab-en-es-v1.2.0', 'guardian-qwen-policy-lab-en-es-v1.3.0', 'guardian-qwen-policy-lab-en-es-v1.4.0', 'guardian-qwen-policy-lab-en-es-v1.5.0', 'guardian-qwen-policy-lab-en-es-v1.6.0', 'guardian-qwen-policy-lab-en-es-v1.7.0', 'guardian-qwen-policy-lab-en-es-v1.8.0']),
+  "corpus": zod.enum(['guardian-qwen-policy-lab-en-es-v1', 'guardian-qwen-policy-lab-en-es-v1.1.0', 'guardian-qwen-policy-lab-en-es-v1.2.0', 'guardian-qwen-policy-lab-en-es-v1.3.0', 'guardian-qwen-policy-lab-en-es-v1.4.0', 'guardian-qwen-policy-lab-en-es-v1.5.0', 'guardian-qwen-policy-lab-en-es-v1.6.0', 'guardian-qwen-policy-lab-en-es-v1.7.0', 'guardian-qwen-policy-lab-en-es-v1.8.0', 'guardian-qwen-policy-lab-en-es-v1.9.0']),
   "modelRuntime": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultSixVersionsModelRuntimeMax),
   "toolMarkupAdapter": zod.literal("guardian-qwen-native-markup-v1")
 }),
@@ -5455,6 +5496,8 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "decision": zod.enum(['allow', 'deny', 'require_approval', 'no_proposal']),
   "reasonCode": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultSixCasesItemReasonCodeMax),
   "dispatchStatus": zod.enum(['not_invoked', 'simulated_execution', 'blocked_by_policy_before_dispatch', 'approval_required_before_dispatch', 'blocked_by_adapter_validation', 'blocked_by_parser']),
+  "inferenceDurationMs": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultSixCasesItemInferenceDurationMsMin).max(createWorkspaceAiAssessmentLabJobResponseResultSixCasesItemInferenceDurationMsMax).optional(),
+  "authorizationDurationMs": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultSixCasesItemAuthorizationDurationMsMin).max(createWorkspaceAiAssessmentLabJobResponseResultSixCasesItemAuthorizationDurationMsMax).nullish(),
   "toolEvents": zod.array(zod.object({
   "phase": zod.enum(['authorization_attempt', 'denied', 'executed']),
   "authorization": zod.enum(['not_checked', 'allowed', 'denied']),
@@ -5479,7 +5522,14 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "rawArgumentsStored": zod.literal(false),
   "caseEvidenceSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultSixCasesItemCaseEvidenceSha256RegExp)
 })).min(createWorkspaceAiAssessmentLabJobResponseResultSixCasesMin).max(createWorkspaceAiAssessmentLabJobResponseResultSixCasesMax),
-  "summary": zod.record(zod.string(), zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultSixSummaryMinOne)),
+  "summary": zod.object({
+  "inferenceLatencyP50Ms": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultSixSummaryInferenceLatencyP50MsMin).optional(),
+  "inferenceLatencyP95Ms": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultSixSummaryInferenceLatencyP95MsMin).optional(),
+  "authorizationLatencyP50Ms": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultSixSummaryAuthorizationLatencyP50MsMin).optional(),
+  "authorizationLatencyP95Ms": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultSixSummaryAuthorizationLatencyP95MsMin).optional(),
+  "authorizationSampleCount": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultSixSummaryAuthorizationSampleCountMin).optional(),
+  "casesPerSecondMilli": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultSixSummaryCasesPerSecondMilliMin).optional()
+}),
   "selfChecks": zod.object({
   "allCallsUsedAuto": zod.literal(true),
   "noForcedToolSelection": zod.literal(true),
@@ -6580,6 +6630,12 @@ export const getWorkspaceAiAssessmentLabJobResponseResultSixCasesItemSyntheticAc
 export const getWorkspaceAiAssessmentLabJobResponseResultSixCasesItemActionSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const getWorkspaceAiAssessmentLabJobResponseResultSixCasesItemReasonCodeMax = 80;
 
+export const getWorkspaceAiAssessmentLabJobResponseResultSixCasesItemInferenceDurationMsMin = 0;
+export const getWorkspaceAiAssessmentLabJobResponseResultSixCasesItemInferenceDurationMsMax = 180000;
+
+export const getWorkspaceAiAssessmentLabJobResponseResultSixCasesItemAuthorizationDurationMsMin = 0;
+export const getWorkspaceAiAssessmentLabJobResponseResultSixCasesItemAuthorizationDurationMsMax = 180000;
+
 export const getWorkspaceAiAssessmentLabJobResponseResultSixCasesItemToolEventsItemArgumentsSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const getWorkspaceAiAssessmentLabJobResponseResultSixCasesItemToolEventsItemResultCodeMax = 100;
 
@@ -6593,7 +6649,17 @@ export const getWorkspaceAiAssessmentLabJobResponseResultSixCasesItemCaseEvidenc
 export const getWorkspaceAiAssessmentLabJobResponseResultSixCasesMin = 2;
 export const getWorkspaceAiAssessmentLabJobResponseResultSixCasesMax = 10;
 
-export const getWorkspaceAiAssessmentLabJobResponseResultSixSummaryMinOne = 0;
+export const getWorkspaceAiAssessmentLabJobResponseResultSixSummaryInferenceLatencyP50MsMin = 0;
+
+export const getWorkspaceAiAssessmentLabJobResponseResultSixSummaryInferenceLatencyP95MsMin = 0;
+
+export const getWorkspaceAiAssessmentLabJobResponseResultSixSummaryAuthorizationLatencyP50MsMin = 0;
+
+export const getWorkspaceAiAssessmentLabJobResponseResultSixSummaryAuthorizationLatencyP95MsMin = 0;
+
+export const getWorkspaceAiAssessmentLabJobResponseResultSixSummaryAuthorizationSampleCountMin = 0;
+
+export const getWorkspaceAiAssessmentLabJobResponseResultSixSummaryCasesPerSecondMilliMin = 0;
 
 export const getWorkspaceAiAssessmentLabJobResponseResultSixDurationSecondsMin = 0;
 export const getWorkspaceAiAssessmentLabJobResponseResultSixDurationSecondsMax = 180;
@@ -7912,7 +7978,7 @@ export const GetWorkspaceAiAssessmentLabJobResponse = zod.object({
   "evidenceVersion": zod.literal(1),
   "source": zod.literal("qwen_local_policy_lab"),
   "engine": zod.literal("guardian_qwen_policy_lab"),
-  "engineVersion": zod.enum(['guardian-agent-qwen-policy-lab-v1', 'guardian-agent-qwen-policy-lab-v1.1.0', 'guardian-agent-qwen-policy-lab-v1.2.0', 'guardian-agent-qwen-policy-lab-v1.3.0', 'guardian-agent-qwen-policy-lab-v1.4.0', 'guardian-agent-qwen-policy-lab-v1.5.0', 'guardian-agent-qwen-policy-lab-v1.6.0', 'guardian-agent-qwen-policy-lab-v1.7.0', 'guardian-agent-qwen-policy-lab-v1.8.0']),
+  "engineVersion": zod.enum(['guardian-agent-qwen-policy-lab-v1', 'guardian-agent-qwen-policy-lab-v1.1.0', 'guardian-agent-qwen-policy-lab-v1.2.0', 'guardian-agent-qwen-policy-lab-v1.3.0', 'guardian-agent-qwen-policy-lab-v1.4.0', 'guardian-agent-qwen-policy-lab-v1.5.0', 'guardian-agent-qwen-policy-lab-v1.6.0', 'guardian-agent-qwen-policy-lab-v1.7.0', 'guardian-agent-qwen-policy-lab-v1.8.0', 'guardian-agent-qwen-policy-lab-v1.9.0']),
   "profileId": zod.enum(['guardian-agent-qwen-lab-email-v1', 'guardian-agent-qwen-lab-database-v1', 'guardian-agent-qwen-lab-finance-v1', 'guardian-agent-qwen-lab-customer-service-v1', 'guardian-agent-qwen-lab-programming-v1', 'guardian-agent-qwen-lab-browser-v1', 'guardian-agent-qwen-lab-infrastructure-v1', 'guardian-agent-qwen-lab-multiagent-v1']),
   "verticalId": zod.enum(['email', 'database', 'finance', 'customer_service', 'programming', 'browser', 'infrastructure', 'multiagent']),
   "executionMode": zod.literal("real_local_qwen_inference"),
@@ -7927,7 +7993,7 @@ export const GetWorkspaceAiAssessmentLabJobResponse = zod.object({
   "versions": zod.object({
   "policy": zod.literal("guardian-policy-engine-synthetic-v2"),
   "toolAdapter": zod.literal("guardian-synthetic-tool-adapter-v1"),
-  "corpus": zod.enum(['guardian-qwen-policy-lab-en-es-v1', 'guardian-qwen-policy-lab-en-es-v1.1.0', 'guardian-qwen-policy-lab-en-es-v1.2.0', 'guardian-qwen-policy-lab-en-es-v1.3.0', 'guardian-qwen-policy-lab-en-es-v1.4.0', 'guardian-qwen-policy-lab-en-es-v1.5.0', 'guardian-qwen-policy-lab-en-es-v1.6.0', 'guardian-qwen-policy-lab-en-es-v1.7.0', 'guardian-qwen-policy-lab-en-es-v1.8.0']),
+  "corpus": zod.enum(['guardian-qwen-policy-lab-en-es-v1', 'guardian-qwen-policy-lab-en-es-v1.1.0', 'guardian-qwen-policy-lab-en-es-v1.2.0', 'guardian-qwen-policy-lab-en-es-v1.3.0', 'guardian-qwen-policy-lab-en-es-v1.4.0', 'guardian-qwen-policy-lab-en-es-v1.5.0', 'guardian-qwen-policy-lab-en-es-v1.6.0', 'guardian-qwen-policy-lab-en-es-v1.7.0', 'guardian-qwen-policy-lab-en-es-v1.8.0', 'guardian-qwen-policy-lab-en-es-v1.9.0']),
   "modelRuntime": zod.string().max(getWorkspaceAiAssessmentLabJobResponseResultSixVersionsModelRuntimeMax),
   "toolMarkupAdapter": zod.literal("guardian-qwen-native-markup-v1")
 }),
@@ -7962,6 +8028,8 @@ export const GetWorkspaceAiAssessmentLabJobResponse = zod.object({
   "decision": zod.enum(['allow', 'deny', 'require_approval', 'no_proposal']),
   "reasonCode": zod.string().max(getWorkspaceAiAssessmentLabJobResponseResultSixCasesItemReasonCodeMax),
   "dispatchStatus": zod.enum(['not_invoked', 'simulated_execution', 'blocked_by_policy_before_dispatch', 'approval_required_before_dispatch', 'blocked_by_adapter_validation', 'blocked_by_parser']),
+  "inferenceDurationMs": zod.int().min(getWorkspaceAiAssessmentLabJobResponseResultSixCasesItemInferenceDurationMsMin).max(getWorkspaceAiAssessmentLabJobResponseResultSixCasesItemInferenceDurationMsMax).optional(),
+  "authorizationDurationMs": zod.int().min(getWorkspaceAiAssessmentLabJobResponseResultSixCasesItemAuthorizationDurationMsMin).max(getWorkspaceAiAssessmentLabJobResponseResultSixCasesItemAuthorizationDurationMsMax).nullish(),
   "toolEvents": zod.array(zod.object({
   "phase": zod.enum(['authorization_attempt', 'denied', 'executed']),
   "authorization": zod.enum(['not_checked', 'allowed', 'denied']),
@@ -7986,7 +8054,14 @@ export const GetWorkspaceAiAssessmentLabJobResponse = zod.object({
   "rawArgumentsStored": zod.literal(false),
   "caseEvidenceSha256": zod.string().regex(getWorkspaceAiAssessmentLabJobResponseResultSixCasesItemCaseEvidenceSha256RegExp)
 })).min(getWorkspaceAiAssessmentLabJobResponseResultSixCasesMin).max(getWorkspaceAiAssessmentLabJobResponseResultSixCasesMax),
-  "summary": zod.record(zod.string(), zod.int().min(getWorkspaceAiAssessmentLabJobResponseResultSixSummaryMinOne)),
+  "summary": zod.object({
+  "inferenceLatencyP50Ms": zod.int().min(getWorkspaceAiAssessmentLabJobResponseResultSixSummaryInferenceLatencyP50MsMin).optional(),
+  "inferenceLatencyP95Ms": zod.int().min(getWorkspaceAiAssessmentLabJobResponseResultSixSummaryInferenceLatencyP95MsMin).optional(),
+  "authorizationLatencyP50Ms": zod.int().min(getWorkspaceAiAssessmentLabJobResponseResultSixSummaryAuthorizationLatencyP50MsMin).optional(),
+  "authorizationLatencyP95Ms": zod.int().min(getWorkspaceAiAssessmentLabJobResponseResultSixSummaryAuthorizationLatencyP95MsMin).optional(),
+  "authorizationSampleCount": zod.int().min(getWorkspaceAiAssessmentLabJobResponseResultSixSummaryAuthorizationSampleCountMin).optional(),
+  "casesPerSecondMilli": zod.int().min(getWorkspaceAiAssessmentLabJobResponseResultSixSummaryCasesPerSecondMilliMin).optional()
+}),
   "selfChecks": zod.object({
   "allCallsUsedAuto": zod.literal(true),
   "noForcedToolSelection": zod.literal(true),
@@ -9153,6 +9228,12 @@ export const retryWorkspaceAiAssessmentLabJobResponseResultSixCasesItemSynthetic
 export const retryWorkspaceAiAssessmentLabJobResponseResultSixCasesItemActionSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const retryWorkspaceAiAssessmentLabJobResponseResultSixCasesItemReasonCodeMax = 80;
 
+export const retryWorkspaceAiAssessmentLabJobResponseResultSixCasesItemInferenceDurationMsMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultSixCasesItemInferenceDurationMsMax = 180000;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultSixCasesItemAuthorizationDurationMsMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultSixCasesItemAuthorizationDurationMsMax = 180000;
+
 export const retryWorkspaceAiAssessmentLabJobResponseResultSixCasesItemToolEventsItemArgumentsSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const retryWorkspaceAiAssessmentLabJobResponseResultSixCasesItemToolEventsItemResultCodeMax = 100;
 
@@ -9166,7 +9247,17 @@ export const retryWorkspaceAiAssessmentLabJobResponseResultSixCasesItemCaseEvide
 export const retryWorkspaceAiAssessmentLabJobResponseResultSixCasesMin = 2;
 export const retryWorkspaceAiAssessmentLabJobResponseResultSixCasesMax = 10;
 
-export const retryWorkspaceAiAssessmentLabJobResponseResultSixSummaryMinOne = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultSixSummaryInferenceLatencyP50MsMin = 0;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultSixSummaryInferenceLatencyP95MsMin = 0;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultSixSummaryAuthorizationLatencyP50MsMin = 0;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultSixSummaryAuthorizationLatencyP95MsMin = 0;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultSixSummaryAuthorizationSampleCountMin = 0;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultSixSummaryCasesPerSecondMilliMin = 0;
 
 export const retryWorkspaceAiAssessmentLabJobResponseResultSixDurationSecondsMin = 0;
 export const retryWorkspaceAiAssessmentLabJobResponseResultSixDurationSecondsMax = 180;
@@ -10485,7 +10576,7 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "evidenceVersion": zod.literal(1),
   "source": zod.literal("qwen_local_policy_lab"),
   "engine": zod.literal("guardian_qwen_policy_lab"),
-  "engineVersion": zod.enum(['guardian-agent-qwen-policy-lab-v1', 'guardian-agent-qwen-policy-lab-v1.1.0', 'guardian-agent-qwen-policy-lab-v1.2.0', 'guardian-agent-qwen-policy-lab-v1.3.0', 'guardian-agent-qwen-policy-lab-v1.4.0', 'guardian-agent-qwen-policy-lab-v1.5.0', 'guardian-agent-qwen-policy-lab-v1.6.0', 'guardian-agent-qwen-policy-lab-v1.7.0', 'guardian-agent-qwen-policy-lab-v1.8.0']),
+  "engineVersion": zod.enum(['guardian-agent-qwen-policy-lab-v1', 'guardian-agent-qwen-policy-lab-v1.1.0', 'guardian-agent-qwen-policy-lab-v1.2.0', 'guardian-agent-qwen-policy-lab-v1.3.0', 'guardian-agent-qwen-policy-lab-v1.4.0', 'guardian-agent-qwen-policy-lab-v1.5.0', 'guardian-agent-qwen-policy-lab-v1.6.0', 'guardian-agent-qwen-policy-lab-v1.7.0', 'guardian-agent-qwen-policy-lab-v1.8.0', 'guardian-agent-qwen-policy-lab-v1.9.0']),
   "profileId": zod.enum(['guardian-agent-qwen-lab-email-v1', 'guardian-agent-qwen-lab-database-v1', 'guardian-agent-qwen-lab-finance-v1', 'guardian-agent-qwen-lab-customer-service-v1', 'guardian-agent-qwen-lab-programming-v1', 'guardian-agent-qwen-lab-browser-v1', 'guardian-agent-qwen-lab-infrastructure-v1', 'guardian-agent-qwen-lab-multiagent-v1']),
   "verticalId": zod.enum(['email', 'database', 'finance', 'customer_service', 'programming', 'browser', 'infrastructure', 'multiagent']),
   "executionMode": zod.literal("real_local_qwen_inference"),
@@ -10500,7 +10591,7 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "versions": zod.object({
   "policy": zod.literal("guardian-policy-engine-synthetic-v2"),
   "toolAdapter": zod.literal("guardian-synthetic-tool-adapter-v1"),
-  "corpus": zod.enum(['guardian-qwen-policy-lab-en-es-v1', 'guardian-qwen-policy-lab-en-es-v1.1.0', 'guardian-qwen-policy-lab-en-es-v1.2.0', 'guardian-qwen-policy-lab-en-es-v1.3.0', 'guardian-qwen-policy-lab-en-es-v1.4.0', 'guardian-qwen-policy-lab-en-es-v1.5.0', 'guardian-qwen-policy-lab-en-es-v1.6.0', 'guardian-qwen-policy-lab-en-es-v1.7.0', 'guardian-qwen-policy-lab-en-es-v1.8.0']),
+  "corpus": zod.enum(['guardian-qwen-policy-lab-en-es-v1', 'guardian-qwen-policy-lab-en-es-v1.1.0', 'guardian-qwen-policy-lab-en-es-v1.2.0', 'guardian-qwen-policy-lab-en-es-v1.3.0', 'guardian-qwen-policy-lab-en-es-v1.4.0', 'guardian-qwen-policy-lab-en-es-v1.5.0', 'guardian-qwen-policy-lab-en-es-v1.6.0', 'guardian-qwen-policy-lab-en-es-v1.7.0', 'guardian-qwen-policy-lab-en-es-v1.8.0', 'guardian-qwen-policy-lab-en-es-v1.9.0']),
   "modelRuntime": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultSixVersionsModelRuntimeMax),
   "toolMarkupAdapter": zod.literal("guardian-qwen-native-markup-v1")
 }),
@@ -10535,6 +10626,8 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "decision": zod.enum(['allow', 'deny', 'require_approval', 'no_proposal']),
   "reasonCode": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultSixCasesItemReasonCodeMax),
   "dispatchStatus": zod.enum(['not_invoked', 'simulated_execution', 'blocked_by_policy_before_dispatch', 'approval_required_before_dispatch', 'blocked_by_adapter_validation', 'blocked_by_parser']),
+  "inferenceDurationMs": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultSixCasesItemInferenceDurationMsMin).max(retryWorkspaceAiAssessmentLabJobResponseResultSixCasesItemInferenceDurationMsMax).optional(),
+  "authorizationDurationMs": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultSixCasesItemAuthorizationDurationMsMin).max(retryWorkspaceAiAssessmentLabJobResponseResultSixCasesItemAuthorizationDurationMsMax).nullish(),
   "toolEvents": zod.array(zod.object({
   "phase": zod.enum(['authorization_attempt', 'denied', 'executed']),
   "authorization": zod.enum(['not_checked', 'allowed', 'denied']),
@@ -10559,7 +10652,14 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "rawArgumentsStored": zod.literal(false),
   "caseEvidenceSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultSixCasesItemCaseEvidenceSha256RegExp)
 })).min(retryWorkspaceAiAssessmentLabJobResponseResultSixCasesMin).max(retryWorkspaceAiAssessmentLabJobResponseResultSixCasesMax),
-  "summary": zod.record(zod.string(), zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultSixSummaryMinOne)),
+  "summary": zod.object({
+  "inferenceLatencyP50Ms": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultSixSummaryInferenceLatencyP50MsMin).optional(),
+  "inferenceLatencyP95Ms": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultSixSummaryInferenceLatencyP95MsMin).optional(),
+  "authorizationLatencyP50Ms": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultSixSummaryAuthorizationLatencyP50MsMin).optional(),
+  "authorizationLatencyP95Ms": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultSixSummaryAuthorizationLatencyP95MsMin).optional(),
+  "authorizationSampleCount": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultSixSummaryAuthorizationSampleCountMin).optional(),
+  "casesPerSecondMilli": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultSixSummaryCasesPerSecondMilliMin).optional()
+}),
   "selfChecks": zod.object({
   "allCallsUsedAuto": zod.literal(true),
   "noForcedToolSelection": zod.literal(true),

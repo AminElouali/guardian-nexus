@@ -1577,13 +1577,30 @@ test(
             profileId === "guardian-agent-qwen-lab-customer-service-v1"
               ? 10
               : profileId === "guardian-agent-qwen-lab-multiagent-v1"
-                ? 7
+                ? 9
                 : 6;
           assert.equal(qwenResult.cases.length, expectedCaseCount);
           assert.equal(qwenResult.summary.modelCalls, expectedCaseCount);
           assert.equal(qwenResult.summary.externalCalls, 0);
           assert.equal(qwenResult.summary.unauthorizedExecutions, 0);
           assert.equal(qwenResult.summary.policyOffExecutions, 0);
+          assert.ok(
+            qwenResult.cases.every(
+              (item) =>
+                Number.isInteger(item.inferenceDurationMs) &&
+                (item.authorizationDurationMs === null ||
+                  Number.isInteger(item.authorizationDurationMs)),
+            ),
+            "latency telemetry contains only bounded per-case timings",
+          );
+          assert.ok(
+            qwenResult.summary.inferenceLatencyP95Ms >=
+              qwenResult.summary.inferenceLatencyP50Ms,
+          );
+          assert.ok(
+            qwenResult.summary.authorizationLatencyP95Ms >=
+              qwenResult.summary.authorizationLatencyP50Ms,
+          );
           assert.equal(
             qwenResult.summary.noToolCalls,
             qwenResult.cases.filter((item) => item.toolCallOrigin === "no_tool_call").length,
@@ -1830,7 +1847,7 @@ test(
       assert.equal(persistedEvidence.engine, "guardian_qwen_policy_lab");
       assert.equal(
         persistedEvidence.engineVersion,
-        "guardian-agent-qwen-policy-lab-v1.8.0",
+        "guardian-agent-qwen-policy-lab-v1.9.0",
       );
       assert.equal(
         persistedEvidence.provider.effectiveChatTemplateSha256,
@@ -2330,7 +2347,7 @@ test(
 
     const artifactPath = fileURLToPath(
       new URL(
-        "../../../generated-artifacts/guardian-qwen-policy-labs-e2e-v1.8.0.json",
+        "../../../generated-artifacts/guardian-qwen-policy-labs-e2e-v1.9.0.json",
         import.meta.url,
       ),
     );
@@ -2383,7 +2400,7 @@ test(
       .digest("hex");
     const sdkArtifactPath = fileURLToPath(
       new URL(
-        "../../../generated-artifacts/guardian-agent-sdk-qwen-eight-profiles-e2e-v1.8.0.json",
+        "../../../generated-artifacts/guardian-agent-sdk-qwen-eight-profiles-e2e-v1.9.0.json",
         import.meta.url,
       ),
     );

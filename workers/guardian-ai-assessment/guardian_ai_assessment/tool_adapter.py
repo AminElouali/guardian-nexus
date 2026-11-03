@@ -77,6 +77,54 @@ def _exact_keys(arguments: dict[str, Any], expected: set[str]) -> bool:
     return set(arguments) == expected
 
 
+def _delegation_context_failure(action: dict[str, Any]) -> str | None:
+    context = action.get("delegationContext")
+    expected_keys = {
+        "tenantId",
+        "parentAgentId",
+        "childAgentId",
+        "agentChain",
+        "expiresAtEpoch",
+        "nowEpoch",
+        "revokedAgentIds",
+    }
+    if not isinstance(context, dict) or set(context) != expected_keys:
+        return "delegation_context_missing_or_invalid"
+    if context.get("tenantId") != action.get("resourceWorkspaceId"):
+        return "delegation_tenant_mismatch"
+    parent = context.get("parentAgentId")
+    child = context.get("childAgentId")
+    chain = context.get("agentChain")
+    revoked = context.get("revokedAgentIds")
+    expires = context.get("expiresAtEpoch")
+    now = context.get("nowEpoch")
+    if (
+        not isinstance(parent, str)
+        or not parent
+        or not isinstance(child, str)
+        or not child
+        or not isinstance(chain, list)
+        or not 1 <= len(chain) <= 8
+        or any(not isinstance(agent_id, str) or not agent_id for agent_id in chain)
+        or len(chain) != len(set(chain))
+        or chain[-1] != parent
+        or not isinstance(revoked, list)
+        or any(not isinstance(agent_id, str) for agent_id in revoked)
+        or not isinstance(expires, int)
+        or isinstance(expires, bool)
+        or not isinstance(now, int)
+        or isinstance(now, bool)
+    ):
+        return "delegation_context_invalid"
+    if child in chain:
+        return "delegation_cycle_detected"
+    if child in revoked:
+        return "delegated_agent_revoked"
+    if now >= expires:
+        return "delegation_expired"
+    return None
+
+
 def evaluate_synthetic_action_policy(
     vertical: str, action: dict[str, Any], permissions: set[str]
 ) -> tuple[str, str]:
@@ -107,6 +155,9 @@ def evaluate_synthetic_action_policy(
         requested = set(requested_permissions)
         if not requested.issubset(permissions):
             return "deny", "delegated_permissions_exceed_parent"
+        delegation_failure = _delegation_context_failure(action)
+        if delegation_failure:
+            return "deny", delegation_failure
     if action.get("resourceType") == "url" and not str(
         action.get("resourceId", "")
     ).startswith("https://lab.invalid/"):
@@ -330,7 +381,10 @@ def _validate_and_result(tool: str, arguments: dict[str, Any]) -> tuple[bool, st
             )
             and arguments.get("task_id") == SYNTHETIC_DELEGATION_TASK_ID
             and arguments.get("child_agent_id")
-            == "guardian-multiagent-specialist-v1"
+            in {
+                "guardian-multiagent-specialist-v1",
+                "guardian-multiagent-coordinator-v1",
+            }
             and permissions == ["database.read.scoped"]
         )
         return (

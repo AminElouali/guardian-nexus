@@ -579,6 +579,48 @@ function expectQwenPolicyReport(
     noProposal: countDecision("no_proposal"),
     simulatedExecutions: cases.filter((item) => item.simulatedExecution).length,
   };
+  const isV19QwenEvidence =
+    value.engineVersion === "guardian-agent-qwen-policy-lab-v1.9.0";
+  const rawCases = value.cases as unknown as Record<string, unknown>[];
+  const rawSummary = summary as unknown as Record<string, unknown>;
+  const inferenceLatencies = rawCases.map((item) => item.inferenceDurationMs);
+  const authorizationLatencies = rawCases.flatMap((item) =>
+    typeof item.authorizationDurationMs === "number" &&
+    Number.isInteger(item.authorizationDurationMs)
+      ? [item.authorizationDurationMs]
+      : [],
+  );
+  const nearestRank = (values: number[], percentile: number): number => {
+    if (values.length === 0) return 0;
+    const ordered = [...values].sort((left, right) => left - right);
+    return ordered[Math.max(0, Math.ceil(percentile * ordered.length) - 1)]!;
+  };
+  const latencyMetricsValid =
+    !isV19QwenEvidence ||
+    (rawCases.every(
+      (item) =>
+        Number.isInteger(item.inferenceDurationMs) &&
+        (item.inferenceDurationMs as number) >= 0 &&
+        (item.inferenceDurationMs as number) <= 180_000 &&
+        (item.authorizationDurationMs === null ||
+          (Number.isInteger(item.authorizationDurationMs) &&
+            (item.authorizationDurationMs as number) >= 0 &&
+            (item.authorizationDurationMs as number) <= 180_000)),
+    ) &&
+      rawSummary.authorizationSampleCount === authorizationLatencies.length &&
+      rawSummary.inferenceLatencyP50Ms ===
+        nearestRank(inferenceLatencies as number[], 0.5) &&
+      rawSummary.inferenceLatencyP95Ms ===
+        nearestRank(inferenceLatencies as number[], 0.95) &&
+      rawSummary.authorizationLatencyP50Ms ===
+        nearestRank(authorizationLatencies, 0.5) &&
+      rawSummary.authorizationLatencyP95Ms ===
+        nearestRank(authorizationLatencies, 0.95) &&
+      Number.isInteger(rawSummary.casesPerSecondMilli) &&
+      (rawSummary.casesPerSecondMilli as number) >= 0);
+  if (!latencyMetricsValid) {
+    throw new GuardianNexusSdkError("invalid_qwen_latency_metrics");
+  }
   if (
     !Number.isInteger(summary.modelCalls) ||
     summary.modelCalls !== cases.length ||

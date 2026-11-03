@@ -53,6 +53,17 @@ export type GuardianQwenPolicyLabEvidenceCasesItem = {
   /** @maxLength 80 */
   reasonCode: string;
   dispatchStatus: GuardianQwenPolicyLabEvidenceCasesItemDispatchStatus;
+  /**
+     * @minimum 0
+     * @maximum 180000
+     */
+  inferenceDurationMs?: number;
+  /**
+     * @minimum 0
+     * @maximum 180000
+     * @nullable
+     */
+  authorizationDurationMs?: number | null;
   /** @maxItems 2 */
   toolEvents: GuardianQwenPolicyLabEvidenceCasesItemToolEventsItem[];
   /** @pattern ^[a-f0-9]{64}$ */

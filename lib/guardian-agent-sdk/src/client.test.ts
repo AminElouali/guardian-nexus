@@ -476,6 +476,67 @@ test("Qwen SDK accepts the bounded v1.8 ten-case corpus and rejects eleven", asy
   );
   assert.equal(result.report.counts.cases, 10);
 
+  const v19Evidence = sizedEvidence(9);
+  v19Evidence.engineVersion = "guardian-agent-qwen-policy-lab-v1.9.0";
+  v19Evidence.versions = {
+    ...v19Evidence.versions,
+    corpus: "guardian-qwen-policy-lab-en-es-v1.9.0",
+  };
+  v19Evidence.profileId = "guardian-agent-qwen-lab-multiagent-v1";
+  v19Evidence.verticalId = "multiagent";
+  v19Evidence.cases = v19Evidence.cases.map((item) => ({
+    ...item,
+    inferenceDurationMs: 11,
+    authorizationDurationMs: null,
+  }));
+  v19Evidence.limits = { ...v19Evidence.limits, maxCases: 9 };
+  v19Evidence.summary = {
+    ...v19Evidence.summary,
+    sampleCount: 9,
+    modelCalls: 9,
+    inferenceLatencyP50Ms: 11,
+    inferenceLatencyP95Ms: 11,
+    authorizationLatencyP50Ms: 0,
+    authorizationLatencyP95Ms: 0,
+    authorizationSampleCount: 0,
+    casesPerSecondMilli: 1_000,
+  };
+  const v19Client = clientWith(async () =>
+    Response.json(
+      qwenJobResponse(
+        "guardian-agent-qwen-lab-multiagent-v1",
+        v19Evidence,
+        "succeeded",
+      ),
+    ),
+  );
+  const v19Result = await v19Client.waitForQwenEvaluation(
+    jobId,
+    "guardian-agent-qwen-lab-multiagent-v1",
+    { intervalMs: 50, maxAttempts: 1 },
+  );
+  assert.equal(v19Result.report.counts.cases, 9);
+
+  const invalidLatency = structuredClone(v19Evidence);
+  invalidLatency.summary.inferenceLatencyP95Ms = 10;
+  const invalidLatencyClient = clientWith(async () =>
+    Response.json(
+      qwenJobResponse(
+        "guardian-agent-qwen-lab-multiagent-v1",
+        invalidLatency,
+        "succeeded",
+      ),
+    ),
+  );
+  await assert.rejects(
+    invalidLatencyClient.waitForQwenEvaluation(
+      jobId,
+      "guardian-agent-qwen-lab-multiagent-v1",
+      { intervalMs: 50, maxAttempts: 1 },
+    ),
+    { code: "invalid_qwen_latency_metrics" },
+  );
+
   const overLimitClient = clientWith(async () =>
     Response.json(
       qwenJobResponse(profileId, sizedEvidence(11), "succeeded"),

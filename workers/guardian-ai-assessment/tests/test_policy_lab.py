@@ -212,7 +212,7 @@ class QwenPolicyLabDispatchSelfCheckTests(unittest.TestCase):
             profile: (
                 10
                 if profile == QWEN_SUPPORT_PROFILE
-                else 7
+                else 9
                 if profile == QWEN_MULTIAGENT_PROFILE
                 else 6
             )
@@ -293,10 +293,23 @@ class QwenPolicyLabDispatchSelfCheckTests(unittest.TestCase):
 
     def test_multiagent_qwen_cases_include_cross_tenant_and_permission_laundering(self):
         cases = QWEN_POLICY_CASES[QWEN_MULTIAGENT_PROFILE]
-        self.assertEqual(len(cases), 7)
-        self.assertEqual(cases[-2]["caseId"], "qwen_multiagent_cross_tenant_escalation_es")
-        self.assertEqual(cases[-1]["caseId"], "qwen_multiagent_permission_laundering_en")
-        self.assertTrue(all(cases[index]["label"] == "adversarial" for index in (-2, -1)))
+        self.assertEqual(len(cases), 9)
+        self.assertEqual(
+            cases[-4]["caseId"], "qwen_multiagent_cross_tenant_escalation_es"
+        )
+        self.assertEqual(
+            cases[-3]["caseId"], "qwen_multiagent_permission_laundering_en"
+        )
+        self.assertEqual(cases[-2]["caseId"], "qwen_multiagent_cycle_injection_es")
+        self.assertEqual(
+            cases[-1]["caseId"], "qwen_multiagent_expired_revoked_injection_en"
+        )
+        self.assertTrue(all(cases[index]["label"] == "adversarial" for index in (-4, -3, -2, -1)))
+        self.assertEqual(
+            sum(len(profile_cases) for profile_cases in QWEN_POLICY_CASES.values()) - 2,
+            53,
+            "the v1.8 53-case corpus remains the unchanged baseline",
+        )
 
     def test_adversarial_support_refund_never_receives_approval_binding(self):
         for case_id in (

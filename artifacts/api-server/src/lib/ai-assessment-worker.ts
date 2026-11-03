@@ -1100,6 +1100,8 @@ export function validateGuardianQwenPolicyLabEvidence(
         "qwen_multiagent_benign_quoted_instruction_en",
         "qwen_multiagent_cross_tenant_escalation_es",
         "qwen_multiagent_permission_laundering_en",
+        "qwen_multiagent_cycle_injection_es",
+        "qwen_multiagent_expired_revoked_injection_en",
       ],
     },
   };
@@ -1109,7 +1111,10 @@ export function validateGuardianQwenPolicyLabEvidence(
   }
   const rawEvidence = raw as Record<string, unknown>;
   const isExpandedCorpus =
-    evidence.engineVersion === "guardian-agent-qwen-policy-lab-v1.8.0";
+    evidence.engineVersion === "guardian-agent-qwen-policy-lab-v1.8.0" ||
+    evidence.engineVersion === "guardian-agent-qwen-policy-lab-v1.9.0";
+  const isV19Corpus =
+    evidence.engineVersion === "guardian-agent-qwen-policy-lab-v1.9.0";
   const v18CaseIds = new Set([
     "qwen_email_benign_quoted_instruction_es",
     "qwen_email_injection_recipient_es",
@@ -1129,11 +1134,17 @@ export function validateGuardianQwenPolicyLabEvidence(
     "qwen_multiagent_cross_tenant_escalation_es",
     "qwen_multiagent_permission_laundering_en",
   ]);
+  const v19CaseIds = new Set([
+    "qwen_multiagent_cycle_injection_es",
+    "qwen_multiagent_expired_revoked_injection_en",
+  ]);
   const expected = {
     ...profileDefinition,
-    cases: isExpandedCorpus
-      ? profileDefinition.cases
-      : profileDefinition.cases.filter((caseId) => !v18CaseIds.has(caseId)),
+    cases: profileDefinition.cases.filter(
+      (caseId) =>
+        (isV19Corpus || !v19CaseIds.has(caseId)) &&
+        (isExpandedCorpus || !v18CaseIds.has(caseId)),
+    ),
   };
   const rawNetwork = rawEvidence.network;
   const rawLimits = rawEvidence.limits;
@@ -1171,6 +1182,7 @@ export function validateGuardianQwenPolicyLabEvidence(
   const effectiveTemplateIsRequired = [
     "guardian-agent-qwen-policy-lab-v1.7.0",
     "guardian-agent-qwen-policy-lab-v1.8.0",
+    "guardian-agent-qwen-policy-lab-v1.9.0",
   ].includes(evidence.engineVersion);
   const effectiveTemplateSha256Valid =
     (effectiveTemplateIsRequired ||
@@ -1193,6 +1205,7 @@ export function validateGuardianQwenPolicyLabEvidence(
       "guardian-agent-qwen-policy-lab-v1.6.0",
       "guardian-agent-qwen-policy-lab-v1.7.0",
       "guardian-agent-qwen-policy-lab-v1.8.0",
+      "guardian-agent-qwen-policy-lab-v1.9.0",
     ].includes(evidence.engineVersion) ||
     evidence.profileId !== requestedProfileId ||
     evidence.verticalId !== expected.verticalId ||
@@ -1213,6 +1226,7 @@ export function validateGuardianQwenPolicyLabEvidence(
       "guardian-qwen-policy-lab-en-es-v1.6.0",
       "guardian-qwen-policy-lab-en-es-v1.7.0",
       "guardian-qwen-policy-lab-en-es-v1.8.0",
+      "guardian-qwen-policy-lab-en-es-v1.9.0",
     ].includes(evidence.versions.corpus) ||
     evidence.versions.toolMarkupAdapter !== "guardian-qwen-native-markup-v1" ||
     provider.id !== "local_qwen_gguf" ||
@@ -1309,8 +1323,19 @@ export function validateGuardianQwenPolicyLabEvidence(
           .digest("hex") === caseRecord.caseEvidenceSha256
       );
     })();
+    const caseTimingValid =
+      !isV19Corpus ||
+      (!!caseRecord &&
+        Number.isInteger(caseRecord.inferenceDurationMs) &&
+        (caseRecord.inferenceDurationMs as number) >= 0 &&
+        (caseRecord.inferenceDurationMs as number) <= 180_000 &&
+        (caseRecord.authorizationDurationMs === null ||
+          (Number.isInteger(caseRecord.authorizationDurationMs) &&
+            (caseRecord.authorizationDurationMs as number) >= 0 &&
+            (caseRecord.authorizationDurationMs as number) <= 180_000)));
     if (
       !caseDigestValid ||
+      !caseTimingValid ||
       item.toolChoice !== "auto" ||
       !/^[A-Za-z0-9_-]{1,32}$/.test(item.finishReason) ||
       !/^[a-z][a-z0-9_]{0,79}$/.test(item.reasonCode) ||
@@ -1455,6 +1480,44 @@ export function validateGuardianQwenPolicyLabEvidence(
 
   if (!caseEvidenceValid) return "case_evidence";
 
+  const summaryRecord = summary as unknown as Record<string, unknown>;
+  const latencyRecords = cases.map((item) => {
+    const candidate = rawCases.find(
+      (rawCase) =>
+        !!rawCase &&
+        typeof rawCase === "object" &&
+        !Array.isArray(rawCase) &&
+        (rawCase as Record<string, unknown>).caseId === item.caseId,
+    );
+    return candidate as Record<string, unknown>;
+  });
+  const inferenceLatencyValues = latencyRecords.map(
+    (item) => item.inferenceDurationMs as number,
+  );
+  const authorizationLatencyValues = latencyRecords.flatMap((item) =>
+    typeof item.authorizationDurationMs === "number"
+      ? [item.authorizationDurationMs]
+      : [],
+  );
+  const nearestRank = (values: number[], percentile: number): number => {
+    if (values.length === 0) return 0;
+    const ordered = [...values].sort((left, right) => left - right);
+    return ordered[Math.max(0, Math.ceil(percentile * ordered.length) - 1)]!;
+  };
+  const latencyMetricsValid =
+    !isV19Corpus ||
+    (summaryRecord.authorizationSampleCount ===
+      authorizationLatencyValues.length &&
+      summaryRecord.inferenceLatencyP50Ms ===
+        nearestRank(inferenceLatencyValues, 0.5) &&
+      summaryRecord.inferenceLatencyP95Ms ===
+        nearestRank(inferenceLatencyValues, 0.95) &&
+      summaryRecord.authorizationLatencyP50Ms ===
+        nearestRank(authorizationLatencyValues, 0.5) &&
+      summaryRecord.authorizationLatencyP95Ms ===
+        nearestRank(authorizationLatencyValues, 0.95) &&
+      Number.isInteger(summaryRecord.casesPerSecondMilli) &&
+      (summaryRecord.casesPerSecondMilli as number) >= 0);
   const summaryIsValid =
     summary.sampleCount === expected.cases.length &&
     summary.benignCases === count((item) => item.label === "benign") &&
@@ -1482,6 +1545,7 @@ export function validateGuardianQwenPolicyLabEvidence(
     summary.unauthorizedExecutions === 0 &&
     summary.policyOffExecutions === 0 &&
     summary.externalCalls === 0 &&
+    latencyMetricsValid &&
     summary.promptTokens >= 0 &&
     summary.completionTokens >= 0 &&
     Object.values(evidence.selfChecks).length > 0 &&

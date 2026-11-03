@@ -3301,6 +3301,7 @@ export const GuardianQwenPolicyLabEvidenceEngineVersion = {
   'guardian-agent-qwen-policy-lab-v160': 'guardian-agent-qwen-policy-lab-v1.6.0',
   'guardian-agent-qwen-policy-lab-v170': 'guardian-agent-qwen-policy-lab-v1.7.0',
   'guardian-agent-qwen-policy-lab-v180': 'guardian-agent-qwen-policy-lab-v1.8.0',
+  'guardian-agent-qwen-policy-lab-v190': 'guardian-agent-qwen-policy-lab-v1.9.0',
 } as const;
 
 export type GuardianQwenPolicyLabEvidenceProfileId = typeof GuardianQwenPolicyLabEvidenceProfileId[keyof typeof GuardianQwenPolicyLabEvidenceProfileId];
@@ -3344,6 +3345,7 @@ export const GuardianQwenPolicyLabEvidenceVersionsCorpus = {
   'guardian-qwen-policy-lab-en-es-v160': 'guardian-qwen-policy-lab-en-es-v1.6.0',
   'guardian-qwen-policy-lab-en-es-v170': 'guardian-qwen-policy-lab-en-es-v1.7.0',
   'guardian-qwen-policy-lab-en-es-v180': 'guardian-qwen-policy-lab-en-es-v1.8.0',
+  'guardian-qwen-policy-lab-en-es-v190': 'guardian-qwen-policy-lab-en-es-v1.9.0',
 } as const;
 
 export type GuardianQwenPolicyLabEvidenceCasesItemLabel = typeof GuardianQwenPolicyLabEvidenceCasesItemLabel[keyof typeof GuardianQwenPolicyLabEvidenceCasesItemLabel];
@@ -3523,6 +3525,17 @@ export type GuardianQwenPolicyLabEvidenceCasesItem = {
   /** @maxLength 80 */
   reasonCode: string;
   dispatchStatus: GuardianQwenPolicyLabEvidenceCasesItemDispatchStatus;
+  /**
+     * @minimum 0
+     * @maximum 180000
+     */
+  inferenceDurationMs?: number;
+  /**
+     * @minimum 0
+     * @maximum 180000
+     * @nullable
+     */
+  authorizationDurationMs?: number | null;
   /** @maxItems 2 */
   toolEvents: GuardianQwenPolicyLabEvidenceCasesItemToolEventsItem[];
   /** @pattern ^[a-f0-9]{64}$ */
@@ -3538,7 +3551,21 @@ export type GuardianQwenPolicyLabEvidenceCasesItem = {
   caseEvidenceSha256: string;
 };
 
-export type GuardianQwenPolicyLabEvidenceSummary = {[key: string]: number};
+export type GuardianQwenPolicyLabEvidenceSummary = {
+  /** @minimum 0 */
+  inferenceLatencyP50Ms?: number;
+  /** @minimum 0 */
+  inferenceLatencyP95Ms?: number;
+  /** @minimum 0 */
+  authorizationLatencyP50Ms?: number;
+  /** @minimum 0 */
+  authorizationLatencyP95Ms?: number;
+  /** @minimum 0 */
+  authorizationSampleCount?: number;
+  /** @minimum 0 */
+  casesPerSecondMilli?: number;
+  [key: string]: unknown;
+};
 
 export type GuardianQwenPolicyLabEvidenceSelfChecks = {
   allCallsUsedAuto: true;

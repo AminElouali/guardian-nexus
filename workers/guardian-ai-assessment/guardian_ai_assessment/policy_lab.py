@@ -434,6 +434,16 @@ def _run_case(vertical: str, action: dict[str, Any], permissions: set[str]) -> d
         "actorType": actor_type,
         "grantedPermissions": sorted(permissions),
     }
+    if action["delegated"]:
+        action_context["delegationContext"] = {
+            "tenantId": resource_workspace_id,
+            "parentAgentId": "guardian-multiagent-coordinator-v1",
+            "childAgentId": agent_id,
+            "agentChain": ["guardian-multiagent-coordinator-v1"],
+            "expiresAtEpoch": 4_000_000_000,
+            "nowEpoch": 1_700_000_000,
+            "revokedAgentIds": [],
+        }
     action_hash = _sha256(action_context)
     proposal_hash = _sha256(
         {

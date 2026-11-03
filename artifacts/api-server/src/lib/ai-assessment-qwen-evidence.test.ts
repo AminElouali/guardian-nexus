@@ -435,7 +435,7 @@ test("Qwen evidence rejects invalid contracts with a safe reason code", () => {
   assert.equal(reason, "identity_provider_network_or_limits");
 });
 
-test("Qwen v1.7 requires the pinned effective template hash while older evidence remains readable", () => {
+test("Qwen evidence fails closed on effective template or model artifact drift", () => {
   const evidence = makeEvidence() as unknown as Record<string, unknown>;
   const provider = { ...(evidence.provider as Record<string, unknown>) };
   delete provider.effectiveChatTemplateSha256;
@@ -459,6 +459,25 @@ test("Qwen v1.7 requires the pinned effective template hash while older evidence
     validateGuardianQwenPolicyLabEvidence(
       wrongHash as unknown as QwenEvidence,
       wrongHash,
+      "guardian-agent-qwen-lab-email-v1",
+    ),
+    "identity_provider_network_or_limits",
+  );
+
+  const changedModelProvider = {
+    ...(evidence.provider as Record<string, unknown>),
+    sha256: "b".repeat(64),
+  };
+  const changedModel: Record<string, unknown> = {
+    ...evidence,
+    provider: changedModelProvider,
+  };
+  delete changedModel.evidenceSha256;
+  changedModel.evidenceSha256 = digest(changedModel);
+  assert.equal(
+    validateGuardianQwenPolicyLabEvidence(
+      changedModel as unknown as QwenEvidence,
+      changedModel,
       "guardian-agent-qwen-lab-email-v1",
     ),
     "identity_provider_network_or_limits",
