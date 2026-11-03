@@ -974,17 +974,26 @@ export function validateGuardianQwenPolicyLabEvidence(
   > = {
     [QWEN_EMAIL_POLICY_PROFILE_ID]: {
       verticalId: "email",
-      cases: ["qwen_email_benign_read_es", "qwen_email_indirect_injection_en"],
+      cases: [
+        "qwen_email_benign_read_es",
+        "qwen_email_indirect_injection_en",
+        "qwen_email_indirect_injection_es",
+      ],
     },
     [QWEN_DATABASE_POLICY_PROFILE_ID]: {
       verticalId: "database",
-      cases: ["qwen_database_benign_read_en", "qwen_database_indirect_injection_es"],
+      cases: [
+        "qwen_database_benign_read_en",
+        "qwen_database_indirect_injection_es",
+        "qwen_database_indirect_injection_en",
+      ],
     },
     [QWEN_FINANCE_POLICY_PROFILE_ID]: {
       verticalId: "finance",
       cases: [
         "qwen_finance_benign_bank_change_request_es",
         "qwen_finance_indirect_bank_change_en",
+        "qwen_finance_indirect_payment_es",
       ],
     },
     [QWEN_CUSTOMER_SERVICE_POLICY_PROFILE_ID]: {
@@ -994,6 +1003,9 @@ export function validateGuardianQwenPolicyLabEvidence(
         "qwen_support_indirect_injection_en",
         "qwen_support_benign_refund_approval_es",
         "qwen_support_benign_eligible_refund_en",
+        "qwen_support_benign_eligible_refund_es",
+        "qwen_support_ticket_injection_es",
+        "qwen_support_ticket_injection_en",
       ],
     },
     [QWEN_PROGRAMMING_POLICY_PROFILE_ID]: {
@@ -1001,6 +1013,7 @@ export function validateGuardianQwenPolicyLabEvidence(
       cases: [
         "qwen_programming_benign_review_es",
         "qwen_programming_indirect_injection_en",
+        "qwen_programming_indirect_injection_es",
       ],
     },
     [QWEN_BROWSER_POLICY_PROFILE_ID]: {
@@ -1008,6 +1021,7 @@ export function validateGuardianQwenPolicyLabEvidence(
       cases: [
         "qwen_browser_benign_local_page_es",
         "qwen_browser_indirect_injection_en",
+        "qwen_browser_indirect_injection_es",
       ],
     },
     [QWEN_INFRASTRUCTURE_POLICY_PROFILE_ID]: {
@@ -1015,6 +1029,7 @@ export function validateGuardianQwenPolicyLabEvidence(
       cases: [
         "qwen_infra_benign_config_read_es",
         "qwen_infra_indirect_injection_en",
+        "qwen_infra_indirect_injection_es",
       ],
     },
     [QWEN_MULTIAGENT_POLICY_PROFILE_ID]: {
@@ -1022,6 +1037,7 @@ export function validateGuardianQwenPolicyLabEvidence(
       cases: [
         "qwen_multiagent_benign_read_only_es",
         "qwen_multiagent_indirect_injection_en",
+        "qwen_multiagent_indirect_injection_es",
       ],
     },
   };
@@ -1072,6 +1088,7 @@ export function validateGuardianQwenPolicyLabEvidence(
       "guardian-agent-qwen-policy-lab-v1.3.0",
       "guardian-agent-qwen-policy-lab-v1.4.0",
       "guardian-agent-qwen-policy-lab-v1.5.0",
+      "guardian-agent-qwen-policy-lab-v1.6.0",
     ].includes(evidence.engineVersion) ||
     evidence.profileId !== requestedProfileId ||
     evidence.verticalId !== expected.verticalId ||
@@ -1089,6 +1106,7 @@ export function validateGuardianQwenPolicyLabEvidence(
       "guardian-qwen-policy-lab-en-es-v1.3.0",
       "guardian-qwen-policy-lab-en-es-v1.4.0",
       "guardian-qwen-policy-lab-en-es-v1.5.0",
+      "guardian-qwen-policy-lab-en-es-v1.6.0",
     ].includes(evidence.versions.corpus) ||
     evidence.versions.toolMarkupAdapter !== "guardian-qwen-native-markup-v1" ||
     provider.id !== "local_qwen_gguf" ||
@@ -1216,7 +1234,8 @@ export function validateGuardianQwenPolicyLabEvidence(
     if ((actionRef === null) !== (actionSha256 === null)) return false;
     if (
       evidence.engineVersion === "guardian-agent-qwen-policy-lab-v1.4.0" ||
-      evidence.engineVersion === "guardian-agent-qwen-policy-lab-v1.5.0"
+      evidence.engineVersion === "guardian-agent-qwen-policy-lab-v1.5.0" ||
+      evidence.engineVersion === "guardian-agent-qwen-policy-lab-v1.6.0"
     ) {
       if (
         !caseRecord ||

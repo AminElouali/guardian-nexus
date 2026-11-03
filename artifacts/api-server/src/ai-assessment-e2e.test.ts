@@ -1017,7 +1017,7 @@ test(
           assert.equal(qwenResult.provider.toolChoice, "auto");
           assert.equal(qwenResult.provider.sha256, "9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031");
           const expectedCaseCount =
-            profileId === "guardian-agent-qwen-lab-customer-service-v1" ? 4 : 2;
+            profileId === "guardian-agent-qwen-lab-customer-service-v1" ? 7 : 3;
           assert.equal(qwenResult.cases.length, expectedCaseCount);
           assert.equal(qwenResult.summary.modelCalls, expectedCaseCount);
           assert.equal(qwenResult.summary.externalCalls, 0);
@@ -1271,20 +1271,97 @@ test(
       assert.equal(persistedDecision?.execution, "synthetic_action_simulated_once");
       console.log("QWEN_APPROVAL_DECISION_TESTED=1; execution=synthetic_action_simulated_once");
 
-      const financeApproval = replayableQwenApprovals.find(
+      const expirableQwenApproval = replayableQwenApprovals.find(
         (approval) =>
           approval.id !== qwenApproval.id &&
+          (
+            approval.caseId === "qwen_support_benign_eligible_refund_es" ||
+            approval.syntheticActionRef ===
+              "guardian.synthetic.finance.bank-change.v1"
+          ),
+      );
+      if (expirableQwenApproval) {
+        const expiryPath =
+          `/api/workspaces/${workspaceA}/ai-security-assessments/approvals/` +
+          `${expirableQwenApproval.id}/decision`;
+        const markedExpired = await fixturePool.query<{ id: string }>(
+          `UPDATE public.ai_assessment_approval_requests
+           SET expires_at = now() - interval '1 minute'
+           WHERE id = $1 AND workspace_id = $2 AND status = 'pending'
+           RETURNING id`,
+          [expirableQwenApproval.id, workspaceA],
+        );
+        assert.equal(
+          markedExpired.rowCount,
+          1,
+          "only the selected pending Qwen approval may be expired",
+        );
+        const expiredQwenResponse = await apiRequest(
+          adminA,
+          expiryPath,
+          "POST",
+          {
+            decision: "approve",
+            proposalBindingSha256: expirableQwenApproval.proposalBindingSha256,
+          },
+        );
+        assert.equal(expiredQwenResponse.status, 409);
+        const expiredQwen = await apiRequest(
+          adminA,
+          `/api/workspaces/${workspaceA}/ai-security-assessments/approvals`,
+        );
+        const persistedExpiredQwen =
+          ListWorkspaceAiAssessmentApprovalsResponse.parse(
+            await expiredQwen.json(),
+          ).approvals.find(
+            (approval) => approval.id === expirableQwenApproval.id,
+          );
+        assert.equal(persistedExpiredQwen?.status, "expired");
+        assert.equal(persistedExpiredQwen?.execution, "not_performed");
+        const expiredQwenReplay = await apiRequest(
+          adminA,
+          expiryPath,
+          "POST",
+          {
+            decision: "approve",
+            proposalBindingSha256:
+              expirableQwenApproval.proposalBindingSha256,
+          },
+        );
+        assert.equal(
+          expiredQwenReplay.status,
+          409,
+          "an expired model-generated proposal cannot be replayed",
+        );
+        const persistedExpiredRecord = await fixturePool.query<{
+          status: string;
+          simulated_at: Date | null;
+        }>(
+          `SELECT status, simulated_at
+           FROM public.ai_assessment_approval_requests
+           WHERE id = $1 AND workspace_id = $2`,
+          [expirableQwenApproval.id, workspaceA],
+        );
+        assert.equal(persistedExpiredRecord.rows[0]?.status, "expired");
+        assert.equal(persistedExpiredRecord.rows[0]?.simulated_at, null);
+        console.log(
+          "QWEN_PROPOSAL_EXPIRY_TESTED=1; execution=not_performed_expired",
+        );
+      }
+      const qwenFinanceApproval = replayableQwenApprovals.find(
+        (approval) =>
+          approval.id !== qwenApproval.id &&
+          approval.id !== expirableQwenApproval?.id &&
           approval.syntheticActionRef ===
             "guardian.synthetic.finance.bank-change.v1",
       );
-      if (financeApproval) {
-        assert.equal(financeApproval.caseId, "qwen_finance_benign_bank_change_request_es");
+      if (qwenFinanceApproval) {
         const financeDecisionPath =
           `/api/workspaces/${workspaceA}/ai-security-assessments/approvals/` +
-          `${financeApproval.id}/decision`;
+          `${qwenFinanceApproval.id}/decision`;
         const financeDecisionBody = {
           decision: "deny",
-          proposalBindingSha256: financeApproval.proposalBindingSha256,
+          proposalBindingSha256: qwenFinanceApproval.proposalBindingSha256,
         };
         const financeDenialResponse = await apiRequest(
           adminA,
@@ -1318,11 +1395,13 @@ test(
           `SELECT status, simulated_at
            FROM public.ai_assessment_approval_requests
            WHERE id = $1 AND workspace_id = $2`,
-          [financeApproval.id, workspaceA],
+          [qwenFinanceApproval.id, workspaceA],
         );
         assert.equal(persistedFinanceDenial.rows[0]?.status, "denied");
         assert.equal(persistedFinanceDenial.rows[0]?.simulated_at, null);
-        console.log("QWEN_FINANCE_PROPOSAL_DENIED=1; execution=not_performed_denied");
+        console.log(
+          "QWEN_FINANCE_PROPOSAL_DENIED=1; execution=not_performed_denied",
+        );
       }
     } else {
       console.log(

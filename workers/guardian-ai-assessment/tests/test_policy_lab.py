@@ -13,6 +13,7 @@ from guardian_ai_assessment.qwen_policy_lab import (
     SUPPORT_TOOLS,
     SYNTHETIC_REFUND_AMOUNT_CENTS,
     SYNTHETIC_SUPPORT_TICKET_ID,
+    _allowlisted_approval_action,
     _denied_call_never_dispatched,
     _digest,
     _js_iso_timestamp,
@@ -185,20 +186,41 @@ class GuardianAgentPolicyLabTests(unittest.TestCase):
 
 
 class QwenPolicyLabDispatchSelfCheckTests(unittest.TestCase):
-    def test_finance_qwen_profile_has_only_two_synthetic_cases(self):
+    def test_qwen_profiles_add_bilingual_adversarial_cases(self):
+        self.assertEqual(
+            {profile: len(cases) for profile, cases in QWEN_POLICY_CASES.items()},
+            {
+                profile: 7 if profile == QWEN_SUPPORT_PROFILE else 3
+                for profile in QWEN_POLICY_CASES
+            },
+        )
+        for profile, cases in QWEN_POLICY_CASES.items():
+            adversarial = [case for case in cases if case["label"] == "adversarial"]
+            self.assertGreaterEqual(len(adversarial), 2, profile)
+            self.assertEqual(
+                {case["language"] for case in adversarial},
+                {"en", "es"},
+                profile,
+            )
+
+    def test_finance_qwen_profile_has_three_synthetic_cases(self):
         cases = QWEN_POLICY_CASES[QWEN_FINANCE_PROFILE]
         self.assertEqual(
             [case["caseId"] for case in cases],
             [
                 "qwen_finance_benign_bank_change_request_es",
                 "qwen_finance_indirect_bank_change_en",
+                "qwen_finance_indirect_payment_es",
             ],
         )
-        self.assertEqual([case["label"] for case in cases], ["benign", "adversarial"])
+        self.assertEqual(
+            [case["label"] for case in cases],
+            ["benign", "adversarial", "adversarial"],
+        )
 
-    def test_support_qwen_profile_includes_refund_approval_inference_case(self):
+    def test_support_qwen_profile_includes_refunds_and_bilingual_attacks(self):
         cases = QWEN_POLICY_CASES[QWEN_SUPPORT_PROFILE]
-        self.assertEqual(len(cases), 4)
+        self.assertEqual(len(cases), 7)
         self.assertEqual(
             cases[2]["caseId"],
             "qwen_support_benign_refund_approval_es",
@@ -209,6 +231,39 @@ class QwenPolicyLabDispatchSelfCheckTests(unittest.TestCase):
             "qwen_support_benign_eligible_refund_en",
         )
         self.assertEqual(cases[3]["label"], "benign")
+        self.assertEqual(
+            cases[4]["caseId"],
+            "qwen_support_benign_eligible_refund_es",
+        )
+        self.assertEqual(cases[4]["label"], "benign")
+        self.assertEqual(
+            [case["caseId"] for case in cases[5:]],
+            [
+                "qwen_support_ticket_injection_es",
+                "qwen_support_ticket_injection_en",
+            ],
+        )
+        self.assertTrue(all(case["label"] == "adversarial" for case in cases[5:]))
+
+    def test_adversarial_support_refund_never_receives_approval_binding(self):
+        for case_id in (
+            "qwen_support_ticket_injection_es",
+            "qwen_support_ticket_injection_en",
+        ):
+            action_ref, action_sha256 = _allowlisted_approval_action(
+                vertical="customer_service",
+                case_id=case_id,
+                tool="propose_synthetic_refund",
+                arguments={
+                    "ticket_id": SYNTHETIC_SUPPORT_TICKET_ID,
+                    "amount_cents": SYNTHETIC_REFUND_AMOUNT_CENTS,
+                },
+                decision="require_approval",
+                dispatch="approval_required_before_dispatch",
+                arguments_sha256="a" * 64,
+            )
+            self.assertIsNone(action_ref)
+            self.assertIsNone(action_sha256)
 
     def test_support_refund_tool_has_fixed_arguments_and_approval_only_semantics(self):
         refund_tool = next(

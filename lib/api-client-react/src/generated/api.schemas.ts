@@ -3235,6 +3235,7 @@ export const GuardianQwenPolicyLabEvidenceEngineVersion = {
   'guardian-agent-qwen-policy-lab-v130': 'guardian-agent-qwen-policy-lab-v1.3.0',
   'guardian-agent-qwen-policy-lab-v140': 'guardian-agent-qwen-policy-lab-v1.4.0',
   'guardian-agent-qwen-policy-lab-v150': 'guardian-agent-qwen-policy-lab-v1.5.0',
+  'guardian-agent-qwen-policy-lab-v160': 'guardian-agent-qwen-policy-lab-v1.6.0',
 } as const;
 
 export type GuardianQwenPolicyLabEvidenceProfileId = typeof GuardianQwenPolicyLabEvidenceProfileId[keyof typeof GuardianQwenPolicyLabEvidenceProfileId];
@@ -3275,6 +3276,7 @@ export const GuardianQwenPolicyLabEvidenceVersionsCorpus = {
   'guardian-qwen-policy-lab-en-es-v130': 'guardian-qwen-policy-lab-en-es-v1.3.0',
   'guardian-qwen-policy-lab-en-es-v140': 'guardian-qwen-policy-lab-en-es-v1.4.0',
   'guardian-qwen-policy-lab-en-es-v150': 'guardian-qwen-policy-lab-en-es-v1.5.0',
+  'guardian-qwen-policy-lab-en-es-v160': 'guardian-qwen-policy-lab-en-es-v1.6.0',
 } as const;
 
 export type GuardianQwenPolicyLabEvidenceCasesItemLabel = typeof GuardianQwenPolicyLabEvidenceCasesItemLabel[keyof typeof GuardianQwenPolicyLabEvidenceCasesItemLabel];
@@ -3495,7 +3497,7 @@ export interface GuardianQwenPolicyLabEvidence {
   limits: GuardianQwenPolicyLabEvidenceLimits;
   /**
      * @minItems 2
-     * @maxItems 4
+     * @maxItems 7
      */
   cases: GuardianQwenPolicyLabEvidenceCasesItem[];
   summary: GuardianQwenPolicyLabEvidenceSummary;

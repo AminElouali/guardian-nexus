@@ -16,4 +16,5 @@ export const GuardianQwenPolicyLabEvidenceVersionsCorpus = {
   'guardian-qwen-policy-lab-en-es-v130': 'guardian-qwen-policy-lab-en-es-v1.3.0',
   'guardian-qwen-policy-lab-en-es-v140': 'guardian-qwen-policy-lab-en-es-v1.4.0',
   'guardian-qwen-policy-lab-en-es-v150': 'guardian-qwen-policy-lab-en-es-v1.5.0',
+  'guardian-qwen-policy-lab-en-es-v160': 'guardian-qwen-policy-lab-en-es-v1.6.0',
 } as const;
