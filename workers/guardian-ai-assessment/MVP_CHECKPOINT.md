@@ -1895,3 +1895,66 @@ This update supersedes the older diskcache status, worker-test count, and OSV
   Muestra pequeña y sintética: no acredita eficacia general, ni llamadas
   nativas, ni conectores empresariales reales. IPv6, broker host, supply-chain,
   avisos, revisión legal y sesión Clerk real siguen pendientes antes de clientes.
+
+## Verificación posterior a v1.7.0 — aprobaciones Qwen y despacho adversarial — 2026-11-03
+
+- Base inspeccionada: HEAD `af26a03ccb10f93e1ececc109449d7c0037c6687`,
+  árbol limpio. El cambio de código de este hito solo añade aserciones al E2E
+  existente; no modifica runner, política, base de datos, UI, canvas ni corpus.
+- Cada uno de los ocho perfiles vuelve a ejecutarse con Qwen local y
+  `tool_choice=auto`. Las nuevas aserciones verifican que `no_proposal` coincide
+  con casos sin llamada, con origen `no_tool_call`, sin despacho ni simulación;
+  que DENY termina antes del simulador (política o validación del adaptador); y
+  que `require_approval` nunca despacha ni simula antes de aprobación. La
+  cobertura adversaria usa el corpus existente; no se añadieron muestras.
+- Corrida: 36 casos (11 benignos, 25 adversarios); 24 propuestas mediante
+  marcadores completos de Qwen adaptados, 0 `message.tool_calls` nativas,
+  0 marcadores incompletos, 12 casos sin propuesta. Decisiones: 12 ALLOW,
+  10 DENY, 2 REQUIRE_APPROVAL; 12 simulaciones sintéticas; 0 ejecución no
+  autorizada, 0 llamadas externas y 0 ejecución de Policy OFF.
+- Conteo adversario comprobado: 25 casos; 9 sin propuesta, 10 DENY y 0
+  REQUIRE_APPROVAL. Los contadores restantes no se presentan como métrica de
+  precisión. Por perfil, los casos adversarios/no-propuesta/DENY/approval son:
+  correo 3/2/0/0; base de datos 3/0/0/0; finanzas 3/1/0/0; atención al cliente
+  4/3/1/0; programación 3/0/3/0; navegador 3/2/1/0; infraestructura 3/1/2/0;
+  multiagente 3/0/3/0. La tabla y los resultados globales describen esta
+  pequeña corrida sintética; no son tasas generales de eficacia.
+- Evidencia de aprobación basada en inferencia local real:
+  `QWEN_APPROVAL_ORIGINS=finance:real_local_inference,support:real_local_inference`.
+  La consulta desde otro tenant devuelve **404**; el vínculo/hash alterado
+  devuelve **409** sin ejecución; la revocación del rol aprobador devuelve
+  **403** sin ejecución. Dos decisiones concurrentes sobre una propuesta Qwen
+  producen exactamente **200/409**: una sola simulación ficticia se persiste con
+  hashes de resultado y replay. La propuesta caducada y su replay devuelven
+  conflicto, sin simulación. Una propuesta Qwen de finanzas denegada devuelve
+  **200** para la decisión DENY; el replay devuelve **409**, sin simular.
+  Solo se reanuda una acción allow-listed ficticia; no hay operación externa.
+  La prueba separada de aprobación basada en fixture continúa etiquetada como
+  `allowlisted_test_fixture`, no como inferencia Qwen.
+- No se mezclan sondas distintas: la sonda nativa separada informa
+  `QWEN_NATIVE_TOOL_TRACE_COUNT=24/288` (no es el número de llamadas nativas
+  observado en los 36 casos) y la comprobación autónoma separada informa
+  `QWEN_AUTONOMOUS_TOOL_TRACE_COUNT=39/42`. Ninguno de esos conteos se suma a
+  los 36 casos `tool_choice=auto` de los perfiles.
+- Validación serial, toda exit 0: root typecheck y build; API typecheck y
+  **63/63** unit tests; SDK build y **12/12** tests; worker Python **87/87**
+  con `run-local.sh --unit-tests`; E2E API/worker **9/9** en `685504 ms`;
+  dashboard/componentes **8/8** en `1702 ms`; `git diff --check`.
+- Artefactos locales (JSON fuera de Git): `guardian-qwen-policy-labs-e2e-v1.7.0.json`,
+  SHA-256 `f793b5ecdace054a53090adb649953eb5629f22d8aa48a57fa3d22157d00ef18`;
+  `guardian-agent-sdk-qwen-eight-profiles-e2e-v1.7.0.json`, SHA-256
+  `761dcff8069af0f607aab9bfa4ea60b0b88b601c445efe9411f905b26976ab27`,
+  SHA interno `f3d50a57813a93476e55ff6fcf45da22dc604fd7469b40b389b46a118aa4bb3a`;
+  indicador de texto bruto `false`, llamadas externas, ejecuciones no
+  autorizadas y Policy OFF `0`. Evidencia de la denegación Qwen de finanzas:
+  `guardian-qwen-approval-security-e2e-v1.json`, SHA-256
+  `d7d752b2b726aedfd41b0440fe6a62ad5b02c14edff908bd9349248a87616764`,
+  SHA interno `6eba6f935f75fed269d8218c08f2e8dc5e5c82e1f0b1df7206dbc10b74387d64`.
+- El informe técnico de esta corrida está en
+  `reports/qwen-approval-hardening-e2e-2026-11-03.md`. Las pruebas de dashboard
+  son de componentes/integración, no una sesión real Clerk en navegador. No se
+  usó bypass ni se crearon credenciales; esa verificación continúa pendiente.
+  También siguen como bloqueos precliente el aislamiento de Docker desde un
+  broker con identidad independiente, IPv6 dual-stack no disponible, triage/
+  remediación de advisories y revisión legal de licencias/procedencia. No se
+  publicó, desplegó ni conectó un sistema externo.

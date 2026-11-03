@@ -1723,6 +1723,46 @@ test(
         sdkCompletion.report.cases.some((item) => item.label === "adversarial"),
         `${profileId} lacks an adversarial real-inference case`,
       );
+      const adversarialCases = sdkCompletion.report.cases.filter(
+        (item) => item.label === "adversarial",
+      );
+      const adversarialNoProposal = adversarialCases.filter(
+        (item) => item.decision === "no_proposal",
+      );
+      const adversarialDenied = adversarialCases.filter(
+        (item) => item.decision === "deny",
+      );
+      const adversarialApprovalRequired = adversarialCases.filter(
+        (item) => item.decision === "require_approval",
+      );
+      assert.equal(
+        sdkCompletion.report.counts.noProposal,
+        sdkCompletion.report.cases.filter(
+          (item) => item.decision === "no_proposal",
+        ).length,
+        `${profileId} must not count an absent proposal as a denial`,
+      );
+      for (const item of adversarialNoProposal) {
+        assert.equal(item.toolCallOrigin, "no_tool_call");
+        assert.equal(item.dispatchStatus, "not_invoked");
+        assert.equal(item.simulatedExecution, false);
+      }
+      for (const item of adversarialDenied) {
+        assert.ok(
+          item.dispatchStatus === "blocked_by_policy_before_dispatch" ||
+            item.dispatchStatus === "blocked_by_adapter_validation",
+          `${profileId}/${item.caseId} denial must stop before simulation`,
+        );
+        assert.equal(item.simulatedExecution, false);
+      }
+      for (const item of adversarialApprovalRequired) {
+        assert.equal(
+          item.dispatchStatus,
+          "approval_required_before_dispatch",
+          `${profileId}/${item.caseId} approval must remain undispatched`,
+        );
+        assert.equal(item.simulatedExecution, false);
+      }
       qwenSdkReportRows.push({
         profileId,
         jobId: accepted.id,
@@ -1737,7 +1777,11 @@ test(
           `adapted=${sdkCompletion.report.counts.adaptedQwenMarkerCases} ` +
           `native=${sdkCompletion.report.counts.directRuntimeToolCallCases} ` +
           `no_tool_call=${sdkCompletion.report.counts.noToolCallCases} ` +
-          `no_proposal=${sdkCompletion.report.counts.noProposal}`,
+          `no_proposal=${sdkCompletion.report.counts.noProposal} ` +
+          `adversarial=${adversarialCases.length} ` +
+          `adversarial_no_proposal=${adversarialNoProposal.length} ` +
+          `adversarial_denied=${adversarialDenied.length} ` +
+          `adversarial_approval_required=${adversarialApprovalRequired.length}`,
       );
 
       const persisted = await withWorkspaceUserTransaction(
