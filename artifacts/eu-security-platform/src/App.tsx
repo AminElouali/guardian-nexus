@@ -99,21 +99,21 @@ function PublicHome() {
   return <main className="public-page">
     <header className="public-nav wrap">
       <Brand />
-      <nav className={`public-links ${mobileOpen ? 'public-links-open' : ''}`}>
-        <a href="#alcance" onClick={() => setMobileOpen(false)}>Capacidades</a><a href="#disponible" onClick={() => setMobileOpen(false)}>Disponible hoy</a><a href="#preparacion" onClick={() => setMobileOpen(false)}>Preparación europea</a>
+      <nav id="public-navigation" className={`public-links ${mobileOpen ? 'public-links-open' : ''}`} aria-label="Navegación principal">
+        <a href="#alcance" onClick={() => setMobileOpen(false)} data-testid="link-capacidades">Capacidades</a><a href="#disponible" onClick={() => setMobileOpen(false)} data-testid="link-disponible">Disponible hoy</a><a href="#preparacion" onClick={() => setMobileOpen(false)} data-testid="link-preparacion">Preparación europea</a>
       </nav>
       <div className="public-actions">
         {isLoaded && isSignedIn
           ? <Link href="/dashboard" className="button button-primary" data-testid="link-open-workspace">Abrir espacio <ArrowRight size={16} /></Link>
           : <><Link href="/sign-in" className="nav-signin" data-testid="link-sign-in">Iniciar sesión</Link><Link href="/sign-up" className="button button-primary" data-testid="link-sign-up">Crear espacio <ArrowRight size={16} /></Link></>}
-        <button className="mobile-menu" aria-label="Mostrar navegación" onClick={() => setMobileOpen(!mobileOpen)} data-testid="button-mobile-menu">{mobileOpen ? <X /> : <Menu />}</button>
+        <button type="button" className="mobile-menu" aria-label={mobileOpen ? 'Cerrar navegación' : 'Mostrar navegación'} aria-expanded={mobileOpen} aria-controls="public-navigation" onClick={() => setMobileOpen(!mobileOpen)} data-testid="button-mobile-menu">{mobileOpen ? <X /> : <Menu />}</button>
       </div>
     </header>
     <section className="hero wrap">
       <div className="hero-copy reveal">
         <div className="eyebrow"><span className="eyebrow-dot" /> Guardian Nexus · Seguridad de sistemas de IA</div>
         <h1>Ciberseguridad<br />para la era de <em>la IA.</em></h1>
-        <p className="hero-lede">Ayudamos a las empresas a prepararse y demostrar controles frente a los requisitos europeos aplicables.</p>
+        <p className="hero-lede">Verificación de acciones propuestas por agentes de IA: contexto, permisos y límites antes de que una acción pueda avanzar.</p>
         <div className="hero-ctas">
           <Link href={startHref} className="button button-primary button-large" data-testid="link-hero-start">{isSignedIn ? 'Abrir mi espacio' : 'Crear espacio de trabajo'} <ArrowRight size={17} /></Link>
           <span className="hero-note"><LockKeyhole size={14} /> Preparación, no certificación</span>
@@ -131,9 +131,35 @@ function PublicHome() {
         <div className="visual-footer"><span><span className="tiny-square" /> Visibilidad con supervisión humana</span><span>Sin promesas de certificación</span></div>
       </div>
     </section>
+    <section className="lab-disclosure wrap" aria-labelledby="lab-disclosure-title" data-testid="notice-lab-scope">
+      <span className="lab-disclosure-mark"><FlaskConical size={19} /></span>
+      <div><p className="lab-disclosure-kicker">Alcance actual · laboratorio</p><h2 id="lab-disclosure-title">Validado en un laboratorio con datos y herramientas sintéticos.</h2><p>Hoy no hay Gmail, bancos, proveedores cloud, robots ni sistemas de clientes conectados o protegidos. Las capacidades descritas para agentes son ámbitos de evaluación, no una protección activa en entornos reales.</p></div>
+    </section>
+    <section id="flujo" className="agent-flow-section" aria-labelledby="agent-flow-title">
+      <div className="wrap">
+        <div className="agent-flow-heading"><div className="eyebrow">Un modelo de control, no una promesa de conexión</div><h2 id="agent-flow-title">Cada acción pasa por una decisión.</h2><p>El enfoque previsto coloca una verificación entre la intención del agente y su herramienta.</p></div>
+        <ol className="agent-flow" data-testid="agent-flow">
+          <li><span className="flow-index">01</span><div><b>El agente propone</b><p>Una acción y sus argumentos, antes de ejecutarse.</p></div></li>
+          <li><span className="flow-index">02</span><div><b>Guardian verifica</b><p>La petición frente al contexto, el acceso y las reglas definidas.</p></div></li>
+          <li><span className="flow-index">03</span><div><b>Decisión explícita</b><p>Permitir, bloquear o requerir aprobación humana.</p></div></li>
+        </ol>
+      </div>
+    </section>
     <section id="alcance" className="principles-section">
       <div className="wrap">
-        <div className="section-intro"><div className="eyebrow">Capacidades y estado actual</div><h2>Una visión conectada de tus riesgos.</h2><p>Guardian Nexus ayuda a preparar y documentar controles. La evaluación de IA se ejecuta hoy solo en un laboratorio interno; las demás capacidades aún están planificadas.</p></div>
+        <div className="section-intro"><div className="eyebrow">Ámbitos de evaluación · solo laboratorio</div><h2>Ocho tipos de agente.<br />Riesgos concretos.</h2><p>Escenarios de referencia con datos y herramientas sintéticos. No equivalen a cobertura en producción ni a conectores disponibles.</p></div>
+        <div className="agent-risk-grid" data-testid="agent-risk-grid">
+          <article className="agent-risk-card" data-testid="agent-risk-email"><span className="agent-risk-number">01 / COMUNICACIÓN</span><div className="agent-risk-icon"><Activity size={18} /></div><h3>Email</h3><p>Phishing, exfiltración de información y envíos no autorizados.</p></article>
+          <article className="agent-risk-card" data-testid="agent-risk-database"><span className="agent-risk-number">02 / DATOS</span><div className="agent-risk-icon"><Database size={18} /></div><h3>Bases de datos</h3><p>Extracción, eliminación o cambios de registros sin autorización.</p></article>
+          <article className="agent-risk-card" data-testid="agent-risk-finance"><span className="agent-risk-number">03 / DINERO</span><div className="agent-risk-icon"><Gauge size={18} /></div><h3>Finanzas</h3><p>Pagos no autorizados y altas o cambios de beneficiarios.</p></article>
+          <article className="agent-risk-card" data-testid="agent-risk-programming"><span className="agent-risk-number">04 / DESARROLLO</span><div className="agent-risk-icon"><Command size={18} /></div><h3>Programación</h3><p>Ejecución de comandos, exposición de secretos y ediciones de código.</p></article>
+          <article className="agent-risk-card" data-testid="agent-risk-support"><span className="agent-risk-number">05 / CLIENTES</span><div className="agent-risk-icon"><Users size={18} /></div><h3>Atención al cliente</h3><p>Cambios fraudulentos de cuenta y exposición de datos personales.</p></article>
+          <article className="agent-risk-card" data-testid="agent-risk-browser"><span className="agent-risk-number">06 / NAVEGACIÓN</span><div className="agent-risk-icon"><Globe2 size={18} /></div><h3>Navegador</h3><p>Inyección de prompts y acciones web iniciadas sin autorización.</p></article>
+          <article className="agent-risk-card" data-testid="agent-risk-infrastructure"><span className="agent-risk-number">07 / SISTEMAS</span><div className="agent-risk-icon"><Cloud size={18} /></div><h3>Infraestructura</h3><p>Elevación de privilegios y modificaciones de configuración.</p></article>
+          <article className="agent-risk-card" data-testid="agent-risk-multiagent"><span className="agent-risk-number">08 / ORQUESTACIÓN</span><div className="agent-risk-icon"><Layers3 size={18} /></div><h3>Sistemas multiagente</h3><p>Delegaciones inseguras y escalada de privilegios entre agentes.</p></article>
+        </div>
+        <div className="agent-ia-cta"><div><span className="eyebrow">Seguridad de IA</span><h3>Explora las evaluaciones disponibles en laboratorio.</h3><p>Perfiles y resultados acotados a escenarios sintéticos; no prueban sistemas de clientes.</p></div><Link href="/ai-evaluations" className="button button-primary" data-testid="link-home-ai-evaluations">Ver Seguridad IA <ArrowRight size={16} /></Link></div>
+        <div className="section-intro capability-intro"><div className="eyebrow">Preparación de la plataforma</div><h2>Construir controles con contexto.</h2><p>Capacidades actuales y previstas, con su estado descrito de forma explícita.</p></div>
         <div className="capability-grid">
           <article className="capability-card capability-featured"><span className="capability-number">01 / SISTEMAS</span><div className="capability-icon"><Sparkles size={20} /></div><h3>Evaluación de seguridad de IA</h3><p>Prueba real y acotada sobre un agente propio de laboratorio. No analiza agentes ni datos de clientes.</p><span className="capability-state">Activo en laboratorio interno · servicio a clientes no disponible</span></article>
           <article className="capability-card"><span className="capability-number">02 / EXPOSICIÓN</span><div className="capability-icon"><Layers3 size={20} /></div><h3>Configuración, identidades y datos</h3><p>Señales sobre configuraciones incorrectas, permisos, identidades y posibles exposiciones de datos.</p><span className="capability-state">Previsto · no disponible aún</span></article>
@@ -152,14 +178,15 @@ function PublicHome() {
           <div className="available-row"><span className="available-check"><Check size={15} /></span><div><b>Inventario manual de activos</b><p>Registra sistemas, entorno y criticidad con contexto.</p></div><span className="availability-tag">Disponible</span></div>
           <div className="available-row"><span className="available-check"><Check size={15} /></span><div><b>Roles básicos por función</b><p>Permisos distintos para lectura y cambios de activos.</p></div><span className="availability-tag">Disponible</span></div>
           <div className="available-row"><span className="available-check"><FlaskConical size={15} /></span><div><b>Evaluación de Seguridad de IA</b><p>Solo laboratorio interno con agente local fijo; no está disponible para sistemas de clientes.</p></div><span className="availability-tag">Laboratorio</span></div>
-          <div className="available-row planned-row"><span className="planned-mark"><Layers3 size={15} /></span><div><b>Conectores cloud, escaneos y monitorización</b><p>No están conectados; no se ejecutan análisis en cuentas de clientes.</p></div><span className="planned-tag">Planificado</span></div>
+          <div className="available-row planned-row"><span className="planned-mark"><Layers3 size={15} /></span><div><b>Conectores empresariales</b><p>Previstos para una fase futura. No hay Gmail, bancos ni proveedores cloud conectados hoy.</p></div><span className="planned-tag">Planificado</span></div>
+          <div className="available-row planned-row"><span className="planned-mark"><Command size={15} /></span><div><b>SDK, API y MCP Gateway</b><p>Vías de integración previstas, todavía no disponibles ni conectadas a sistemas externos.</p></div><span className="planned-tag">Planificado</span></div>
         </div>
       </div>
     </section>
     <section id="preparacion" className="compliance-section">
       <div className="wrap compliance-layout">
         <div className="compliance-heading"><div className="eyebrow">Requisitos europeos aplicables</div><h2>Prepararse no es certificarse.</h2></div>
-        <div className="compliance-copy"><p>Los marcos y obligaciones aplicables dependen de tu organización, los sistemas que utiliza y su contexto. Guardian Nexus aspira a ayudar a evaluar el estado de los controles y reunir evidencias para apoyar ese trabajo.</p><p><strong>La plataforma no concede certificaciones ni garantiza el cumplimiento.</strong> La evaluación, interpretación de requisitos y validación deben realizarse con las personas responsables y, cuando corresponda, con asesoramiento cualificado.</p><Link href="/roadmap" className="text-link" data-testid="link-roadmap">Consultar la hoja de ruta <ArrowRight size={15} /></Link></div>
+        <div className="compliance-copy"><p>Los marcos y obligaciones aplicables dependen de tu organización, los sistemas que utiliza y su contexto. Guardian Nexus busca ayudar a organizar la preparación y evidencias; no determina por sí sola qué obligaciones te aplican.</p><p><strong>La plataforma no concede certificaciones ni garantiza el cumplimiento.</strong> La evaluación, interpretación de requisitos y validación deben realizarse con las personas responsables y, cuando corresponda, con asesoramiento cualificado. La referencia a Europa describe el contexto previsto, no una certificación ni una conclusión legal.</p><Link href="/roadmap" className="text-link" data-testid="link-roadmap">Consultar la hoja de ruta <ArrowRight size={15} /></Link></div>
         <div className="compliance-steps"><div><span>01</span><b>Preparar</b><small>Organizar activos y responsabilidades</small></div><i /><div><span>02</span><b>Evaluar</b><small>Revisar controles frente al contexto aplicable</small></div><i /><div className="certification-step"><span>03</span><b>Certificar</b><small>Proceso independiente, fuera de la plataforma</small></div></div>
       </div>
     </section>

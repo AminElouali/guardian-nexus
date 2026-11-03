@@ -5,6 +5,7 @@ import { publishableKeyFromHost } from "@clerk/shared/keys";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import {
+  AGENT_ACTION_INTENT_ROUTE,
   AI_ASSESSMENT_LAB_JOB_ROUTE,
   aiAssessmentLabBodySizeErrorHandler,
   aiAssessmentLabJsonParser,
@@ -38,6 +39,7 @@ app.use(
 );
 app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 app.use(AI_ASSESSMENT_LAB_JOB_ROUTE, aiAssessmentLabJsonParser);
+app.use(AGENT_ACTION_INTENT_ROUTE, aiAssessmentLabJsonParser);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(

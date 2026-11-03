@@ -586,6 +586,37 @@ paths:
           description: Local worker concurrency limit reached
         "503":
           description: Local isolated Docker worker is unavailable or disabled outside development
+  /workspaces/{workspaceId}/agent-action-adapter/intents:
+    post:
+      operationId: submitWorkspaceAgentActionIntent
+      tags: [ai-evaluations]
+      summary: Submit a fixed synthetic external-agent scenario for policy evaluation
+      description: Accepts only a versioned scenario ID from the fixed local test catalog. The server derives agent and actor identity, tenant, tool, resource, and permissions; callers cannot choose a policy, decision, tool arguments, target, or execution mode. The existing isolated worker evaluates the scenario before any synthetic dispatch.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AgentActionAdapterRequest" }
+      responses:
+        "202":
+          description: Tenant-scoped isolated policy-lab job queued with a redacted, hashed action-intent contract
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentActionAdapterResponse" }
+        "400":
+          description: Invalid or unsupported action-intent scenario
+        "403":
+          description: Workspace owner or admin role required
+        "409":
+          description: Workspace quota or pending-job limit reached
+        "503":
+          description: Required isolated policy-lab profile is unavailable
   /workspaces/{workspaceId}/ai-security-assessments/lab/jobs/{jobId}/retry:
     post:
       operationId: retryWorkspaceAiAssessmentLabJob
@@ -929,6 +960,75 @@ components:
         startedAt: { type: ["string", "null"], format: date-time }
         completedAt: { type: ["string", "null"], format: date-time }
       required: [id, status, profileId, workerVersion, attempts, engineVersion, result, errorCode, createdAt, startedAt, completedAt]
+    AgentActionAdapterRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        contractVersion: { type: string, const: guardian-action-intent-v1 }
+        scenarioId:
+          type: string
+          enum: [email.allowed_draft, email.untrusted_send, finance.transfer_approval]
+        idempotencyKey: { type: string, minLength: 16, maxLength: 128 }
+      required: [contractVersion, scenarioId, idempotencyKey]
+    AgentActionIntentV1:
+      type: object
+      additionalProperties: false
+      properties:
+        contractVersion: { type: string, const: guardian-action-intent-v1 }
+        agentId: { type: string, const: guardian-synthetic-external-agent-v1 }
+        actorUserId: { type: string, minLength: 1, maxLength: 160 }
+        actorRole: { type: string, enum: [owner, admin] }
+        workspaceId: { type: string, format: uuid }
+        scenarioId:
+          type: string
+          enum: [email.allowed_draft, email.untrusted_send, finance.transfer_approval]
+        caseId: { type: string, minLength: 1, maxLength: 80 }
+        toolId:
+          type: string
+          enum: [send_email_simulated, consult_synthetic_invoice]
+        operation:
+          type: string
+          enum: [draft.create, send.external, transfer.request]
+        resourceType:
+          type: string
+          enum: [mailbox, recipient, payment]
+        resourceId: { type: string, minLength: 1, maxLength: 80 }
+        sensitivity:
+          type: string
+          enum: [internal, confidential, restricted]
+        instructionProvenance:
+          type: string
+          enum: [trusted_user_request, untrusted_email, untrusted_document]
+        requiredPermissions:
+          type: array
+          minItems: 1
+          maxItems: 4
+          items: { type: string, maxLength: 80 }
+        intentSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+      required: [contractVersion, agentId, actorUserId, actorRole, workspaceId, scenarioId, caseId, toolId, operation, resourceType, resourceId, sensitivity, instructionProvenance, requiredPermissions, intentSha256]
+    AgentActionAdapterResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        adapterVersion: { type: string, const: guardian-agent-intent-adapter-v1 }
+        source: { type: string, const: fixed_synthetic_scenario }
+        decisionStatus: { type: string, const: pending_worker_evaluation }
+        externalDispatch: { type: boolean, const: false }
+        actionIntent: { $ref: "#/components/schemas/AgentActionIntentV1" }
+        job: { $ref: "#/components/schemas/AgentActionAdapterJobReference" }
+      required: [adapterVersion, source, decisionStatus, externalDispatch, actionIntent, job]
+    AgentActionAdapterJobReference:
+      type: object
+      additionalProperties: false
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [queued, running, succeeded, failed] }
+        profileId:
+          type: string
+          enum: [guardian-agent-lab-email-v1, guardian-agent-lab-finance-v1]
+        workerVersion: { type: string, maxLength: 80 }
+        createdAt: { type: string, format: date-time }
+      required: [id, status, profileId, workerVersion, createdAt]
     AiAssessmentApproval:
       type: object
       additionalProperties: false

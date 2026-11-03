@@ -6,6 +6,20 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './agentActionAdapterJobReference';
+export * from './agentActionAdapterJobReferenceProfileId';
+export * from './agentActionAdapterJobReferenceStatus';
+export * from './agentActionAdapterRequest';
+export * from './agentActionAdapterRequestScenarioId';
+export * from './agentActionAdapterResponse';
+export * from './agentActionIntentV1';
+export * from './agentActionIntentV1ActorRole';
+export * from './agentActionIntentV1InstructionProvenance';
+export * from './agentActionIntentV1Operation';
+export * from './agentActionIntentV1ResourceType';
+export * from './agentActionIntentV1ScenarioId';
+export * from './agentActionIntentV1Sensitivity';
+export * from './agentActionIntentV1ToolId';
 export * from './aiAssessmentApproval';
 export * from './aiAssessmentApprovalBindingVersion';
 export * from './aiAssessmentApprovalDecidedByRole';

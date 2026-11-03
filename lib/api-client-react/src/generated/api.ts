@@ -25,6 +25,8 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AgentActionAdapterRequest,
+  AgentActionAdapterResponse,
   AiAssessmentApprovalDecisionRequest,
   AiAssessmentApprovalDecisionResponse,
   AiAssessmentApprovalList,
@@ -2374,6 +2376,96 @@ export const useCreateWorkspaceAiAssessmentLabJob = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getCreateWorkspaceAiAssessmentLabJobMutationOptions(options), queryClient);
+    }
+
+export const getSubmitWorkspaceAgentActionIntentUrl = (workspaceId: string,) => {
+
+
+
+
+  return `/api/workspaces/${workspaceId}/agent-action-adapter/intents`
+}
+
+/**
+ * Accepts only a versioned scenario ID from the fixed local test catalog. The server derives agent and actor identity, tenant, tool, resource, and permissions; callers cannot choose a policy, decision, tool arguments, target, or execution mode. The existing isolated worker evaluates the scenario before any synthetic dispatch.
+ * @summary Submit a fixed synthetic external-agent scenario for policy evaluation
+ */
+export const submitWorkspaceAgentActionIntent = async (workspaceId: string,
+    agentActionAdapterRequest: AgentActionAdapterRequest, options?: Parameters<typeof customFetch>[1]): Promise<AgentActionAdapterResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<AgentActionAdapterResponse>(getSubmitWorkspaceAgentActionIntentUrl(workspaceId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(agentActionAdapterRequest)
+  }
+);}
+
+
+
+
+
+export const getSubmitWorkspaceAgentActionIntentMutationKey = () => ['submitWorkspaceAgentActionIntent'] as const;
+
+export const getSubmitWorkspaceAgentActionIntentMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitWorkspaceAgentActionIntent>>, TError,SubmitWorkspaceAgentActionIntentMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof submitWorkspaceAgentActionIntent>>, TError,SubmitWorkspaceAgentActionIntentMutationVariables, TContext> => {
+
+const mutationKey = getSubmitWorkspaceAgentActionIntentMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitWorkspaceAgentActionIntent>>, SubmitWorkspaceAgentActionIntentMutationVariables> = (props) => {
+          const {workspaceId,data} = props ?? {};
+
+          return  submitWorkspaceAgentActionIntent(workspaceId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SubmitWorkspaceAgentActionIntentMutationResult = NonNullable<Awaited<ReturnType<typeof submitWorkspaceAgentActionIntent>>>
+    export type SubmitWorkspaceAgentActionIntentMutationBody = BodyType<AgentActionAdapterRequest>
+    export type SubmitWorkspaceAgentActionIntentMutationError = ErrorType<void>
+    export type SubmitWorkspaceAgentActionIntentMutationVariables = {workspaceId: string;data: BodyType<AgentActionAdapterRequest>}
+
+    /**
+ * @summary Submit a fixed synthetic external-agent scenario for policy evaluation
+ */
+export const useSubmitWorkspaceAgentActionIntent = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitWorkspaceAgentActionIntent>>, TError,SubmitWorkspaceAgentActionIntentMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof submitWorkspaceAgentActionIntent>>,
+        TError,
+        SubmitWorkspaceAgentActionIntentMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSubmitWorkspaceAgentActionIntentMutationOptions(options), queryClient);
     }
 
 export const getRetryWorkspaceAiAssessmentLabJobUrl = (workspaceId: string,

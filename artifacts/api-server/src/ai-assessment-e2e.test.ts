@@ -14,6 +14,7 @@ import {
   DecideWorkspaceAiAssessmentApprovalResponse,
   ListWorkspaceAiAssessmentLabJobsResponse,
   ListWorkspaceAiAssessmentApprovalsResponse,
+  SubmitWorkspaceAgentActionIntentResponse,
 } from "@workspace/api-zod";
 import {
   aiAssessmentJobsTable,
@@ -29,6 +30,7 @@ import {
   computeApprovalProposalBindingV2,
   getAllowlistedSyntheticApprovalAction,
 } from "./lib/ai-assessment-approval-actions";
+import { deriveAgentActionIdempotencyKey } from "./lib/guardian-agent-action-adapter";
 import {
   AI_ASSESSMENT_WORKER_VERSION,
   getLocalWorkerAvailability,
@@ -37,6 +39,7 @@ import {
 import { POLICY_LAB_PROFILE_IDS } from "./lib/ai-assessment-sandbox";
 import { createAiAssessmentLabRouter } from "./routes/ai-assessment-lab";
 import {
+  AGENT_ACTION_INTENT_ROUTE,
   AI_ASSESSMENT_LAB_JOB_ROUTE,
   AI_ASSESSMENT_LAB_JSON_LIMIT_BYTES,
   aiAssessmentLabBodySizeErrorHandler,
@@ -67,6 +70,7 @@ if (!databaseUrl) {
 const fixturePool = new pg.Pool({ connectionString: databaseUrl });
 const app = express();
 app.use(AI_ASSESSMENT_LAB_JOB_ROUTE, aiAssessmentLabJsonParser);
+app.use(AGENT_ACTION_INTENT_ROUTE, aiAssessmentLabJsonParser);
 app.use(express.json());
 app.use("/api", createAiAssessmentLabRouter(testAuth));
 app.use(aiAssessmentLabBodySizeErrorHandler);
@@ -926,6 +930,221 @@ test(
     );
     mkdirSync(dirname(artifactPath), { recursive: true });
     writeFileSync(artifactPath, JSON.stringify(artifactJobs, null, 2));
+  },
+);
+
+test(
+  "external-agent action adapter preserves tenant identity and gates synthetic policy scenarios",
+  { timeout: TIMEOUT_MS },
+  async () => {
+    const adapterPath =
+      `/api/workspaces/${workspaceA}/agent-action-adapter/intents`;
+    const scenarios = [
+      {
+        scenarioId: "email.allowed_draft",
+        profileId: "guardian-agent-lab-email-v1",
+        caseId: "email_benign_read_and_draft",
+        decision: "allow",
+        toolId: "send_email_simulated",
+        operation: "draft.create",
+      },
+      {
+        scenarioId: "email.untrusted_send",
+        profileId: "guardian-agent-lab-email-v1",
+        caseId: "email_adversarial_external_exfiltration",
+        decision: "deny",
+        toolId: "send_email_simulated",
+        operation: "send.external",
+      },
+      {
+        scenarioId: "finance.transfer_approval",
+        profileId: "guardian-agent-lab-finance-v1",
+        caseId: "finance_adversarial_transfer_request",
+        decision: "require_approval",
+        toolId: "consult_synthetic_invoice",
+        operation: "transfer.request",
+      },
+    ] as const;
+
+    assert.equal((await apiRequest(null, adapterPath, "POST", {})).status, 401);
+    assert.equal((await apiRequest(userB, adapterPath, "POST", {
+      contractVersion: "guardian-action-intent-v1",
+      scenarioId: scenarios[0].scenarioId,
+      idempotencyKey: `external-agent-cross-tenant-${randomUUID()}`,
+    })).status, 403);
+    assert.equal((await apiRequest(viewerA, adapterPath, "POST", {
+      contractVersion: "guardian-action-intent-v1",
+      scenarioId: scenarios[0].scenarioId,
+      idempotencyKey: `external-agent-viewer-${randomUUID()}`,
+    })).status, 403);
+    assert.equal((await apiRequest(userA, adapterPath, "POST", {
+      contractVersion: "guardian-action-intent-v1",
+      scenarioId: "email.external_target",
+      idempotencyKey: `external-agent-invalid-${randomUUID()}`,
+    })).status, 400);
+    assert.equal((await apiRequest(userA, adapterPath, "POST", {
+      contractVersion: "guardian-action-intent-v1",
+      scenarioId: scenarios[0].scenarioId,
+      idempotencyKey: `external-agent-extra-${randomUUID()}`,
+      policyMode: "off",
+      toolArguments: { recipient: "outside.invalid" },
+    })).status, 400, "caller cannot choose policy or tool arguments");
+    assert.equal((await apiRequest(userA, adapterPath, "POST", {
+      contractVersion: "guardian-action-intent-v1",
+      scenarioId: scenarios[0].scenarioId,
+      idempotencyKey: `external-agent-profile-${randomUUID()}`,
+      profileId: "guardian-agent-qwen-lab-email-v1",
+    })).status, 400, "caller cannot choose a worker profile or image");
+
+    const oversizedKey = `external-agent-oversize-${randomUUID()}`;
+    const oversizedScenario = scenarios[0].scenarioId;
+    const oversizedResponse = await apiRequest(userA, adapterPath, "POST", {
+      contractVersion: "guardian-action-intent-v1",
+      scenarioId: oversizedScenario,
+      idempotencyKey: oversizedKey,
+      unused: "x".repeat(9 * 1024),
+    });
+    assert.equal(oversizedResponse.status, 413);
+    const derivedOversizedKey = deriveAgentActionIdempotencyKey({
+      scenarioId: oversizedScenario,
+      actorUserId: userA,
+      actorRole: "owner",
+      callerKey: oversizedKey,
+    });
+    const oversizedJob = await fixturePool.query(
+      `SELECT id FROM public.ai_assessment_jobs
+       WHERE workspace_id = $1 AND idempotency_key = $2`,
+      [workspaceA, derivedOversizedKey],
+    );
+    assert.equal(oversizedJob.rowCount, 0, "413 must occur before job creation");
+
+    for (const scenario of scenarios) {
+      const idempotencyKey = `external-agent-adapter-${randomUUID()}`;
+      const requestBody = {
+        contractVersion: "guardian-action-intent-v1",
+        scenarioId: scenario.scenarioId,
+        idempotencyKey,
+      };
+      const acceptedResponse = await apiRequest(
+        userA,
+        adapterPath,
+        "POST",
+        requestBody,
+      );
+      assert.equal(
+        acceptedResponse.status,
+        202,
+        await acceptedResponse.clone().text(),
+      );
+      const accepted = SubmitWorkspaceAgentActionIntentResponse.parse(
+        await acceptedResponse.json(),
+      );
+      assert.equal(
+        accepted.adapterVersion,
+        "guardian-agent-intent-adapter-v1",
+      );
+      assert.equal(accepted.source, "fixed_synthetic_scenario");
+      assert.equal(accepted.decisionStatus, "pending_worker_evaluation");
+      assert.equal(accepted.externalDispatch, false);
+      assert.equal(accepted.actionIntent.contractVersion, "guardian-action-intent-v1");
+      assert.equal(accepted.actionIntent.scenarioId, scenario.scenarioId);
+      assert.equal(accepted.actionIntent.caseId, scenario.caseId);
+      assert.equal(accepted.actionIntent.agentId, "guardian-synthetic-external-agent-v1");
+      assert.equal(accepted.actionIntent.actorUserId, userA);
+      assert.equal(accepted.actionIntent.actorRole, "owner");
+      assert.equal(accepted.actionIntent.workspaceId, workspaceA);
+      assert.equal(accepted.actionIntent.toolId, scenario.toolId);
+      assert.equal(accepted.actionIntent.operation, scenario.operation);
+      assert.match(accepted.actionIntent.intentSha256, /^[a-f0-9]{64}$/);
+      assert.equal(accepted.job.profileId, scenario.profileId);
+      assert.equal(accepted.job.status, "queued");
+      policyLabJobIds.push(accepted.job.id);
+
+      const duplicate = await apiRequest(
+        userA,
+        adapterPath,
+        "POST",
+        requestBody,
+      );
+      assert.equal(duplicate.status, 202);
+      const duplicateResponse = SubmitWorkspaceAgentActionIntentResponse.parse(
+        await duplicate.json(),
+      );
+      assert.equal(duplicateResponse.job.id, accepted.job.id);
+      assert.equal(
+        duplicateResponse.actionIntent.intentSha256,
+        accepted.actionIntent.intentSha256,
+      );
+
+      const audit = await fixturePool.query<{
+        metadata: Record<string, unknown>;
+      }>(
+        `SELECT metadata FROM public.workspace_audit_events
+         WHERE workspace_id = $1 AND resource_id = $2
+           AND action = 'ai_assessment.lab.requested'`,
+        [workspaceA, accepted.job.id],
+      );
+      assert.equal(audit.rowCount, 1);
+      assert.equal(
+        audit.rows[0]?.metadata["adapterVersion"],
+        "guardian-agent-intent-adapter-v1",
+      );
+      assert.equal(
+        audit.rows[0]?.metadata["scenarioId"],
+        scenario.scenarioId,
+      );
+      assert.equal(
+        audit.rows[0]?.metadata["intentSha256"],
+        accepted.actionIntent.intentSha256,
+      );
+
+      let completed:
+        | ReturnType<typeof ListWorkspaceAiAssessmentLabJobsResponse.parse>[number]
+        | undefined;
+      const deadline = Date.now() + 60_000;
+      while (Date.now() < deadline) {
+        const response = await apiRequest(
+          userA,
+          `/api/workspaces/${workspaceA}/ai-security-assessments/lab/jobs`,
+        );
+        assert.equal(response.status, 200);
+        const jobs = ListWorkspaceAiAssessmentLabJobsResponse.parse(
+          await response.json(),
+        );
+        const job = jobs.find((candidate) => candidate.id === accepted.job.id);
+        if (job?.status === "succeeded" || job?.status === "failed") {
+          completed = job;
+          break;
+        }
+        await delay(POLL_INTERVAL_MS);
+      }
+      assert.ok(completed, `${scenario.scenarioId} did not complete`);
+      assert.equal(completed.status, "succeeded", completed.errorCode ?? undefined);
+      assert.equal(completed.profileId, scenario.profileId);
+      const evidence = completed.result;
+      assert.ok(evidence && evidence.engine === "guardian_policy_lab");
+      if (!evidence || evidence.engine !== "guardian_policy_lab") {
+        assert.fail("adapter scenarios must use the existing policy lab engine");
+      }
+      const evaluatedCase = evidence.cases.find(
+        (candidate) => candidate.caseId === scenario.caseId,
+      );
+      assert.ok(evaluatedCase, `${scenario.caseId} missing from worker evidence`);
+      assert.equal(evaluatedCase.policyOn.decision, scenario.decision);
+      assert.equal(evaluatedCase.policyOn.executed, scenario.decision === "allow");
+      assert.equal(evaluatedCase.policyOff.executed, false);
+      assert.equal(evaluatedCase.rawArgumentsStored, false);
+      assert.equal(evaluatedCase.rawInstructionStored, false);
+      assert.equal(evidence.summary.actualOperations, 0);
+      assert.equal(evidence.summary.externalCalls, 0);
+      assert.equal(evidence.summary.persistentStateChanges, 0);
+      assert.equal(
+        evaluatedCase.toolTrace?.policyOn.invoked,
+        scenario.decision === "allow",
+      );
+      assert.equal(evaluatedCase.toolTrace?.policyOff.invoked, false);
+    }
+
   },
 );
 

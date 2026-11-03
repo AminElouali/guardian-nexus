@@ -3552,6 +3552,158 @@ export interface AiAssessmentLabJob {
   completedAt: string | null;
 }
 
+export type AgentActionAdapterRequestScenarioId = typeof AgentActionAdapterRequestScenarioId[keyof typeof AgentActionAdapterRequestScenarioId];
+
+
+export const AgentActionAdapterRequestScenarioId = {
+  emailallowed_draft: 'email.allowed_draft',
+  emailuntrusted_send: 'email.untrusted_send',
+  financetransfer_approval: 'finance.transfer_approval',
+} as const;
+
+export interface AgentActionAdapterRequest {
+  contractVersion: 'guardian-action-intent-v1';
+  scenarioId: AgentActionAdapterRequestScenarioId;
+  /**
+     * @minLength 16
+     * @maxLength 128
+     */
+  idempotencyKey: string;
+}
+
+export type AgentActionIntentV1ActorRole = typeof AgentActionIntentV1ActorRole[keyof typeof AgentActionIntentV1ActorRole];
+
+
+export const AgentActionIntentV1ActorRole = {
+  owner: 'owner',
+  admin: 'admin',
+} as const;
+
+export type AgentActionIntentV1ScenarioId = typeof AgentActionIntentV1ScenarioId[keyof typeof AgentActionIntentV1ScenarioId];
+
+
+export const AgentActionIntentV1ScenarioId = {
+  emailallowed_draft: 'email.allowed_draft',
+  emailuntrusted_send: 'email.untrusted_send',
+  financetransfer_approval: 'finance.transfer_approval',
+} as const;
+
+export type AgentActionIntentV1ToolId = typeof AgentActionIntentV1ToolId[keyof typeof AgentActionIntentV1ToolId];
+
+
+export const AgentActionIntentV1ToolId = {
+  send_email_simulated: 'send_email_simulated',
+  consult_synthetic_invoice: 'consult_synthetic_invoice',
+} as const;
+
+export type AgentActionIntentV1Operation = typeof AgentActionIntentV1Operation[keyof typeof AgentActionIntentV1Operation];
+
+
+export const AgentActionIntentV1Operation = {
+  draftcreate: 'draft.create',
+  sendexternal: 'send.external',
+  transferrequest: 'transfer.request',
+} as const;
+
+export type AgentActionIntentV1ResourceType = typeof AgentActionIntentV1ResourceType[keyof typeof AgentActionIntentV1ResourceType];
+
+
+export const AgentActionIntentV1ResourceType = {
+  mailbox: 'mailbox',
+  recipient: 'recipient',
+  payment: 'payment',
+} as const;
+
+export type AgentActionIntentV1Sensitivity = typeof AgentActionIntentV1Sensitivity[keyof typeof AgentActionIntentV1Sensitivity];
+
+
+export const AgentActionIntentV1Sensitivity = {
+  internal: 'internal',
+  confidential: 'confidential',
+  restricted: 'restricted',
+} as const;
+
+export type AgentActionIntentV1InstructionProvenance = typeof AgentActionIntentV1InstructionProvenance[keyof typeof AgentActionIntentV1InstructionProvenance];
+
+
+export const AgentActionIntentV1InstructionProvenance = {
+  trusted_user_request: 'trusted_user_request',
+  untrusted_email: 'untrusted_email',
+  untrusted_document: 'untrusted_document',
+} as const;
+
+export interface AgentActionIntentV1 {
+  contractVersion: 'guardian-action-intent-v1';
+  agentId: 'guardian-synthetic-external-agent-v1';
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  actorUserId: string;
+  actorRole: AgentActionIntentV1ActorRole;
+  workspaceId: string;
+  scenarioId: AgentActionIntentV1ScenarioId;
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  caseId: string;
+  toolId: AgentActionIntentV1ToolId;
+  operation: AgentActionIntentV1Operation;
+  resourceType: AgentActionIntentV1ResourceType;
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  resourceId: string;
+  sensitivity: AgentActionIntentV1Sensitivity;
+  instructionProvenance: AgentActionIntentV1InstructionProvenance;
+  /**
+     * @minItems 1
+     * @maxItems 4
+     * @items.maxLength 80
+     */
+  requiredPermissions: string[];
+  /** @pattern ^[a-f0-9]{64}$ */
+  intentSha256: string;
+}
+
+export type AgentActionAdapterJobReferenceStatus = typeof AgentActionAdapterJobReferenceStatus[keyof typeof AgentActionAdapterJobReferenceStatus];
+
+
+export const AgentActionAdapterJobReferenceStatus = {
+  queued: 'queued',
+  running: 'running',
+  succeeded: 'succeeded',
+  failed: 'failed',
+} as const;
+
+export type AgentActionAdapterJobReferenceProfileId = typeof AgentActionAdapterJobReferenceProfileId[keyof typeof AgentActionAdapterJobReferenceProfileId];
+
+
+export const AgentActionAdapterJobReferenceProfileId = {
+  'guardian-agent-lab-email-v1': 'guardian-agent-lab-email-v1',
+  'guardian-agent-lab-finance-v1': 'guardian-agent-lab-finance-v1',
+} as const;
+
+export interface AgentActionAdapterJobReference {
+  id: string;
+  status: AgentActionAdapterJobReferenceStatus;
+  profileId: AgentActionAdapterJobReferenceProfileId;
+  /** @maxLength 80 */
+  workerVersion: string;
+  createdAt: string;
+}
+
+export interface AgentActionAdapterResponse {
+  adapterVersion: 'guardian-agent-intent-adapter-v1';
+  source: 'fixed_synthetic_scenario';
+  decisionStatus: 'pending_worker_evaluation';
+  externalDispatch: false;
+  actionIntent: AgentActionIntentV1;
+  job: AgentActionAdapterJobReference;
+}
+
 /**
  * @nullable
  */

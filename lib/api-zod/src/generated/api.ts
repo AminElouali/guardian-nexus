@@ -5443,6 +5443,72 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
 
 
 /**
+ * Accepts only a versioned scenario ID from the fixed local test catalog. The server derives agent and actor identity, tenant, tool, resource, and permissions; callers cannot choose a policy, decision, tool arguments, target, or execution mode. The existing isolated worker evaluates the scenario before any synthetic dispatch.
+ * @summary Submit a fixed synthetic external-agent scenario for policy evaluation
+ */
+export const SubmitWorkspaceAgentActionIntentParams = zod.object({
+  "workspaceId": zod.uuid()
+})
+
+export const submitWorkspaceAgentActionIntentBodyIdempotencyKeyMin = 16;
+export const submitWorkspaceAgentActionIntentBodyIdempotencyKeyMax = 128;
+
+
+
+export const SubmitWorkspaceAgentActionIntentBody = zod.object({
+  "contractVersion": zod.literal("guardian-action-intent-v1"),
+  "scenarioId": zod.enum(['email.allowed_draft', 'email.untrusted_send', 'finance.transfer_approval']),
+  "idempotencyKey": zod.string().min(submitWorkspaceAgentActionIntentBodyIdempotencyKeyMin).max(submitWorkspaceAgentActionIntentBodyIdempotencyKeyMax)
+})
+
+export const submitWorkspaceAgentActionIntentResponseActionIntentActorUserIdMax = 160;
+
+export const submitWorkspaceAgentActionIntentResponseActionIntentCaseIdMax = 80;
+
+export const submitWorkspaceAgentActionIntentResponseActionIntentResourceIdMax = 80;
+
+export const submitWorkspaceAgentActionIntentResponseActionIntentRequiredPermissionsItemMax = 80;
+
+export const submitWorkspaceAgentActionIntentResponseActionIntentRequiredPermissionsMax = 4;
+
+export const submitWorkspaceAgentActionIntentResponseActionIntentIntentSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const submitWorkspaceAgentActionIntentResponseJobWorkerVersionMax = 80;
+
+
+
+export const SubmitWorkspaceAgentActionIntentResponse = zod.object({
+  "adapterVersion": zod.literal("guardian-agent-intent-adapter-v1"),
+  "source": zod.literal("fixed_synthetic_scenario"),
+  "decisionStatus": zod.literal("pending_worker_evaluation"),
+  "externalDispatch": zod.literal(false),
+  "actionIntent": zod.object({
+  "contractVersion": zod.literal("guardian-action-intent-v1"),
+  "agentId": zod.literal("guardian-synthetic-external-agent-v1"),
+  "actorUserId": zod.string().min(1).max(submitWorkspaceAgentActionIntentResponseActionIntentActorUserIdMax),
+  "actorRole": zod.enum(['owner', 'admin']),
+  "workspaceId": zod.uuid(),
+  "scenarioId": zod.enum(['email.allowed_draft', 'email.untrusted_send', 'finance.transfer_approval']),
+  "caseId": zod.string().min(1).max(submitWorkspaceAgentActionIntentResponseActionIntentCaseIdMax),
+  "toolId": zod.enum(['send_email_simulated', 'consult_synthetic_invoice']),
+  "operation": zod.enum(['draft.create', 'send.external', 'transfer.request']),
+  "resourceType": zod.enum(['mailbox', 'recipient', 'payment']),
+  "resourceId": zod.string().min(1).max(submitWorkspaceAgentActionIntentResponseActionIntentResourceIdMax),
+  "sensitivity": zod.enum(['internal', 'confidential', 'restricted']),
+  "instructionProvenance": zod.enum(['trusted_user_request', 'untrusted_email', 'untrusted_document']),
+  "requiredPermissions": zod.array(zod.string().max(submitWorkspaceAgentActionIntentResponseActionIntentRequiredPermissionsItemMax)).min(1).max(submitWorkspaceAgentActionIntentResponseActionIntentRequiredPermissionsMax),
+  "intentSha256": zod.string().regex(submitWorkspaceAgentActionIntentResponseActionIntentIntentSha256RegExp)
+}),
+  "job": zod.object({
+  "id": zod.uuid(),
+  "status": zod.enum(['queued', 'running', 'succeeded', 'failed']),
+  "profileId": zod.enum(['guardian-agent-lab-email-v1', 'guardian-agent-lab-finance-v1']),
+  "workerVersion": zod.string().max(submitWorkspaceAgentActionIntentResponseJobWorkerVersionMax),
+  "createdAt": zod.coerce.date()
+})
+})
+
+
+/**
  * @summary Retry a failed tenant-scoped laboratory job within its attempt limit
  */
 export const RetryWorkspaceAiAssessmentLabJobParams = zod.object({
