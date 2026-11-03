@@ -1017,7 +1017,7 @@ test(
           assert.equal(qwenResult.provider.toolChoice, "auto");
           assert.equal(qwenResult.provider.sha256, "9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031");
           const expectedCaseCount =
-            profileId === "guardian-agent-qwen-lab-customer-service-v1" ? 3 : 2;
+            profileId === "guardian-agent-qwen-lab-customer-service-v1" ? 4 : 2;
           assert.equal(qwenResult.cases.length, expectedCaseCount);
           assert.equal(qwenResult.summary.modelCalls, expectedCaseCount);
           assert.equal(qwenResult.summary.externalCalls, 0);
@@ -1089,11 +1089,32 @@ test(
             assert.ok(
               qwenResult.cases.some(
                 (item) =>
-                  item.caseId === "qwen_support_benign_refund_approval_es" &&
+                  item.caseId === "qwen_support_benign_eligible_refund_en" &&
                   item.toolChoice === "auto",
               ),
-              "the refund approval scenario must be a real, unforced local Qwen inference",
+              "the eligibility-backed refund scenario must be a real, unforced local Qwen inference",
             );
+            const eligibleRefund = qwenResult.cases.find(
+              (item) => item.caseId === "qwen_support_benign_eligible_refund_en",
+            )!;
+            if (eligibleRefund.proposedTool === "propose_synthetic_refund") {
+              assert.equal(eligibleRefund.decision, "require_approval");
+              assert.equal(
+                eligibleRefund.dispatchStatus,
+                "approval_required_before_dispatch",
+              );
+              assert.equal(
+                eligibleRefund.syntheticActionRef,
+                "guardian.synthetic.support.refund.v1",
+              );
+              assert.match(eligibleRefund.actionSha256 ?? "", /^[a-f0-9]{64}$/);
+              assert.equal(eligibleRefund.toolEvents.length, 0);
+            } else {
+              assert.equal(eligibleRefund.toolCallOrigin, "no_tool_call");
+              assert.equal(eligibleRefund.decision, "no_proposal");
+              assert.equal(eligibleRefund.dispatchStatus, "not_invoked");
+              assert.equal(eligibleRefund.toolEvents.length, 0);
+            }
           }
           break;
         }
@@ -1184,7 +1205,11 @@ test(
         approval.actionSha256 !== null,
     );
     if (replayableQwenApprovals.length > 0) {
-      const qwenApproval = replayableQwenApprovals[0]!;
+      const qwenApproval =
+        replayableQwenApprovals.find(
+          (approval) =>
+            approval.caseId === "qwen_support_benign_eligible_refund_en",
+        ) ?? replayableQwenApprovals[0]!;
       assert.equal(qwenApproval.status, "pending");
       assert.equal(qwenApproval.canCurrentUserDecide, false);
       assert.ok(
@@ -1200,6 +1225,18 @@ test(
         decision: "approve",
         proposalBindingSha256: qwenApproval.proposalBindingSha256,
       };
+      const crossTenantDecision = await apiRequest(
+        userB,
+        `/api/workspaces/${workspaceB}/ai-security-assessments/approvals/` +
+          `${qwenApproval.id}/decision`,
+        "POST",
+        decisionBody,
+      );
+      assert.equal(
+        crossTenantDecision.status,
+        404,
+        "a Qwen approval must not be visible or decidable from another tenant",
+      );
       const concurrent = await Promise.all([
         apiRequest(adminA, decisionPath, "POST", decisionBody),
         apiRequest(adminA, decisionPath, "POST", decisionBody),
@@ -1233,6 +1270,60 @@ test(
       ).approvals.find((approval) => approval.id === qwenApproval.id);
       assert.equal(persistedDecision?.execution, "synthetic_action_simulated_once");
       console.log("QWEN_APPROVAL_DECISION_TESTED=1; execution=synthetic_action_simulated_once");
+
+      const financeApproval = replayableQwenApprovals.find(
+        (approval) =>
+          approval.id !== qwenApproval.id &&
+          approval.syntheticActionRef ===
+            "guardian.synthetic.finance.bank-change.v1",
+      );
+      if (financeApproval) {
+        assert.equal(financeApproval.caseId, "qwen_finance_benign_bank_change_request_es");
+        const financeDecisionPath =
+          `/api/workspaces/${workspaceA}/ai-security-assessments/approvals/` +
+          `${financeApproval.id}/decision`;
+        const financeDecisionBody = {
+          decision: "deny",
+          proposalBindingSha256: financeApproval.proposalBindingSha256,
+        };
+        const financeDenialResponse = await apiRequest(
+          adminA,
+          financeDecisionPath,
+          "POST",
+          financeDecisionBody,
+        );
+        assert.equal(financeDenialResponse.status, 200);
+        const financeDenial =
+          DecideWorkspaceAiAssessmentApprovalResponse.parse(
+            await financeDenialResponse.json(),
+          );
+        assert.equal(financeDenial.approval.status, "denied");
+        assert.equal(financeDenial.execution, "not_performed_denied");
+        assert.equal(
+          (
+            await apiRequest(
+              adminA,
+              financeDecisionPath,
+              "POST",
+              financeDecisionBody,
+            )
+          ).status,
+          409,
+          "a denied model-generated proposal cannot be replayed",
+        );
+        const persistedFinanceDenial = await fixturePool.query<{
+          status: string;
+          simulated_at: Date | null;
+        }>(
+          `SELECT status, simulated_at
+           FROM public.ai_assessment_approval_requests
+           WHERE id = $1 AND workspace_id = $2`,
+          [financeApproval.id, workspaceA],
+        );
+        assert.equal(persistedFinanceDenial.rows[0]?.status, "denied");
+        assert.equal(persistedFinanceDenial.rows[0]?.simulated_at, null);
+        console.log("QWEN_FINANCE_PROPOSAL_DENIED=1; execution=not_performed_denied");
+      }
     } else {
       console.log(
         "QWEN_APPROVAL_DECISION_TESTED=0; no allow-listed real Qwen proposal was generated",

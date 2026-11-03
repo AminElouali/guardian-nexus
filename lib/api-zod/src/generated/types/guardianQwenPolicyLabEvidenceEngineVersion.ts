@@ -15,4 +15,5 @@ export const GuardianQwenPolicyLabEvidenceEngineVersion = {
   'guardian-agent-qwen-policy-lab-v120': 'guardian-agent-qwen-policy-lab-v1.2.0',
   'guardian-agent-qwen-policy-lab-v130': 'guardian-agent-qwen-policy-lab-v1.3.0',
   'guardian-agent-qwen-policy-lab-v140': 'guardian-agent-qwen-policy-lab-v1.4.0',
+  'guardian-agent-qwen-policy-lab-v150': 'guardian-agent-qwen-policy-lab-v1.5.0',
 } as const;

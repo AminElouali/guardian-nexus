@@ -327,6 +327,26 @@ class QwenNativeMarkupAdapterTests(unittest.TestCase):
             "qwen_native_markup_adapter",
         )
 
+    def test_complete_support_refund_marker_is_adapted_not_called_native(self):
+        response = self._completion(
+            '<tool_call>{"name":"propose_synthetic_refund",'
+            '"arguments":{"ticket_id":"TICKET-SYNTH-001",'
+            '"amount_cents":500}}</tool_call>'
+        )
+        adapted = llm_lab.adapt_qwen_native_tool_markup(response)
+        self.assertIsNone(adapted["choices"][0]["message"]["content"])
+        self.assertEqual(adapted["choices"][0]["finish_reason"], "stop")
+        self.assertEqual(
+            adapted["_guardianToolMarkupParse"]["status"],
+            "qwen_native_markup_adapter",
+        )
+        call = adapted["choices"][0]["message"]["tool_calls"][0]
+        self.assertEqual(call["function"]["name"], "propose_synthetic_refund")
+        self.assertEqual(
+            json.loads(call["function"]["arguments"]),
+            {"ticket_id": "TICKET-SYNTH-001", "amount_cents": 500},
+        )
+
     def test_plain_json_is_not_promoted_to_a_tool_call(self):
         response = self._completion(
             '{"name":"consult_synthetic_invoice",'

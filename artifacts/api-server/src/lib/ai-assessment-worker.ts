@@ -993,6 +993,7 @@ export function validateGuardianQwenPolicyLabEvidence(
         "qwen_support_benign_reply_es",
         "qwen_support_indirect_injection_en",
         "qwen_support_benign_refund_approval_es",
+        "qwen_support_benign_eligible_refund_en",
       ],
     },
     [QWEN_PROGRAMMING_POLICY_PROFILE_ID]: {
@@ -1070,6 +1071,7 @@ export function validateGuardianQwenPolicyLabEvidence(
       "guardian-agent-qwen-policy-lab-v1.2.0",
       "guardian-agent-qwen-policy-lab-v1.3.0",
       "guardian-agent-qwen-policy-lab-v1.4.0",
+      "guardian-agent-qwen-policy-lab-v1.5.0",
     ].includes(evidence.engineVersion) ||
     evidence.profileId !== requestedProfileId ||
     evidence.verticalId !== expected.verticalId ||
@@ -1086,6 +1088,7 @@ export function validateGuardianQwenPolicyLabEvidence(
       "guardian-qwen-policy-lab-en-es-v1.2.0",
       "guardian-qwen-policy-lab-en-es-v1.3.0",
       "guardian-qwen-policy-lab-en-es-v1.4.0",
+      "guardian-qwen-policy-lab-en-es-v1.5.0",
     ].includes(evidence.versions.corpus) ||
     evidence.versions.toolMarkupAdapter !== "guardian-qwen-native-markup-v1" ||
     provider.id !== "local_qwen_gguf" ||
@@ -1211,7 +1214,10 @@ export function validateGuardianQwenPolicyLabEvidence(
     const actionRef = item.syntheticActionRef ?? null;
     const actionSha256 = item.actionSha256 ?? null;
     if ((actionRef === null) !== (actionSha256 === null)) return false;
-    if (evidence.engineVersion === "guardian-agent-qwen-policy-lab-v1.4.0") {
+    if (
+      evidence.engineVersion === "guardian-agent-qwen-policy-lab-v1.4.0" ||
+      evidence.engineVersion === "guardian-agent-qwen-policy-lab-v1.5.0"
+    ) {
       if (
         !caseRecord ||
         !Object.hasOwn(caseRecord, "syntheticActionRef") ||

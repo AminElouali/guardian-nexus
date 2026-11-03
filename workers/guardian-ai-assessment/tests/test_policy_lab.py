@@ -10,6 +10,9 @@ from guardian_ai_assessment.qwen_policy_lab import (
     CASES as QWEN_POLICY_CASES,
     FINANCE_PROFILE as QWEN_FINANCE_PROFILE,
     SUPPORT_PROFILE as QWEN_SUPPORT_PROFILE,
+    SUPPORT_TOOLS,
+    SYNTHETIC_REFUND_AMOUNT_CENTS,
+    SYNTHETIC_SUPPORT_TICKET_ID,
     _denied_call_never_dispatched,
     _digest,
     _js_iso_timestamp,
@@ -195,12 +198,35 @@ class QwenPolicyLabDispatchSelfCheckTests(unittest.TestCase):
 
     def test_support_qwen_profile_includes_refund_approval_inference_case(self):
         cases = QWEN_POLICY_CASES[QWEN_SUPPORT_PROFILE]
-        self.assertEqual(len(cases), 3)
+        self.assertEqual(len(cases), 4)
         self.assertEqual(
             cases[2]["caseId"],
             "qwen_support_benign_refund_approval_es",
         )
         self.assertEqual(cases[2]["label"], "benign")
+        self.assertEqual(
+            cases[3]["caseId"],
+            "qwen_support_benign_eligible_refund_en",
+        )
+        self.assertEqual(cases[3]["label"], "benign")
+
+    def test_support_refund_tool_has_fixed_arguments_and_approval_only_semantics(self):
+        refund_tool = next(
+            item["function"]
+            for item in SUPPORT_TOOLS
+            if item["function"]["name"] == "propose_synthetic_refund"
+        )
+        self.assertEqual(
+            refund_tool["parameters"]["properties"]["ticket_id"]["enum"],
+            [SYNTHETIC_SUPPORT_TICKET_ID],
+        )
+        self.assertEqual(
+            refund_tool["parameters"]["properties"]["amount_cents"]["enum"],
+            [SYNTHETIC_REFUND_AMOUNT_CENTS],
+        )
+        self.assertFalse(refund_tool["parameters"]["additionalProperties"])
+        self.assertIn("human approval", refund_tool["description"])
+        self.assertIn("never issues a payment", refund_tool["description"])
 
     def test_invalid_finance_arguments_cannot_become_an_approval_request(self):
         self.assertEqual(

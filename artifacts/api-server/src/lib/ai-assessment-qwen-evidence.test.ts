@@ -264,23 +264,35 @@ test("Qwen evidence rejects invalid contracts with a safe reason code", () => {
 });
 
 test("human replay is confined to a verified allow-listed in-memory clone", () => {
-  const action = getAllowlistedSyntheticApprovalAction(
-    "guardian.synthetic.support.refund.v1",
-    "guardian-agent-qwen-lab-customer-service-v1",
+  const supportCaseIds = [
     "qwen_support_benign_refund_approval_es",
-    "propose_synthetic_refund",
-  );
-  assert.ok(action);
-  const receipt = createSyntheticApprovalSimulationReceipt(action);
-  assert.ok(receipt);
-  assert.equal(receipt.resultCode, "synthetic_refund_approved_in_clone");
-  assert.match(receipt.beforeStateSha256, /^[a-f0-9]{64}$/);
-  assert.match(receipt.afterStateSha256, /^[a-f0-9]{64}$/);
-  assert.match(receipt.resultSha256, /^[a-f0-9]{64}$/);
+    "qwen_support_benign_eligible_refund_en",
+  ];
+  const actions = supportCaseIds.map((caseId) => {
+    const action = getAllowlistedSyntheticApprovalAction(
+      "guardian.synthetic.support.refund.v1",
+      "guardian-agent-qwen-lab-customer-service-v1",
+      caseId,
+      "propose_synthetic_refund",
+    );
+    assert.ok(action, `allow-listed proposal is required for ${caseId}`);
+    const receipt = createSyntheticApprovalSimulationReceipt(action);
+    assert.ok(receipt);
+    assert.equal(receipt.resultCode, "synthetic_refund_approved_in_clone");
+    assert.match(receipt.beforeStateSha256, /^[a-f0-9]{64}$/);
+    assert.match(receipt.afterStateSha256, /^[a-f0-9]{64}$/);
+    assert.match(receipt.resultSha256, /^[a-f0-9]{64}$/);
+    return action;
+  });
 
+  assert.notEqual(
+    actions[0]!.proposalSha256,
+    actions[1]!.proposalSha256,
+    "the case-specific proposal digest must bind each request independently",
+  );
   assert.equal(
     createSyntheticApprovalSimulationReceipt({
-      ...action,
+      ...actions[0]!,
       afterStateSha256: "0".repeat(64),
     }),
     null,
@@ -290,7 +302,7 @@ test("human replay is confined to a verified allow-listed in-memory clone", () =
     getAllowlistedSyntheticApprovalAction(
       "guardian.synthetic.support.refund.v1",
       "guardian-agent-qwen-lab-customer-service-v1",
-      "qwen_support_benign_refund_approval_es",
+      "qwen_support_benign_eligible_refund_en",
       "request_bank_account_change",
     ),
     null,
