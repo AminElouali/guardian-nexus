@@ -9,18 +9,51 @@ CREATE TABLE IF NOT EXISTS public.ai_assessment_approval_requests (
   action_sha256 text,
   proposal_binding_sha256 text NOT NULL,
   requested_by_user_id text NOT NULL,
+  requested_by_role text,
+  binding_version integer NOT NULL DEFAULT 1,
+  synthetic_action_ref text,
   status text NOT NULL DEFAULT 'pending'
     CONSTRAINT ai_assessment_approval_status_check
     CHECK (status IN ('pending', 'approved', 'denied', 'expired')),
   expires_at timestamptz NOT NULL,
   decided_by_user_id text,
+  decided_by_role text,
   decided_at timestamptz,
+  simulated_at timestamptz,
+  simulation_result_code text,
+  simulation_result_sha256 text,
+  replay_binding_sha256 text,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT ai_assessment_approval_hashes_check CHECK (
     proposal_sha256 ~ '^[a-f0-9]{64}$'
     AND (action_sha256 IS NULL OR action_sha256 ~ '^[a-f0-9]{64}$')
     AND proposal_binding_sha256 ~ '^[a-f0-9]{64}$'
+    AND (simulation_result_sha256 IS NULL OR simulation_result_sha256 ~ '^[a-f0-9]{64}$')
+    AND (replay_binding_sha256 IS NULL OR replay_binding_sha256 ~ '^[a-f0-9]{64}$')
+  ),
+  CONSTRAINT ai_assessment_approval_binding_version_check CHECK (
+    binding_version IN (1, 2)
+    AND (binding_version = 1 OR (requested_by_role IS NOT NULL
+         AND synthetic_action_ref IS NOT NULL AND action_sha256 IS NOT NULL))
+  ),
+  CONSTRAINT ai_assessment_approval_action_ref_check CHECK (
+    (synthetic_action_ref IS NULL AND action_sha256 IS NULL)
+    OR (synthetic_action_ref IN (
+        'guardian.synthetic.finance.bank-change.v1',
+        'guardian.synthetic.support.refund.v1'
+      ) AND action_sha256 IS NOT NULL)
+  ),
+  CONSTRAINT ai_assessment_approval_simulation_receipt_check CHECK (
+    (simulated_at IS NULL AND simulation_result_code IS NULL
+      AND simulation_result_sha256 IS NULL AND replay_binding_sha256 IS NULL)
+    OR (status = 'approved' AND synthetic_action_ref IS NOT NULL
+      AND simulated_at IS NOT NULL
+      AND simulation_result_code IN (
+        'synthetic_bank_change_approved_in_clone',
+        'synthetic_refund_approved_in_clone'
+      )
+      AND simulation_result_sha256 IS NOT NULL AND replay_binding_sha256 IS NOT NULL)
   ),
   CONSTRAINT ai_assessment_approval_decision_check CHECK (
     (status = 'pending' AND decided_by_user_id IS NULL AND decided_at IS NULL)
@@ -32,12 +65,25 @@ CREATE TABLE IF NOT EXISTS public.ai_assessment_approval_requests (
     decided_by_user_id IS NULL OR decided_by_user_id <> requested_by_user_id
   )
 );
+ALTER TABLE public.ai_assessment_approval_requests
+  ADD COLUMN IF NOT EXISTS requested_by_role text,
+  ADD COLUMN IF NOT EXISTS binding_version integer NOT NULL DEFAULT 1,
+  ADD COLUMN IF NOT EXISTS synthetic_action_ref text,
+  ADD COLUMN IF NOT EXISTS decided_by_role text,
+  ADD COLUMN IF NOT EXISTS simulated_at timestamptz,
+  ADD COLUMN IF NOT EXISTS simulation_result_code text,
+  ADD COLUMN IF NOT EXISTS simulation_result_sha256 text,
+  ADD COLUMN IF NOT EXISTS replay_binding_sha256 text;
 CREATE UNIQUE INDEX IF NOT EXISTS ai_assessment_approval_job_case_idx
   ON public.ai_assessment_approval_requests (workspace_id, job_id, case_id);
 CREATE INDEX IF NOT EXISTS ai_assessment_approval_workspace_status_expiry_idx
   ON public.ai_assessment_approval_requests (workspace_id, status, expires_at);
 GRANT SELECT, INSERT ON TABLE public.ai_assessment_approval_requests TO app_runtime;
-GRANT UPDATE (status, decided_by_user_id, decided_at, updated_at)
+GRANT UPDATE (
+  status, decided_by_user_id, decided_by_role, decided_at, simulated_at,
+  simulation_result_code, simulation_result_sha256, replay_binding_sha256,
+  updated_at
+)
   ON TABLE public.ai_assessment_approval_requests TO app_runtime;
 ALTER TABLE public.ai_assessment_approval_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_assessment_approval_requests FORCE ROW LEVEL SECURITY;
@@ -65,6 +111,7 @@ CREATE POLICY ai_assessment_approvals_insert_owner
     AND status = 'pending'
     AND decided_by_user_id IS NULL
     AND decided_at IS NULL
+    AND binding_version IN (1, 2)
     AND EXISTS (
       SELECT 1 FROM public.workspace_memberships AS membership
       WHERE membership.workspace_id = ai_assessment_approval_requests.workspace_id
@@ -111,6 +158,7 @@ CREATE POLICY ai_assessment_approvals_update_approver
       (status IN ('approved', 'denied')
        AND decided_by_user_id = NULLIF(current_setting('app.user_id', true), '')
        AND decided_at IS NOT NULL
+       AND decided_by_role IN ('owner', 'admin')
        AND requested_by_user_id <> decided_by_user_id)
       OR (status = 'expired'
           AND expires_at <= now()

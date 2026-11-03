@@ -15,6 +15,11 @@ import { fileURLToPath } from "node:url";
 import { sql } from "drizzle-orm";
 import { CreateWorkspaceAiAssessmentLabJobResponse } from "@workspace/api-zod";
 import {
+  computeApprovalProposalBindingV2,
+  getAllowlistedSyntheticApprovalAction,
+  type SyntheticApprovalActionRef,
+} from "./ai-assessment-approval-actions";
+import {
   aiAssessmentApprovalRequestsTable,
   aiAssessmentJobsTable,
   withAiAssessmentQueueTransaction,
@@ -987,6 +992,7 @@ export function validateGuardianQwenPolicyLabEvidence(
       cases: [
         "qwen_support_benign_reply_es",
         "qwen_support_indirect_injection_en",
+        "qwen_support_benign_refund_approval_es",
       ],
     },
     [QWEN_PROGRAMMING_POLICY_PROFILE_ID]: {
@@ -1063,6 +1069,7 @@ export function validateGuardianQwenPolicyLabEvidence(
       "guardian-agent-qwen-policy-lab-v1.1.0",
       "guardian-agent-qwen-policy-lab-v1.2.0",
       "guardian-agent-qwen-policy-lab-v1.3.0",
+      "guardian-agent-qwen-policy-lab-v1.4.0",
     ].includes(evidence.engineVersion) ||
     evidence.profileId !== requestedProfileId ||
     evidence.verticalId !== expected.verticalId ||
@@ -1078,6 +1085,7 @@ export function validateGuardianQwenPolicyLabEvidence(
       "guardian-qwen-policy-lab-en-es-v1.1.0",
       "guardian-qwen-policy-lab-en-es-v1.2.0",
       "guardian-qwen-policy-lab-en-es-v1.3.0",
+      "guardian-qwen-policy-lab-en-es-v1.4.0",
     ].includes(evidence.versions.corpus) ||
     evidence.versions.toolMarkupAdapter !== "guardian-qwen-native-markup-v1" ||
     provider.id !== "local_qwen_gguf" ||
@@ -1098,7 +1106,7 @@ export function validateGuardianQwenPolicyLabEvidence(
     limits.memoryMiB !== 1536 ||
     limits.pids !== 64 ||
     limits.concurrency !== 1 ||
-    limits.maxCases !== 2 ||
+    limits.maxCases !== expected.cases.length ||
     limits.maxModelCallsPerCase !== 1 ||
     limits.maxToolCallsPerCase !== 1 ||
     limits.customerDataUsed !== false ||
@@ -1132,8 +1140,8 @@ export function validateGuardianQwenPolicyLabEvidence(
   }
 
   if (
-    cases.length !== 2 ||
-    new Set(cases.map((item) => item.caseId)).size !== 2 ||
+    cases.length !== expected.cases.length ||
+    new Set(cases.map((item) => item.caseId)).size !== expected.cases.length ||
     !expectedIds.every((caseId) => cases.some((item) => item.caseId === caseId))
   ) {
     return "case_set";
@@ -1199,6 +1207,35 @@ export function validateGuardianQwenPolicyLabEvidence(
       )
     ) {
       return false;
+    }
+    const actionRef = item.syntheticActionRef ?? null;
+    const actionSha256 = item.actionSha256 ?? null;
+    if ((actionRef === null) !== (actionSha256 === null)) return false;
+    if (evidence.engineVersion === "guardian-agent-qwen-policy-lab-v1.4.0") {
+      if (
+        !caseRecord ||
+        !Object.hasOwn(caseRecord, "syntheticActionRef") ||
+        !Object.hasOwn(caseRecord, "actionSha256")
+      ) {
+        return false;
+      }
+    }
+    if (actionRef !== null) {
+      const actionProof = getAllowlistedSyntheticApprovalAction(
+        actionRef,
+        evidence.profileId,
+        item.caseId,
+        item.proposedTool,
+      );
+      if (
+        !actionProof ||
+        item.decision !== "require_approval" ||
+        item.dispatchStatus !== "approval_required_before_dispatch" ||
+        actionSha256 !== actionProof.actionSha256 ||
+        item.proposalSha256 !== actionProof.proposalSha256
+      ) {
+        return false;
+      }
     }
     const originIsProposal =
       item.toolCallOrigin === "guardian_qwen_native_markup_adapter" ||
@@ -1283,10 +1320,10 @@ export function validateGuardianQwenPolicyLabEvidence(
   if (!caseEvidenceValid) return "case_evidence";
 
   const summaryIsValid =
-    summary.sampleCount === 2 &&
+    summary.sampleCount === expected.cases.length &&
     summary.benignCases === count((item) => item.label === "benign") &&
     summary.adversarialCases === count((item) => item.label === "adversarial") &&
-    summary.modelCalls === 2 &&
+    summary.modelCalls === expected.cases.length &&
     summary.runtimeMessageToolCalls ===
       count((item) => item.toolCallOrigin === "runtime_message_tool_calls") &&
     summary.adaptedQwenMarkupCalls ===
@@ -2908,6 +2945,7 @@ type ApprovalCandidate = {
   caseId: string;
   proposalSha256: string;
   actionSha256: string | null;
+  syntheticActionRef: SyntheticApprovalActionRef | null;
 };
 
 function extractApprovalCandidates(
@@ -2942,6 +2980,7 @@ function extractApprovalCandidates(
     const caseId = item.caseId;
     const proposalSha256 = item.proposalSha256;
     const actionSha256 = item.actionSha256;
+    const rawActionRef = item.syntheticActionRef;
     if (
       decision !== "require_approval" ||
       dispatchStatus !== "approval_required_before_dispatch" ||
@@ -2960,6 +2999,16 @@ function extractApprovalCandidates(
         actionSha256:
           typeof actionSha256 === "string" && /^[a-f0-9]{64}$/.test(actionSha256)
             ? actionSha256
+            : null,
+        syntheticActionRef:
+          typeof rawActionRef === "string" &&
+          getAllowlistedSyntheticApprovalAction(
+            rawActionRef,
+            String(evidence.profileId),
+            caseId,
+            typeof item.proposedTool === "string" ? item.proposedTool : null,
+          )
+            ? (rawActionRef as SyntheticApprovalActionRef)
             : null,
       },
     ];
@@ -3018,17 +3067,32 @@ async function updateJob(
                 caseId: candidate.caseId,
                 proposalSha256: candidate.proposalSha256,
                 actionSha256: candidate.actionSha256,
-                proposalBindingSha256: createHash("sha256")
-                  .update(
-                    JSON.stringify([
-                      item.workspaceId,
-                      item.jobId,
-                      candidate.caseId,
-                      candidate.proposalSha256,
-                      candidate.actionSha256,
-                    ]),
-                  )
-                  .digest("hex"),
+                syntheticActionRef: candidate.syntheticActionRef,
+                bindingVersion: candidate.syntheticActionRef ? 2 : 1,
+                requestedByRole: membership.role,
+                proposalBindingSha256: candidate.syntheticActionRef
+                  ? computeApprovalProposalBindingV2({
+                      workspaceId: item.workspaceId,
+                      jobId: item.jobId,
+                      caseId: candidate.caseId,
+                      proposalSha256: candidate.proposalSha256,
+                      actionSha256: candidate.actionSha256!,
+                      syntheticActionRef: candidate.syntheticActionRef,
+                      requestedByUserId: item.actorUserId,
+                      requestedByRole: membership.role,
+                      expiresAt,
+                    })
+                  : createHash("sha256")
+                      .update(
+                        JSON.stringify([
+                          item.workspaceId,
+                          item.jobId,
+                          candidate.caseId,
+                          candidate.proposalSha256,
+                          candidate.actionSha256,
+                        ]),
+                      )
+                      .digest("hex"),
                 requestedByUserId: item.actorUserId,
                 status: "pending",
                 expiresAt,
@@ -3041,6 +3105,9 @@ async function updateJob(
               proposalSha256: aiAssessmentApprovalRequestsTable.proposalSha256,
               proposalBindingSha256:
                 aiAssessmentApprovalRequestsTable.proposalBindingSha256,
+                syntheticActionRef:
+                  aiAssessmentApprovalRequestsTable.syntheticActionRef,
+                actionSha256: aiAssessmentApprovalRequestsTable.actionSha256,
             });
           for (const approval of inserted) {
             await tx.insert(workspaceAuditEventsTable).values({
@@ -3054,6 +3121,9 @@ async function updateJob(
                 caseId: approval.caseId,
                 proposalSha256: approval.proposalSha256,
                 proposalBindingSha256: approval.proposalBindingSha256,
+                syntheticActionRef: approval.syntheticActionRef,
+                actionSha256: approval.actionSha256,
+                requestedByRole: membership.role,
                 expiresAt: expiresAt.toISOString(),
               },
             });

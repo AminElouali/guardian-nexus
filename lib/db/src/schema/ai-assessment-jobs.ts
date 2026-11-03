@@ -986,7 +986,8 @@ export type GuardianQwenPolicyLabEvidence = {
     | "guardian-agent-qwen-policy-lab-v1"
     | "guardian-agent-qwen-policy-lab-v1.1.0"
     | "guardian-agent-qwen-policy-lab-v1.2.0"
-    | "guardian-agent-qwen-policy-lab-v1.3.0";
+    | "guardian-agent-qwen-policy-lab-v1.3.0"
+    | "guardian-agent-qwen-policy-lab-v1.4.0";
   profileId:
     | "guardian-agent-qwen-lab-email-v1"
     | "guardian-agent-qwen-lab-database-v1"
@@ -1021,7 +1022,8 @@ export type GuardianQwenPolicyLabEvidence = {
       | "guardian-qwen-policy-lab-en-es-v1"
       | "guardian-qwen-policy-lab-en-es-v1.1.0"
       | "guardian-qwen-policy-lab-en-es-v1.2.0"
-      | "guardian-qwen-policy-lab-en-es-v1.3.0";
+      | "guardian-qwen-policy-lab-en-es-v1.3.0"
+      | "guardian-qwen-policy-lab-en-es-v1.4.0";
     modelRuntime: string;
     toolMarkupAdapter: "guardian-qwen-native-markup-v1";
   };
@@ -1054,6 +1056,8 @@ export type GuardianQwenPolicyLabEvidence = {
     toolCallCount: number;
     proposedTool: string | null;
     proposalSha256: string | null;
+    syntheticActionRef?: string | null;
+    actionSha256?: string | null;
     decision: "allow" | "deny" | "require_approval" | "no_proposal";
     reasonCode: string;
     dispatchStatus: string;
@@ -1250,10 +1254,18 @@ export const aiAssessmentApprovalRequestsTable = pgTable(
     actionSha256: text("action_sha256"),
     proposalBindingSha256: text("proposal_binding_sha256").notNull(),
     requestedByUserId: text("requested_by_user_id").notNull(),
+    requestedByRole: text("requested_by_role"),
+    bindingVersion: integer("binding_version").notNull().default(1),
+    syntheticActionRef: text("synthetic_action_ref"),
     status: text("status").notNull().default("pending"),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     decidedByUserId: text("decided_by_user_id"),
+    decidedByRole: text("decided_by_role"),
     decidedAt: timestamp("decided_at", { withTimezone: true }),
+    simulatedAt: timestamp("simulated_at", { withTimezone: true }),
+    simulationResultCode: text("simulation_result_code"),
+    simulationResultSha256: text("simulation_result_sha256"),
+    replayBindingSha256: text("replay_binding_sha256"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -1279,7 +1291,19 @@ export const aiAssessmentApprovalRequestsTable = pgTable(
     ),
     check(
       "ai_assessment_approval_hashes_check",
-      sql`${table.proposalSha256} ~ '^[a-f0-9]{64}$' AND (${table.actionSha256} IS NULL OR ${table.actionSha256} ~ '^[a-f0-9]{64}$') AND ${table.proposalBindingSha256} ~ '^[a-f0-9]{64}$'`,
+      sql`${table.proposalSha256} ~ '^[a-f0-9]{64}$' AND (${table.actionSha256} IS NULL OR ${table.actionSha256} ~ '^[a-f0-9]{64}$') AND ${table.proposalBindingSha256} ~ '^[a-f0-9]{64}$' AND (${table.simulationResultSha256} IS NULL OR ${table.simulationResultSha256} ~ '^[a-f0-9]{64}$') AND (${table.replayBindingSha256} IS NULL OR ${table.replayBindingSha256} ~ '^[a-f0-9]{64}$')`,
+    ),
+    check(
+      "ai_assessment_approval_binding_version_check",
+      sql`${table.bindingVersion} IN (1, 2) AND (${table.bindingVersion} = 1 OR (${table.requestedByRole} IS NOT NULL AND ${table.syntheticActionRef} IS NOT NULL AND ${table.actionSha256} IS NOT NULL))`,
+    ),
+    check(
+      "ai_assessment_approval_action_ref_check",
+      sql`(${table.syntheticActionRef} IS NULL AND ${table.actionSha256} IS NULL) OR (${table.syntheticActionRef} IN ('guardian.synthetic.finance.bank-change.v1', 'guardian.synthetic.support.refund.v1') AND ${table.actionSha256} IS NOT NULL)`,
+    ),
+    check(
+      "ai_assessment_approval_simulation_receipt_check",
+      sql`(${table.simulatedAt} IS NULL AND ${table.simulationResultCode} IS NULL AND ${table.simulationResultSha256} IS NULL AND ${table.replayBindingSha256} IS NULL) OR (${table.status} = 'approved' AND ${table.syntheticActionRef} IS NOT NULL AND ${table.simulatedAt} IS NOT NULL AND ${table.simulationResultCode} IN ('synthetic_bank_change_approved_in_clone', 'synthetic_refund_approved_in_clone') AND ${table.simulationResultSha256} IS NOT NULL AND ${table.replayBindingSha256} IS NOT NULL)`,
     ),
     check(
       "ai_assessment_approval_decision_check",
@@ -1301,6 +1325,7 @@ export const aiAssessmentApprovalRequestsTable = pgTable(
         ${ownerOrAdminScope(table.workspaceId)}
         AND ${table.requestedByUserId} = NULLIF(current_setting('app.user_id', true), '')
         AND ${table.status} = 'pending'
+        AND ${table.bindingVersion} IN (1, 2)
         AND ${table.decidedByUserId} IS NULL
         AND ${table.decidedAt} IS NULL
         AND EXISTS (
@@ -1331,6 +1356,7 @@ export const aiAssessmentApprovalRequestsTable = pgTable(
           (${table.status} IN ('approved', 'denied')
            AND ${table.decidedByUserId} = NULLIF(current_setting('app.user_id', true), '')
            AND ${table.decidedAt} IS NOT NULL
+           AND ${table.decidedByRole} IN ('owner', 'admin')
            AND ${table.requestedByUserId} <> ${table.decidedByUserId})
           OR (${table.status} = 'expired'
               AND ${table.expiresAt} <= now()

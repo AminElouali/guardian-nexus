@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, lte, sql } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import { Router, type IRouter, type RequestHandler } from "express";
 import {
@@ -23,6 +23,13 @@ import {
   workspaceAuditEventsTable,
   type AiAssessmentJob,
 } from "@workspace/db";
+import {
+  canonicalApprovalJson,
+  computeApprovalProposalBindingV2,
+  computeApprovalReplayBinding,
+  getAllowlistedSyntheticApprovalAction,
+  type SyntheticApprovalActionRef,
+} from "../lib/ai-assessment-approval-actions";
 import { canRunAiEvaluation } from "../lib/access-control";
 import {
   AI_ASSESSMENT_JOB_MAX_ATTEMPTS,
@@ -70,10 +77,18 @@ function formatApproval(
   actionSha256: string | null;
   proposalBindingSha256: string;
   requestedByUserId: string;
+    requestedByRole: string | null;
+    bindingVersion: number;
+    syntheticActionRef: string | null;
   status: string;
   expiresAt: Date;
   decidedByUserId: string | null;
+    decidedByRole: string | null;
   decidedAt: Date | null;
+    simulatedAt: Date | null;
+    simulationResultCode: string | null;
+    simulationResultSha256: string | null;
+    replayBindingSha256: string | null;
     createdAt: Date;
   },
   canCurrentUserDecide = false,
@@ -97,7 +112,31 @@ function computeApprovalBinding(approval: {
   caseId: string;
   proposalSha256: string;
   actionSha256: string | null;
+  bindingVersion: number;
+  syntheticActionRef: string | null;
+  requestedByUserId: string;
+  requestedByRole: string | null;
+  expiresAt: Date;
 }): string {
+  if (
+    approval.bindingVersion === 2 &&
+    approval.syntheticActionRef &&
+    approval.actionSha256 &&
+    approval.requestedByRole
+  ) {
+    return computeApprovalProposalBindingV2({
+      workspaceId: approval.workspaceId,
+      jobId: approval.jobId,
+      caseId: approval.caseId,
+      proposalSha256: approval.proposalSha256,
+      actionSha256: approval.actionSha256,
+      syntheticActionRef:
+        approval.syntheticActionRef as SyntheticApprovalActionRef,
+      requestedByUserId: approval.requestedByUserId,
+      requestedByRole: approval.requestedByRole,
+      expiresAt: approval.expiresAt,
+    });
+  }
   return createHash("sha256")
     .update(
       JSON.stringify([
@@ -109,6 +148,90 @@ function computeApprovalBinding(approval: {
       ]),
     )
     .digest("hex");
+}
+
+function verifyPersistedApprovalEvidence(
+  approval: {
+    workspaceId: string;
+    jobId: string;
+    caseId: string;
+    proposalSha256: string;
+    actionSha256: string | null;
+    syntheticActionRef: string | null;
+    requestedByUserId: string;
+  },
+  job: AiAssessmentJob | undefined,
+) {
+  if (
+    !job ||
+    job.status !== "succeeded" ||
+    job.requestedByUserId !== approval.requestedByUserId ||
+    !job.result ||
+    !approval.syntheticActionRef
+  ) {
+    return null;
+  }
+  const raw = job.result as unknown as Record<string, unknown>;
+  if (
+    raw.engine !== "guardian_qwen_policy_lab" ||
+    raw.profileId !== job.profileId ||
+    typeof raw.evidenceSha256 !== "string"
+  ) {
+    return null;
+  }
+  const { evidenceSha256, ...unsigned } = raw;
+  if (
+    createHash("sha256")
+      .update(canonicalApprovalJson(unsigned), "utf8")
+      .digest("hex") !== evidenceSha256 ||
+    !Array.isArray(raw.cases)
+  ) {
+    return null;
+  }
+  const caseRecord = raw.cases.find(
+    (value) =>
+      !!value &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      (value as Record<string, unknown>).caseId === approval.caseId,
+  );
+  if (!caseRecord || typeof caseRecord !== "object" || Array.isArray(caseRecord)) {
+    return null;
+  }
+  const item = caseRecord as Record<string, unknown>;
+  const caseDigest = item.caseEvidenceSha256;
+  const unsignedCase = { ...item, caseEvidenceSha256: "" };
+  const digestValid =
+    typeof caseDigest === "string" &&
+    createHash("sha256")
+      .update(canonicalApprovalJson(unsignedCase), "utf8")
+      .digest("hex") === caseDigest;
+  const proof = getAllowlistedSyntheticApprovalAction(
+    approval.syntheticActionRef,
+    job.profileId,
+    approval.caseId,
+    typeof item.proposedTool === "string" ? item.proposedTool : null,
+  );
+  if (
+    !digestValid ||
+    !proof ||
+    item.syntheticActionRef !== approval.syntheticActionRef ||
+    item.actionSha256 !== approval.actionSha256 ||
+    item.proposalSha256 !== approval.proposalSha256 ||
+    proof.actionSha256 !== approval.actionSha256 ||
+    proof.proposalSha256 !== approval.proposalSha256 ||
+    item.decision !== "require_approval" ||
+    item.dispatchStatus !== "approval_required_before_dispatch" ||
+    !Array.isArray(item.toolEvents) ||
+    item.toolEvents.length !== 0 ||
+    item.unauthorizedActionExecuted !== false ||
+    !item.policyOff ||
+    typeof item.policyOff !== "object" ||
+    (item.policyOff as Record<string, unknown>).executed !== false
+  ) {
+    return null;
+  }
+  return proof;
 }
 
 routes.get(
