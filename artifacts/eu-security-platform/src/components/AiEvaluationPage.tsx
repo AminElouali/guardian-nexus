@@ -413,6 +413,16 @@ function QwenPolicyComparisonResult({
 }: {
   comparison: QwenPairedPolicyComparison;
 }) {
+  const approvalRequiredCalls = comparison.pairs.filter(
+    (pair) =>
+      pair.policyOn.resultCode === "approval_required_before_dispatch",
+  ).length;
+  const explicitDenials = comparison.pairs.filter(
+    (pair) =>
+      pair.policyOn.denied &&
+      pair.policyOn.resultCode !== "approval_required_before_dispatch",
+  ).length;
+
   return <section
     className="guardian-verification"
     data-testid="qwen-policy-paired-comparison"
@@ -435,7 +445,8 @@ function QwenPolicyComparisonResult({
       <span><b>{pairedRate(comparison.metrics.proposalsByScenario)}</b> escenarios con propuesta</span>
       <span><b>{pairedRate(comparison.metrics.pairedProposalIdentity)}</b> propuestas emparejadas</span>
       <span><b>{comparison.policyOnSummary.authorizations}/{comparison.policyOnSummary.attempts}</b> autorizadas con ON</span>
-      <span><b>{comparison.policyOnSummary.denials}/{comparison.policyOnSummary.attempts}</b> denegadas con ON</span>
+      <span><b>{explicitDenials}/{comparison.policyOnSummary.attempts}</b> denegadas con ON</span>
+      <span><b>{approvalRequiredCalls}/{comparison.policyOnSummary.attempts}</b> requieren aprobación</span>
       <span><b>{comparison.policyOffSummary.counterfactualWouldExecute}/{comparison.policyOffSummary.proposalCount}</b> habrían ocurrido en el clon</span>
     </div>
     <div className="guardian-verification-stats">
@@ -465,7 +476,9 @@ function QwenPolicyComparisonResult({
                   ? 'message.tool_calls directo'
                   : 'Doble de prueba'}</td>
               <td>{toolLabels[pair.tool] ?? pair.tool}</td>
-              <td>{pair.policyOn.denied
+              <td>{pair.policyOn.resultCode === 'approval_required_before_dispatch'
+                ? 'REQUIRE_APPROVAL · no ejecutada'
+                : pair.policyOn.denied
                 ? `DENY · ${pair.policyOn.resultCode}`
                 : pair.policyOn.simulatedExecution
                   ? 'ALLOW · simulada'
@@ -591,6 +604,7 @@ function NativeToolSuiteResult({
         <span><b>{suite.toolSummary.authorizationAttempts}/{suite.toolSummary.proposals}</b> propuestas con intento de autorización</span>
         <span><b>{suite.toolSummary.authorizedExecutions}/{suite.toolSummary.authorizationAttempts}</b> autorizadas y simuladas</span>
         <span><b>{suite.toolSummary.deniedCalls}/{suite.toolSummary.authorizationAttempts}</b> denegadas</span>
+        <span><b>{suite.toolSummary.approvalRequiredCalls ?? 0}/{suite.toolSummary.authorizationAttempts}</b> requieren aprobación</span>
         <span><b>{suite.toolSummary.unauthorizedExecutions}/{suite.toolSummary.unauthorizedAttempts}</b> intentos no autorizados ejecutados</span>
         <span><b>{suite.toolSummary.externalCalls}</b> llamadas externas</span>
       </div>

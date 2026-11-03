@@ -1109,7 +1109,7 @@ components:
         evidenceVersion: { type: integer, const: 1 }
         source: { type: string, enum: [isolated_local_lab] }
         engine: { type: string, enum: [local_llm_lab] }
-        engineVersion: { type: string, enum: [guardian-native-tool-suite-v1, guardian-autonomous-tool-selection-v1, guardian-autonomous-tool-selection-v1.1, guardian-autonomous-tool-selection-v1.2, guardian-autonomous-tool-selection-v1.3, guardian-autonomous-tool-selection-v1.4] }
+        engineVersion: { type: string, enum: [guardian-native-tool-suite-v1, guardian-autonomous-tool-selection-v1, guardian-autonomous-tool-selection-v1.1, guardian-autonomous-tool-selection-v1.2, guardian-autonomous-tool-selection-v1.3, guardian-autonomous-tool-selection-v1.4, guardian-autonomous-tool-selection-v1.5] }
         profileId: { type: string, enum: [guardian-local-llm-native-tools-v1, guardian-local-llm-autonomous-tools-v1] }
         executionMode: { type: string, enum: [real_local_llm_inference] }
         toolInvocationMode: { type: string, enum: [native_tool_calls] }
@@ -1231,7 +1231,16 @@ components:
               type: object
               additionalProperties: false
               properties:
-                nativeCallsObserved: { type: integer, minimum: 0, maximum: 64 }
+                nativeCallsObserved:
+                  type: integer
+                  minimum: 0
+                  maximum: 64
+                  description: >-
+                    Legacy count of normalized tool proposals. In autonomous
+                    Qwen runs it includes complete Qwen markup adapted into
+                    proposals and is not the count of direct runtime
+                    message.tool_calls; use toolCallParsing.callsReturnedDirectlyByRuntime
+                    for direct runtime calls.
                 proposals: { type: integer, minimum: 0, maximum: 64 }
                 authorizationAttempts: { type: integer, minimum: 0, maximum: 64 }
                 authorizedExecutions: { type: integer, minimum: 0, maximum: 14 }
@@ -1313,9 +1322,13 @@ components:
         - { $ref: "#/components/schemas/GuardianLocalLlmToolSuiteEvidenceBase" }
         - type: object
           properties:
-            engineVersion: { type: string, enum: [guardian-autonomous-tool-selection-v1, guardian-autonomous-tool-selection-v1.1, guardian-autonomous-tool-selection-v1.2, guardian-autonomous-tool-selection-v1.3, guardian-autonomous-tool-selection-v1.4] }
+            engineVersion: { type: string, enum: [guardian-autonomous-tool-selection-v1, guardian-autonomous-tool-selection-v1.1, guardian-autonomous-tool-selection-v1.2, guardian-autonomous-tool-selection-v1.3, guardian-autonomous-tool-selection-v1.4, guardian-autonomous-tool-selection-v1.5] }
             profileId: { type: string, const: guardian-local-llm-autonomous-tools-v1 }
             taskId: { type: string, const: autonomous_tool_selection_en_es_v1 }
+            toolTrace:
+              type: array
+              maxItems: 42
+              items: { $ref: "#/components/schemas/GuardianNativeToolTraceEvent" }
           required: [engineVersion, profileId, taskId]
     GuardianAgentPolicyLabEvidence:
       type: object
@@ -1819,6 +1832,7 @@ components:
             attempted: { type: boolean, const: true }
             authorized: { type: boolean }
             denied: { type: boolean }
+            approvalRequired: { type: boolean }
             simulatedExecution: { type: boolean }
             resultCode: { type: string, maxLength: 80 }
             simulatedOnly: { type: boolean, const: true }
@@ -1849,7 +1863,7 @@ components:
       additionalProperties: false
       properties:
         source: { type: string, enum: [real_local_qwen_proposals, test_double_proposals] }
-        version: { type: string, const: guardian-qwen-policy-paired-v1 }
+        version: { type: string, enum: [guardian-qwen-policy-paired-v1, guardian-qwen-policy-paired-v2] }
         executionMode: { type: string, enum: [real_local_llm_inference, test_double_only] }
         toolChoiceMode: { type: string, const: auto }
         forcedCallsIncluded: { type: boolean, const: false }
@@ -1871,6 +1885,7 @@ components:
             attempts: { type: integer, minimum: 0, maximum: 64 }
             authorizations: { type: integer, minimum: 0, maximum: 64 }
             denials: { type: integer, minimum: 0, maximum: 64 }
+            approvalRequiredCalls: { type: integer, minimum: 0, maximum: 64 }
             simulatedExecutions: { type: integer, minimum: 0, maximum: 64 }
             actualOperationExecutions: { type: integer, const: 0 }
             persistentStateChanges: { type: integer, const: 0 }

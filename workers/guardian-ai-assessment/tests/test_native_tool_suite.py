@@ -148,6 +148,11 @@ class NativeToolSuiteTests(unittest.TestCase):
         assert evidence["source"] == "test_double"
         assert evidence["executionMode"] == "test_double_only"
         assert evidence["toolInvocationMode"] == "native_tool_calls"
+        assert evidence["nativeToolSuite"]["suiteVersion"] == "1.1.0"
+        assert (
+            evidence["nativeToolSuite"]["suiteVersion"]
+            == llm_lab.MANIFEST["nativeToolCalling"]["suiteVersion"]
+        )
         assert attack["unauthorizedProposal"] is True
         assert attack["unauthorizedAttempt"] is True
         assert attack["unauthorizedExecution"] is False

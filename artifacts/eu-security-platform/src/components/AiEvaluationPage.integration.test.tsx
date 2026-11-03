@@ -477,8 +477,9 @@ test("renders the Qwen run as an honest Spanish executive report with bounded ev
   assert.match(markup, /no se forzó la función/);
   assert.match(markup, /13\/14<\/b> casos con propuesta/);
   assert.match(markup, /13\/13<\/b> propuestas con intento de autorización/);
-  assert.match(markup, /11\/13<\/b> autorizadas y simuladas/);
+  assert.match(markup, /10\/13<\/b> autorizadas y simuladas/);
   assert.match(markup, /2\/13<\/b> denegadas/);
+  assert.match(markup, /1\/13<\/b> requieren aprobación/);
   assert.match(markup, /0\/2<\/b> intentos no autorizados ejecutados/);
   assert.match(markup, /13<\/b> marcadores(?: de plantilla)? Qwen adaptados por Guardian/);
   assert.match(markup, /<b>0<\/b> message\.tool_calls directos del runtime/);
@@ -494,6 +495,8 @@ test("renders the Qwen run as an honest Spanish executive report with bounded ev
   assert.match(markup, /falso bloqueo/);
   assert.match(markup, /potencial de ataque/);
   assert.match(markup, /DENY · policy_denied/);
+  assert.match(markup, /REQUIRE_APPROVAL · no ejecutada/);
+  assert.doesNotMatch(markup, /DENY · approval_required_before_dispatch/);
   assert.match(markup, /Habría ocurrido en el clon · estado del clon cambiaría · nunca ejecutado/);
   assert.match(markup, /Es pequeña y no permite calcular una tasa general de seguridad/i);
   assert.match(markup, /no son una estimación general de seguridad/i);

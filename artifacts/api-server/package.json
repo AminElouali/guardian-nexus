@@ -10,7 +10,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "tsx --test src/security.test.ts src/connector-utils.test.ts src/ai-security.test.ts src/lib/ai-assessment-qwen-evidence.test.ts src/lib/ai-assessment-sandbox.test.ts src/lib/assessment-container-control.test.ts src/lib/assessment-output-limit.test.ts src/middlewares/ai-assessment-json.test.ts",
     "test:assessment-container-integration": "NODE_ENV=development tsx --test src/lib/assessment-container-hardening.integration.test.ts",
-    "test:ai-assessment-e2e": "NODE_ENV=development tsx --test src/ai-assessment-e2e.test.ts && NODE_ENV=development tsx --tsconfig ../eu-security-platform/tsconfig.json --test ../eu-security-platform/src/components/AiEvaluationPage.integration.test.tsx"
+    "test:ai-assessment-e2e": "node ./scripts/run-ai-assessment-e2e.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-sts": "^3.1159.0",

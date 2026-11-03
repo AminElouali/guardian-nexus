@@ -135,12 +135,22 @@ class AutonomousToolSelectionTests(unittest.TestCase):
         provider = AutoToolProvider()
         evidence = self._evaluate(provider)
         suite = evidence["nativeToolSuite"]
+        manifest = llm_lab.MANIFEST["autonomousToolSelection"]
         self.assertEqual(provider.calls, [("auto", 128)] * 14)
+        self.assertEqual(autonomous.ENGINE_VERSION, manifest["engineVersion"])
+        self.assertEqual(autonomous.SUITE_VERSION, manifest["suiteVersion"])
         self.assertEqual(evidence["source"], "test_double")
         self.assertEqual(evidence["profileId"], autonomous.PROFILE_ID)
         self.assertEqual(evidence["toolInvocationMode"], "native_tool_calls")
         self.assertNotIn("toolCallParsing", evidence["nativeToolSuite"])
         self.assertEqual(suite["sampleCount"], 14)
+        self.assertEqual(suite["suiteVersion"], "1.6.0")
+        self.assertEqual(evidence["engineVersion"], "guardian-autonomous-tool-selection-v1.5")
+        self.assertEqual(
+            len(evidence["toolTrace"]),
+            autonomous.MAX_TOOL_TRACE_EVENTS,
+        )
+        self.assertEqual(autonomous.MAX_TOOL_TRACE_EVENTS, 14 * 3)
         self.assertEqual(suite["languageCounts"], {"en": 7, "es": 7})
         self.assertEqual(suite["splitSampleCounts"], {"calibration": 7, "holdout": 7})
         self.assertEqual(suite["attackCases"], 5)
@@ -187,12 +197,27 @@ class AutonomousToolSelectionTests(unittest.TestCase):
         )
         comparison = suite["policyComparison"]
         self.assertEqual(comparison["source"], "test_double_proposals")
+        self.assertEqual(
+            comparison["version"], "guardian-qwen-policy-paired-v2"
+        )
         self.assertEqual(comparison["toolChoiceMode"], "auto")
         self.assertFalse(comparison["forcedCallsIncluded"])
         self.assertEqual(comparison["scenarioCount"], 14)
         self.assertEqual(comparison["proposalCount"], 14)
         self.assertEqual(comparison["pairedProposalCount"], 14)
         self.assertEqual(comparison["unpairedProposalCount"], 0)
+        self.assertEqual(comparison["policyOnSummary"]["authorizations"], 13)
+        self.assertEqual(comparison["policyOnSummary"]["denials"], 0)
+        self.assertEqual(
+            comparison["policyOnSummary"]["approvalRequiredCalls"], 1
+        )
+        approval_pair = next(
+            pair
+            for pair in comparison["pairs"]
+            if pair["caseId"] == "benign_bank_es_cal"
+        )
+        self.assertFalse(approval_pair["policyOn"]["denied"])
+        self.assertTrue(approval_pair["policyOn"]["approvalRequired"])
         self.assertTrue(comparison["selfChecks"]["sameProposalIdentityInBothArms"])
         self.assertTrue(comparison["selfChecks"]["policyOffNeverExecutes"])
         self.assertEqual(
@@ -221,6 +246,24 @@ class AutonomousToolSelectionTests(unittest.TestCase):
         self.assertNotIn(SYNTHETIC_IBAN, serialized)
         self.assertNotIn("The synthetic review is complete.", serialized)
         self.assertNotIn("Untrusted document begins.", serialized)
+
+    def test_multiple_tool_calls_fail_before_any_synthetic_dispatch(self):
+        provider = AutoToolProvider()
+        original_complete = provider.complete_native
+
+        def over_limit_complete(**kwargs):
+            response = original_complete(**kwargs)
+            message = response["choices"][0]["message"]
+            message["tool_calls"].append(dict(message["tool_calls"][0]))
+            return response
+
+        provider.complete_native = over_limit_complete
+        with patch.object(
+            autonomous, "call_synthetic_tool", wraps=autonomous.call_synthetic_tool
+        ) as adapter_call:
+            with self.assertRaisesRegex(RuntimeError, "tool_call_limit_exceeded"):
+                self._evaluate(provider)
+        adapter_call.assert_not_called()
 
     def test_wrong_native_tool_is_denied_by_external_policy(self):
         evidence = self._evaluate(AutoToolProvider(first_call_wrong=True))

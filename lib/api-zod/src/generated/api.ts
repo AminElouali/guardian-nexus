@@ -879,6 +879,9 @@ export const listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSui
 export const listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummaryDenialsMin = 0;
 export const listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummaryDenialsMax = 64;
 
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummaryApprovalRequiredCallsMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummaryApprovalRequiredCallsMax = 64;
+
 export const listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummarySimulatedExecutionsMin = 0;
 export const listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummarySimulatedExecutionsMax = 64;
 
@@ -1251,6 +1254,9 @@ export const listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuit
 export const listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummaryDenialsMin = 0;
 export const listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummaryDenialsMax = 64;
 
+export const listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummaryApprovalRequiredCallsMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummaryApprovalRequiredCallsMax = 64;
+
 export const listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummarySimulatedExecutionsMin = 0;
 export const listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummarySimulatedExecutionsMax = 64;
 
@@ -1391,6 +1397,13 @@ export const listWorkspaceAiAssessmentLabJobsResponseResultFourOneDurationSecond
 export const listWorkspaceAiAssessmentLabJobsResponseResultFourOneInterpretationMax = 500;
 
 export const listWorkspaceAiAssessmentLabJobsResponseResultFourOneEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const listWorkspaceAiAssessmentLabJobsResponseResultFourTwoToolTraceItemToolCallIdMax = 80;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultFourTwoToolTraceItemArgumentsSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const listWorkspaceAiAssessmentLabJobsResponseResultFourTwoToolTraceItemResultCodeMax = 80;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultFourTwoToolTraceMax = 42;
+
 export const listWorkspaceAiAssessmentLabJobsResponseResultFiveVerticalLabelMax = 80;
 
 export const listWorkspaceAiAssessmentLabJobsResponseResultFiveAgentIdentityAgentIdMax = 100;
@@ -1879,7 +1892,7 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "evidenceVersion": zod.literal(1),
   "source": zod.enum(['isolated_local_lab']),
   "engine": zod.enum(['local_llm_lab']),
-  "engineVersion": zod.enum(['guardian-native-tool-suite-v1', 'guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1', 'guardian-autonomous-tool-selection-v1.2', 'guardian-autonomous-tool-selection-v1.3', 'guardian-autonomous-tool-selection-v1.4']),
+  "engineVersion": zod.enum(['guardian-native-tool-suite-v1', 'guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1', 'guardian-autonomous-tool-selection-v1.2', 'guardian-autonomous-tool-selection-v1.3', 'guardian-autonomous-tool-selection-v1.4', 'guardian-autonomous-tool-selection-v1.5']),
   "profileId": zod.enum(['guardian-local-llm-native-tools-v1', 'guardian-local-llm-autonomous-tools-v1']),
   "executionMode": zod.enum(['real_local_llm_inference']),
   "toolInvocationMode": zod.enum(['native_tool_calls']),
@@ -2056,7 +2069,7 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
 })
 }),
   "toolSummary": zod.object({
-  "nativeCallsObserved": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuiteToolSummaryNativeCallsObservedMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuiteToolSummaryNativeCallsObservedMax),
+  "nativeCallsObserved": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuiteToolSummaryNativeCallsObservedMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuiteToolSummaryNativeCallsObservedMax).describe('Legacy count of normalized tool proposals. In autonomous Qwen runs it includes complete Qwen markup adapted into proposals and is not the count of direct runtime message.tool_calls; use toolCallParsing.callsReturnedDirectlyByRuntime for direct runtime calls.'),
   "proposals": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuiteToolSummaryProposalsMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuiteToolSummaryProposalsMax),
   "authorizationAttempts": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuiteToolSummaryAuthorizationAttemptsMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuiteToolSummaryAuthorizationAttemptsMax),
   "authorizedExecutions": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuiteToolSummaryAuthorizedExecutionsMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuiteToolSummaryAuthorizedExecutionsMax),
@@ -2078,7 +2091,7 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
 }).optional(),
   "policyComparison": zod.object({
   "source": zod.enum(['real_local_qwen_proposals', 'test_double_proposals']),
-  "version": zod.literal("guardian-qwen-policy-paired-v1"),
+  "version": zod.enum(['guardian-qwen-policy-paired-v1', 'guardian-qwen-policy-paired-v2']),
   "executionMode": zod.enum(['real_local_llm_inference', 'test_double_only']),
   "toolChoiceMode": zod.literal("auto"),
   "forcedCallsIncluded": zod.literal(false),
@@ -2106,6 +2119,7 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "attempted": zod.literal(true),
   "authorized": zod.boolean(),
   "denied": zod.boolean(),
+  "approvalRequired": zod.boolean().optional(),
   "simulatedExecution": zod.boolean(),
   "resultCode": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuitePolicyComparisonPairsItemPolicyOnResultCodeMax),
   "simulatedOnly": zod.literal(true)
@@ -2133,6 +2147,7 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "attempts": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummaryAttemptsMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummaryAttemptsMax),
   "authorizations": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummaryAuthorizationsMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummaryAuthorizationsMax),
   "denials": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummaryDenialsMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummaryDenialsMax),
+  "approvalRequiredCalls": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummaryApprovalRequiredCallsMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummaryApprovalRequiredCallsMax).optional(),
   "simulatedExecutions": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummarySimulatedExecutionsMin).max(listWorkspaceAiAssessmentLabJobsResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummarySimulatedExecutionsMax),
   "actualOperationExecutions": zod.literal(0),
   "persistentStateChanges": zod.literal(0),
@@ -2268,7 +2283,7 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "evidenceVersion": zod.literal(1),
   "source": zod.enum(['isolated_local_lab']),
   "engine": zod.enum(['local_llm_lab']),
-  "engineVersion": zod.enum(['guardian-native-tool-suite-v1', 'guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1', 'guardian-autonomous-tool-selection-v1.2', 'guardian-autonomous-tool-selection-v1.3', 'guardian-autonomous-tool-selection-v1.4']),
+  "engineVersion": zod.enum(['guardian-native-tool-suite-v1', 'guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1', 'guardian-autonomous-tool-selection-v1.2', 'guardian-autonomous-tool-selection-v1.3', 'guardian-autonomous-tool-selection-v1.4', 'guardian-autonomous-tool-selection-v1.5']),
   "profileId": zod.enum(['guardian-local-llm-native-tools-v1', 'guardian-local-llm-autonomous-tools-v1']),
   "executionMode": zod.enum(['real_local_llm_inference']),
   "toolInvocationMode": zod.enum(['native_tool_calls']),
@@ -2445,7 +2460,7 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
 })
 }),
   "toolSummary": zod.object({
-  "nativeCallsObserved": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuiteToolSummaryNativeCallsObservedMin).max(listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuiteToolSummaryNativeCallsObservedMax),
+  "nativeCallsObserved": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuiteToolSummaryNativeCallsObservedMin).max(listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuiteToolSummaryNativeCallsObservedMax).describe('Legacy count of normalized tool proposals. In autonomous Qwen runs it includes complete Qwen markup adapted into proposals and is not the count of direct runtime message.tool_calls; use toolCallParsing.callsReturnedDirectlyByRuntime for direct runtime calls.'),
   "proposals": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuiteToolSummaryProposalsMin).max(listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuiteToolSummaryProposalsMax),
   "authorizationAttempts": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuiteToolSummaryAuthorizationAttemptsMin).max(listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuiteToolSummaryAuthorizationAttemptsMax),
   "authorizedExecutions": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuiteToolSummaryAuthorizedExecutionsMin).max(listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuiteToolSummaryAuthorizedExecutionsMax),
@@ -2467,7 +2482,7 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
 }).optional(),
   "policyComparison": zod.object({
   "source": zod.enum(['real_local_qwen_proposals', 'test_double_proposals']),
-  "version": zod.literal("guardian-qwen-policy-paired-v1"),
+  "version": zod.enum(['guardian-qwen-policy-paired-v1', 'guardian-qwen-policy-paired-v2']),
   "executionMode": zod.enum(['real_local_llm_inference', 'test_double_only']),
   "toolChoiceMode": zod.literal("auto"),
   "forcedCallsIncluded": zod.literal(false),
@@ -2495,6 +2510,7 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "attempted": zod.literal(true),
   "authorized": zod.boolean(),
   "denied": zod.boolean(),
+  "approvalRequired": zod.boolean().optional(),
   "simulatedExecution": zod.boolean(),
   "resultCode": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuitePolicyComparisonPairsItemPolicyOnResultCodeMax),
   "simulatedOnly": zod.literal(true)
@@ -2522,6 +2538,7 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "attempts": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummaryAttemptsMin).max(listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummaryAttemptsMax),
   "authorizations": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummaryAuthorizationsMin).max(listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummaryAuthorizationsMax),
   "denials": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummaryDenialsMin).max(listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummaryDenialsMax),
+  "approvalRequiredCalls": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummaryApprovalRequiredCallsMin).max(listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummaryApprovalRequiredCallsMax).optional(),
   "simulatedExecutions": zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummarySimulatedExecutionsMin).max(listWorkspaceAiAssessmentLabJobsResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummarySimulatedExecutionsMax),
   "actualOperationExecutions": zod.literal(0),
   "persistentStateChanges": zod.literal(0),
@@ -2650,9 +2667,23 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "interpretation": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultFourOneInterpretationMax),
   "evidenceSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultFourOneEvidenceSha256RegExp)
 }).and(zod.object({
-  "engineVersion": zod.enum(['guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1', 'guardian-autonomous-tool-selection-v1.2', 'guardian-autonomous-tool-selection-v1.3', 'guardian-autonomous-tool-selection-v1.4']),
+  "engineVersion": zod.enum(['guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1', 'guardian-autonomous-tool-selection-v1.2', 'guardian-autonomous-tool-selection-v1.3', 'guardian-autonomous-tool-selection-v1.4', 'guardian-autonomous-tool-selection-v1.5']),
   "profileId": zod.literal("guardian-local-llm-autonomous-tools-v1"),
-  "taskId": zod.literal("autonomous_tool_selection_en_es_v1")
+  "taskId": zod.literal("autonomous_tool_selection_en_es_v1"),
+  "toolTrace": zod.array(zod.object({
+  "caseId": zod.enum(['capability_preflight', 'attack_email_en_cal', 'attack_bank_es_cal', 'benign_invoice_en_cal', 'benign_quote_es_cal', 'benign_email_en_cal', 'benign_bank_es_cal', 'attack_email_es_holdout', 'attack_bank_en_holdout', 'benign_invoice_es_holdout', 'benign_quote_en_holdout', 'benign_email_es_holdout', 'benign_bank_es_holdout', 'benign_bank_en_holdout', 'benign_quoted_injection_en_cal', 'attack_invoice_payment_override_es_holdout', 'benign_document_en_holdout', 'benign_document_es_holdout', 'benign_email_reply_en_cal', 'attack_document_injection_en_holdout']),
+  "toolCallId": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultFourTwoToolTraceItemToolCallIdMax),
+  "source": zod.enum(['native_tool_call']),
+  "tool": zod.enum(['consult_synthetic_invoice', 'read_synthetic_document', 'read_synthetic_email', 'send_email_simulated', 'request_bank_account_change', 'unknown']),
+  "phase": zod.enum(['proposal', 'authorization_attempt', 'executed', 'denied']),
+  "authorization": zod.enum(['not_checked', 'allowed', 'denied']),
+  "executed": zod.boolean(),
+  "simulatedOnly": zod.literal(true),
+  "stateChanged": zod.literal(false),
+  "externalSideEffect": zod.literal(false),
+  "argumentsSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultFourTwoToolTraceItemArgumentsSha256RegExp),
+  "resultCode": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultFourTwoToolTraceItemResultCodeMax)
+})).max(listWorkspaceAiAssessmentLabJobsResponseResultFourTwoToolTraceMax)
 })),zod.object({
   "evidenceVersion": zod.union([zod.literal(1),zod.literal(2)]),
   "source": zod.literal("synthetic_policy_scenarios"),
@@ -3336,6 +3367,9 @@ export const createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSu
 export const createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummaryDenialsMin = 0;
 export const createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummaryDenialsMax = 64;
 
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummaryApprovalRequiredCallsMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummaryApprovalRequiredCallsMax = 64;
+
 export const createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummarySimulatedExecutionsMin = 0;
 export const createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummarySimulatedExecutionsMax = 64;
 
@@ -3708,6 +3742,9 @@ export const createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSui
 export const createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummaryDenialsMin = 0;
 export const createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummaryDenialsMax = 64;
 
+export const createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummaryApprovalRequiredCallsMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummaryApprovalRequiredCallsMax = 64;
+
 export const createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummarySimulatedExecutionsMin = 0;
 export const createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummarySimulatedExecutionsMax = 64;
 
@@ -3848,6 +3885,13 @@ export const createWorkspaceAiAssessmentLabJobResponseResultFourOneDurationSecon
 export const createWorkspaceAiAssessmentLabJobResponseResultFourOneInterpretationMax = 500;
 
 export const createWorkspaceAiAssessmentLabJobResponseResultFourOneEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceAiAssessmentLabJobResponseResultFourTwoToolTraceItemToolCallIdMax = 80;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultFourTwoToolTraceItemArgumentsSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceAiAssessmentLabJobResponseResultFourTwoToolTraceItemResultCodeMax = 80;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultFourTwoToolTraceMax = 42;
+
 export const createWorkspaceAiAssessmentLabJobResponseResultFiveVerticalLabelMax = 80;
 
 export const createWorkspaceAiAssessmentLabJobResponseResultFiveAgentIdentityAgentIdMax = 100;
@@ -4336,7 +4380,7 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "evidenceVersion": zod.literal(1),
   "source": zod.enum(['isolated_local_lab']),
   "engine": zod.enum(['local_llm_lab']),
-  "engineVersion": zod.enum(['guardian-native-tool-suite-v1', 'guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1', 'guardian-autonomous-tool-selection-v1.2', 'guardian-autonomous-tool-selection-v1.3', 'guardian-autonomous-tool-selection-v1.4']),
+  "engineVersion": zod.enum(['guardian-native-tool-suite-v1', 'guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1', 'guardian-autonomous-tool-selection-v1.2', 'guardian-autonomous-tool-selection-v1.3', 'guardian-autonomous-tool-selection-v1.4', 'guardian-autonomous-tool-selection-v1.5']),
   "profileId": zod.enum(['guardian-local-llm-native-tools-v1', 'guardian-local-llm-autonomous-tools-v1']),
   "executionMode": zod.enum(['real_local_llm_inference']),
   "toolInvocationMode": zod.enum(['native_tool_calls']),
@@ -4513,7 +4557,7 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
 })
 }),
   "toolSummary": zod.object({
-  "nativeCallsObserved": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolSummaryNativeCallsObservedMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolSummaryNativeCallsObservedMax),
+  "nativeCallsObserved": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolSummaryNativeCallsObservedMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolSummaryNativeCallsObservedMax).describe('Legacy count of normalized tool proposals. In autonomous Qwen runs it includes complete Qwen markup adapted into proposals and is not the count of direct runtime message.tool_calls; use toolCallParsing.callsReturnedDirectlyByRuntime for direct runtime calls.'),
   "proposals": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolSummaryProposalsMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolSummaryProposalsMax),
   "authorizationAttempts": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolSummaryAuthorizationAttemptsMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolSummaryAuthorizationAttemptsMax),
   "authorizedExecutions": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolSummaryAuthorizedExecutionsMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolSummaryAuthorizedExecutionsMax),
@@ -4535,7 +4579,7 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
 }).optional(),
   "policyComparison": zod.object({
   "source": zod.enum(['real_local_qwen_proposals', 'test_double_proposals']),
-  "version": zod.literal("guardian-qwen-policy-paired-v1"),
+  "version": zod.enum(['guardian-qwen-policy-paired-v1', 'guardian-qwen-policy-paired-v2']),
   "executionMode": zod.enum(['real_local_llm_inference', 'test_double_only']),
   "toolChoiceMode": zod.literal("auto"),
   "forcedCallsIncluded": zod.literal(false),
@@ -4563,6 +4607,7 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "attempted": zod.literal(true),
   "authorized": zod.boolean(),
   "denied": zod.boolean(),
+  "approvalRequired": zod.boolean().optional(),
   "simulatedExecution": zod.boolean(),
   "resultCode": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuitePolicyComparisonPairsItemPolicyOnResultCodeMax),
   "simulatedOnly": zod.literal(true)
@@ -4590,6 +4635,7 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "attempts": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummaryAttemptsMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummaryAttemptsMax),
   "authorizations": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummaryAuthorizationsMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummaryAuthorizationsMax),
   "denials": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummaryDenialsMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummaryDenialsMax),
+  "approvalRequiredCalls": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummaryApprovalRequiredCallsMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummaryApprovalRequiredCallsMax).optional(),
   "simulatedExecutions": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummarySimulatedExecutionsMin).max(createWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummarySimulatedExecutionsMax),
   "actualOperationExecutions": zod.literal(0),
   "persistentStateChanges": zod.literal(0),
@@ -4725,7 +4771,7 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "evidenceVersion": zod.literal(1),
   "source": zod.enum(['isolated_local_lab']),
   "engine": zod.enum(['local_llm_lab']),
-  "engineVersion": zod.enum(['guardian-native-tool-suite-v1', 'guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1', 'guardian-autonomous-tool-selection-v1.2', 'guardian-autonomous-tool-selection-v1.3', 'guardian-autonomous-tool-selection-v1.4']),
+  "engineVersion": zod.enum(['guardian-native-tool-suite-v1', 'guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1', 'guardian-autonomous-tool-selection-v1.2', 'guardian-autonomous-tool-selection-v1.3', 'guardian-autonomous-tool-selection-v1.4', 'guardian-autonomous-tool-selection-v1.5']),
   "profileId": zod.enum(['guardian-local-llm-native-tools-v1', 'guardian-local-llm-autonomous-tools-v1']),
   "executionMode": zod.enum(['real_local_llm_inference']),
   "toolInvocationMode": zod.enum(['native_tool_calls']),
@@ -4902,7 +4948,7 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
 })
 }),
   "toolSummary": zod.object({
-  "nativeCallsObserved": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolSummaryNativeCallsObservedMin).max(createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolSummaryNativeCallsObservedMax),
+  "nativeCallsObserved": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolSummaryNativeCallsObservedMin).max(createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolSummaryNativeCallsObservedMax).describe('Legacy count of normalized tool proposals. In autonomous Qwen runs it includes complete Qwen markup adapted into proposals and is not the count of direct runtime message.tool_calls; use toolCallParsing.callsReturnedDirectlyByRuntime for direct runtime calls.'),
   "proposals": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolSummaryProposalsMin).max(createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolSummaryProposalsMax),
   "authorizationAttempts": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolSummaryAuthorizationAttemptsMin).max(createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolSummaryAuthorizationAttemptsMax),
   "authorizedExecutions": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolSummaryAuthorizedExecutionsMin).max(createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolSummaryAuthorizedExecutionsMax),
@@ -4924,7 +4970,7 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
 }).optional(),
   "policyComparison": zod.object({
   "source": zod.enum(['real_local_qwen_proposals', 'test_double_proposals']),
-  "version": zod.literal("guardian-qwen-policy-paired-v1"),
+  "version": zod.enum(['guardian-qwen-policy-paired-v1', 'guardian-qwen-policy-paired-v2']),
   "executionMode": zod.enum(['real_local_llm_inference', 'test_double_only']),
   "toolChoiceMode": zod.literal("auto"),
   "forcedCallsIncluded": zod.literal(false),
@@ -4952,6 +4998,7 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "attempted": zod.literal(true),
   "authorized": zod.boolean(),
   "denied": zod.boolean(),
+  "approvalRequired": zod.boolean().optional(),
   "simulatedExecution": zod.boolean(),
   "resultCode": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuitePolicyComparisonPairsItemPolicyOnResultCodeMax),
   "simulatedOnly": zod.literal(true)
@@ -4979,6 +5026,7 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "attempts": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummaryAttemptsMin).max(createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummaryAttemptsMax),
   "authorizations": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummaryAuthorizationsMin).max(createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummaryAuthorizationsMax),
   "denials": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummaryDenialsMin).max(createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummaryDenialsMax),
+  "approvalRequiredCalls": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummaryApprovalRequiredCallsMin).max(createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummaryApprovalRequiredCallsMax).optional(),
   "simulatedExecutions": zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummarySimulatedExecutionsMin).max(createWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummarySimulatedExecutionsMax),
   "actualOperationExecutions": zod.literal(0),
   "persistentStateChanges": zod.literal(0),
@@ -5107,9 +5155,23 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "interpretation": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultFourOneInterpretationMax),
   "evidenceSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultFourOneEvidenceSha256RegExp)
 }).and(zod.object({
-  "engineVersion": zod.enum(['guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1', 'guardian-autonomous-tool-selection-v1.2', 'guardian-autonomous-tool-selection-v1.3', 'guardian-autonomous-tool-selection-v1.4']),
+  "engineVersion": zod.enum(['guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1', 'guardian-autonomous-tool-selection-v1.2', 'guardian-autonomous-tool-selection-v1.3', 'guardian-autonomous-tool-selection-v1.4', 'guardian-autonomous-tool-selection-v1.5']),
   "profileId": zod.literal("guardian-local-llm-autonomous-tools-v1"),
-  "taskId": zod.literal("autonomous_tool_selection_en_es_v1")
+  "taskId": zod.literal("autonomous_tool_selection_en_es_v1"),
+  "toolTrace": zod.array(zod.object({
+  "caseId": zod.enum(['capability_preflight', 'attack_email_en_cal', 'attack_bank_es_cal', 'benign_invoice_en_cal', 'benign_quote_es_cal', 'benign_email_en_cal', 'benign_bank_es_cal', 'attack_email_es_holdout', 'attack_bank_en_holdout', 'benign_invoice_es_holdout', 'benign_quote_en_holdout', 'benign_email_es_holdout', 'benign_bank_es_holdout', 'benign_bank_en_holdout', 'benign_quoted_injection_en_cal', 'attack_invoice_payment_override_es_holdout', 'benign_document_en_holdout', 'benign_document_es_holdout', 'benign_email_reply_en_cal', 'attack_document_injection_en_holdout']),
+  "toolCallId": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultFourTwoToolTraceItemToolCallIdMax),
+  "source": zod.enum(['native_tool_call']),
+  "tool": zod.enum(['consult_synthetic_invoice', 'read_synthetic_document', 'read_synthetic_email', 'send_email_simulated', 'request_bank_account_change', 'unknown']),
+  "phase": zod.enum(['proposal', 'authorization_attempt', 'executed', 'denied']),
+  "authorization": zod.enum(['not_checked', 'allowed', 'denied']),
+  "executed": zod.boolean(),
+  "simulatedOnly": zod.literal(true),
+  "stateChanged": zod.literal(false),
+  "externalSideEffect": zod.literal(false),
+  "argumentsSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultFourTwoToolTraceItemArgumentsSha256RegExp),
+  "resultCode": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultFourTwoToolTraceItemResultCodeMax)
+})).max(createWorkspaceAiAssessmentLabJobResponseResultFourTwoToolTraceMax)
 })),zod.object({
   "evidenceVersion": zod.union([zod.literal(1),zod.literal(2)]),
   "source": zod.literal("synthetic_policy_scenarios"),
@@ -5782,6 +5844,9 @@ export const retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSui
 export const retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummaryDenialsMin = 0;
 export const retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummaryDenialsMax = 64;
 
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummaryApprovalRequiredCallsMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummaryApprovalRequiredCallsMax = 64;
+
 export const retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummarySimulatedExecutionsMin = 0;
 export const retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummarySimulatedExecutionsMax = 64;
 
@@ -6154,6 +6219,9 @@ export const retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuit
 export const retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummaryDenialsMin = 0;
 export const retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummaryDenialsMax = 64;
 
+export const retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummaryApprovalRequiredCallsMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummaryApprovalRequiredCallsMax = 64;
+
 export const retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummarySimulatedExecutionsMin = 0;
 export const retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummarySimulatedExecutionsMax = 64;
 
@@ -6294,6 +6362,13 @@ export const retryWorkspaceAiAssessmentLabJobResponseResultFourOneDurationSecond
 export const retryWorkspaceAiAssessmentLabJobResponseResultFourOneInterpretationMax = 500;
 
 export const retryWorkspaceAiAssessmentLabJobResponseResultFourOneEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const retryWorkspaceAiAssessmentLabJobResponseResultFourTwoToolTraceItemToolCallIdMax = 80;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultFourTwoToolTraceItemArgumentsSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const retryWorkspaceAiAssessmentLabJobResponseResultFourTwoToolTraceItemResultCodeMax = 80;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultFourTwoToolTraceMax = 42;
+
 export const retryWorkspaceAiAssessmentLabJobResponseResultFiveVerticalLabelMax = 80;
 
 export const retryWorkspaceAiAssessmentLabJobResponseResultFiveAgentIdentityAgentIdMax = 100;
@@ -6782,7 +6857,7 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "evidenceVersion": zod.literal(1),
   "source": zod.enum(['isolated_local_lab']),
   "engine": zod.enum(['local_llm_lab']),
-  "engineVersion": zod.enum(['guardian-native-tool-suite-v1', 'guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1', 'guardian-autonomous-tool-selection-v1.2', 'guardian-autonomous-tool-selection-v1.3', 'guardian-autonomous-tool-selection-v1.4']),
+  "engineVersion": zod.enum(['guardian-native-tool-suite-v1', 'guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1', 'guardian-autonomous-tool-selection-v1.2', 'guardian-autonomous-tool-selection-v1.3', 'guardian-autonomous-tool-selection-v1.4', 'guardian-autonomous-tool-selection-v1.5']),
   "profileId": zod.enum(['guardian-local-llm-native-tools-v1', 'guardian-local-llm-autonomous-tools-v1']),
   "executionMode": zod.enum(['real_local_llm_inference']),
   "toolInvocationMode": zod.enum(['native_tool_calls']),
@@ -6959,7 +7034,7 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
 })
 }),
   "toolSummary": zod.object({
-  "nativeCallsObserved": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolSummaryNativeCallsObservedMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolSummaryNativeCallsObservedMax),
+  "nativeCallsObserved": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolSummaryNativeCallsObservedMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolSummaryNativeCallsObservedMax).describe('Legacy count of normalized tool proposals. In autonomous Qwen runs it includes complete Qwen markup adapted into proposals and is not the count of direct runtime message.tool_calls; use toolCallParsing.callsReturnedDirectlyByRuntime for direct runtime calls.'),
   "proposals": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolSummaryProposalsMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolSummaryProposalsMax),
   "authorizationAttempts": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolSummaryAuthorizationAttemptsMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolSummaryAuthorizationAttemptsMax),
   "authorizedExecutions": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolSummaryAuthorizedExecutionsMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuiteToolSummaryAuthorizedExecutionsMax),
@@ -6981,7 +7056,7 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
 }).optional(),
   "policyComparison": zod.object({
   "source": zod.enum(['real_local_qwen_proposals', 'test_double_proposals']),
-  "version": zod.literal("guardian-qwen-policy-paired-v1"),
+  "version": zod.enum(['guardian-qwen-policy-paired-v1', 'guardian-qwen-policy-paired-v2']),
   "executionMode": zod.enum(['real_local_llm_inference', 'test_double_only']),
   "toolChoiceMode": zod.literal("auto"),
   "forcedCallsIncluded": zod.literal(false),
@@ -7009,6 +7084,7 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "attempted": zod.literal(true),
   "authorized": zod.boolean(),
   "denied": zod.boolean(),
+  "approvalRequired": zod.boolean().optional(),
   "simulatedExecution": zod.boolean(),
   "resultCode": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuitePolicyComparisonPairsItemPolicyOnResultCodeMax),
   "simulatedOnly": zod.literal(true)
@@ -7036,6 +7112,7 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "attempts": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummaryAttemptsMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummaryAttemptsMax),
   "authorizations": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummaryAuthorizationsMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummaryAuthorizationsMax),
   "denials": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummaryDenialsMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummaryDenialsMax),
+  "approvalRequiredCalls": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummaryApprovalRequiredCallsMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummaryApprovalRequiredCallsMax).optional(),
   "simulatedExecutions": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummarySimulatedExecutionsMin).max(retryWorkspaceAiAssessmentLabJobResponseResultThreeOneNativeToolSuitePolicyComparisonPolicyOnSummarySimulatedExecutionsMax),
   "actualOperationExecutions": zod.literal(0),
   "persistentStateChanges": zod.literal(0),
@@ -7171,7 +7248,7 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "evidenceVersion": zod.literal(1),
   "source": zod.enum(['isolated_local_lab']),
   "engine": zod.enum(['local_llm_lab']),
-  "engineVersion": zod.enum(['guardian-native-tool-suite-v1', 'guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1', 'guardian-autonomous-tool-selection-v1.2', 'guardian-autonomous-tool-selection-v1.3', 'guardian-autonomous-tool-selection-v1.4']),
+  "engineVersion": zod.enum(['guardian-native-tool-suite-v1', 'guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1', 'guardian-autonomous-tool-selection-v1.2', 'guardian-autonomous-tool-selection-v1.3', 'guardian-autonomous-tool-selection-v1.4', 'guardian-autonomous-tool-selection-v1.5']),
   "profileId": zod.enum(['guardian-local-llm-native-tools-v1', 'guardian-local-llm-autonomous-tools-v1']),
   "executionMode": zod.enum(['real_local_llm_inference']),
   "toolInvocationMode": zod.enum(['native_tool_calls']),
@@ -7348,7 +7425,7 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
 })
 }),
   "toolSummary": zod.object({
-  "nativeCallsObserved": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolSummaryNativeCallsObservedMin).max(retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolSummaryNativeCallsObservedMax),
+  "nativeCallsObserved": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolSummaryNativeCallsObservedMin).max(retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolSummaryNativeCallsObservedMax).describe('Legacy count of normalized tool proposals. In autonomous Qwen runs it includes complete Qwen markup adapted into proposals and is not the count of direct runtime message.tool_calls; use toolCallParsing.callsReturnedDirectlyByRuntime for direct runtime calls.'),
   "proposals": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolSummaryProposalsMin).max(retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolSummaryProposalsMax),
   "authorizationAttempts": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolSummaryAuthorizationAttemptsMin).max(retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolSummaryAuthorizationAttemptsMax),
   "authorizedExecutions": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolSummaryAuthorizedExecutionsMin).max(retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuiteToolSummaryAuthorizedExecutionsMax),
@@ -7370,7 +7447,7 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
 }).optional(),
   "policyComparison": zod.object({
   "source": zod.enum(['real_local_qwen_proposals', 'test_double_proposals']),
-  "version": zod.literal("guardian-qwen-policy-paired-v1"),
+  "version": zod.enum(['guardian-qwen-policy-paired-v1', 'guardian-qwen-policy-paired-v2']),
   "executionMode": zod.enum(['real_local_llm_inference', 'test_double_only']),
   "toolChoiceMode": zod.literal("auto"),
   "forcedCallsIncluded": zod.literal(false),
@@ -7398,6 +7475,7 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "attempted": zod.literal(true),
   "authorized": zod.boolean(),
   "denied": zod.boolean(),
+  "approvalRequired": zod.boolean().optional(),
   "simulatedExecution": zod.boolean(),
   "resultCode": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuitePolicyComparisonPairsItemPolicyOnResultCodeMax),
   "simulatedOnly": zod.literal(true)
@@ -7425,6 +7503,7 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "attempts": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummaryAttemptsMin).max(retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummaryAttemptsMax),
   "authorizations": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummaryAuthorizationsMin).max(retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummaryAuthorizationsMax),
   "denials": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummaryDenialsMin).max(retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummaryDenialsMax),
+  "approvalRequiredCalls": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummaryApprovalRequiredCallsMin).max(retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummaryApprovalRequiredCallsMax).optional(),
   "simulatedExecutions": zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummarySimulatedExecutionsMin).max(retryWorkspaceAiAssessmentLabJobResponseResultFourOneNativeToolSuitePolicyComparisonPolicyOnSummarySimulatedExecutionsMax),
   "actualOperationExecutions": zod.literal(0),
   "persistentStateChanges": zod.literal(0),
@@ -7553,9 +7632,23 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "interpretation": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultFourOneInterpretationMax),
   "evidenceSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultFourOneEvidenceSha256RegExp)
 }).and(zod.object({
-  "engineVersion": zod.enum(['guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1', 'guardian-autonomous-tool-selection-v1.2', 'guardian-autonomous-tool-selection-v1.3', 'guardian-autonomous-tool-selection-v1.4']),
+  "engineVersion": zod.enum(['guardian-autonomous-tool-selection-v1', 'guardian-autonomous-tool-selection-v1.1', 'guardian-autonomous-tool-selection-v1.2', 'guardian-autonomous-tool-selection-v1.3', 'guardian-autonomous-tool-selection-v1.4', 'guardian-autonomous-tool-selection-v1.5']),
   "profileId": zod.literal("guardian-local-llm-autonomous-tools-v1"),
-  "taskId": zod.literal("autonomous_tool_selection_en_es_v1")
+  "taskId": zod.literal("autonomous_tool_selection_en_es_v1"),
+  "toolTrace": zod.array(zod.object({
+  "caseId": zod.enum(['capability_preflight', 'attack_email_en_cal', 'attack_bank_es_cal', 'benign_invoice_en_cal', 'benign_quote_es_cal', 'benign_email_en_cal', 'benign_bank_es_cal', 'attack_email_es_holdout', 'attack_bank_en_holdout', 'benign_invoice_es_holdout', 'benign_quote_en_holdout', 'benign_email_es_holdout', 'benign_bank_es_holdout', 'benign_bank_en_holdout', 'benign_quoted_injection_en_cal', 'attack_invoice_payment_override_es_holdout', 'benign_document_en_holdout', 'benign_document_es_holdout', 'benign_email_reply_en_cal', 'attack_document_injection_en_holdout']),
+  "toolCallId": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultFourTwoToolTraceItemToolCallIdMax),
+  "source": zod.enum(['native_tool_call']),
+  "tool": zod.enum(['consult_synthetic_invoice', 'read_synthetic_document', 'read_synthetic_email', 'send_email_simulated', 'request_bank_account_change', 'unknown']),
+  "phase": zod.enum(['proposal', 'authorization_attempt', 'executed', 'denied']),
+  "authorization": zod.enum(['not_checked', 'allowed', 'denied']),
+  "executed": zod.boolean(),
+  "simulatedOnly": zod.literal(true),
+  "stateChanged": zod.literal(false),
+  "externalSideEffect": zod.literal(false),
+  "argumentsSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultFourTwoToolTraceItemArgumentsSha256RegExp),
+  "resultCode": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultFourTwoToolTraceItemResultCodeMax)
+})).max(retryWorkspaceAiAssessmentLabJobResponseResultFourTwoToolTraceMax)
 })),zod.object({
   "evidenceVersion": zod.union([zod.literal(1),zod.literal(2)]),
   "source": zod.literal("synthetic_policy_scenarios"),

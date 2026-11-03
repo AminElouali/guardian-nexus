@@ -98,3 +98,9 @@ description: Product boundaries for security integrations, claims, and productio
 **Why:** OSV Scanner returns a nonzero status for vulnerability matches, while cache, version, archive, or JSON failures make the result untrustworthy for a different reason.
 
 **How to apply:** Require a parseable scanner version, exact loaded DB paths and hashes, valid JSON, and internally consistent finding counts. Classify mismatched provenance separately from process failures and findings.
+
+**Rule:** A proposal held at `approval_required_before_dispatch` is neither an explicit policy DENY nor an execution. In paired-evidence v2, report pending approvals separately from denials while retaining strict validation and reading legacy v1 evidence compatibly.
+
+**Why:** Counting a valid approval hold as DENY made worker/API/UI metrics disagree and obscured the action state, even though dispatch correctly never occurred.
+
+**How to apply:** Derive approval state from the verified trace result code, require matching pair and summary fields in v2, and ensure the hold remains unauthorized and unexecuted. Do not change policy outcomes merely to fit the report.

@@ -645,6 +645,11 @@ test(
       "tool_calls",
     );
     assert.equal(nativeEvidence.nativeToolSuite.sampleCount, 12);
+    assert.equal(nativeEvidence.nativeToolSuite.suiteVersion, "1.1.0");
+    assert.ok(nativeEvidence.toolTrace.length <= 288);
+    console.info(
+      `QWEN_NATIVE_TOOL_TRACE_COUNT=${nativeEvidence.toolTrace.length}/288`,
+    );
     assert.deepEqual(
       nativeEvidence.nativeToolSuite.splitSampleCounts,
       { calibration: 6, holdout: 6 },
@@ -1515,9 +1520,16 @@ test(
     );
     assert.equal(
       evidence.engineVersion,
-      "guardian-autonomous-tool-selection-v1.4",
+      "guardian-autonomous-tool-selection-v1.5",
     );
-    assert.equal(evidence.nativeToolSuite.suiteVersion, "1.5.0");
+    assert.equal(evidence.nativeToolSuite.suiteVersion, "1.6.0");
+    assert.ok(
+      evidence.toolTrace.length <= 42,
+      "autonomous evidence trace must fit the versioned 14-case / 3-events-per-call budget",
+    );
+    console.info(
+      `QWEN_AUTONOMOUS_TOOL_TRACE_COUNT=${evidence.toolTrace.length}/42`,
+    );
     assert.deepEqual(
       evidence.nativeToolSuite.caseEvidence.reduce<Record<string, number>>(
         (counts, item) => {
@@ -1618,6 +1630,7 @@ test(
     const comparison = evidence.nativeToolSuite.policyComparison;
     assert.ok(comparison, "real Qwen proposals must have paired policy evidence");
     assert.equal(comparison.source, "real_local_qwen_proposals");
+    assert.equal(comparison.version, "guardian-qwen-policy-paired-v2");
     assert.equal(comparison.executionMode, "real_local_llm_inference");
     assert.equal(comparison.toolChoiceMode, "auto");
     assert.equal(comparison.forcedCallsIncluded, false);
@@ -1630,9 +1643,13 @@ test(
     assert.equal(comparison.unpairedProposalCount, 0);
     assert.equal(comparison.policyOnSummary.proposalCount, comparison.proposalCount);
     assert.equal(comparison.policyOnSummary.attempts, comparison.proposalCount);
+    const approvalRequiredCalls =
+      comparison.policyOnSummary.approvalRequiredCalls ?? -1;
+    assert.ok(approvalRequiredCalls >= 0);
     assert.equal(
       comparison.policyOnSummary.authorizations +
-        comparison.policyOnSummary.denials,
+        comparison.policyOnSummary.denials +
+        approvalRequiredCalls,
       comparison.policyOnSummary.attempts,
     );
     assert.equal(

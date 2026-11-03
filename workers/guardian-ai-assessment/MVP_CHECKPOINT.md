@@ -1605,3 +1605,58 @@ This update supersedes the older diskcache status, worker-test count, and OSV
   sesión Clerk real en navegador. Los ocho perfiles siguen usando un solo
   modelo local y herramientas ficticias. No cambian pendientes de broker
   Docker, IPv6, OSV/SBOM/licencias; no publicar ni usar con clientes.
+
+## Validación serial de contrato y ocho perfiles Qwen v1.6.0 — 2026-11-03
+
+- Base: HEAD `de654b06d085e6ad5ec70e99b4cf1e04c4add85f`. El test E2E falló
+  primero porque la aserción no sumaba `approvalRequiredCalls`; se corrigió la
+  clasificación de prueba para contar ALLOW, DENY y REQUIRE_APPROVAL por
+  separado. El validador de seguridad no se relajó. La repetición serial pasó.
+- Se aclaró en OpenAPI el campo legado `nativeCallsObserved`: es el total de
+  propuestas normalizadas y puede incluir marcadores Qwen adaptados. No es el
+  contador de `message.tool_calls` directos; para estos se consulta
+  `toolCallParsing.callsReturnedDirectlyByRuntime`. Codegen y typecheck de
+  librerías pasaron.
+- Qwen local de los ocho perfiles: 28 casos/28 inferencias `tool_choice=auto`,
+  19 marcadores completos adaptados, 0 llamadas directas del runtime y 9 casos
+  sin propuesta. El conjunto observado tuvo 11 benignos y 17 adversarios.
+  Política ON: 10 simulaciones ficticias, 7 denegaciones y 2 casos con
+  aprobación requerida; 0 ejecuciones no autorizadas/externas. En las pruebas
+  de aprobación, una propuesta se simuló una vez tras aprobarla y otra caducó
+  sin ejecución.
+- Selección autónoma emparejada v2: 14 escenarios, 13 propuestas emparejadas,
+  13 marcadores adaptados, 0 `message.tool_calls` directos, 1 sin propuesta,
+  traza 39/42. Política ON: 10 ALLOW, 2 DENY, 1 REQUIRE_APPROVAL. Policy OFF
+  fue solo contrafactual sobre clones: 12 habrían pasado, hubo 2 cambios en
+  clones efímeros y 0 operaciones reales, persistentes o externas.
+- La suite nativa está separada de la autónoma: la sonda nativa usó
+  `specific_function` y devolvió `finish_reason=tool_calls`; su traza E2E fue
+  24/288. No se cuentan estas llamadas forzadas como selección autónoma.
+- Pruebas/builds: E2E serial API/worker 6/6; integración de componentes
+  dashboard 8/8; API 57/57; worker Python 118/118 (ejecutado previamente con
+  el mismo código worker); typecheck y build API pasaron; typecheck/build web
+  pasaron; `typecheck:libs` y `git diff --check` pasaron. Build web conserva
+  avisos de sourcemap de `tooltip.tsx` y chunk >500 kB. La captura visual
+  comprobó solo la home pública; login Clerk autenticado no se verificó.
+- Modelo/hash: Qwen/Qwen3-0.6B-GGUF Q8_0,
+  `9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031`;
+  `llama-cpp-python` 0.3.36; ejecución Docker sin red, imagen fijada
+  `sha256:884d4f7bc6c11e03f6ced5cfcc9e88e7a8043d85923429f1a3a181953f07830f`.
+  IPv6 permanece `kernel_protocol_unavailable`, no verificado.
+- Evidencias (SHA-256): ocho perfiles
+  `124c0cb765a00a39453b9e301caad732708aa8e4c4814768e71be4e830c44220`;
+  autónoma emparejada
+  `a9e56bc7aaececa631fdbc6110e9dac3c4544640de2db443845e86d10376345c`;
+  suite nativa separada
+  `8fb01d5034af76c7306b31de6fe39fb615e77aa4f19a37086c5775ca8672d03a`;
+  respuesta general E2E
+  `cfc558e970b2e2d5da1685f2e7fe33373562c17cb3d81f223e0f7b1ed3dc15bf`;
+  log serial
+  `5dadfef88559e9b58a932cb692ec34a271fd5de0f2653c803940e6d220f3de02`.
+- Informe:
+  `reports/guardian-nexus-qwen-e2e-v1.6.0-2026-11-03.md`, SHA-256
+  `41d7c5d83fb5070b0f853e4f499af6b93b4f3f1151defff85e6f51074bcc4958`.
+- Evidencia sintética únicamente; no es eficacia general ni garantía. Sin
+  sesión Clerk real, sin publicación ni producción. Siguen pendientes
+  dual-stack IPv6, aislamiento real API/broker y riesgos OSV/licencias antes
+  de clientes.

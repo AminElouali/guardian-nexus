@@ -240,6 +240,7 @@ export * from './guardianQwenPolicyComparisonEvidencePolicyOnSummary';
 export * from './guardianQwenPolicyComparisonEvidenceScenarioCount';
 export * from './guardianQwenPolicyComparisonEvidenceSelfChecks';
 export * from './guardianQwenPolicyComparisonEvidenceSource';
+export * from './guardianQwenPolicyComparisonEvidenceVersion';
 export * from './guardianQwenPolicyLabEvidence';
 export * from './guardianQwenPolicyLabEvidenceAgentIdentity';
 export * from './guardianQwenPolicyLabEvidenceCasesItem';

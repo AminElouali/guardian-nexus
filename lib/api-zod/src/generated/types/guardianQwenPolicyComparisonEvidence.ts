@@ -13,11 +13,12 @@ import type { GuardianQwenPolicyComparisonEvidencePolicyOnSummary } from './guar
 import type { GuardianQwenPolicyComparisonEvidenceScenarioCount } from './guardianQwenPolicyComparisonEvidenceScenarioCount';
 import type { GuardianQwenPolicyComparisonEvidenceSelfChecks } from './guardianQwenPolicyComparisonEvidenceSelfChecks';
 import type { GuardianQwenPolicyComparisonEvidenceSource } from './guardianQwenPolicyComparisonEvidenceSource';
+import type { GuardianQwenPolicyComparisonEvidenceVersion } from './guardianQwenPolicyComparisonEvidenceVersion';
 import type { GuardianQwenPolicyPair } from './guardianQwenPolicyPair';
 
 export interface GuardianQwenPolicyComparisonEvidence {
   source: GuardianQwenPolicyComparisonEvidenceSource;
-  version: 'guardian-qwen-policy-paired-v1';
+  version: GuardianQwenPolicyComparisonEvidenceVersion;
   executionMode: GuardianQwenPolicyComparisonEvidenceExecutionMode;
   toolChoiceMode: 'auto';
   forcedCallsIncluded: false;

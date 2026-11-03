@@ -31,6 +31,11 @@ export type GuardianQwenPolicyComparisonEvidencePolicyOnSummary = {
      * @minimum 0
      * @maximum 64
      */
+  approvalRequiredCalls?: number;
+  /**
+     * @minimum 0
+     * @maximum 64
+     */
   simulatedExecutions: number;
   actualOperationExecutions: 0;
   persistentStateChanges: 0;

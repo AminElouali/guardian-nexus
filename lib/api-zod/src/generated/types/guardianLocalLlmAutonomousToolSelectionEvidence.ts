@@ -7,9 +7,12 @@
  */
 import type { GuardianLocalLlmAutonomousToolSelectionEvidenceEngineVersion } from './guardianLocalLlmAutonomousToolSelectionEvidenceEngineVersion';
 import type { GuardianLocalLlmToolSuiteEvidenceBase } from './guardianLocalLlmToolSuiteEvidenceBase';
+import type { GuardianNativeToolTraceEvent } from './guardianNativeToolTraceEvent';
 
 export type GuardianLocalLlmAutonomousToolSelectionEvidence = GuardianLocalLlmToolSuiteEvidenceBase & {
   engineVersion: GuardianLocalLlmAutonomousToolSelectionEvidenceEngineVersion;
   profileId: 'guardian-local-llm-autonomous-tools-v1';
   taskId: 'autonomous_tool_selection_en_es_v1';
+  /** @maxItems 42 */
+  toolTrace?: GuardianNativeToolTraceEvent[];
 };

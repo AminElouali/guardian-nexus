@@ -522,6 +522,7 @@ type GuardianQwenPolicyPair = {
     attempted: boolean;
     authorized: boolean;
     denied: boolean;
+    approvalRequired?: boolean;
     simulatedExecution: boolean;
     resultCode: string;
     simulatedOnly: true;
@@ -547,7 +548,9 @@ type GuardianQwenPolicyPair = {
 
 type GuardianQwenPolicyComparisonEvidence = {
   source: "real_local_qwen_proposals" | "test_double_proposals";
-  version: "guardian-qwen-policy-paired-v1";
+  version:
+    | "guardian-qwen-policy-paired-v1"
+    | "guardian-qwen-policy-paired-v2";
   executionMode: "real_local_llm_inference" | "test_double_only";
   toolChoiceMode: "auto";
   forcedCallsIncluded: false;
@@ -563,6 +566,7 @@ type GuardianQwenPolicyComparisonEvidence = {
     attempts: number;
     authorizations: number;
     denials: number;
+    approvalRequiredCalls?: number;
     simulatedExecutions: number;
     actualOperationExecutions: 0;
     persistentStateChanges: 0;
@@ -614,7 +618,8 @@ type GuardianLocalLlmToolSuiteEvidenceBase = {
     | "guardian-autonomous-tool-selection-v1.1"
     | "guardian-autonomous-tool-selection-v1.2"
     | "guardian-autonomous-tool-selection-v1.3"
-    | "guardian-autonomous-tool-selection-v1.4";
+    | "guardian-autonomous-tool-selection-v1.4"
+    | "guardian-autonomous-tool-selection-v1.5";
   profileId:
     | "guardian-local-llm-native-tools-v1"
     | "guardian-local-llm-autonomous-tools-v1";
@@ -676,7 +681,7 @@ type GuardianLocalLlmToolSuiteEvidenceBase = {
   toolTrace: GuardianNativeToolTraceEvent[];
   nativeToolSuite: {
     suiteId: string;
-    suiteVersion: "1.0.0" | "1.1.0" | "1.2.0" | "1.3.0" | "1.4.0" | "1.5.0";
+    suiteVersion: "1.0.0" | "1.1.0" | "1.2.0" | "1.3.0" | "1.4.0" | "1.5.0" | "1.6.0";
     sampleCount: number;
     splitSampleCounts: { calibration: number; holdout: number };
     languageCounts: { en: number; es: number };
@@ -778,7 +783,8 @@ export type GuardianLocalLlmAutonomousToolSelectionEvidence = Omit<
     | "guardian-autonomous-tool-selection-v1.1"
     | "guardian-autonomous-tool-selection-v1.2"
     | "guardian-autonomous-tool-selection-v1.3"
-    | "guardian-autonomous-tool-selection-v1.4";
+    | "guardian-autonomous-tool-selection-v1.4"
+    | "guardian-autonomous-tool-selection-v1.5";
   profileId: "guardian-local-llm-autonomous-tools-v1";
   taskId: "autonomous_tool_selection_en_es_v1";
 };

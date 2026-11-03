@@ -1432,6 +1432,7 @@ export const GuardianLocalLlmToolSuiteEvidenceBaseEngineVersion = {
   'guardian-autonomous-tool-selection-v12': 'guardian-autonomous-tool-selection-v1.2',
   'guardian-autonomous-tool-selection-v13': 'guardian-autonomous-tool-selection-v1.3',
   'guardian-autonomous-tool-selection-v14': 'guardian-autonomous-tool-selection-v1.4',
+  'guardian-autonomous-tool-selection-v15': 'guardian-autonomous-tool-selection-v1.5',
 } as const;
 
 export type GuardianLocalLlmToolSuiteEvidenceBaseProfileId = typeof GuardianLocalLlmToolSuiteEvidenceBaseProfileId[keyof typeof GuardianLocalLlmToolSuiteEvidenceBaseProfileId];
@@ -2097,6 +2098,14 @@ export const GuardianQwenPolicyComparisonEvidenceSource = {
   test_double_proposals: 'test_double_proposals',
 } as const;
 
+export type GuardianQwenPolicyComparisonEvidenceVersion = typeof GuardianQwenPolicyComparisonEvidenceVersion[keyof typeof GuardianQwenPolicyComparisonEvidenceVersion];
+
+
+export const GuardianQwenPolicyComparisonEvidenceVersion = {
+  'guardian-qwen-policy-paired-v1': 'guardian-qwen-policy-paired-v1',
+  'guardian-qwen-policy-paired-v2': 'guardian-qwen-policy-paired-v2',
+} as const;
+
 export type GuardianQwenPolicyComparisonEvidenceExecutionMode = typeof GuardianQwenPolicyComparisonEvidenceExecutionMode[keyof typeof GuardianQwenPolicyComparisonEvidenceExecutionMode];
 
 
@@ -2198,6 +2207,7 @@ export type GuardianQwenPolicyPairPolicyOn = {
   attempted: true;
   authorized: boolean;
   denied: boolean;
+  approvalRequired?: boolean;
   simulatedExecution: boolean;
   /** @maxLength 80 */
   resultCode: string;
@@ -2314,6 +2324,11 @@ export type GuardianQwenPolicyComparisonEvidencePolicyOnSummary = {
      * @minimum 0
      * @maximum 64
      */
+  approvalRequiredCalls?: number;
+  /**
+     * @minimum 0
+     * @maximum 64
+     */
   simulatedExecutions: number;
   actualOperationExecutions: 0;
   persistentStateChanges: 0;
@@ -2395,7 +2410,7 @@ export type GuardianQwenPolicyComparisonEvidenceSelfChecks = {
 
 export interface GuardianQwenPolicyComparisonEvidence {
   source: GuardianQwenPolicyComparisonEvidenceSource;
-  version: 'guardian-qwen-policy-paired-v1';
+  version: GuardianQwenPolicyComparisonEvidenceVersion;
   executionMode: GuardianQwenPolicyComparisonEvidenceExecutionMode;
   toolChoiceMode: 'auto';
   forcedCallsIncluded: false;
@@ -2572,6 +2587,7 @@ export type GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteTaskSuccessBySpl
 
 export type GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteToolSummary = {
   /**
+     * Legacy count of normalized tool proposals. In autonomous Qwen runs it includes complete Qwen markup adapted into proposals and is not the count of direct runtime message.tool_calls; use toolCallParsing.callsReturnedDirectlyByRuntime for direct runtime calls.
      * @minimum 0
      * @maximum 64
      */
@@ -2750,12 +2766,15 @@ export const GuardianLocalLlmAutonomousToolSelectionEvidenceEngineVersion = {
   'guardian-autonomous-tool-selection-v12': 'guardian-autonomous-tool-selection-v1.2',
   'guardian-autonomous-tool-selection-v13': 'guardian-autonomous-tool-selection-v1.3',
   'guardian-autonomous-tool-selection-v14': 'guardian-autonomous-tool-selection-v1.4',
+  'guardian-autonomous-tool-selection-v15': 'guardian-autonomous-tool-selection-v1.5',
 } as const;
 
 export type GuardianLocalLlmAutonomousToolSelectionEvidence = GuardianLocalLlmToolSuiteEvidenceBase & {
   engineVersion: GuardianLocalLlmAutonomousToolSelectionEvidenceEngineVersion;
   profileId: 'guardian-local-llm-autonomous-tools-v1';
   taskId: 'autonomous_tool_selection_en_es_v1';
+  /** @maxItems 42 */
+  toolTrace?: GuardianNativeToolTraceEvent[];
 };
 
 export type GuardianAgentPolicyLabEvidenceEvidenceVersion = typeof GuardianAgentPolicyLabEvidenceEvidenceVersion[keyof typeof GuardianAgentPolicyLabEvidenceEvidenceVersion];

@@ -8,6 +8,7 @@
 
 export type GuardianLocalLlmToolSuiteEvidenceBaseNativeToolSuiteToolSummary = {
   /**
+     * Legacy count of normalized tool proposals. In autonomous Qwen runs it includes complete Qwen markup adapted into proposals and is not the count of direct runtime message.tool_calls; use toolCallParsing.callsReturnedDirectlyByRuntime for direct runtime calls.
      * @minimum 0
      * @maximum 64
      */

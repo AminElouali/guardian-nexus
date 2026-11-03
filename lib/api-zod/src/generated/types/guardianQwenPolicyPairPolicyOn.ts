@@ -12,6 +12,7 @@ export type GuardianQwenPolicyPairPolicyOn = {
   attempted: true;
   authorized: boolean;
   denied: boolean;
+  approvalRequired?: boolean;
   simulatedExecution: boolean;
   /** @maxLength 80 */
   resultCode: string;
