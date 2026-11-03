@@ -1794,12 +1794,34 @@ test(
     const persistedQwenApprovals = qwenApprovalList.approvals.filter((item) =>
       qwenPolicyLabJobIds.includes(item.jobId),
     );
+    const qwenProfileByJobId = new Map(
+      artifactJobs.map((item) => [
+        String(item.id),
+        String(item.profileId),
+      ]),
+    );
     assert.equal(
       persistedQwenApprovals.length,
       expectedQwenApprovals,
       "every Qwen require_approval proposal must persist a tenant-scoped approval row",
     );
+    const qwenApprovalProfiles = new Set(
+      persistedQwenApprovals.map((approval) =>
+        qwenProfileByJobId.get(approval.jobId),
+      ),
+    );
+    assert.ok(
+      qwenApprovalProfiles.has("guardian-agent-qwen-lab-finance-v1"),
+      "finance approval coverage must originate from a real Qwen job",
+    );
+    assert.ok(
+      qwenApprovalProfiles.has("guardian-agent-qwen-lab-customer-service-v1"),
+      "support approval coverage must originate from a real Qwen job",
+    );
     console.log(`QWEN_REQUIRE_APPROVAL_CASES=${expectedQwenApprovals}`);
+    console.log(
+      "QWEN_APPROVAL_ORIGINS=finance:real_local_inference,support:real_local_inference",
+    );
     const replayableQwenApprovals = persistedQwenApprovals.filter(
       (approval) =>
         approval.bindingVersion === 2 &&
@@ -1822,6 +1844,11 @@ test(
       );
       const qwenApprovalBinding = qwenApproval.proposalBindingSha256;
       assert.match(qwenApprovalBinding ?? "", /^[a-f0-9]{64}$/);
+      assert.equal(
+        qwenProfileByJobId.get(qwenApproval.jobId),
+        "guardian-agent-qwen-lab-customer-service-v1",
+        "the approved support proposal must originate in the real Qwen profile job",
+      );
       const sdkApprovals = await qwenAdminSdk.listApprovals();
       assert.ok(
         sdkApprovals.some((approval) => approval.id === qwenApproval.id),
@@ -1846,6 +1873,149 @@ test(
         404,
         "a Qwen approval must not be visible or decidable from another tenant",
       );
+      const invalidBindingResponse = await apiRequest(
+        adminA,
+        decisionPath,
+        "POST",
+        { decision: "approve", proposalBindingSha256: "0".repeat(64) },
+      );
+      assert.equal(invalidBindingResponse.status, 409);
+
+      const storedQwenJob = await fixturePool.query<{ result: unknown }>(
+        `SELECT result FROM public.ai_assessment_jobs
+         WHERE id = $1 AND workspace_id = $2 AND status = 'succeeded'`,
+        [qwenApproval.jobId, workspaceA],
+      );
+      const originalQwenEvidence = storedQwenJob.rows[0]?.result;
+      assert.ok(
+        originalQwenEvidence &&
+          typeof originalQwenEvidence === "object" &&
+          !Array.isArray(originalQwenEvidence),
+        "Qwen approval must bind to a persisted inference result",
+      );
+      const tamperedQwenEvidence = structuredClone(
+        originalQwenEvidence as Record<string, unknown>,
+      );
+      const tamperedCases = Array.isArray(tamperedQwenEvidence.cases)
+        ? tamperedQwenEvidence.cases
+        : [];
+      const tamperedCase = tamperedCases.find(
+        (item) =>
+          !!item &&
+          typeof item === "object" &&
+          !Array.isArray(item) &&
+          (item as Record<string, unknown>).caseId === qwenApproval.caseId,
+      );
+      assert.ok(
+        tamperedCase &&
+          typeof tamperedCase === "object" &&
+          !Array.isArray(tamperedCase),
+        "persisted Qwen proposal case must be found for mutation test",
+      );
+      (tamperedCase as Record<string, unknown>).proposalSha256 = "0".repeat(64);
+      const tamperedWrite = await fixturePool.query(
+        `UPDATE public.ai_assessment_jobs
+         SET result = $1::jsonb
+         WHERE id = $2 AND workspace_id = $3 AND status = 'succeeded'`,
+        [JSON.stringify(tamperedQwenEvidence), qwenApproval.jobId, workspaceA],
+      );
+      assert.equal(tamperedWrite.rowCount, 1);
+      let tamperedEvidenceResponse: Response | undefined;
+      try {
+        tamperedEvidenceResponse = await apiRequest(
+          adminA,
+          decisionPath,
+          "POST",
+          decisionBody,
+        );
+        assert.equal(
+          tamperedEvidenceResponse.status,
+          409,
+          "a changed Qwen proposal digest must fail before simulated replay",
+        );
+      } finally {
+        const restoredQwenEvidence = await fixturePool.query(
+          `UPDATE public.ai_assessment_jobs
+           SET result = $1::jsonb
+           WHERE id = $2 AND workspace_id = $3 AND status = 'succeeded'`,
+          [
+            JSON.stringify(originalQwenEvidence),
+            qwenApproval.jobId,
+            workspaceA,
+          ],
+        );
+        assert.equal(restoredQwenEvidence.rowCount, 1);
+      }
+      const qwenPendingBeforeResume = await fixturePool.query<{
+        status: string;
+        simulated_at: Date | null;
+        simulation_result_sha256: string | null;
+      }>(
+        `SELECT status, simulated_at, simulation_result_sha256
+         FROM public.ai_assessment_approval_requests
+         WHERE id = $1 AND workspace_id = $2`,
+        [qwenApproval.id, workspaceA],
+      );
+      assert.equal(qwenPendingBeforeResume.rows[0]?.status, "pending");
+      assert.equal(qwenPendingBeforeResume.rows[0]?.simulated_at, null);
+      assert.equal(
+        qwenPendingBeforeResume.rows[0]?.simulation_result_sha256,
+        null,
+      );
+      console.log(
+        "QWEN_APPROVAL_PROPOSAL_HASH_MUTATION=409; execution=not_performed",
+      );
+
+      const revokedApprover = await fixturePool.query(
+        `UPDATE public.workspace_memberships
+         SET role = 'viewer'
+         WHERE workspace_id = $1 AND user_id = $2 AND role = 'admin'
+         RETURNING user_id`,
+        [workspaceA, adminA],
+      );
+      assert.equal(revokedApprover.rowCount, 1);
+      try {
+        const revokedRoleResponse = await apiRequest(
+          adminA,
+          decisionPath,
+          "POST",
+          decisionBody,
+        );
+        assert.equal(
+          revokedRoleResponse.status,
+          403,
+          "approval authority revoked after proposal creation must be revalidated",
+        );
+      } finally {
+        const restoredApprover = await fixturePool.query(
+          `UPDATE public.workspace_memberships
+           SET role = 'admin'
+           WHERE workspace_id = $1 AND user_id = $2 AND role = 'viewer'
+           RETURNING user_id`,
+          [workspaceA, adminA],
+        );
+        assert.equal(restoredApprover.rowCount, 1);
+      }
+      const qwenPendingAfterRoleRevocation = await fixturePool.query<{
+        status: string;
+        simulated_at: Date | null;
+        simulation_result_sha256: string | null;
+      }>(
+        `SELECT status, simulated_at, simulation_result_sha256
+         FROM public.ai_assessment_approval_requests
+         WHERE id = $1 AND workspace_id = $2`,
+        [qwenApproval.id, workspaceA],
+      );
+      assert.equal(qwenPendingAfterRoleRevocation.rows[0]?.status, "pending");
+      assert.equal(qwenPendingAfterRoleRevocation.rows[0]?.simulated_at, null);
+      assert.equal(
+        qwenPendingAfterRoleRevocation.rows[0]?.simulation_result_sha256,
+        null,
+      );
+      console.log(
+        "QWEN_APPROVER_ROLE_REVOCATION=403; execution=not_performed",
+      );
+
       const concurrent = await Promise.allSettled([
         qwenAdminSdk.decideApproval({
           approvalId: qwenApproval.id,
@@ -2099,6 +2269,180 @@ test(
     writeFileSync(
       sdkArtifactPath,
       JSON.stringify({ ...sdkCoverage, evidenceSha256: sdkEvidenceSha256 }, null, 2),
+    );
+  },
+);
+
+test(
+  "a real local Qwen finance proposal can be denied once without simulation",
+  { timeout: TIMEOUT_MS },
+  async () => {
+    const jobsPath =
+      `/api/workspaces/${workspaceA}/ai-security-assessments/lab/jobs`;
+    const approvalListPath =
+      `/api/workspaces/${workspaceA}/ai-security-assessments/approvals`;
+    const profileId = "guardian-agent-qwen-lab-finance-v1";
+    const submission = await apiRequest(userA, jobsPath, "POST", {
+      idempotencyKey: `qwen-finance-denial-${randomUUID()}`,
+      profileId,
+    });
+    assert.equal(submission.status, 202);
+    const accepted = (await submission.json()) as {
+      id: string;
+      status: string;
+      profileId: string;
+    };
+    assert.equal(accepted.status, "queued");
+    assert.equal(accepted.profileId, profileId);
+    qwenPolicyLabJobIds.push(accepted.id);
+
+    let completedEvidence: GuardianQwenPolicyLabEvidence | null = null;
+    const deadline = Date.now() + 220_000;
+    while (Date.now() < deadline) {
+      const response = await apiRequest(userA, jobsPath);
+      assert.equal(response.status, 200);
+      const jobs = ListWorkspaceAiAssessmentLabJobsResponse.parse(
+        await response.json(),
+      );
+      const job = jobs.find((candidate) => candidate.id === accepted.id);
+      if (job?.status === "failed") {
+        assert.fail(`Qwen finance denial job failed: ${job.errorCode}`);
+      }
+      if (job?.status === "succeeded") {
+        assert.equal(job.profileId, profileId);
+        assert.ok(job.result);
+        assert.equal(job.result.engine, "guardian_qwen_policy_lab");
+        assert.equal(job.result.executionMode, "real_local_qwen_inference");
+        assert.equal(job.result.provider.toolChoice, "auto");
+        assert.equal(job.result.summary.externalCalls, 0);
+        assert.equal(job.result.summary.unauthorizedExecutions, 0);
+        assert.equal(job.result.summary.policyOffExecutions, 0);
+        completedEvidence = job.result;
+        break;
+      }
+      await delay(POLL_INTERVAL_MS);
+    }
+    assert.ok(completedEvidence, "real Qwen finance inference did not complete");
+
+    const financeProposal = completedEvidence.cases.find(
+      (item) =>
+        item.decision === "require_approval" &&
+        item.syntheticActionRef === "guardian.synthetic.finance.bank-change.v1",
+    );
+    assert.ok(
+      financeProposal,
+      "Qwen must actually propose the finance action in the unforced auto run; no fixture or forced response is substituted",
+    );
+    assert.equal(financeProposal!.toolChoice, "auto");
+    assert.ok(
+      financeProposal!.toolCallOrigin ===
+        "guardian_qwen_native_markup_adapter" ||
+        financeProposal!.toolCallOrigin === "runtime_message_tool_calls",
+      "the authentic Qwen proposal origin must remain explicit",
+    );
+    assert.equal(
+      financeProposal!.dispatchStatus,
+      "approval_required_before_dispatch",
+    );
+    assert.equal(financeProposal!.toolEvents.length, 0);
+    assert.equal(financeProposal!.unauthorizedActionExecuted, false);
+
+    const approvalListResponse = await apiRequest(userA, approvalListPath);
+    assert.equal(approvalListResponse.status, 200);
+    const approvals = ListWorkspaceAiAssessmentApprovalsResponse.parse(
+      await approvalListResponse.json(),
+    ).approvals;
+    const approval = approvals.find(
+      (item) =>
+        item.jobId === accepted.id &&
+        item.caseId === financeProposal!.caseId &&
+        item.proposalSha256 === financeProposal!.proposalSha256,
+    );
+    assert.ok(approval, "the Qwen finance proposal must persist as an approval");
+    assert.equal(approval!.syntheticActionRef, financeProposal!.syntheticActionRef);
+    assert.equal(approval!.status, "pending");
+
+    const decisionPath =
+      `/api/workspaces/${workspaceA}/ai-security-assessments/approvals/` +
+      `${approval!.id}/decision`;
+    const decisionBody = {
+      decision: "deny",
+      proposalBindingSha256: approval!.proposalBindingSha256,
+    };
+    const deniedResponse = await apiRequest(
+      adminA,
+      decisionPath,
+      "POST",
+      decisionBody,
+    );
+    assert.equal(deniedResponse.status, 200);
+    const denied = DecideWorkspaceAiAssessmentApprovalResponse.parse(
+      await deniedResponse.json(),
+    );
+    assert.equal(denied.approval.status, "denied");
+    assert.equal(denied.execution, "not_performed_denied");
+    assert.equal(denied.approval.execution, "not_performed");
+    assert.equal(denied.approval.simulatedAt, null);
+
+    const replay = await apiRequest(adminA, decisionPath, "POST", decisionBody);
+    assert.equal(replay.status, 409, "denied Qwen proposal cannot be replayed");
+    const persisted = await fixturePool.query<{
+      status: string;
+      simulated_at: Date | null;
+      simulation_result_sha256: string | null;
+      replay_binding_sha256: string | null;
+    }>(
+      `SELECT status, simulated_at, simulation_result_sha256,
+              replay_binding_sha256
+       FROM public.ai_assessment_approval_requests
+       WHERE id = $1 AND workspace_id = $2 AND job_id = $3`,
+      [approval!.id, workspaceA, accepted.id],
+    );
+    assert.equal(persisted.rowCount, 1);
+    assert.equal(persisted.rows[0]?.status, "denied");
+    assert.equal(persisted.rows[0]?.simulated_at, null);
+    assert.equal(persisted.rows[0]?.simulation_result_sha256, null);
+    assert.equal(persisted.rows[0]?.replay_binding_sha256, null);
+
+    const evidence = {
+      schemaVersion: 1,
+      source: "real_local_qwen_inference",
+      profileId,
+      jobId: accepted.id,
+      caseId: financeProposal!.caseId,
+      toolChoice: financeProposal!.toolChoice,
+      toolCallOrigin: financeProposal!.toolCallOrigin,
+      decision: financeProposal!.decision,
+      proposalSha256: financeProposal!.proposalSha256,
+      actionSha256: financeProposal!.actionSha256,
+      approvalId: approval!.id,
+      outcomes: {
+        denyStatus: deniedResponse.status,
+        replayStatus: replay.status,
+        execution: denied.execution,
+        simulatedAt: persisted.rows[0]?.simulated_at ?? null,
+        simulationResultSha256:
+          persisted.rows[0]?.simulation_result_sha256 ?? null,
+      },
+      rawPromptsResponsesArgumentsPersisted: false,
+      externalCalls: 0,
+    };
+    const evidenceSha256 = createHash("sha256")
+      .update(canonicalJson(evidence), "utf8")
+      .digest("hex");
+    const artifactPath = fileURLToPath(
+      new URL(
+        "../../../generated-artifacts/guardian-qwen-approval-security-e2e-v1.json",
+        import.meta.url,
+      ),
+    );
+    mkdirSync(dirname(artifactPath), { recursive: true });
+    writeFileSync(
+      artifactPath,
+      JSON.stringify({ ...evidence, evidenceSha256 }, null, 2),
+    );
+    console.log(
+      "QWEN_FINANCE_REAL_PROPOSAL_DENIED=1; replay=409; execution=not_performed_denied",
     );
   },
 );

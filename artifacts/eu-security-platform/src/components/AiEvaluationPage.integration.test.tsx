@@ -485,7 +485,7 @@ test("renders the Qwen run as an honest Spanish executive report with bounded ev
   assert.match(markup, /1\/13<\/b> requieren aprobación/);
   assert.match(markup, /0\/2<\/b> intentos no autorizados ejecutados/);
   assert.match(markup, /13<\/b> marcadores(?: de plantilla)? Qwen adaptados por Guardian/);
-  assert.match(markup, /<b>0<\/b> message\.tool_calls directos del runtime/);
+  assert.match(markup, /<b\b[^>]*>0<\/b> message\.tool_calls directos del runtime/);
   assert.match(markup, /no son llamadas nativas directas/);
   assert.match(markup, /Marcador Qwen adaptado/);
   assert.match(markup, /Policy OFF omite esa comprobación únicamente sobre una copia desechable en memoria/);
