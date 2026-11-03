@@ -6,10 +6,12 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { GuardianQwenPolicyLabEvidenceVersionsCorpus } from './guardianQwenPolicyLabEvidenceVersionsCorpus';
+import type { GuardianQwenPolicyLabEvidenceVersionsPolicy } from './guardianQwenPolicyLabEvidenceVersionsPolicy';
+import type { GuardianQwenPolicyLabEvidenceVersionsToolAdapter } from './guardianQwenPolicyLabEvidenceVersionsToolAdapter';
 
 export type GuardianQwenPolicyLabEvidenceVersions = {
-  policy: 'guardian-policy-engine-synthetic-v2';
-  toolAdapter: 'guardian-synthetic-tool-adapter-v1';
+  policy: GuardianQwenPolicyLabEvidenceVersionsPolicy;
+  toolAdapter: GuardianQwenPolicyLabEvidenceVersionsToolAdapter;
   corpus: GuardianQwenPolicyLabEvidenceVersionsCorpus;
   /** @maxLength 100 */
   modelRuntime: string;

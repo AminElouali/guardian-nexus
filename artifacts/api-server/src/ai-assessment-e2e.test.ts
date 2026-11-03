@@ -1847,8 +1847,42 @@ test(
       assert.equal(persistedEvidence.engine, "guardian_qwen_policy_lab");
       assert.equal(
         persistedEvidence.engineVersion,
-        "guardian-agent-qwen-policy-lab-v1.9.0",
+        "guardian-agent-qwen-policy-lab-v1.10.0",
       );
+      assert.equal(
+        persistedEvidence.versions.policy,
+        "guardian-policy-engine-synthetic-v3",
+      );
+      assert.equal(
+        persistedEvidence.versions.toolAdapter,
+        "guardian-synthetic-tool-adapter-v2",
+      );
+      assert.equal(
+        persistedEvidence.selfChecks.trustedGoalScopeFailClosed,
+        true,
+      );
+      for (const item of persistedEvidence.cases) {
+        assert.ok(item.contentProvenance);
+        assert.ok(item.instructionProvenance);
+        if (item.decision === "allow" || item.decision === "require_approval") {
+          assert.equal(item.trustedGoalScopeStatus, "matched");
+          assert.match(item.trustedGoalScopeSha256 ?? "", /^[a-f0-9]{64}$/);
+        }
+        if (
+          item.trustedGoalScopeStatus === "mismatch" ||
+          item.trustedGoalScopeStatus === "invalid" ||
+          item.trustedGoalScopeStatus === "missing"
+        ) {
+          assert.equal(item.decision, "deny");
+          assert.equal(item.toolEvents.length, 0);
+          assert.ok(
+            [
+              "blocked_by_policy_before_dispatch",
+              "blocked_by_adapter_validation",
+            ].includes(item.dispatchStatus),
+          );
+        }
+      }
       assert.equal(
         persistedEvidence.provider.effectiveChatTemplateSha256,
         "ec01f905b506faf0146fedd9efc747fd863dd87f4ddab4771b0c072e17021aa1",
@@ -2347,7 +2381,7 @@ test(
 
     const artifactPath = fileURLToPath(
       new URL(
-        "../../../generated-artifacts/guardian-qwen-policy-labs-e2e-v1.9.0.json",
+        "../../../generated-artifacts/guardian-qwen-policy-labs-e2e-v1.10.0.json",
         import.meta.url,
       ),
     );
@@ -2400,7 +2434,7 @@ test(
       .digest("hex");
     const sdkArtifactPath = fileURLToPath(
       new URL(
-        "../../../generated-artifacts/guardian-agent-sdk-qwen-eight-profiles-e2e-v1.9.0.json",
+        "../../../generated-artifacts/guardian-agent-sdk-qwen-eight-profiles-e2e-v1.10.0.json",
         import.meta.url,
       ),
     );

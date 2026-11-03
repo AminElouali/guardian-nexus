@@ -2105,4 +2105,67 @@ This update supersedes the older diskcache status, worker-test count, and OSV
   licencias y sesión Clerk real de navegador. La autorización de lecturas
   adversarias debe seguir limitada a fixtures; antes de conectores de datos,
   revisar de forma independiente cómo procedencia no confiable limita lecturas
-  y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
+y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
+
+## Provenance Guard y preparación broker — v1.10.0 — 2026-11-03
+
+- Inicio: HEAD `e5f18185815b8d1747db3d06f06113a83972f77b`, árbol limpio.
+- Procedencia: el objetivo confiable ahora procede del contexto autenticado y
+  del catálogo fijo del runner; texto documental y afirmaciones del modelo no
+  amplían alcance. La política comprueba actor/tenant/perfil/caso/propuesta y
+  herramientas/operaciones/recursos permitidos antes del simulador. El digest
+  vincula integridad, no sustituye firma ni autenticación.
+- Contrato evidencia v1.10: OpenAPI, Zod generado, esquema de persistencia y API
+  sincronizados para procedencia, estado de alcance y versiones; compatibilidad
+  anterior conservada; campos inválidos o alcance desconocido fallan cerrados.
+- Qwen local real: 55 casos/8 perfiles, 19 benignos y 36 adversarios; `auto` en
+  todos. 37 propuestas mediante marcadores Qwen adaptados, 0 `message.tool_calls`
+  directas y 18 `no_proposal`. Resultados agregados SDK: 18 ALLOW, 17 DENY,
+  2 REQUIRE_APPROVAL, 18 sin propuesta; 18 ejecuciones solo sintéticas, 0
+  Policy-OFF ejecuciones, 0 no autorizadas y 0 llamadas externas.
+- De los 36 adversarios: 16 DENY, 11 sin propuesta y 9 ALLOW de lecturas
+  sintéticas solicitadas y acotadas (2 correo, 4 consultas DB, 3 factura); no
+  son denegaciones ni evidencia de eficacia general. Hash modelo
+  `9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031`;
+  Qwen3-0.6B Q8_0, llama-cpp-python 0.3.36, `network=none`, 1 CPU, 1536 MiB,
+  64 PIDs, concurrencia 1, 96 tokens de salida, sin secretos/datos cliente.
+- Aprobación Qwen: 2 propuestas reales; mutación de hash y política obsoleta
+  409, rol revocado 403; una aprobación válida simuló una acción ficticia una
+  vez; propuesta expirada y propuesta denegada no se ejecutaron; replay 409.
+- Broker: grant HMAC de corta duración y pruebas negativas añadidos como
+  preparación, pero no están conectados a cola/broker ni tienen consumo
+  atómico DB. No se demostró identidad Unix separada; API conserva autoridad
+  Docker en este host. No se tocó socket/daemon ni se elevaron permisos.
+- Egress harness: IPv4 TCP/UDP/DNS `blocked`, loopback IPv4 `reachable`; IPv6
+  `kernel_protocol_unavailable`/`unavailable`, por lo que el script terminó
+  con código 2 y estado incompleto, no aprobado. No hay contenedores residuales.
+- Verificación: worker 134/134; API 71/71; API typecheck/build pasaron; SDK
+  13/13 y build; UI typecheck/build pasaron y componentes 8/8; E2E API/worker
+  9/9. Vite emitió avisos no bloqueantes de source map y chunk >500 kB.
+  `typecheck:libs` y `git diff --check` pasaron. El API workflow reinició y
+  escuchó en 8080.
+- No se verificó sesión Clerk real en navegador. No se reconstruyó/escaneó la
+  imagen, no se remediaron los 81 IDs OSV/1 crítico/25 altos, no se cerraron
+  licencias de `langdetect`/binarios y no se verificó IPv6 dual-stack.
+- El E2E escribió inicialmente evidencia de motor v1.10 bajo nombre v1.9;
+  se corrigieron rutas y se movieron los JSON sin cambiar su contenido. El
+  JSON histórico v1.9 (hash `e454c15f2d18deea7a238fa80fa84d1dd2a8850f3ddda0a56dce42d8fa0a721`)
+  y su SDK (hash `bba561ca58326569ce9f293f1c722198a1a555e979e9f418f9e2dcb42f9e6996`)
+  ya no están disponibles, aunque sus hashes siguen registrados en esta
+  historia. El E2E 9/9 precedió al cambio de literal de ruta; se ejecutaron
+  typecheck y pruebas restantes después, no una segunda inferencia completa.
+- Evidencia actual fuera de Git:
+  `generated-artifacts/guardian-qwen-policy-labs-e2e-v1.10.0.json`,
+  SHA-256 `2500000f271bdf95333a048551dab2d2b08fe0ee835434b336f5cffc3eed61ec`;
+  `generated-artifacts/guardian-agent-sdk-qwen-eight-profiles-e2e-v1.10.0.json`,
+  SHA-256 `ab3856716c9e931cd1657cb8df844dc9c5688c4e9a13345ec0dd0c14387257a0`;
+  aprobación `generated-artifacts/guardian-qwen-approval-security-e2e-v1.json`,
+  SHA-256 `cdd89d0ee63fa8a3002546b9614298e86c3596c85383460a88f8e6eab49e782f`.
+- Informe: `reports/provenance-guard-broker-preparation-v1.10.0-2026-11-03.md`,
+  SHA-256 `0b9e9987b7cd35113cf8d466794246192af4e58ae564f9d0ba55b2d030348530`.
+  Manifiesto de archivos cambiados/evidencias:
+  `reports/provenance-guard-broker-preparation-v1.10.0-2026-11-03.sha256`,
+  SHA-256 `0bfe29d959acf445b085dbafef1e01005635f091e6dda78674def3343346bc5e`.
+- Límites vigentes antes de cualquier piloto: broker con identidad/DB separadas,
+  IPv6 dual-stack, revisión OSV/licencias, sesión Clerk autenticada real y
+  evaluación legal. No publicación, producción, clientes ni servicios externos.

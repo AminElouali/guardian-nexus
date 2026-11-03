@@ -1,0 +1,67 @@
+manifestVersion: guardian-assessment-broker-host-requirements-v1
+status: requirements-only-not-deployed
+purpose: >
+  Reference contract for a future host that can enforce separate Unix
+  identities. This file is not an active Replit deployment manifest.
+
+api:
+  unixIdentity: guardian-api
+  postgresRole: app_api
+  dockerSocketAccess: forbidden
+  mayClaimAssessmentJobs: false
+  maySubmitAuthenticatedRequests: true
+  mayIssueScopedRunAuthorization: true
+
+broker:
+  unixIdentity: guardian-assessment-broker
+  postgresRole: app_assessment_worker
+  dockerDaemon: dedicated-rootless-daemon-owned-by-broker
+  dockerSocketAccess: broker-only
+  acceptedProfiles:
+    source: ../profile-image-lock.json
+    callerMayChooseImage: false
+    callerMayChooseCommand: false
+  requiredJobChecks:
+    - authenticated-lease-and-attempt
+    - tenant-and-workspace-binding
+    - allowlisted-profile-id
+    - immutable-image-id-and-oci-label
+    - request-digest
+    - bounded-resource-and-no-egress-contract
+  oneUseAuthorization:
+    format: signed-canonical-json
+    algorithm: HMAC-SHA-256
+    maximumTtlSeconds: 60
+    requiredClaims:
+      - tokenId
+      - jobId
+      - workspaceId
+      - actorId
+      - leaseId
+      - leaseAttempt
+      - profileId
+      - immutableImageId
+      - requestSha256
+      - issuedAt
+      - expiresAt
+    replayStore: postgres-unique-token-id-consumed-atomically
+    invalid-or-replayed: fail-closed
+
+databaseBoundary:
+  apiRole:
+    mayReadTenantScopedJobs: true
+    mayWriteWorkerLeaseOrResult: false
+  workerRole:
+    mayReadJobExecutionMetadata: true
+    mayWriteClaimLeaseAndSanitizedResult: true
+    mayReadCrossTenantRows: false
+    rlsRequired: true
+
+hostAcceptance:
+  requireDifferentEffectiveUids: true
+  requireApiDeniedDockerSocketOpen: true
+  requireBrokerDockerSocketOpen: true
+  requireRootlessDaemon: true
+  requireNetworkNoneForEvaluationContainers: true
+  requireImmutableImageIdAtLaunch: true
+  rejectSharedUidOrSharedDockerSocket: true

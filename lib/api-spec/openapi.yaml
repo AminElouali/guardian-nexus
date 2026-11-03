@@ -1493,10 +1493,10 @@ components:
           type: object
           additionalProperties: false
           properties:
-            policy: { type: string, enum: [guardian-policy-engine-synthetic-v1, guardian-policy-engine-synthetic-v2] }
+            policy: { type: string, enum: [guardian-policy-engine-synthetic-v1, guardian-policy-engine-synthetic-v2, guardian-policy-engine-synthetic-v3] }
             corpus: { type: string, const: guardian-agent-lab-corpus-v1 }
             oracle: { type: string, const: guardian-policy-oracle-v1 }
-            toolAdapter: { type: string, const: guardian-synthetic-tool-adapter-v1 }
+            toolAdapter: { type: string, enum: [guardian-synthetic-tool-adapter-v1, guardian-synthetic-tool-adapter-v2] }
           required: [policy, corpus, oracle]
         seed: { type: integer, const: 20261102 }
         sampleCount: { type: integer, minimum: 2, maximum: 3 }
@@ -1722,7 +1722,7 @@ components:
         engine: { type: string, const: guardian_qwen_policy_lab }
         engineVersion:
           type: string
-          enum: [guardian-agent-qwen-policy-lab-v1, guardian-agent-qwen-policy-lab-v1.1.0, guardian-agent-qwen-policy-lab-v1.2.0, guardian-agent-qwen-policy-lab-v1.3.0, guardian-agent-qwen-policy-lab-v1.4.0, guardian-agent-qwen-policy-lab-v1.5.0, guardian-agent-qwen-policy-lab-v1.6.0, guardian-agent-qwen-policy-lab-v1.7.0, guardian-agent-qwen-policy-lab-v1.8.0, guardian-agent-qwen-policy-lab-v1.9.0]
+          enum: [guardian-agent-qwen-policy-lab-v1, guardian-agent-qwen-policy-lab-v1.1.0, guardian-agent-qwen-policy-lab-v1.2.0, guardian-agent-qwen-policy-lab-v1.3.0, guardian-agent-qwen-policy-lab-v1.4.0, guardian-agent-qwen-policy-lab-v1.5.0, guardian-agent-qwen-policy-lab-v1.6.0, guardian-agent-qwen-policy-lab-v1.7.0, guardian-agent-qwen-policy-lab-v1.8.0, guardian-agent-qwen-policy-lab-v1.9.0, guardian-agent-qwen-policy-lab-v1.10.0]
         profileId:
           type: string
           enum: [guardian-agent-qwen-lab-email-v1, guardian-agent-qwen-lab-database-v1, guardian-agent-qwen-lab-finance-v1, guardian-agent-qwen-lab-customer-service-v1, guardian-agent-qwen-lab-programming-v1, guardian-agent-qwen-lab-browser-v1, guardian-agent-qwen-lab-infrastructure-v1, guardian-agent-qwen-lab-multiagent-v1]
@@ -1743,11 +1743,11 @@ components:
           type: object
           additionalProperties: false
           properties:
-            policy: { type: string, const: guardian-policy-engine-synthetic-v2 }
-            toolAdapter: { type: string, const: guardian-synthetic-tool-adapter-v1 }
+            policy: { type: string, enum: [guardian-policy-engine-synthetic-v2, guardian-policy-engine-synthetic-v3] }
+            toolAdapter: { type: string, enum: [guardian-synthetic-tool-adapter-v1, guardian-synthetic-tool-adapter-v2] }
             corpus:
               type: string
-              enum: [guardian-qwen-policy-lab-en-es-v1, guardian-qwen-policy-lab-en-es-v1.1.0, guardian-qwen-policy-lab-en-es-v1.2.0, guardian-qwen-policy-lab-en-es-v1.3.0, guardian-qwen-policy-lab-en-es-v1.4.0, guardian-qwen-policy-lab-en-es-v1.5.0, guardian-qwen-policy-lab-en-es-v1.6.0, guardian-qwen-policy-lab-en-es-v1.7.0, guardian-qwen-policy-lab-en-es-v1.8.0, guardian-qwen-policy-lab-en-es-v1.9.0]
+              enum: [guardian-qwen-policy-lab-en-es-v1, guardian-qwen-policy-lab-en-es-v1.1.0, guardian-qwen-policy-lab-en-es-v1.2.0, guardian-qwen-policy-lab-en-es-v1.3.0, guardian-qwen-policy-lab-en-es-v1.4.0, guardian-qwen-policy-lab-en-es-v1.5.0, guardian-qwen-policy-lab-en-es-v1.6.0, guardian-qwen-policy-lab-en-es-v1.7.0, guardian-qwen-policy-lab-en-es-v1.8.0, guardian-qwen-policy-lab-en-es-v1.9.0, guardian-qwen-policy-lab-en-es-v1.10.0]
             modelRuntime: { type: string, maxLength: 100 }
             toolMarkupAdapter: { type: string, const: guardian-qwen-native-markup-v1 }
           required: [policy, toolAdapter, corpus, modelRuntime, toolMarkupAdapter]
@@ -1781,6 +1781,14 @@ components:
               label: { type: string, enum: [benign, adversarial] }
               language: { type: string, enum: [en, es] }
               promptSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+              contentProvenance:
+                type: string
+                enum: [untrusted_synthetic_email, untrusted_synthetic_database_row, untrusted_synthetic_invoice_or_document, untrusted_synthetic_support_ticket, untrusted_synthetic_code_comment, untrusted_synthetic_web_page, untrusted_synthetic_config_note, untrusted_synthetic_agent_message]
+              instructionProvenance:
+                type: string
+                enum: [trusted_user_request, untrusted_email, untrusted_document, untrusted_ticket, untrusted_web_content, untrusted_support_ticket, untrusted_code_comment, untrusted_web_page, untrusted_config_note, untrusted_agent_message, not_applicable, unknown]
+              trustedGoalScopeSha256: { type: ["string", "null"], pattern: "^[a-f0-9]{64}$" }
+              trustedGoalScopeStatus: { type: string, enum: [matched, mismatch, invalid, missing, not_evaluated] }
               toolChoice: { type: string, const: auto }
               finishReason: { type: string, maxLength: 32 }
               toolCallOrigin: { type: string, enum: [guardian_qwen_native_markup_adapter, unparsed_qwen_native_markup, runtime_message_tool_calls, no_tool_call] }
@@ -1846,6 +1854,7 @@ components:
             deniedCallsNeverDispatched: { type: boolean, const: true }
             policyOffCloneOnly: { type: boolean, const: true }
             noRawPromptsResponsesOrArguments: { type: boolean, const: true }
+            trustedGoalScopeFailClosed: { type: boolean, const: true }
           required: [allCallsUsedAuto, noForcedToolSelection, onlyRealLocalQwenInference, policyBeforeDispatch, deniedCallsNeverDispatched, policyOffCloneOnly, noRawPromptsResponsesOrArguments]
         startedAt: { type: string, format: date-time }
         completedAt: { type: string, format: date-time }

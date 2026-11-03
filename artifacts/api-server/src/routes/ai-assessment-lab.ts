@@ -437,8 +437,12 @@ function verifyPersistedApprovalEvidence(
   }
   if (
     isQwenEvidence &&
-    ((raw.versions as Record<string, unknown> | null)?.policy !==
-      "guardian-policy-engine-synthetic-v2" ||
+    (![
+      "guardian-policy-engine-synthetic-v2",
+      "guardian-policy-engine-synthetic-v3",
+    ].includes(
+      String((raw.versions as Record<string, unknown> | null)?.policy),
+    ) ||
       raw.executionMode !== "real_local_qwen_inference" ||
       raw.proposalOriginScope !==
         "qwen_marker_adapter_or_runtime_tool_calls_only")
@@ -519,9 +523,16 @@ function verifyPersistedApprovalEvidence(
   const policyOffHasNoExecution =
     policyOff?.executed === false &&
     (isQwenEvidence || policyOff?.mode === "counterfactual_clone_only");
+  const trustedScopeValid =
+    !isQwenEvidence ||
+    raw.engineVersion !== "guardian-agent-qwen-policy-lab-v1.10.0" ||
+    (item.trustedGoalScopeStatus === "matched" &&
+      typeof item.trustedGoalScopeSha256 === "string" &&
+      /^[a-f0-9]{64}$/.test(item.trustedGoalScopeSha256));
   if (
     !digestValid ||
     !proof ||
+    !trustedScopeValid ||
     item.syntheticActionRef !== approval.syntheticActionRef ||
     item.actionSha256 !== approval.actionSha256 ||
     item.proposalSha256 !== approval.proposalSha256 ||

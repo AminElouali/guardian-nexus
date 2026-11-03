@@ -105,11 +105,11 @@ description: Product boundaries for security integrations, claims, and productio
 
 **How to apply:** Derive approval state from the verified trace result code, require matching pair and summary fields in v2, and ensure the hold remains unauthorized and unexecuted. Do not change policy outcomes merely to fit the report.
 
-**Rule:** The laboratory SDK may submit only versioned, server-allowlisted scenario IDs; tenant, actor, role, tool, resource, policy decision, and action binding are derived or verified server-side. Never accept caller-selected policy outcomes or arbitrary tool dispatch.
+**Rule:** The laboratory SDK may submit only versioned, server-allowlisted scenario IDs; tenant, actor, role, tool, resource, policy decision, and action binding are derived or verified server-side. Qwen-generated provenance or scope claims never grant authority, and an evidence digest provides integrity linkage—not authentication.
 
-**Why:** SDK callers are untrusted inputs; accepting their identity or policy claims would bypass the independent policy engine and tenant boundary.
+**Why:** SDK callers and model-generated content are untrusted; accepting their identity or scope claims would bypass the independent policy engine and tenant boundary. A hash can expose mutation but cannot prove who authorized the proposal.
 
-**How to apply:** Keep the lab adapter fixed and synthetic. Any future general action SDK must bind authenticated identity to workspace membership and pass server-side policy before dispatch; DENY and approval-required actions never dispatch directly.
+**How to apply:** Keep the lab adapter fixed and synthetic. Derive trusted goals from the authenticated request and runner-owned scenario registry, bind the evidence digest to that context, and deny closed on unknown provenance or scope mismatch. Any future general action SDK must bind authenticated identity to workspace membership and pass server-side policy before dispatch; DENY and approval-required actions never dispatch directly.
 
 **Rule:** Verify evidence digests against the exact canonical wire representation and the versioned engine convention; do not normalize timestamp strings before validation.
 

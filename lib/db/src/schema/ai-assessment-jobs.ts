@@ -829,10 +829,11 @@ export type GuardianAgentPolicyLabEvidence = {
   versions: {
     policy:
       | "guardian-policy-engine-synthetic-v1"
-      | "guardian-policy-engine-synthetic-v2";
+      | "guardian-policy-engine-synthetic-v2"
+      | "guardian-policy-engine-synthetic-v3";
     corpus: "guardian-agent-lab-corpus-v1";
     oracle: "guardian-policy-oracle-v1";
-    toolAdapter?: "guardian-synthetic-tool-adapter-v1";
+    toolAdapter?: "guardian-synthetic-tool-adapter-v1" | "guardian-synthetic-tool-adapter-v2";
   };
   seed: number;
   sampleCount: 2 | 3;
@@ -1001,7 +1002,8 @@ export type GuardianQwenPolicyLabEvidence = {
     | "guardian-agent-qwen-policy-lab-v1.6.0"
     | "guardian-agent-qwen-policy-lab-v1.7.0"
     | "guardian-agent-qwen-policy-lab-v1.8.0"
-    | "guardian-agent-qwen-policy-lab-v1.9.0";
+    | "guardian-agent-qwen-policy-lab-v1.9.0"
+    | "guardian-agent-qwen-policy-lab-v1.10.0";
   profileId:
     | "guardian-agent-qwen-lab-email-v1"
     | "guardian-agent-qwen-lab-database-v1"
@@ -1030,8 +1032,12 @@ export type GuardianQwenPolicyLabEvidence = {
     permissions: string[];
   };
   versions: {
-    policy: "guardian-policy-engine-synthetic-v2";
-    toolAdapter: "guardian-synthetic-tool-adapter-v1";
+    policy:
+      | "guardian-policy-engine-synthetic-v2"
+      | "guardian-policy-engine-synthetic-v3";
+    toolAdapter:
+      | "guardian-synthetic-tool-adapter-v1"
+      | "guardian-synthetic-tool-adapter-v2";
     corpus:
       | "guardian-qwen-policy-lab-en-es-v1"
       | "guardian-qwen-policy-lab-en-es-v1.1.0"
@@ -1042,7 +1048,8 @@ export type GuardianQwenPolicyLabEvidence = {
       | "guardian-qwen-policy-lab-en-es-v1.6.0"
       | "guardian-qwen-policy-lab-en-es-v1.7.0"
       | "guardian-qwen-policy-lab-en-es-v1.8.0"
-      | "guardian-qwen-policy-lab-en-es-v1.9.0";
+      | "guardian-qwen-policy-lab-en-es-v1.9.0"
+      | "guardian-qwen-policy-lab-en-es-v1.10.0";
     modelRuntime: string;
     toolMarkupAdapter: "guardian-qwen-native-markup-v1";
   };
@@ -1066,6 +1073,10 @@ export type GuardianQwenPolicyLabEvidence = {
     label: "benign" | "adversarial";
     language: "en" | "es";
     promptSha256: string;
+    contentProvenance?: string;
+    instructionProvenance?: string;
+    trustedGoalScopeSha256?: string | null;
+    trustedGoalScopeStatus?: "matched" | "mismatch" | "invalid" | "missing" | "not_evaluated";
     toolChoice: "auto";
     finishReason: string;
     toolCallOrigin:
@@ -1106,7 +1117,9 @@ export type GuardianQwenPolicyLabEvidence = {
     caseEvidenceSha256: string;
   }>;
   summary: Record<string, number>;
-  selfChecks: Record<string, boolean>;
+  selfChecks: Record<string, boolean> & {
+    trustedGoalScopeFailClosed?: true;
+  };
   startedAt: Date | string;
   completedAt: Date | string;
   durationSeconds: number;

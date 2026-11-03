@@ -2827,6 +2827,15 @@ export type GuardianAgentPolicyLabEvidenceVersionsPolicy = typeof GuardianAgentP
 export const GuardianAgentPolicyLabEvidenceVersionsPolicy = {
   'guardian-policy-engine-synthetic-v1': 'guardian-policy-engine-synthetic-v1',
   'guardian-policy-engine-synthetic-v2': 'guardian-policy-engine-synthetic-v2',
+  'guardian-policy-engine-synthetic-v3': 'guardian-policy-engine-synthetic-v3',
+} as const;
+
+export type GuardianAgentPolicyLabEvidenceVersionsToolAdapter = typeof GuardianAgentPolicyLabEvidenceVersionsToolAdapter[keyof typeof GuardianAgentPolicyLabEvidenceVersionsToolAdapter];
+
+
+export const GuardianAgentPolicyLabEvidenceVersionsToolAdapter = {
+  'guardian-synthetic-tool-adapter-v1': 'guardian-synthetic-tool-adapter-v1',
+  'guardian-synthetic-tool-adapter-v2': 'guardian-synthetic-tool-adapter-v2',
 } as const;
 
 export type GuardianAgentPolicyLabEvidenceCasesItemLabel = typeof GuardianAgentPolicyLabEvidenceCasesItemLabel[keyof typeof GuardianAgentPolicyLabEvidenceCasesItemLabel];
@@ -2999,7 +3008,7 @@ export type GuardianAgentPolicyLabEvidenceVersions = {
   policy: GuardianAgentPolicyLabEvidenceVersionsPolicy;
   corpus: 'guardian-agent-lab-corpus-v1';
   oracle: 'guardian-policy-oracle-v1';
-  toolAdapter?: 'guardian-synthetic-tool-adapter-v1';
+  toolAdapter?: GuardianAgentPolicyLabEvidenceVersionsToolAdapter;
 };
 
 export type GuardianAgentPolicyLabEvidenceCasesItemPolicyOn = {
@@ -3302,6 +3311,7 @@ export const GuardianQwenPolicyLabEvidenceEngineVersion = {
   'guardian-agent-qwen-policy-lab-v170': 'guardian-agent-qwen-policy-lab-v1.7.0',
   'guardian-agent-qwen-policy-lab-v180': 'guardian-agent-qwen-policy-lab-v1.8.0',
   'guardian-agent-qwen-policy-lab-v190': 'guardian-agent-qwen-policy-lab-v1.9.0',
+  'guardian-agent-qwen-policy-lab-v1100': 'guardian-agent-qwen-policy-lab-v1.10.0',
 } as const;
 
 export type GuardianQwenPolicyLabEvidenceProfileId = typeof GuardianQwenPolicyLabEvidenceProfileId[keyof typeof GuardianQwenPolicyLabEvidenceProfileId];
@@ -3332,6 +3342,22 @@ export const GuardianQwenPolicyLabEvidenceVerticalId = {
   multiagent: 'multiagent',
 } as const;
 
+export type GuardianQwenPolicyLabEvidenceVersionsPolicy = typeof GuardianQwenPolicyLabEvidenceVersionsPolicy[keyof typeof GuardianQwenPolicyLabEvidenceVersionsPolicy];
+
+
+export const GuardianQwenPolicyLabEvidenceVersionsPolicy = {
+  'guardian-policy-engine-synthetic-v2': 'guardian-policy-engine-synthetic-v2',
+  'guardian-policy-engine-synthetic-v3': 'guardian-policy-engine-synthetic-v3',
+} as const;
+
+export type GuardianQwenPolicyLabEvidenceVersionsToolAdapter = typeof GuardianQwenPolicyLabEvidenceVersionsToolAdapter[keyof typeof GuardianQwenPolicyLabEvidenceVersionsToolAdapter];
+
+
+export const GuardianQwenPolicyLabEvidenceVersionsToolAdapter = {
+  'guardian-synthetic-tool-adapter-v1': 'guardian-synthetic-tool-adapter-v1',
+  'guardian-synthetic-tool-adapter-v2': 'guardian-synthetic-tool-adapter-v2',
+} as const;
+
 export type GuardianQwenPolicyLabEvidenceVersionsCorpus = typeof GuardianQwenPolicyLabEvidenceVersionsCorpus[keyof typeof GuardianQwenPolicyLabEvidenceVersionsCorpus];
 
 
@@ -3346,6 +3372,7 @@ export const GuardianQwenPolicyLabEvidenceVersionsCorpus = {
   'guardian-qwen-policy-lab-en-es-v170': 'guardian-qwen-policy-lab-en-es-v1.7.0',
   'guardian-qwen-policy-lab-en-es-v180': 'guardian-qwen-policy-lab-en-es-v1.8.0',
   'guardian-qwen-policy-lab-en-es-v190': 'guardian-qwen-policy-lab-en-es-v1.9.0',
+  'guardian-qwen-policy-lab-en-es-v1100': 'guardian-qwen-policy-lab-en-es-v1.10.0',
 } as const;
 
 export type GuardianQwenPolicyLabEvidenceCasesItemLabel = typeof GuardianQwenPolicyLabEvidenceCasesItemLabel[keyof typeof GuardianQwenPolicyLabEvidenceCasesItemLabel];
@@ -3362,6 +3389,49 @@ export type GuardianQwenPolicyLabEvidenceCasesItemLanguage = typeof GuardianQwen
 export const GuardianQwenPolicyLabEvidenceCasesItemLanguage = {
   en: 'en',
   es: 'es',
+} as const;
+
+export type GuardianQwenPolicyLabEvidenceCasesItemContentProvenance = typeof GuardianQwenPolicyLabEvidenceCasesItemContentProvenance[keyof typeof GuardianQwenPolicyLabEvidenceCasesItemContentProvenance];
+
+
+export const GuardianQwenPolicyLabEvidenceCasesItemContentProvenance = {
+  untrusted_synthetic_email: 'untrusted_synthetic_email',
+  untrusted_synthetic_database_row: 'untrusted_synthetic_database_row',
+  untrusted_synthetic_invoice_or_document: 'untrusted_synthetic_invoice_or_document',
+  untrusted_synthetic_support_ticket: 'untrusted_synthetic_support_ticket',
+  untrusted_synthetic_code_comment: 'untrusted_synthetic_code_comment',
+  untrusted_synthetic_web_page: 'untrusted_synthetic_web_page',
+  untrusted_synthetic_config_note: 'untrusted_synthetic_config_note',
+  untrusted_synthetic_agent_message: 'untrusted_synthetic_agent_message',
+} as const;
+
+export type GuardianQwenPolicyLabEvidenceCasesItemInstructionProvenance = typeof GuardianQwenPolicyLabEvidenceCasesItemInstructionProvenance[keyof typeof GuardianQwenPolicyLabEvidenceCasesItemInstructionProvenance];
+
+
+export const GuardianQwenPolicyLabEvidenceCasesItemInstructionProvenance = {
+  trusted_user_request: 'trusted_user_request',
+  untrusted_email: 'untrusted_email',
+  untrusted_document: 'untrusted_document',
+  untrusted_ticket: 'untrusted_ticket',
+  untrusted_web_content: 'untrusted_web_content',
+  untrusted_support_ticket: 'untrusted_support_ticket',
+  untrusted_code_comment: 'untrusted_code_comment',
+  untrusted_web_page: 'untrusted_web_page',
+  untrusted_config_note: 'untrusted_config_note',
+  untrusted_agent_message: 'untrusted_agent_message',
+  not_applicable: 'not_applicable',
+  unknown: 'unknown',
+} as const;
+
+export type GuardianQwenPolicyLabEvidenceCasesItemTrustedGoalScopeStatus = typeof GuardianQwenPolicyLabEvidenceCasesItemTrustedGoalScopeStatus[keyof typeof GuardianQwenPolicyLabEvidenceCasesItemTrustedGoalScopeStatus];
+
+
+export const GuardianQwenPolicyLabEvidenceCasesItemTrustedGoalScopeStatus = {
+  matched: 'matched',
+  mismatch: 'mismatch',
+  invalid: 'invalid',
+  missing: 'missing',
+  not_evaluated: 'not_evaluated',
 } as const;
 
 export type GuardianQwenPolicyLabEvidenceCasesItemToolCallOrigin = typeof GuardianQwenPolicyLabEvidenceCasesItemToolCallOrigin[keyof typeof GuardianQwenPolicyLabEvidenceCasesItemToolCallOrigin];
@@ -3428,8 +3498,8 @@ export type GuardianQwenPolicyLabEvidenceAgentIdentity = {
 };
 
 export type GuardianQwenPolicyLabEvidenceVersions = {
-  policy: 'guardian-policy-engine-synthetic-v2';
-  toolAdapter: 'guardian-synthetic-tool-adapter-v1';
+  policy: GuardianQwenPolicyLabEvidenceVersionsPolicy;
+  toolAdapter: GuardianQwenPolicyLabEvidenceVersionsToolAdapter;
   corpus: GuardianQwenPolicyLabEvidenceVersionsCorpus;
   /** @maxLength 100 */
   modelRuntime: string;
@@ -3492,6 +3562,14 @@ export type GuardianQwenPolicyLabEvidenceCasesItem = {
   language: GuardianQwenPolicyLabEvidenceCasesItemLanguage;
   /** @pattern ^[a-f0-9]{64}$ */
   promptSha256: string;
+  contentProvenance?: GuardianQwenPolicyLabEvidenceCasesItemContentProvenance;
+  instructionProvenance?: GuardianQwenPolicyLabEvidenceCasesItemInstructionProvenance;
+  /**
+     * @nullable
+     * @pattern ^[a-f0-9]{64}$
+     */
+  trustedGoalScopeSha256?: string | null;
+  trustedGoalScopeStatus?: GuardianQwenPolicyLabEvidenceCasesItemTrustedGoalScopeStatus;
   toolChoice: 'auto';
   /** @maxLength 32 */
   finishReason: string;
@@ -3564,6 +3642,7 @@ export type GuardianQwenPolicyLabEvidenceSelfChecks = {
   deniedCallsNeverDispatched: true;
   policyOffCloneOnly: true;
   noRawPromptsResponsesOrArguments: true;
+  trustedGoalScopeFailClosed?: true;
 };
 
 export interface GuardianQwenPolicyLabEvidence {

@@ -14,4 +14,5 @@ export type GuardianQwenPolicyLabEvidenceSelfChecks = {
   deniedCallsNeverDispatched: true;
   policyOffCloneOnly: true;
   noRawPromptsResponsesOrArguments: true;
+  trustedGoalScopeFailClosed?: true;
 };

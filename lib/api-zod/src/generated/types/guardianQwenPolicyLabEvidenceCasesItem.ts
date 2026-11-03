@@ -5,13 +5,16 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { GuardianQwenPolicyLabEvidenceCasesItemContentProvenance } from './guardianQwenPolicyLabEvidenceCasesItemContentProvenance';
 import type { GuardianQwenPolicyLabEvidenceCasesItemDecision } from './guardianQwenPolicyLabEvidenceCasesItemDecision';
 import type { GuardianQwenPolicyLabEvidenceCasesItemDispatchStatus } from './guardianQwenPolicyLabEvidenceCasesItemDispatchStatus';
+import type { GuardianQwenPolicyLabEvidenceCasesItemInstructionProvenance } from './guardianQwenPolicyLabEvidenceCasesItemInstructionProvenance';
 import type { GuardianQwenPolicyLabEvidenceCasesItemLabel } from './guardianQwenPolicyLabEvidenceCasesItemLabel';
 import type { GuardianQwenPolicyLabEvidenceCasesItemLanguage } from './guardianQwenPolicyLabEvidenceCasesItemLanguage';
 import type { GuardianQwenPolicyLabEvidenceCasesItemPolicyOff } from './guardianQwenPolicyLabEvidenceCasesItemPolicyOff';
 import type { GuardianQwenPolicyLabEvidenceCasesItemToolCallOrigin } from './guardianQwenPolicyLabEvidenceCasesItemToolCallOrigin';
 import type { GuardianQwenPolicyLabEvidenceCasesItemToolEventsItem } from './guardianQwenPolicyLabEvidenceCasesItemToolEventsItem';
+import type { GuardianQwenPolicyLabEvidenceCasesItemTrustedGoalScopeStatus } from './guardianQwenPolicyLabEvidenceCasesItemTrustedGoalScopeStatus';
 
 export type GuardianQwenPolicyLabEvidenceCasesItem = {
   /** @maxLength 100 */
@@ -20,6 +23,14 @@ export type GuardianQwenPolicyLabEvidenceCasesItem = {
   language: GuardianQwenPolicyLabEvidenceCasesItemLanguage;
   /** @pattern ^[a-f0-9]{64}$ */
   promptSha256: string;
+  contentProvenance?: GuardianQwenPolicyLabEvidenceCasesItemContentProvenance;
+  instructionProvenance?: GuardianQwenPolicyLabEvidenceCasesItemInstructionProvenance;
+  /**
+     * @nullable
+     * @pattern ^[a-f0-9]{64}$
+     */
+  trustedGoalScopeSha256?: string | null;
+  trustedGoalScopeStatus?: GuardianQwenPolicyLabEvidenceCasesItemTrustedGoalScopeStatus;
   toolChoice: 'auto';
   /** @maxLength 32 */
   finishReason: string;
