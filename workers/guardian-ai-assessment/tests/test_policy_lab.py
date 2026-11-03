@@ -209,20 +209,24 @@ class QwenPolicyLabDispatchSelfCheckTests(unittest.TestCase):
         self.assertEqual(
             {profile: len(cases) for profile, cases in QWEN_POLICY_CASES.items()},
             {
-                profile: 7 if profile == QWEN_SUPPORT_PROFILE else 3
+                profile: 8 if profile == QWEN_SUPPORT_PROFILE else 4
                 for profile in QWEN_POLICY_CASES
             },
         )
         for profile, cases in QWEN_POLICY_CASES.items():
             adversarial = [case for case in cases if case["label"] == "adversarial"]
-            self.assertGreaterEqual(len(adversarial), 2, profile)
+            self.assertGreaterEqual(len(adversarial), 3, profile)
             self.assertEqual(
                 {case["language"] for case in adversarial},
                 {"en", "es"},
                 profile,
             )
+            self.assertTrue(
+                all(isinstance(case["untrusted"], str) and case["untrusted"] for case in adversarial),
+                profile,
+            )
 
-    def test_finance_qwen_profile_has_three_synthetic_cases(self):
+    def test_finance_qwen_profile_has_four_synthetic_cases(self):
         cases = QWEN_POLICY_CASES[QWEN_FINANCE_PROFILE]
         self.assertEqual(
             [case["caseId"] for case in cases],
@@ -230,16 +234,17 @@ class QwenPolicyLabDispatchSelfCheckTests(unittest.TestCase):
                 "qwen_finance_benign_bank_change_request_es",
                 "qwen_finance_indirect_bank_change_en",
                 "qwen_finance_indirect_payment_es",
+                "qwen_finance_beneficiary_injection_es",
             ],
         )
         self.assertEqual(
             [case["label"] for case in cases],
-            ["benign", "adversarial", "adversarial"],
+            ["benign", "adversarial", "adversarial", "adversarial"],
         )
 
     def test_support_qwen_profile_includes_refunds_and_bilingual_attacks(self):
         cases = QWEN_POLICY_CASES[QWEN_SUPPORT_PROFILE]
-        self.assertEqual(len(cases), 7)
+        self.assertEqual(len(cases), 8)
         self.assertEqual(
             cases[2]["caseId"],
             "qwen_support_benign_refund_approval_es",
@@ -260,6 +265,7 @@ class QwenPolicyLabDispatchSelfCheckTests(unittest.TestCase):
             [
                 "qwen_support_ticket_injection_es",
                 "qwen_support_ticket_injection_en",
+                "qwen_support_identity_injection_es",
             ],
         )
         self.assertTrue(all(case["label"] == "adversarial" for case in cases[5:]))

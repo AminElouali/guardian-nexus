@@ -1,4 +1,4 @@
-export const GUARDIAN_NEXUS_SDK_VERSION = "0.2.0" as const;
+export const GUARDIAN_NEXUS_SDK_VERSION = "0.3.0" as const;
 
 export const AGENT_ACTION_SCENARIOS = [
   "email.allowed_draft",
@@ -46,10 +46,12 @@ export interface QwenPolicyCaseSummary {
   label: "benign" | "adversarial";
   language: "en" | "es";
   toolChoice: "auto";
+  finishReason: string;
   toolCallOrigin: QwenToolCallOrigin;
   toolCallCount: number;
   proposedTool: string | null;
   decision: QwenPolicyDecision;
+  reasonCode: string;
   dispatchStatus:
     | "not_invoked"
     | "simulated_execution"
@@ -426,7 +428,7 @@ function expectQwenPolicyReport(
     !isRecord(value.summary) ||
     !Array.isArray(value.cases) ||
     value.cases.length < 2 ||
-    value.cases.length > 7
+    value.cases.length > 8
   ) {
     throw new GuardianNexusSdkError("invalid_qwen_policy_evidence");
   }
@@ -442,6 +444,10 @@ function expectQwenPolicyReport(
       !["benign", "adversarial"].includes(String(rawCase.label)) ||
       !["en", "es"].includes(String(rawCase.language)) ||
       rawCase.toolChoice !== "auto" ||
+       typeof rawCase.finishReason !== "string" ||
+       !/^[A-Za-z0-9_-]{1,32}$/.test(rawCase.finishReason) ||
+       typeof rawCase.reasonCode !== "string" ||
+       !/^[a-z][a-z0-9_]{0,79}$/.test(rawCase.reasonCode) ||
       !QWEN_CASE_ORIGINS.has(String(rawCase.toolCallOrigin)) ||
       !Number.isInteger(rawCase.toolCallCount) ||
       (rawCase.toolCallCount as number) < 0 ||
@@ -506,6 +512,33 @@ function expectQwenPolicyReport(
       throw new GuardianNexusSdkError("invalid_qwen_dispatch_state");
     }
     if (
+      rawCase.toolCallOrigin === "no_tool_call" &&
+      (rawCase.toolCallCount !== 0 ||
+        rawCase.proposedTool !== null ||
+        rawCase.proposalSha256 !== null ||
+        rawCase.decision !== "no_proposal" ||
+        rawCase.reasonCode !== "no_tool_call" ||
+        rawCase.dispatchStatus !== "not_invoked" ||
+        rawCase.toolEvents.length !== 0 ||
+        rawCase.policyOff.wouldExecute !== false)
+    ) {
+      throw new GuardianNexusSdkError("invalid_qwen_no_proposal_evidence");
+    }
+    if (
+      rawCase.toolCallOrigin === "unparsed_qwen_native_markup" &&
+      (rawCase.decision !== "no_proposal" ||
+        rawCase.dispatchStatus !== "blocked_by_parser" ||
+        rawCase.toolEvents.length !== 0 ||
+        rawCase.policyOff.wouldExecute !== false ||
+        ![
+          "markup_not_accepted",
+          "tool_arguments_invalid",
+          "tool_call_count_limit",
+        ].includes(rawCase.reasonCode))
+    ) {
+      throw new GuardianNexusSdkError("invalid_qwen_parser_rejection_evidence");
+    }
+    if (
       rawCase.dispatchStatus === "simulated_execution" &&
       !simulatedExecution
     ) {
@@ -516,10 +549,12 @@ function expectQwenPolicyReport(
       label: rawCase.label as "benign" | "adversarial",
       language: rawCase.language as "en" | "es",
       toolChoice: "auto",
+      finishReason: rawCase.finishReason,
       toolCallOrigin: rawCase.toolCallOrigin as QwenToolCallOrigin,
       toolCallCount: rawCase.toolCallCount as number,
       proposedTool: rawCase.proposedTool as string | null,
       decision: rawCase.decision as QwenPolicyDecision,
+      reasonCode: rawCase.reasonCode,
       dispatchStatus: rawCase.dispatchStatus as QwenPolicyCaseSummary["dispatchStatus"],
       simulatedExecution,
       caseEvidenceSha256: rawCase.caseEvidenceSha256,
@@ -815,6 +850,13 @@ export class GuardianNexusClient {
       throw new GuardianNexusSdkError("invalid_approval_decision_response");
     }
     const approval = expectApproval(value.approval);
+    const expectedStatus = input.decision === "approve" ? "approved" : "denied";
+    if (
+      approval.proposalBindingSha256 !== input.proposalBindingSha256 ||
+      approval.status !== expectedStatus
+    ) {
+      throw new GuardianNexusSdkError("approval_response_binding_mismatch");
+    }
     if (
       value.execution !== "synthetic_action_simulated_once" &&
       value.execution !== "not_performed"

@@ -1441,7 +1441,7 @@ test(
 
     const evidenceSummary = {
       source: "guardian_agent_sdk_local_e2e",
-      sdkVersion: "0.1.0",
+      sdkVersion: GUARDIAN_NEXUS_SDK_VERSION,
       jobId: submission.job.id,
       jobStatus: completed.status,
       profileId: completed.profileId,
@@ -1574,7 +1574,7 @@ test(
           assert.equal(qwenResult.provider.toolChoice, "auto");
           assert.equal(qwenResult.provider.sha256, "9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031");
           const expectedCaseCount =
-            profileId === "guardian-agent-qwen-lab-customer-service-v1" ? 7 : 3;
+            profileId === "guardian-agent-qwen-lab-customer-service-v1" ? 8 : 4;
           assert.equal(qwenResult.cases.length, expectedCaseCount);
           assert.equal(qwenResult.summary.modelCalls, expectedCaseCount);
           assert.equal(qwenResult.summary.externalCalls, 0);
@@ -1757,9 +1757,16 @@ test(
       if (!persisted.authorized) return;
       assert.equal(persisted.value[0]?.status, "succeeded");
       assert.equal(persisted.value[0]?.profileId, profileId);
+      const persistedEvidence =
+        persisted.value[0]?.result as GuardianQwenPolicyLabEvidence;
+      assert.equal(persistedEvidence.engine, "guardian_qwen_policy_lab");
       assert.equal(
-        (persisted.value[0]?.result as GuardianQwenPolicyLabEvidence).engine,
-        "guardian_qwen_policy_lab",
+        persistedEvidence.engineVersion,
+        "guardian-agent-qwen-policy-lab-v1.7.0",
+      );
+      assert.equal(
+        persistedEvidence.provider.effectiveChatTemplateSha256,
+        "ec01f905b506faf0146fedd9efc747fd863dd87f4ddab4771b0c072e17021aa1",
       );
       assert.equal((await apiRequest(userB, pathA)).status, 403);
       assert.deepEqual(await (await apiRequest(userB, pathB)).json(), []);
@@ -2032,7 +2039,7 @@ test(
 
     const artifactPath = fileURLToPath(
       new URL(
-        "../../../generated-artifacts/guardian-qwen-policy-labs-e2e.json",
+        "../../../generated-artifacts/guardian-qwen-policy-labs-e2e-v1.7.0.json",
         import.meta.url,
       ),
     );
@@ -2085,7 +2092,7 @@ test(
       .digest("hex");
     const sdkArtifactPath = fileURLToPath(
       new URL(
-        "../../../generated-artifacts/guardian-agent-sdk-qwen-eight-profiles-e2e.json",
+        "../../../generated-artifacts/guardian-agent-sdk-qwen-eight-profiles-e2e-v1.7.0.json",
         import.meta.url,
       ),
     );

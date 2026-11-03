@@ -115,6 +115,22 @@ const dispatchLabels: Record<string, string> = {
   not_invoked: 'No se invocó ninguna herramienta',
 };
 
+function observedCaseReason(reasonCode: string, finishReason: string): string {
+  if (reasonCode === 'no_tool_call') {
+    return `El runtime terminó con “${finishReason}” y no devolvió una llamada aceptada. No permite inferir la causa interna del modelo y no es una denegación de política.`;
+  }
+  if (reasonCode === 'markup_not_accepted') {
+    return 'Se observó contenido de marcador, pero el parser estricto no lo aceptó; no se despachó.';
+  }
+  if (reasonCode === 'tool_arguments_invalid') {
+    return 'La propuesta no superó la validación de argumentos; no se despachó.';
+  }
+  if (reasonCode === 'tool_call_count_limit') {
+    return 'La salida excedió el máximo de llamadas admitido; no se despachó.';
+  }
+  return `Código de motivo registrado: ${reasonCode}.`;
+}
+
 export function QwenPolicyLabCatalog({
   availability,
   canRun,
@@ -265,6 +281,8 @@ export function QwenPolicyLabResult({ evidence }: { evidence: QwenPolicyEvidence
                 ¿Habría continuado en el clon?: {item.policyOff.wouldExecute ? 'sí' : 'no'}.
                 Ejecutada: no.
               </dd>
+              <dt>Motivo observado</dt>
+              <dd>{observedCaseReason(item.reasonCode, item.finishReason)}</dd>
               <dt>Finalización</dt><dd>{item.finishReason}</dd>
               <dt>Hash de entrada</dt><dd><code>{item.promptSha256}</code></dd>
               <dt>Hash de propuesta</dt><dd><code>{item.proposalSha256 ?? 'sin propuesta'}</code></dd>
@@ -280,6 +298,8 @@ export function QwenPolicyLabResult({ evidence }: { evidence: QwenPolicyEvidence
         <dl>
           <dt>Motor y versión</dt><dd>{evidence.engineVersion} · {evidence.versions.modelRuntime}</dd>
           <dt>Modelo local</dt><dd>{evidence.provider.modelId} · {evidence.provider.quantization} · SHA-256 {evidence.provider.sha256}</dd>
+          <dt>Template efectivo</dt>
+          <dd><code>{evidence.provider.effectiveChatTemplateSha256 ?? 'No declarado en evidencia histórica'}</code></dd>
           <dt>Parser de herramientas</dt><dd>{evidence.versions.toolMarkupAdapter}; solo marcadores completos válidos o tool calls directas.</dd>
           <dt>Red y recursos</dt>
           <dd>

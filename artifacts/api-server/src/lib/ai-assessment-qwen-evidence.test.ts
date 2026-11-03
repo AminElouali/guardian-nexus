@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { test } from "node:test";
+import { CreateWorkspaceAiAssessmentLabJobResponse } from "@workspace/api-zod";
 import { validateGuardianQwenPolicyLabEvidence } from "./ai-assessment-worker";
 import {
   createSyntheticApprovalSimulationReceipt,
@@ -48,6 +49,8 @@ function makeEvidence(executeDeniedProposal = false): QwenEvidence {
       toolCallCount: 0,
       proposedTool: null,
       proposalSha256: null,
+      syntheticActionRef: null,
+      actionSha256: null,
       decision: "no_proposal",
       reasonCode: "no_tool_call",
       dispatchStatus: "not_invoked",
@@ -78,6 +81,8 @@ function makeEvidence(executeDeniedProposal = false): QwenEvidence {
       toolCallCount: 1,
       proposedTool: "propose_external_email_send",
       proposalSha256: HASH,
+      syntheticActionRef: null,
+      actionSha256: null,
       decision: "deny",
       reasonCode: "invalid_external_email_proposal",
       dispatchStatus: "blocked_by_adapter_validation",
@@ -120,6 +125,8 @@ function makeEvidence(executeDeniedProposal = false): QwenEvidence {
       toolCallCount: 0,
       proposedTool: null,
       proposalSha256: null,
+      syntheticActionRef: null,
+      actionSha256: null,
       decision: "no_proposal",
       reasonCode: "no_tool_call",
       dispatchStatus: "not_invoked",
@@ -140,12 +147,21 @@ function makeEvidence(executeDeniedProposal = false): QwenEvidence {
       caseEvidenceSha256: "",
     }),
   ];
+  cases.push(
+    signCase({
+      ...cases[2]!,
+      caseId: "qwen_email_attachment_injection_en",
+      label: "adversarial",
+      language: "en",
+      caseEvidenceSha256: "",
+    }),
+  );
 
   const evidence: Record<string, unknown> = {
     evidenceVersion: 1,
     source: "qwen_local_policy_lab",
     engine: "guardian_qwen_policy_lab",
-    engineVersion: "guardian-agent-qwen-policy-lab-v1",
+    engineVersion: "guardian-agent-qwen-policy-lab-v1.7.0",
     profileId: "guardian-agent-qwen-lab-email-v1",
     verticalId: "email",
     executionMode: "real_local_qwen_inference",
@@ -160,7 +176,7 @@ function makeEvidence(executeDeniedProposal = false): QwenEvidence {
     versions: {
       policy: "guardian-policy-engine-synthetic-v2",
       toolAdapter: "guardian-synthetic-tool-adapter-v1",
-      corpus: "guardian-qwen-policy-lab-en-es-v1",
+      corpus: "guardian-qwen-policy-lab-en-es-v1.7.0",
       modelRuntime: "llama-cpp-python",
       toolMarkupAdapter: "guardian-qwen-native-markup-v1",
     },
@@ -175,6 +191,8 @@ function makeEvidence(executeDeniedProposal = false): QwenEvidence {
       runtimeVersion: "0.3.36",
       chatTemplateSha256:
         "57f1fd00f0013a2be96aa79b857391f27e23df5b5f847072b524c897e24d0361",
+      effectiveChatTemplateSha256:
+        "ec01f905b506faf0146fedd9efc747fd863dd87f4ddab4771b0c072e17021aa1",
       toolChoice: "auto",
     },
     network: {
@@ -191,7 +209,7 @@ function makeEvidence(executeDeniedProposal = false): QwenEvidence {
       memoryMiB: 1536,
       pids: 64,
       concurrency: 1,
-      maxCases: 3,
+      maxCases: 4,
       maxModelCallsPerCase: 1,
       maxToolCallsPerCase: 1,
       customerDataUsed: false,
@@ -213,13 +231,13 @@ function makeEvidence(executeDeniedProposal = false): QwenEvidence {
     },
     cases,
     summary: {
-      sampleCount: 3,
+      sampleCount: 4,
       benignCases: 1,
-      adversarialCases: 2,
-      modelCalls: 3,
+      adversarialCases: 3,
+      modelCalls: 4,
       runtimeMessageToolCalls: 0,
       adaptedQwenMarkupCalls: 1,
-      noToolCalls: 2,
+      noToolCalls: 3,
       denied: 1,
       policyDenials: 0,
       adapterValidationBlocks: 1,
@@ -249,6 +267,85 @@ function makeEvidence(executeDeniedProposal = false): QwenEvidence {
   return evidence as unknown as QwenEvidence;
 }
 
+test("generated API contract accepts Qwen v1.7 up to the supported eight cases", () => {
+  const resultSchema = CreateWorkspaceAiAssessmentLabJobResponse.shape.result;
+  const base = makeEvidence() as unknown as Record<string, unknown>;
+  const baseParse = resultSchema.safeParse(base);
+  const flattenIssues = (
+    issues: Array<{
+      code: string;
+      path: PropertyKey[];
+      errors?: Array<Array<{ code: string; path: PropertyKey[]; errors?: unknown }>>;
+    }>,
+  ): Array<{ code: string; path: string }> =>
+    issues.flatMap((issue) =>
+      issue.code === "invalid_union" && Array.isArray(issue.errors)
+        ? issue.errors.flatMap((nested) =>
+            flattenIssues(
+              nested as Array<{
+                code: string;
+                path: PropertyKey[];
+                errors?: Array<Array<{ code: string; path: PropertyKey[]; errors?: unknown }>>;
+              }>,
+            ),
+          )
+        : [{ code: issue.code, path: issue.path.map(String).join(".") }],
+    );
+  assert.equal(
+    baseParse.success,
+    true,
+    baseParse.success
+      ? undefined
+      : JSON.stringify(flattenIssues(baseParse.error.issues)),
+  );
+
+  const cases = base.cases as Array<Record<string, unknown>>;
+  const eightCaseEvidence = {
+    ...base,
+    cases: Array.from({ length: 8 }, (_, index) => ({
+      ...cases[index % cases.length],
+      caseId: `contract-case-${index}`,
+    })),
+    summary: {
+      ...(base.summary as Record<string, number>),
+      sampleCount: 8,
+    },
+  };
+  assert.equal(resultSchema.safeParse(eightCaseEvidence).success, true);
+  assert.equal(
+    resultSchema.safeParse({
+      ...eightCaseEvidence,
+      cases: [
+        ...eightCaseEvidence.cases,
+        { ...eightCaseEvidence.cases[0], caseId: "contract-case-over-limit" },
+      ],
+    }).success,
+    false,
+  );
+  assert.equal(
+    resultSchema.safeParse({
+      ...base,
+      engineVersion: "guardian-agent-qwen-policy-lab-v1.8.0",
+    }).success,
+    false,
+  );
+
+  const legacyProvider = { ...(base.provider as Record<string, unknown>) };
+  delete legacyProvider.effectiveChatTemplateSha256;
+  const legacy = {
+    ...base,
+    engineVersion: "guardian-agent-qwen-policy-lab-v1.6.0",
+    versions: {
+      ...(base.versions as Record<string, unknown>),
+      corpus: "guardian-qwen-policy-lab-en-es-v1.6.0",
+    },
+    provider: legacyProvider,
+  };
+  delete (legacy as Record<string, unknown>).evidenceSha256;
+  (legacy as Record<string, unknown>).evidenceSha256 = digest(legacy);
+  assert.equal(resultSchema.safeParse(legacy).success, true);
+});
+
 test("Qwen evidence accepts adapter-validation blocks without calling them policy denials", () => {
   const evidence = makeEvidence();
   assert.equal(
@@ -277,6 +374,23 @@ test("Qwen evidence rejects a simulated execution attached to a denied proposal"
   );
 });
 
+test("Qwen evidence rejects no-proposal records mislabeled with a different reason", () => {
+  const evidence = makeEvidence() as unknown as Record<string, unknown>;
+  const cases = evidence.cases as Record<string, unknown>[];
+  cases[0]!.reasonCode = "policy_denied";
+  signCase(cases[0]!);
+  delete evidence.evidenceSha256;
+  evidence.evidenceSha256 = digest(evidence);
+  assert.equal(
+    validateGuardianQwenPolicyLabEvidence(
+      evidence as unknown as QwenEvidence,
+      evidence,
+      "guardian-agent-qwen-lab-email-v1",
+    ),
+    "case_evidence",
+  );
+});
+
 test("Qwen evidence rejects invalid contracts with a safe reason code", () => {
   const evidence = makeEvidence() as unknown as {
     provider: { toolChoice: string };
@@ -291,6 +405,36 @@ test("Qwen evidence rejects invalid contracts with a safe reason code", () => {
     "guardian-agent-qwen-lab-email-v1",
   );
   assert.equal(reason, "identity_provider_network_or_limits");
+});
+
+test("Qwen v1.7 requires the pinned effective template hash while older evidence remains readable", () => {
+  const evidence = makeEvidence() as unknown as Record<string, unknown>;
+  const provider = { ...(evidence.provider as Record<string, unknown>) };
+  delete provider.effectiveChatTemplateSha256;
+  const unsigned: Record<string, unknown> = { ...evidence, provider };
+  delete unsigned.evidenceSha256;
+  unsigned.evidenceSha256 = digest(unsigned);
+  assert.equal(
+    validateGuardianQwenPolicyLabEvidence(
+      unsigned as unknown as QwenEvidence,
+      unsigned,
+      "guardian-agent-qwen-lab-email-v1",
+    ),
+    "identity_provider_network_or_limits",
+  );
+
+  provider.effectiveChatTemplateSha256 = "a".repeat(64);
+  const wrongHash: Record<string, unknown> = { ...evidence, provider };
+  delete wrongHash.evidenceSha256;
+  wrongHash.evidenceSha256 = digest(wrongHash);
+  assert.equal(
+    validateGuardianQwenPolicyLabEvidence(
+      wrongHash as unknown as QwenEvidence,
+      wrongHash,
+      "guardian-agent-qwen-lab-email-v1",
+    ),
+    "identity_provider_network_or_limits",
+  );
 });
 
 test("human replay is confined to a verified allow-listed in-memory clone", () => {

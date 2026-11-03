@@ -1538,6 +1538,7 @@ export const listWorkspaceAiAssessmentLabJobsResponseResultSixProviderRuntimeMax
 export const listWorkspaceAiAssessmentLabJobsResponseResultSixProviderRuntimeVersionMax = 40;
 
 export const listWorkspaceAiAssessmentLabJobsResponseResultSixProviderChatTemplateSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const listWorkspaceAiAssessmentLabJobsResponseResultSixProviderEffectiveChatTemplateSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const listWorkspaceAiAssessmentLabJobsResponseResultSixCasesItemCaseIdMax = 100;
 
 export const listWorkspaceAiAssessmentLabJobsResponseResultSixCasesItemPromptSha256RegExp = new RegExp('^[a-f0-9]{64}$');
@@ -1565,7 +1566,7 @@ export const listWorkspaceAiAssessmentLabJobsResponseResultSixCasesItemPolicyOff
 export const listWorkspaceAiAssessmentLabJobsResponseResultSixCasesItemPolicyOffStateAfterSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const listWorkspaceAiAssessmentLabJobsResponseResultSixCasesItemCaseEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const listWorkspaceAiAssessmentLabJobsResponseResultSixCasesMin = 2;
-export const listWorkspaceAiAssessmentLabJobsResponseResultSixCasesMax = 7;
+export const listWorkspaceAiAssessmentLabJobsResponseResultSixCasesMax = 8;
 
 export const listWorkspaceAiAssessmentLabJobsResponseResultSixSummaryMinOne = 0;
 
@@ -2886,7 +2887,7 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "evidenceVersion": zod.literal(1),
   "source": zod.literal("qwen_local_policy_lab"),
   "engine": zod.literal("guardian_qwen_policy_lab"),
-  "engineVersion": zod.enum(['guardian-agent-qwen-policy-lab-v1', 'guardian-agent-qwen-policy-lab-v1.1.0', 'guardian-agent-qwen-policy-lab-v1.2.0', 'guardian-agent-qwen-policy-lab-v1.3.0', 'guardian-agent-qwen-policy-lab-v1.4.0', 'guardian-agent-qwen-policy-lab-v1.5.0', 'guardian-agent-qwen-policy-lab-v1.6.0']),
+  "engineVersion": zod.enum(['guardian-agent-qwen-policy-lab-v1', 'guardian-agent-qwen-policy-lab-v1.1.0', 'guardian-agent-qwen-policy-lab-v1.2.0', 'guardian-agent-qwen-policy-lab-v1.3.0', 'guardian-agent-qwen-policy-lab-v1.4.0', 'guardian-agent-qwen-policy-lab-v1.5.0', 'guardian-agent-qwen-policy-lab-v1.6.0', 'guardian-agent-qwen-policy-lab-v1.7.0']),
   "profileId": zod.enum(['guardian-agent-qwen-lab-email-v1', 'guardian-agent-qwen-lab-database-v1', 'guardian-agent-qwen-lab-finance-v1', 'guardian-agent-qwen-lab-customer-service-v1', 'guardian-agent-qwen-lab-programming-v1', 'guardian-agent-qwen-lab-browser-v1', 'guardian-agent-qwen-lab-infrastructure-v1', 'guardian-agent-qwen-lab-multiagent-v1']),
   "verticalId": zod.enum(['email', 'database', 'finance', 'customer_service', 'programming', 'browser', 'infrastructure', 'multiagent']),
   "executionMode": zod.literal("real_local_qwen_inference"),
@@ -2901,7 +2902,7 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "versions": zod.object({
   "policy": zod.literal("guardian-policy-engine-synthetic-v2"),
   "toolAdapter": zod.literal("guardian-synthetic-tool-adapter-v1"),
-  "corpus": zod.enum(['guardian-qwen-policy-lab-en-es-v1', 'guardian-qwen-policy-lab-en-es-v1.1.0', 'guardian-qwen-policy-lab-en-es-v1.2.0', 'guardian-qwen-policy-lab-en-es-v1.3.0', 'guardian-qwen-policy-lab-en-es-v1.4.0', 'guardian-qwen-policy-lab-en-es-v1.5.0', 'guardian-qwen-policy-lab-en-es-v1.6.0']),
+  "corpus": zod.enum(['guardian-qwen-policy-lab-en-es-v1', 'guardian-qwen-policy-lab-en-es-v1.1.0', 'guardian-qwen-policy-lab-en-es-v1.2.0', 'guardian-qwen-policy-lab-en-es-v1.3.0', 'guardian-qwen-policy-lab-en-es-v1.4.0', 'guardian-qwen-policy-lab-en-es-v1.5.0', 'guardian-qwen-policy-lab-en-es-v1.6.0', 'guardian-qwen-policy-lab-en-es-v1.7.0']),
   "modelRuntime": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultSixVersionsModelRuntimeMax),
   "toolMarkupAdapter": zod.literal("guardian-qwen-native-markup-v1")
 }),
@@ -2915,6 +2916,7 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "runtime": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultSixProviderRuntimeMax),
   "runtimeVersion": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultSixProviderRuntimeVersionMax),
   "chatTemplateSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultSixProviderChatTemplateSha256RegExp),
+  "effectiveChatTemplateSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultSixProviderEffectiveChatTemplateSha256RegExp).optional(),
   "toolChoice": zod.literal("auto")
 }),
   "network": zod.record(zod.string(), zod.unknown()),
@@ -4054,6 +4056,7 @@ export const createWorkspaceAiAssessmentLabJobResponseResultSixProviderRuntimeMa
 export const createWorkspaceAiAssessmentLabJobResponseResultSixProviderRuntimeVersionMax = 40;
 
 export const createWorkspaceAiAssessmentLabJobResponseResultSixProviderChatTemplateSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceAiAssessmentLabJobResponseResultSixProviderEffectiveChatTemplateSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const createWorkspaceAiAssessmentLabJobResponseResultSixCasesItemCaseIdMax = 100;
 
 export const createWorkspaceAiAssessmentLabJobResponseResultSixCasesItemPromptSha256RegExp = new RegExp('^[a-f0-9]{64}$');
@@ -4081,7 +4084,7 @@ export const createWorkspaceAiAssessmentLabJobResponseResultSixCasesItemPolicyOf
 export const createWorkspaceAiAssessmentLabJobResponseResultSixCasesItemPolicyOffStateAfterSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const createWorkspaceAiAssessmentLabJobResponseResultSixCasesItemCaseEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const createWorkspaceAiAssessmentLabJobResponseResultSixCasesMin = 2;
-export const createWorkspaceAiAssessmentLabJobResponseResultSixCasesMax = 7;
+export const createWorkspaceAiAssessmentLabJobResponseResultSixCasesMax = 8;
 
 export const createWorkspaceAiAssessmentLabJobResponseResultSixSummaryMinOne = 0;
 
@@ -5402,7 +5405,7 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "evidenceVersion": zod.literal(1),
   "source": zod.literal("qwen_local_policy_lab"),
   "engine": zod.literal("guardian_qwen_policy_lab"),
-  "engineVersion": zod.enum(['guardian-agent-qwen-policy-lab-v1', 'guardian-agent-qwen-policy-lab-v1.1.0', 'guardian-agent-qwen-policy-lab-v1.2.0', 'guardian-agent-qwen-policy-lab-v1.3.0', 'guardian-agent-qwen-policy-lab-v1.4.0', 'guardian-agent-qwen-policy-lab-v1.5.0', 'guardian-agent-qwen-policy-lab-v1.6.0']),
+  "engineVersion": zod.enum(['guardian-agent-qwen-policy-lab-v1', 'guardian-agent-qwen-policy-lab-v1.1.0', 'guardian-agent-qwen-policy-lab-v1.2.0', 'guardian-agent-qwen-policy-lab-v1.3.0', 'guardian-agent-qwen-policy-lab-v1.4.0', 'guardian-agent-qwen-policy-lab-v1.5.0', 'guardian-agent-qwen-policy-lab-v1.6.0', 'guardian-agent-qwen-policy-lab-v1.7.0']),
   "profileId": zod.enum(['guardian-agent-qwen-lab-email-v1', 'guardian-agent-qwen-lab-database-v1', 'guardian-agent-qwen-lab-finance-v1', 'guardian-agent-qwen-lab-customer-service-v1', 'guardian-agent-qwen-lab-programming-v1', 'guardian-agent-qwen-lab-browser-v1', 'guardian-agent-qwen-lab-infrastructure-v1', 'guardian-agent-qwen-lab-multiagent-v1']),
   "verticalId": zod.enum(['email', 'database', 'finance', 'customer_service', 'programming', 'browser', 'infrastructure', 'multiagent']),
   "executionMode": zod.literal("real_local_qwen_inference"),
@@ -5417,7 +5420,7 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "versions": zod.object({
   "policy": zod.literal("guardian-policy-engine-synthetic-v2"),
   "toolAdapter": zod.literal("guardian-synthetic-tool-adapter-v1"),
-  "corpus": zod.enum(['guardian-qwen-policy-lab-en-es-v1', 'guardian-qwen-policy-lab-en-es-v1.1.0', 'guardian-qwen-policy-lab-en-es-v1.2.0', 'guardian-qwen-policy-lab-en-es-v1.3.0', 'guardian-qwen-policy-lab-en-es-v1.4.0', 'guardian-qwen-policy-lab-en-es-v1.5.0', 'guardian-qwen-policy-lab-en-es-v1.6.0']),
+  "corpus": zod.enum(['guardian-qwen-policy-lab-en-es-v1', 'guardian-qwen-policy-lab-en-es-v1.1.0', 'guardian-qwen-policy-lab-en-es-v1.2.0', 'guardian-qwen-policy-lab-en-es-v1.3.0', 'guardian-qwen-policy-lab-en-es-v1.4.0', 'guardian-qwen-policy-lab-en-es-v1.5.0', 'guardian-qwen-policy-lab-en-es-v1.6.0', 'guardian-qwen-policy-lab-en-es-v1.7.0']),
   "modelRuntime": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultSixVersionsModelRuntimeMax),
   "toolMarkupAdapter": zod.literal("guardian-qwen-native-markup-v1")
 }),
@@ -5431,6 +5434,7 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "runtime": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultSixProviderRuntimeMax),
   "runtimeVersion": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultSixProviderRuntimeVersionMax),
   "chatTemplateSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultSixProviderChatTemplateSha256RegExp),
+  "effectiveChatTemplateSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultSixProviderEffectiveChatTemplateSha256RegExp).optional(),
   "toolChoice": zod.literal("auto")
 }),
   "network": zod.record(zod.string(), zod.unknown()),
@@ -6559,6 +6563,7 @@ export const getWorkspaceAiAssessmentLabJobResponseResultSixProviderRuntimeMax =
 export const getWorkspaceAiAssessmentLabJobResponseResultSixProviderRuntimeVersionMax = 40;
 
 export const getWorkspaceAiAssessmentLabJobResponseResultSixProviderChatTemplateSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const getWorkspaceAiAssessmentLabJobResponseResultSixProviderEffectiveChatTemplateSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const getWorkspaceAiAssessmentLabJobResponseResultSixCasesItemCaseIdMax = 100;
 
 export const getWorkspaceAiAssessmentLabJobResponseResultSixCasesItemPromptSha256RegExp = new RegExp('^[a-f0-9]{64}$');
@@ -6586,7 +6591,7 @@ export const getWorkspaceAiAssessmentLabJobResponseResultSixCasesItemPolicyOffSt
 export const getWorkspaceAiAssessmentLabJobResponseResultSixCasesItemPolicyOffStateAfterSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const getWorkspaceAiAssessmentLabJobResponseResultSixCasesItemCaseEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const getWorkspaceAiAssessmentLabJobResponseResultSixCasesMin = 2;
-export const getWorkspaceAiAssessmentLabJobResponseResultSixCasesMax = 7;
+export const getWorkspaceAiAssessmentLabJobResponseResultSixCasesMax = 8;
 
 export const getWorkspaceAiAssessmentLabJobResponseResultSixSummaryMinOne = 0;
 
@@ -7907,7 +7912,7 @@ export const GetWorkspaceAiAssessmentLabJobResponse = zod.object({
   "evidenceVersion": zod.literal(1),
   "source": zod.literal("qwen_local_policy_lab"),
   "engine": zod.literal("guardian_qwen_policy_lab"),
-  "engineVersion": zod.enum(['guardian-agent-qwen-policy-lab-v1', 'guardian-agent-qwen-policy-lab-v1.1.0', 'guardian-agent-qwen-policy-lab-v1.2.0', 'guardian-agent-qwen-policy-lab-v1.3.0', 'guardian-agent-qwen-policy-lab-v1.4.0', 'guardian-agent-qwen-policy-lab-v1.5.0', 'guardian-agent-qwen-policy-lab-v1.6.0']),
+  "engineVersion": zod.enum(['guardian-agent-qwen-policy-lab-v1', 'guardian-agent-qwen-policy-lab-v1.1.0', 'guardian-agent-qwen-policy-lab-v1.2.0', 'guardian-agent-qwen-policy-lab-v1.3.0', 'guardian-agent-qwen-policy-lab-v1.4.0', 'guardian-agent-qwen-policy-lab-v1.5.0', 'guardian-agent-qwen-policy-lab-v1.6.0', 'guardian-agent-qwen-policy-lab-v1.7.0']),
   "profileId": zod.enum(['guardian-agent-qwen-lab-email-v1', 'guardian-agent-qwen-lab-database-v1', 'guardian-agent-qwen-lab-finance-v1', 'guardian-agent-qwen-lab-customer-service-v1', 'guardian-agent-qwen-lab-programming-v1', 'guardian-agent-qwen-lab-browser-v1', 'guardian-agent-qwen-lab-infrastructure-v1', 'guardian-agent-qwen-lab-multiagent-v1']),
   "verticalId": zod.enum(['email', 'database', 'finance', 'customer_service', 'programming', 'browser', 'infrastructure', 'multiagent']),
   "executionMode": zod.literal("real_local_qwen_inference"),
@@ -7922,7 +7927,7 @@ export const GetWorkspaceAiAssessmentLabJobResponse = zod.object({
   "versions": zod.object({
   "policy": zod.literal("guardian-policy-engine-synthetic-v2"),
   "toolAdapter": zod.literal("guardian-synthetic-tool-adapter-v1"),
-  "corpus": zod.enum(['guardian-qwen-policy-lab-en-es-v1', 'guardian-qwen-policy-lab-en-es-v1.1.0', 'guardian-qwen-policy-lab-en-es-v1.2.0', 'guardian-qwen-policy-lab-en-es-v1.3.0', 'guardian-qwen-policy-lab-en-es-v1.4.0', 'guardian-qwen-policy-lab-en-es-v1.5.0', 'guardian-qwen-policy-lab-en-es-v1.6.0']),
+  "corpus": zod.enum(['guardian-qwen-policy-lab-en-es-v1', 'guardian-qwen-policy-lab-en-es-v1.1.0', 'guardian-qwen-policy-lab-en-es-v1.2.0', 'guardian-qwen-policy-lab-en-es-v1.3.0', 'guardian-qwen-policy-lab-en-es-v1.4.0', 'guardian-qwen-policy-lab-en-es-v1.5.0', 'guardian-qwen-policy-lab-en-es-v1.6.0', 'guardian-qwen-policy-lab-en-es-v1.7.0']),
   "modelRuntime": zod.string().max(getWorkspaceAiAssessmentLabJobResponseResultSixVersionsModelRuntimeMax),
   "toolMarkupAdapter": zod.literal("guardian-qwen-native-markup-v1")
 }),
@@ -7936,6 +7941,7 @@ export const GetWorkspaceAiAssessmentLabJobResponse = zod.object({
   "runtime": zod.string().max(getWorkspaceAiAssessmentLabJobResponseResultSixProviderRuntimeMax),
   "runtimeVersion": zod.string().max(getWorkspaceAiAssessmentLabJobResponseResultSixProviderRuntimeVersionMax),
   "chatTemplateSha256": zod.string().regex(getWorkspaceAiAssessmentLabJobResponseResultSixProviderChatTemplateSha256RegExp),
+  "effectiveChatTemplateSha256": zod.string().regex(getWorkspaceAiAssessmentLabJobResponseResultSixProviderEffectiveChatTemplateSha256RegExp).optional(),
   "toolChoice": zod.literal("auto")
 }),
   "network": zod.record(zod.string(), zod.unknown()),
@@ -9130,6 +9136,7 @@ export const retryWorkspaceAiAssessmentLabJobResponseResultSixProviderRuntimeMax
 export const retryWorkspaceAiAssessmentLabJobResponseResultSixProviderRuntimeVersionMax = 40;
 
 export const retryWorkspaceAiAssessmentLabJobResponseResultSixProviderChatTemplateSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const retryWorkspaceAiAssessmentLabJobResponseResultSixProviderEffectiveChatTemplateSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const retryWorkspaceAiAssessmentLabJobResponseResultSixCasesItemCaseIdMax = 100;
 
 export const retryWorkspaceAiAssessmentLabJobResponseResultSixCasesItemPromptSha256RegExp = new RegExp('^[a-f0-9]{64}$');
@@ -9157,7 +9164,7 @@ export const retryWorkspaceAiAssessmentLabJobResponseResultSixCasesItemPolicyOff
 export const retryWorkspaceAiAssessmentLabJobResponseResultSixCasesItemPolicyOffStateAfterSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const retryWorkspaceAiAssessmentLabJobResponseResultSixCasesItemCaseEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const retryWorkspaceAiAssessmentLabJobResponseResultSixCasesMin = 2;
-export const retryWorkspaceAiAssessmentLabJobResponseResultSixCasesMax = 7;
+export const retryWorkspaceAiAssessmentLabJobResponseResultSixCasesMax = 8;
 
 export const retryWorkspaceAiAssessmentLabJobResponseResultSixSummaryMinOne = 0;
 
@@ -10478,7 +10485,7 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "evidenceVersion": zod.literal(1),
   "source": zod.literal("qwen_local_policy_lab"),
   "engine": zod.literal("guardian_qwen_policy_lab"),
-  "engineVersion": zod.enum(['guardian-agent-qwen-policy-lab-v1', 'guardian-agent-qwen-policy-lab-v1.1.0', 'guardian-agent-qwen-policy-lab-v1.2.0', 'guardian-agent-qwen-policy-lab-v1.3.0', 'guardian-agent-qwen-policy-lab-v1.4.0', 'guardian-agent-qwen-policy-lab-v1.5.0', 'guardian-agent-qwen-policy-lab-v1.6.0']),
+  "engineVersion": zod.enum(['guardian-agent-qwen-policy-lab-v1', 'guardian-agent-qwen-policy-lab-v1.1.0', 'guardian-agent-qwen-policy-lab-v1.2.0', 'guardian-agent-qwen-policy-lab-v1.3.0', 'guardian-agent-qwen-policy-lab-v1.4.0', 'guardian-agent-qwen-policy-lab-v1.5.0', 'guardian-agent-qwen-policy-lab-v1.6.0', 'guardian-agent-qwen-policy-lab-v1.7.0']),
   "profileId": zod.enum(['guardian-agent-qwen-lab-email-v1', 'guardian-agent-qwen-lab-database-v1', 'guardian-agent-qwen-lab-finance-v1', 'guardian-agent-qwen-lab-customer-service-v1', 'guardian-agent-qwen-lab-programming-v1', 'guardian-agent-qwen-lab-browser-v1', 'guardian-agent-qwen-lab-infrastructure-v1', 'guardian-agent-qwen-lab-multiagent-v1']),
   "verticalId": zod.enum(['email', 'database', 'finance', 'customer_service', 'programming', 'browser', 'infrastructure', 'multiagent']),
   "executionMode": zod.literal("real_local_qwen_inference"),
@@ -10493,7 +10500,7 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "versions": zod.object({
   "policy": zod.literal("guardian-policy-engine-synthetic-v2"),
   "toolAdapter": zod.literal("guardian-synthetic-tool-adapter-v1"),
-  "corpus": zod.enum(['guardian-qwen-policy-lab-en-es-v1', 'guardian-qwen-policy-lab-en-es-v1.1.0', 'guardian-qwen-policy-lab-en-es-v1.2.0', 'guardian-qwen-policy-lab-en-es-v1.3.0', 'guardian-qwen-policy-lab-en-es-v1.4.0', 'guardian-qwen-policy-lab-en-es-v1.5.0', 'guardian-qwen-policy-lab-en-es-v1.6.0']),
+  "corpus": zod.enum(['guardian-qwen-policy-lab-en-es-v1', 'guardian-qwen-policy-lab-en-es-v1.1.0', 'guardian-qwen-policy-lab-en-es-v1.2.0', 'guardian-qwen-policy-lab-en-es-v1.3.0', 'guardian-qwen-policy-lab-en-es-v1.4.0', 'guardian-qwen-policy-lab-en-es-v1.5.0', 'guardian-qwen-policy-lab-en-es-v1.6.0', 'guardian-qwen-policy-lab-en-es-v1.7.0']),
   "modelRuntime": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultSixVersionsModelRuntimeMax),
   "toolMarkupAdapter": zod.literal("guardian-qwen-native-markup-v1")
 }),
@@ -10507,6 +10514,7 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "runtime": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultSixProviderRuntimeMax),
   "runtimeVersion": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultSixProviderRuntimeVersionMax),
   "chatTemplateSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultSixProviderChatTemplateSha256RegExp),
+  "effectiveChatTemplateSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultSixProviderEffectiveChatTemplateSha256RegExp).optional(),
   "toolChoice": zod.literal("auto")
 }),
   "network": zod.record(zod.string(), zod.unknown()),

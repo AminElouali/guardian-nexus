@@ -92,12 +92,24 @@ function sampleQwenEvidence(
       dispatchStatus: "not_invoked",
       toolEvents: [],
     },
+    {
+      ...sharedCase,
+      caseId: "qwen_attack_unparsed_marker",
+      label: "adversarial",
+      language: "en",
+      toolCallOrigin: "unparsed_qwen_native_markup",
+      toolCallCount: 0,
+      decision: "no_proposal",
+      reasonCode: "markup_not_accepted",
+      dispatchStatus: "blocked_by_parser",
+      toolEvents: [],
+    },
   ];
   return {
     evidenceVersion: 1,
     source: "qwen_local_policy_lab",
     engine: "guardian_qwen_policy_lab",
-    engineVersion: "guardian-agent-qwen-policy-lab-v1.6.0",
+    engineVersion: "guardian-agent-qwen-policy-lab-v1.7.0",
     profileId,
     verticalId,
     executionMode: "real_local_qwen_inference",
@@ -123,7 +135,7 @@ function sampleQwenEvidence(
       rawPromptsStored: false,
       rawResponsesStored: false,
       rawToolArgumentsStored: false,
-      maxCases: 3,
+      maxCases: 4,
       maxToolCallsPerCase: 1,
       maxModelCallsPerCase: 1,
       maxCompletionTokensPerCall: 96,
@@ -135,10 +147,10 @@ function sampleQwenEvidence(
     },
     cases,
     summary: {
-      modelCalls: 3,
-      sampleCount: 3,
+      modelCalls: 4,
+      sampleCount: 4,
       benignCases: 2,
-      adversarialCases: 1,
+      adversarialCases: 2,
       noToolCalls: 1,
       runtimeMessageToolCalls: 1,
       adaptedQwenMarkupCalls: 1,
@@ -371,15 +383,15 @@ test("Qwen evidence parser keeps native, adapted, and absent proposals distinct"
   assert.equal(completed.report.executionMode, "real_local_qwen_inference");
   assert.equal(completed.report.toolChoice, "auto");
   assert.deepEqual(completed.report.counts, {
-    cases: 3,
+    cases: 4,
     directRuntimeToolCallCases: 1,
     adaptedQwenMarkerCases: 1,
-    unparsedMarkerCases: 0,
+    unparsedMarkerCases: 1,
     noToolCallCases: 1,
     allow: 1,
     deny: 1,
     requireApproval: 0,
-    noProposal: 1,
+    noProposal: 2,
     simulatedExecutions: 1,
   });
   assert.deepEqual(
@@ -388,8 +400,18 @@ test("Qwen evidence parser keeps native, adapted, and absent proposals distinct"
       "guardian_qwen_native_markup_adapter",
       "runtime_message_tool_calls",
       "no_tool_call",
+      "unparsed_qwen_native_markup",
     ],
   );
+  const noProposal = completed.report.cases[2]!;
+  assert.equal(noProposal.finishReason, "stop");
+  assert.equal(noProposal.reasonCode, "no_tool_call");
+  assert.equal(noProposal.decision, "no_proposal");
+  assert.equal(noProposal.dispatchStatus, "not_invoked");
+  const unparsed = completed.report.cases[3]!;
+  assert.equal(unparsed.reasonCode, "markup_not_accepted");
+  assert.equal(unparsed.decision, "no_proposal");
+  assert.equal(unparsed.dispatchStatus, "blocked_by_parser");
 });
 
 test("Qwen SDK rejects false dispatch or mismatched evidence summaries", async () => {
@@ -399,7 +421,10 @@ test("Qwen SDK rejects false dispatch or mismatched evidence summaries", async (
   invalidPolicyOff.executed = true;
   const invalidSummary = structuredClone(sampleQwenEvidence());
   invalidSummary.summary.adaptedQwenMarkupCalls = 0;
-  for (const result of [invalidDispatch, invalidSummary]) {
+  const inconsistentNoProposal = structuredClone(sampleQwenEvidence());
+  (inconsistentNoProposal.cases[2] as Record<string, unknown>).reasonCode =
+    "policy_denied";
+  for (const result of [invalidDispatch, invalidSummary, inconsistentNoProposal]) {
     const client = clientWith(async () =>
       Response.json(
         qwenJobResponse(
@@ -419,6 +444,7 @@ test("Qwen SDK rejects false dispatch or mismatched evidence summaries", async (
         error instanceof GuardianNexusSdkError &&
         [
           "invalid_qwen_policy_case",
+          "invalid_qwen_no_proposal_evidence",
           "inconsistent_qwen_policy_summary",
         ].includes(error.code),
     );
@@ -464,6 +490,35 @@ test("approval decisions are bound, typed and never automatically retried", asyn
       error.code === "approval_already_decided",
   );
   assert.equal(requests, 1);
+});
+
+test("SDK rejects approval responses not bound to the requested proposal", async () => {
+  const mismatched = {
+    id: approvalId,
+    jobId,
+    caseId: "finance_trusted_bank_change_requires_approval",
+    proposalSha256: binding,
+    proposalBindingSha256: "b".repeat(64),
+    requestedByUserId: "user-requester",
+    status: "approved",
+    expiresAt: "2026-11-03T00:05:00.000Z",
+  };
+  const client = clientWith(async () =>
+    Response.json({
+      approval: mismatched,
+      execution: "not_performed",
+    }),
+  );
+  await assert.rejects(
+    client.decideApproval({
+      approvalId,
+      decision: "approve",
+      proposalBindingSha256: binding,
+    }),
+    (error: unknown) =>
+      error instanceof GuardianNexusSdkError &&
+      error.code === "approval_response_binding_mismatch",
+  );
 });
 
 test("SDK maps approval evidence conflicts to a stable non-sensitive code", async () => {

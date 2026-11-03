@@ -170,7 +170,7 @@ test("renders the real API lab response in the authenticated dashboard card", ()
 
 test("renders real Qwen profiles separately from fixture evidence", () => {
   const artifactPath = new URL(
-    "../../../../generated-artifacts/guardian-qwen-policy-labs-e2e.json",
+    "../../../../generated-artifacts/guardian-qwen-policy-labs-e2e-v1.7.0.json",
     import.meta.url,
   );
   const jobs = JSON.parse(readFileSync(artifactPath, "utf8")) as AiAssessmentLabJob[];
@@ -220,6 +220,8 @@ test("renders real Qwen profiles separately from fixture evidence", () => {
     assert.match(result, /inferencia local real de Qwen/);
     assert.match(result, /no se guardan prompts, respuestas ni argumentos/i);
     assert.match(result, /SHA-256/);
+    assert.match(result, /Motivo observado/);
+    assert.match(result, /Template efectivo/);
     for (const item of job.result.cases) {
       if (item.toolCallOrigin === "guardian_qwen_native_markup_adapter") {
         assert.match(result, /Marcador Qwen completo adaptado por Guardian/);
@@ -228,7 +230,8 @@ test("renders real Qwen profiles separately from fixture evidence", () => {
       } else if (item.toolCallOrigin === "unparsed_qwen_native_markup") {
         assert.match(result, /Propuesta no aceptada por el parser estricto/);
       } else {
-        assert.match(result, /Qwen no propuso una herramienta/);
+        assert.match(result, /El runtime terminó con/);
+        assert.match(result, /no es una denegación de política/);
       }
     }
   }

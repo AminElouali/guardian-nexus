@@ -1839,3 +1839,59 @@ This update supersedes the older diskcache status, worker-test count, and OSV
   Clerk en navegador real. IPv6, broker host, advisories y revisión legal de
   licencias/procedencia continúan pendientes antes de clientes. Sin publicación,
   producción, clientes o servicios externos.
+
+## E2E Qwen/SDK de ocho perfiles v1.7.0 — 2026-11-03
+
+- Base del hito: HEAD `8d428ae1cf2c49decc9009dca29a03c29b354dcf`; cambios
+  incrementales en runner, contrato OpenAPI/Zod, validador de evidencia,
+  SDK, dashboard, pruebas y este checkpoint. No se alteró la arquitectura,
+  la base de datos ni el modo de aislamiento.
+- El runner Qwen publica el hash del chat template efectivo que ya verifica
+  `llama-cpp-python`; para v1.7.0 el validador API lo exige exactamente, sin
+  aceptar evidencia ausente o alterada. El campo queda opcional en el esquema
+  general para leer evidencia histórica anterior. Se añadieron pruebas de
+  ausencia/hash incorrecto y compatibilidad histórica. La causa previa era
+  desajuste entre el runner que no serializaba ese hash y el contrato estricto.
+- Suite `pnpm --filter @workspace/api-server run test:ai-assessment-e2e`,
+  serial: API/worker **8/8**, exit 0, duración `630599.604669 ms`; dashboard
+  **8/8**, exit 0. La suite SDK v0.3.0 recorrió los ocho perfiles.
+- E2E real Qwen `tool_choice=auto`: **36 casos** (11 benignos, 25 adversarios),
+  **24** marcadores Qwen completos adaptados, **0** `message.tool_calls`
+  nativas, **0** marcadores sin parsear, **12** sin propuesta. Decisiones:
+  **12 ALLOW**, **10 DENY**, **2 REQUIRE_APPROVAL**; **12** acciones ficticias
+  simuladas, **0** ejecuciones no autorizadas, **0** llamadas externas y
+  **0** ejecuciones Policy OFF. DENY se bloquea antes de despachar; OFF solo
+  evalúa un clon contrafactual.
+- Resultados por perfil: correo 4 (2 adaptadas/2 sin propuesta, 2 ALLOW);
+  base de datos 4 (3/1, 3 ALLOW); finanzas 4 (3/1, 2 ALLOW/1 aprobación);
+  atención al cliente 8 (3/5, 1 ALLOW/1 DENY/1 aprobación); programación 4
+  (4/0, 1 ALLOW/3 DENY); navegador 4 (2/2, 1 ALLOW/1 DENY); infraestructura
+  4 (3/1, 1 ALLOW/2 DENY); multiagente 4 (4/0, 1 ALLOW/3 DENY). En los ocho
+  perfiles hubo **0** llamadas nativas directas.
+- De las dos propuestas Qwen con `REQUIRE_APPROVAL`, una se aprobó y simuló
+  una vez; la otra expiró y no se ejecutó. Una prueba API separada de aprobación
+  persistente reporta `source=allowlisted_test_fixture`; no se atribuye a Qwen.
+  La bandeja de aprobaciones pasó pruebas de componente, pero no se verificó
+  una sesión Clerk real de navegador.
+- En regresiones separadas de la misma ejecución:
+  `QWEN_NATIVE_TOOL_TRACE_COUNT=24/288` (sonda distinta, no son llamadas
+  nativas contadas en los 36 casos) y
+  `QWEN_AUTONOMOUS_TOOL_TRACE_COUNT=39/42`. Pruebas unitarias API **63/63**,
+  worker Python **16/16**, SDK **12/12**; typecheck API/librerías/web y build
+  API correctos. Build web correcto con `PORT=5000
+  BASE_PATH=/eu-security-platform/`; persisten avisos de sourcemap `tooltip.tsx`
+  y bundle de 683.60 kB. `git diff --check` correcto.
+- Evidencia local (JSON ignorados por Git): `generated-artifacts/
+  guardian-qwen-policy-labs-e2e-v1.7.0.json`, SHA-256 de archivo
+  `61111269a0f17c555fdb54ee11ce08a1f26d483730e71f5498f72821e26c11c7`;
+  `generated-artifacts/guardian-agent-sdk-qwen-eight-profiles-e2e-v1.7.0.json`,
+  SHA-256 de archivo
+  `5644d79172e2383565a901a50074441a82add39a4ba4514c9dabadcb8587ebde`,
+  SHA interno `0898c04bb407d7867425912834f4d4d112d2c9b96ded9a1ff853d275a3e5e4eb`.
+  El script de inspección detectó cero claves de contenido bruto de prompt,
+  respuesta o argumentos; los indicadores de persistencia bruta son `false`.
+- Informe: `reports/guardian-qwen-policy-labs-v1.7.0-2026-11-03.md`, SHA-256
+  `dffd40e7a8860f4bb1b9db7e90b2ef88bc67832e47f704c623509e449aefc73c`.
+  Muestra pequeña y sintética: no acredita eficacia general, ni llamadas
+  nativas, ni conectores empresariales reales. IPv6, broker host, supply-chain,
+  avisos, revisión legal y sesión Clerk real siguen pendientes antes de clientes.

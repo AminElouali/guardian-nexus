@@ -2,7 +2,7 @@
 
 `@workspace/guardian-agent-sdk` is a typed client for the versioned Guardian
 Nexus action-intent, laboratory approval and local Qwen evaluation API. Version
-`0.2.0` is a local
+`0.3.0` is a local
 workspace package for development and integration testing; it has **not** been
 published to a package registry.
 
@@ -29,7 +29,7 @@ in a separate local consumer project:
 pnpm --filter @workspace/guardian-agent-sdk run build
 pnpm --filter @workspace/guardian-agent-sdk pack --pack-destination /tmp/guardian-sdk-dist
 cd /path/to/consumer
-pnpm add /tmp/guardian-sdk-dist/workspace-guardian-agent-sdk-0.2.0.tgz
+pnpm add /tmp/guardian-sdk-dist/workspace-guardian-agent-sdk-0.3.0.tgz
 ```
 
 This is a local file install only; it does not publish the package or contact a
@@ -136,6 +136,12 @@ The report keeps
 existing authenticated approval methods can inspect and decide persisted
 approvals; only the server's exact, approved synthetic action can run once in
 the laboratory clone.
+
+For a case with `toolCallOrigin: "no_tool_call"`, the SDK exposes the observed
+`finishReason` and the constant `reasonCode: "no_tool_call"`. This means the
+runtime completed without returning an accepted tool call; it does not explain
+the model's internal reason and is not a policy decision. An unparsed marker is
+reported separately as `unparsed_qwen_native_markup` with a parser reason code.
 
 ## Current limits
 

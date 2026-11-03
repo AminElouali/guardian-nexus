@@ -24,5 +24,7 @@ export type GuardianQwenPolicyLabEvidenceProvider = {
   runtimeVersion: string;
   /** @pattern ^[a-f0-9]{64}$ */
   chatTemplateSha256: string;
+  /** @pattern ^[a-f0-9]{64}$ */
+  effectiveChatTemplateSha256?: string;
   toolChoice: 'auto';
 };
