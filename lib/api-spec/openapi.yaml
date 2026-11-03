@@ -586,6 +586,31 @@ paths:
           description: Local worker concurrency limit reached
         "503":
           description: Local isolated Docker worker is unavailable or disabled outside development
+  /workspaces/{workspaceId}/ai-security-assessments/lab/jobs/{jobId}:
+    get:
+      operationId: getWorkspaceAiAssessmentLabJob
+      tags: [ai-evaluations]
+      summary: Get one tenant-scoped laboratory job and its redacted evidence
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: jobId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Job and redacted evidence visible to this workspace member
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AiAssessmentLabJob" }
+        "403":
+          description: User is not a member of this workspace
+        "404":
+          description: Job does not exist in this workspace
   /workspaces/{workspaceId}/agent-action-adapter/intents:
     post:
       operationId: submitWorkspaceAgentActionIntent
@@ -967,7 +992,7 @@ components:
         contractVersion: { type: string, const: guardian-action-intent-v1 }
         scenarioId:
           type: string
-          enum: [email.allowed_draft, email.untrusted_send, finance.untrusted_transfer]
+          enum: [email.allowed_draft, email.untrusted_send, finance.untrusted_transfer, finance.trusted_bank_change_approval]
         idempotencyKey: { type: string, minLength: 16, maxLength: 128 }
       required: [contractVersion, scenarioId, idempotencyKey]
     AgentActionIntentV1:
@@ -981,11 +1006,11 @@ components:
         workspaceId: { type: string, format: uuid }
         scenarioId:
           type: string
-          enum: [email.allowed_draft, email.untrusted_send, finance.untrusted_transfer]
+          enum: [email.allowed_draft, email.untrusted_send, finance.untrusted_transfer, finance.trusted_bank_change_approval]
         caseId: { type: string, minLength: 1, maxLength: 80 }
         toolId:
           type: string
-          enum: [send_email_simulated, consult_synthetic_invoice]
+          enum: [send_email_simulated, consult_synthetic_invoice, request_bank_account_change]
         operation:
           type: string
           enum: [draft.create, send.external, transfer.request]
@@ -1474,11 +1499,11 @@ components:
             toolAdapter: { type: string, const: guardian-synthetic-tool-adapter-v1 }
           required: [policy, corpus, oracle]
         seed: { type: integer, const: 20261102 }
-        sampleCount: { type: integer, const: 2 }
+        sampleCount: { type: integer, minimum: 2, maximum: 3 }
         cases:
           type: array
           minItems: 2
-          maxItems: 2
+          maxItems: 3
           items:
             type: object
             additionalProperties: false
@@ -1510,6 +1535,9 @@ components:
                 items: { type: string, maxLength: 80 }
               actionSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
               proposalSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+              syntheticActionRef:
+                type: string
+                enum: [guardian.synthetic.finance.bank-change.v1, guardian.synthetic.support.refund.v1]
               policyOn:
                 type: object
                 additionalProperties: false
@@ -1556,7 +1584,7 @@ components:
                   adapterVersion: { type: string, const: guardian-synthetic-tool-adapter-v1 }
                   toolName:
                     type: string
-                    enum: [send_email_simulated, query_synthetic_database, consult_synthetic_invoice, propose_synthetic_code_diff, draft_synthetic_support_reply, read_local_synthetic_page, read_synthetic_infrastructure_config, delegate_synthetic_read_only_task]
+                    enum: [send_email_simulated, query_synthetic_database, consult_synthetic_invoice, request_bank_account_change, propose_synthetic_code_diff, draft_synthetic_support_reply, read_local_synthetic_page, read_synthetic_infrastructure_config, delegate_synthetic_read_only_task]
                   policyOn:
                     type: object
                     additionalProperties: false
@@ -1620,18 +1648,18 @@ components:
           type: object
           additionalProperties: false
           properties:
-            sampleCount: { type: integer, const: 2 }
-            benignCases: { type: integer, const: 1 }
+            sampleCount: { type: integer, minimum: 2, maximum: 3 }
+            benignCases: { type: integer, minimum: 1, maximum: 2 }
             adversarialCases: { type: integer, const: 1 }
-            proposed: { type: integer, const: 2 }
-            attempted: { type: integer, const: 2 }
-            allowed: { type: integer, minimum: 0, maximum: 2 }
-            denied: { type: integer, minimum: 0, maximum: 2 }
-            requiresApproval: { type: integer, minimum: 0, maximum: 2 }
-            simulatedExecutions: { type: integer, minimum: 0, maximum: 2 }
+            proposed: { type: integer, minimum: 2, maximum: 3 }
+            attempted: { type: integer, minimum: 2, maximum: 3 }
+            allowed: { type: integer, minimum: 0, maximum: 3 }
+            denied: { type: integer, minimum: 0, maximum: 3 }
+            requiresApproval: { type: integer, minimum: 0, maximum: 3 }
+            simulatedExecutions: { type: integer, minimum: 0, maximum: 3 }
             unauthorizedExecutions: { type: integer, const: 0 }
-            policyOffCounterfactualWouldExecute: { type: integer, const: 2 }
-            policyOffCloneStateChanges: { type: integer, minimum: 0, maximum: 2 }
+            policyOffCounterfactualWouldExecute: { type: integer, minimum: 2, maximum: 3 }
+            policyOffCloneStateChanges: { type: integer, minimum: 0, maximum: 3 }
             actualOperations: { type: integer, const: 0 }
             persistentStateChanges: { type: integer, const: 0 }
             externalCalls: { type: integer, const: 0 }

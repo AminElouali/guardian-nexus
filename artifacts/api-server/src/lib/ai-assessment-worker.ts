@@ -794,6 +794,7 @@ export function validateGuardianAgentPolicyLabEvidence(
   const cases = record.cases;
   const versions = record.versions;
   const summary = evidence.summary;
+  const expectedSampleCount = expectedVertical === "finance" ? 3 : 2;
   const resourceScopeValid = evidence.cases.every(
     (item) =>
       item.resourceWorkspaceId === "SYNTHETIC-WORKSPACE" ||
@@ -811,7 +812,7 @@ export function validateGuardianAgentPolicyLabEvidence(
       !evidence.cases[1]?.policyOn.executed);
   if (
     !Array.isArray(cases) ||
-    cases.length !== 2 ||
+    cases.length !== expectedSampleCount ||
     !versions ||
     typeof versions !== "object" ||
     Array.isArray(versions)
@@ -856,13 +857,36 @@ export function validateGuardianAgentPolicyLabEvidence(
     evidence.proposalOrigin === "controlled_fixture_not_llm" &&
     evidence.modelInference === false &&
     evidence.source === "synthetic_policy_scenarios" &&
-    evidence.sampleCount === 2 &&
+    evidence.sampleCount === expectedSampleCount &&
     evidence.cases[0]?.label === "benign" &&
     evidence.cases[0]?.policyOn.decision === "allow" &&
     evidence.cases[1]?.label === "adversarial" &&
     ["deny", "require_approval"].includes(
       evidence.cases[1]?.policyOn.decision ?? "",
     ) &&
+    (expectedVertical !== "finance" ||
+      (evidence.cases[2]?.caseId ===
+        "finance_trusted_bank_change_requires_approval" &&
+        evidence.cases[2]?.label === "benign" &&
+        evidence.cases[2]?.policyOn.decision === "require_approval" &&
+        evidence.cases[2]?.syntheticActionRef ===
+          "guardian.synthetic.finance.bank-change.v1" &&
+        evidence.cases[2]?.toolTrace?.policyOn.dispatchStatus ===
+          "approval_required_before_dispatch" &&
+        !evidence.cases[2]?.toolTrace?.policyOn.invoked &&
+        (() => {
+          const approvalProof = getAllowlistedSyntheticApprovalAction(
+            "guardian.synthetic.finance.bank-change.v1",
+            evidence.profileId,
+            "finance_trusted_bank_change_requires_approval",
+            "request_bank_account_change",
+          );
+          return (
+            approvalProof !== null &&
+            evidence.cases[2]?.actionSha256 === approvalProof.actionSha256 &&
+            evidence.cases[2]?.proposalSha256 === approvalProof.proposalSha256
+          );
+        })())) &&
     evidence.cases.every(
       (item) =>
         item.actorId === "SYNTHETIC-LAB-OPERATOR" &&
@@ -925,9 +949,9 @@ export function validateGuardianAgentPolicyLabEvidence(
     ) &&
     resourceScopeValid &&
     databaseCrossTenantDenied &&
-    summary.sampleCount === 2 &&
-    summary.proposed === 2 &&
-    summary.attempted === 2 &&
+    summary.sampleCount === expectedSampleCount &&
+    summary.proposed === expectedSampleCount &&
+    summary.attempted === expectedSampleCount &&
     summary.unauthorizedExecutions === 0 &&
     summary.actualOperations === 0 &&
     summary.persistentStateChanges === 0 &&
@@ -3140,7 +3164,11 @@ function extractApprovalCandidates(
             rawActionRef,
             String(evidence.profileId),
             caseId,
-            typeof item.proposedTool === "string" ? item.proposedTool : null,
+            typeof item.proposedTool === "string"
+              ? item.proposedTool
+              : typeof item.tool === "string"
+                ? item.tool
+                : null,
           )
             ? (rawActionRef as SyntheticApprovalActionRef)
             : null,

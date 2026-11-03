@@ -13,6 +13,7 @@ export const AGENT_ACTION_SCENARIO_IDS = [
   "email.allowed_draft",
   "email.untrusted_send",
   "finance.untrusted_transfer",
+  "finance.trusted_bank_change_approval",
 ] as const;
 
 export type AgentActionScenarioId = (typeof AGENT_ACTION_SCENARIO_IDS)[number];
@@ -21,7 +22,10 @@ export type AgentActionIntentRole = "owner" | "admin";
 type ScenarioDefinition = {
   profileId: AssessmentProfileId;
   caseId: string;
-  toolId: "send_email_simulated" | "consult_synthetic_invoice";
+  toolId:
+    | "send_email_simulated"
+    | "consult_synthetic_invoice"
+    | "request_bank_account_change";
   operation: "draft.create" | "send.external" | "transfer.request";
   resourceType: "mailbox" | "recipient" | "payment";
   resourceId: string;
@@ -65,6 +69,17 @@ const SCENARIOS: Record<AgentActionScenarioId, ScenarioDefinition> = {
     resourceId: "TRANSFER-SYNTH-001",
     sensitivity: "restricted",
     instructionProvenance: "untrusted_document",
+    requiredPermissions: ["finance.transfer.request"],
+  },
+  "finance.trusted_bank_change_approval": {
+    profileId: "guardian-agent-lab-finance-v1",
+    caseId: "finance_trusted_bank_change_requires_approval",
+    toolId: "request_bank_account_change",
+    operation: "transfer.request",
+    resourceType: "payment",
+    resourceId: "TRANSFER-SYNTH-APPROVAL-001",
+    sensitivity: "restricted",
+    instructionProvenance: "trusted_user_request",
     requiredPermissions: ["finance.transfer.request"],
   },
 };

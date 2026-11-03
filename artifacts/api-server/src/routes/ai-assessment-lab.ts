@@ -423,8 +423,13 @@ function verifyPersistedApprovalEvidence(
     return null;
   }
   const raw = job.result as unknown as Record<string, unknown>;
+  const isQwenEvidence = raw.engine === "guardian_qwen_policy_lab";
+  const isDeterministicPolicyEvidence =
+    raw.engine === "guardian_policy_lab" &&
+    raw.executionMode === "deterministic_fixture" &&
+    raw.modelInference === false;
   if (
-    raw.engine !== "guardian_qwen_policy_lab" ||
+    (!isQwenEvidence && !isDeterministicPolicyEvidence) ||
     raw.profileId !== job.profileId ||
     typeof raw.evidenceSha256 !== "string"
   ) {
@@ -457,12 +462,46 @@ function verifyPersistedApprovalEvidence(
     createHash("sha256")
       .update(canonicalApprovalJson(unsignedCase), "utf8")
       .digest("hex") === caseDigest;
+  const policyOn =
+    item.policyOn && typeof item.policyOn === "object"
+      ? (item.policyOn as Record<string, unknown>)
+      : null;
+  const toolTrace =
+    item.toolTrace && typeof item.toolTrace === "object"
+      ? (item.toolTrace as Record<string, unknown>)
+      : null;
+  const policyOnTrace =
+    toolTrace?.policyOn && typeof toolTrace.policyOn === "object"
+      ? (toolTrace.policyOn as Record<string, unknown>)
+      : null;
+  const policyOff =
+    item.policyOff && typeof item.policyOff === "object"
+      ? (item.policyOff as Record<string, unknown>)
+      : null;
+  const proposedTool =
+    typeof item.proposedTool === "string"
+      ? item.proposedTool
+      : typeof item.tool === "string"
+        ? item.tool
+        : null;
   const proof = getAllowlistedSyntheticApprovalAction(
     approval.syntheticActionRef,
     job.profileId,
     approval.caseId,
-    typeof item.proposedTool === "string" ? item.proposedTool : null,
+    proposedTool,
   );
+  const decision = isQwenEvidence ? item.decision : policyOn?.decision;
+  const dispatchStatus = isQwenEvidence
+    ? item.dispatchStatus
+    : policyOnTrace?.dispatchStatus;
+  const noDispatchedTools = isQwenEvidence
+    ? Array.isArray(item.toolEvents) && item.toolEvents.length === 0
+    : policyOnTrace?.invoked === false &&
+      Array.isArray(policyOnTrace.events) &&
+      policyOnTrace.events.length === 0;
+  const policyOffHasNoExecution =
+    policyOff?.executed === false &&
+    (isQwenEvidence || policyOff?.mode === "counterfactual_clone_only");
   if (
     !digestValid ||
     !proof ||
@@ -471,14 +510,19 @@ function verifyPersistedApprovalEvidence(
     item.proposalSha256 !== approval.proposalSha256 ||
     proof.actionSha256 !== approval.actionSha256 ||
     proof.proposalSha256 !== approval.proposalSha256 ||
-    item.decision !== "require_approval" ||
-    item.dispatchStatus !== "approval_required_before_dispatch" ||
-    !Array.isArray(item.toolEvents) ||
-    item.toolEvents.length !== 0 ||
+    decision !== "require_approval" ||
+    dispatchStatus !== "approval_required_before_dispatch" ||
+    !noDispatchedTools ||
     item.unauthorizedActionExecuted !== false ||
-    !item.policyOff ||
-    typeof item.policyOff !== "object" ||
-    (item.policyOff as Record<string, unknown>).executed !== false
+    !policyOffHasNoExecution ||
+    (isDeterministicPolicyEvidence &&
+      (item.instructionProvenance !== "trusted_user_request" ||
+        item.rawArgumentsStored !== false ||
+        item.rawInstructionStored !== false ||
+        policyOn?.proposed !== true ||
+        policyOn?.attempted !== true ||
+        policyOn?.authorized !== false ||
+        policyOn?.executed !== false))
   ) {
     return null;
   }
@@ -543,6 +587,52 @@ routes.get(
         access.value.jobs.map(formatJob),
       ),
     );
+  },
+);
+
+routes.get(
+  "/workspaces/:workspaceId/ai-security-assessments/lab/jobs/:jobId",
+  async (req, res): Promise<void> => {
+    const params = CreateWorkspaceAiAssessmentLabJobParams.safeParse({
+      workspaceId: req.params.workspaceId,
+    });
+    const jobId = req.params.jobId;
+    if (
+      !params.success ||
+      !UUID_PATTERN.test(params.data.workspaceId) ||
+      typeof jobId !== "string" ||
+      !UUID_PATTERN.test(jobId)
+    ) {
+      res.status(400).json({ error: "Invalid workspace or job ID" });
+      return;
+    }
+    const { workspaceId } = params.data;
+    const access = await withWorkspaceUserTransaction(
+      req.authUserId!,
+      workspaceId,
+      async (tx) => {
+        const [job] = await tx
+          .select()
+          .from(aiAssessmentJobsTable)
+          .where(
+            and(
+              eq(aiAssessmentJobsTable.workspaceId, workspaceId),
+              eq(aiAssessmentJobsTable.id, jobId),
+            ),
+          )
+          .limit(1);
+        return job ?? null;
+      },
+    );
+    if (!access.authorized) {
+      res.status(403).json({ error: "Workspace membership required" });
+      return;
+    }
+    if (!access.value) {
+      res.status(404).json({ error: "Laboratory job not found" });
+      return;
+    }
+    res.json(formatJob(access.value));
   },
 );
 

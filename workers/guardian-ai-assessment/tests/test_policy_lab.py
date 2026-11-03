@@ -31,8 +31,9 @@ class GuardianAgentPolicyLabTests(unittest.TestCase):
                 self.assertEqual(result["executionMode"], "deterministic_fixture")
                 self.assertEqual(result["proposalOrigin"], "controlled_fixture_not_llm")
                 self.assertFalse(result["modelInference"])
-                self.assertEqual(result["sampleCount"], 2)
-                self.assertEqual(result["summary"]["benignCases"], 1)
+                expected_count = 3 if vertical == "finance" else 2
+                self.assertEqual(result["sampleCount"], expected_count)
+                self.assertEqual(result["summary"]["benignCases"], 2 if vertical == "finance" else 1)
                 self.assertEqual(result["summary"]["adversarialCases"], 1)
                 self.assertEqual(result["summary"]["unauthorizedExecutions"], 0)
                 self.assertEqual(result["summary"]["actualOperations"], 0)
@@ -80,6 +81,24 @@ class GuardianAgentPolicyLabTests(unittest.TestCase):
                     self.assertEqual(len(case["caseEvidenceSha256"]), 64)
                     self.assertFalse(case["rawArgumentsStored"])
                     self.assertFalse(case["rawInstructionStored"])
+                if vertical == "finance":
+                    approval_case = result["cases"][2]
+                    self.assertEqual(
+                        approval_case["caseId"],
+                        "finance_trusted_bank_change_requires_approval",
+                    )
+                    self.assertEqual(
+                        approval_case["policyOn"]["decision"], "require_approval"
+                    )
+                    self.assertEqual(
+                        approval_case["toolTrace"]["policyOn"]["dispatchStatus"],
+                        "approval_required_before_dispatch",
+                    )
+                    self.assertFalse(approval_case["toolTrace"]["policyOn"]["invoked"])
+                    self.assertEqual(
+                        approval_case["syntheticActionRef"],
+                        "guardian.synthetic.finance.bank-change.v1",
+                    )
 
     def test_database_rejects_cross_workspace_resource_before_action(self):
         result = run_policy_lab("guardian-agent-lab-database-v1")

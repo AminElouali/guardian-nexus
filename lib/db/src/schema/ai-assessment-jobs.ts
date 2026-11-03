@@ -139,7 +139,7 @@ export type GuardianPolicyComparisonEvidence = {
   source: "synthetic_controlled_proposals_not_llm";
   version: "guardian-policy-counterfactual-1";
   fixedSeed: 20261101;
-  sampleCount: 2;
+  sampleCount: 2 | 3;
   proposals: GuardianPolicyComparisonProposal[];
   caseSetSha256: string;
   initialSyntheticStateSha256: string;
@@ -861,6 +861,9 @@ export type GuardianAgentPolicyLabEvidence = {
     requiredPermissions: string[];
     actionSha256: string;
     proposalSha256: string;
+    syntheticActionRef?:
+      | "guardian.synthetic.finance.bank-change.v1"
+      | "guardian.synthetic.support.refund.v1";
     policyOn: {
       decision: "allow" | "deny" | "require_approval";
       reasonCode: string;
