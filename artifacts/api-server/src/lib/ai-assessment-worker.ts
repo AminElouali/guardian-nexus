@@ -47,17 +47,30 @@ import {
   type DockerImageInspection,
 } from "./ai-assessment-sandbox";
 import { classifyDockerImageInspectResult } from "./assessment-docker-inspection";
+import { evaluateAssessmentBrokerBoundary } from "./assessment-broker-boundary";
 import { stopAndVerifyAssessmentContainer } from "./assessment-container-control";
 import {
   classifyAssessmentExecutionFailure,
   createAssessmentOutputCapture,
   createAssessmentTimeout,
 } from "./assessment-output-limit";
+import {
+  AI_ASSESSMENT_JOB_MAX_ATTEMPTS,
+  AI_ASSESSMENT_WORKER_VERSION,
+  GARAK_PROFILE_ID,
+  isAiAssessmentJobRetryable,
+  type LocalWorkerAvailability,
+} from "./assessment-queue-contract";
 import { withWorkspaceUserTransaction } from "./tenant-db";
 import { logger } from "./logger";
 
-export const AI_ASSESSMENT_WORKER_VERSION = "guardian-ai-assessment-lab-0.5.2";
-export const GARAK_PROFILE_ID = "guardian-local-agent-v1";
+export {
+  AI_ASSESSMENT_JOB_MAX_ATTEMPTS,
+  AI_ASSESSMENT_WORKER_VERSION,
+  GARAK_PROFILE_ID,
+  isAiAssessmentJobRetryable,
+} from "./assessment-queue-contract";
+export type { LocalWorkerAvailability } from "./assessment-queue-contract";
 export const LOCAL_LLM_PROFILE_ID = "guardian-local-llm-qwen3-0.6b-v1";
 export const NATIVE_TOOL_PROFILE_ID = "guardian-local-llm-native-tools-v1";
 export const AUTONOMOUS_TOOL_PROFILE_ID =
@@ -103,7 +116,6 @@ const POLICY_LAB_PROFILE_IDS = [
 const GARAK_MAX_RUNTIME_MS = ASSESSMENT_EXECUTION_LIMITS.garak.timeoutMs;
 const LOCAL_LLM_MAX_RUNTIME_MS = ASSESSMENT_EXECUTION_LIMITS.qwen.timeoutMs;
 const MAX_STDOUT_BYTES = ASSESSMENT_EXECUTION_LIMITS.maxStdoutBytes;
-const MAX_ATTEMPTS = 2;
 const LEASE_DURATION_MS = 45_000;
 const HEARTBEAT_INTERVAL_MS = 10_000;
 const QUEUE_POLL_INTERVAL_MS = 2_000;
@@ -232,22 +244,6 @@ export type QueueClaim = { job: ClaimedJob | null; exhausted: ExhaustedJob[] };
 let draining = false;
 let queuePollTimer: NodeJS.Timeout | null = null;
 let queueWorkerEnabled = false;
-
-export type LocalWorkerAvailability = {
-  status: "ready" | "unavailable" | "disabled";
-  workerVersion: string;
-  reasonCode: string | null;
-  profiles: Array<{
-    profileId: AssessmentProfileId;
-    engine:
-      | "garak"
-      | "local_llm_lab"
-      | "guardian_policy_lab"
-      | "guardian_qwen_policy_lab";
-    status: "ready" | "unavailable" | "disabled";
-    reasonCode: string | null;
-  }>;
-};
 
 function getLocalLlmArtifactReason(): string | null {
   try {
@@ -387,6 +383,12 @@ function inspectAssessmentDockerImage(profileId: AssessmentProfileId): {
   inspection: DockerImageInspection | null;
   reasonCode: string | null;
 } {
+  if (!isLocalDockerWorkerAllowed()) {
+    return {
+      inspection: null,
+      reasonCode: getAssessmentBrokerBoundaryFailure(),
+    };
+  }
   if (!verifyAssessmentImageLockSources(PROFILE_IMAGE_LOCK, WORKER_ROOT)) {
     return { inspection: null, reasonCode: "worker_image_lock_source_mismatch" };
   }
@@ -466,7 +468,7 @@ export function getLocalWorkerAvailability(): LocalWorkerAvailability {
     ],
   });
   if (!isLocalDockerWorkerAllowed()) {
-    return disabled("development_only");
+    return disabled(getAssessmentBrokerBoundaryFailure());
   }
 
   const garakReason = inspectAssessmentDockerImage(GARAK_PROFILE_ID).reasonCode;
@@ -535,12 +537,74 @@ export function isLocalDockerWorkerAllowed(
   environment: {
     NODE_ENV?: string;
     REPLIT_DEPLOYMENT?: string;
+    GUARDIAN_PROCESS_ROLE?: string;
   } = process.env,
 ): boolean {
-  return (
-    environment.NODE_ENV === "development" &&
-    environment.REPLIT_DEPLOYMENT !== "1"
-  );
+  if (
+    environment.NODE_ENV !== "development" ||
+    environment.REPLIT_DEPLOYMENT === "1"
+  ) {
+    return false;
+  }
+  const uid = process.getuid?.() ?? null;
+  let socket: { isSocket: boolean; uid: number; gid: number; mode: number } | null =
+    null;
+  try {
+    const stats = statSync("/var/run/docker.sock");
+    socket = {
+      isSocket: stats.isSocket(),
+      uid: stats.uid,
+      gid: stats.gid,
+      mode: stats.mode,
+    };
+  } catch {
+    socket = null;
+  }
+  const boundary = evaluateAssessmentBrokerBoundary({
+    processRole: environment.GUARDIAN_PROCESS_ROLE,
+    processUid: uid,
+    processGroups: process.getgroups?.() ?? [],
+    apiUid: uid,
+    apiGroups: process.getgroups?.() ?? [],
+    brokerUid: null,
+    socket,
+    // This process uses the API database pool. No broker-only DB principal exists.
+    brokerDatabaseIdentityVerified: false,
+  });
+  return boundary.allowed;
+}
+
+function getAssessmentBrokerBoundaryFailure(): string {
+  if (
+    process.env.NODE_ENV !== "development" ||
+    process.env.REPLIT_DEPLOYMENT === "1"
+  ) {
+    return "development_only";
+  }
+  const uid = process.getuid?.() ?? null;
+  let socket: { isSocket: boolean; uid: number; gid: number; mode: number } | null =
+    null;
+  try {
+    const stats = statSync("/var/run/docker.sock");
+    socket = {
+      isSocket: stats.isSocket(),
+      uid: stats.uid,
+      gid: stats.gid,
+      mode: stats.mode,
+    };
+  } catch {
+    socket = null;
+  }
+  return evaluateAssessmentBrokerBoundary({
+    processRole: process.env.GUARDIAN_PROCESS_ROLE,
+    processUid: uid,
+    processGroups: process.getgroups?.() ?? [],
+    apiUid: uid,
+    apiGroups: process.getgroups?.() ?? [],
+    brokerUid: null,
+    socket,
+    brokerDatabaseIdentityVerified: false,
+  }).reasonCode ?? "assessment_broker_boundary_unverified";
 }
 
 export function isAssessmentProfileAvailable(
@@ -585,13 +649,6 @@ export function stopLocalAssessmentQueueWorker(): void {
     clearInterval(queuePollTimer);
     queuePollTimer = null;
   }
-}
-
-export function isAiAssessmentJobRetryable(
-  status: string,
-  attempts: number,
-): boolean {
-  return status === "failed" && attempts < MAX_ATTEMPTS;
 }
 
 function getContainerName(jobId: string): string {
@@ -654,6 +711,13 @@ function killDockerContainer(jobId: string): void {
 }
 
 function stopAssessmentContainerForJob(jobId: string): Promise<boolean> {
+  if (!isLocalDockerWorkerAllowed()) {
+    logger.error(
+      { jobId, reasonCode: getAssessmentBrokerBoundaryFailure() },
+      "assessment_container_cleanup_blocked_by_broker_boundary",
+    );
+    return Promise.resolve(false);
+  }
   return stopAndVerifyAssessmentContainer(
     getContainerName(jobId),
     (args) =>
@@ -2913,6 +2977,9 @@ async function runDockerAssessment(
   jobId: string,
   profileId: AssessmentProfileId,
 ): Promise<AiAssessmentJobEvidence> {
+  if (!isLocalDockerWorkerAllowed()) {
+    throw new Error(getAssessmentBrokerBoundaryFailure());
+  }
   const isPolicyLab = isPolicyLabProfile(profileId);
   if (isLocalLlmProfile(profileId)) {
     await verifyLocalLlmRuntimeWheels();
@@ -3703,7 +3770,7 @@ export async function claimNextAssessmentJob(): Promise<QueueClaim> {
           workspaceId: candidate.workspaceId,
           actorUserId: candidate.actorUserId,
         };
-        if (candidate.attempts >= MAX_ATTEMPTS) {
+        if (candidate.attempts >= AI_ASSESSMENT_JOB_MAX_ATTEMPTS) {
           await tx.execute(sql`
             UPDATE public.ai_assessment_jobs
             SET status = 'failed',
@@ -3812,7 +3879,7 @@ async function recordLeaseExhaustedAudit(item: ExhaustedJob): Promise<void> {
         metadata: {
           status: "failed",
           attempts: item.attempts,
-          maxAttempts: MAX_ATTEMPTS,
+          maxAttempts: AI_ASSESSMENT_JOB_MAX_ATTEMPTS,
         },
       });
     },
@@ -3919,5 +3986,3 @@ async function drainQueue(): Promise<void> {
     draining = false;
   }
 }
-
-export const AI_ASSESSMENT_JOB_MAX_ATTEMPTS = MAX_ATTEMPTS;

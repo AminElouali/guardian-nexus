@@ -1,0 +1,13 @@
+a1f667ec7d82a2a7ef8435e6cbce0cd5286d9a0ab8ea619b17666861a9fce843  artifacts/api-server/src/index.ts
+e1f8dc96f7b900c6fe1d77b491fe5bd2bea3a2052196a7e7526b6ef0e7b89838  artifacts/api-server/src/routes/ai-assessment-lab.ts
+9a8ffbb53ae25f5af6bbf9b768444cdf95d68b0387d2dcadf0c6fb2b2473268e  artifacts/api-server/src/lib/ai-assessment-worker.ts
+2d01187529b62b3edf1a22c3d2e486002eaa049125a04a032b2dc004cd1408fb  artifacts/api-server/src/lib/assessment-broker-boundary.ts
+e3412302164ca24ea050df5c8d906a3fbc8cb8100d87519d5a3eb3ced74fde6b  artifacts/api-server/src/lib/assessment-queue-contract.ts
+4aadec836794b75ee99dad3b66825b3342634a48d53e0e90b9e82318ef27c181  artifacts/api-server/src/lib/assessment-worker-api-gate.ts
+538150226080522927a5a6f54ff70fbef3cb62c8be1f91ace5d266baab91c221  artifacts/api-server/src/lib/assessment-worker-mode.test.ts
+2385fd240bd3196da63d998fbdc610611a9583a20e6962a738c48274993cbb8b  artifacts/eu-security-platform/src/components/AiEvaluationPage.integration.test.tsx
+28c9a8aaab8956b0bc7938134bece92990269234f092a42ea26cdacb9ea1cbe6  workers/guardian-ai-assessment/reports/broker-boundary-fail-closed-2026-11-03.md
+8eb49149a21afac04818f94ac0183eb799ed740b8f2254a9f63c453c279c5d97  generated-artifacts/guardian-ai-assessment-offline/sbom.cdx.json
+2602cdf1fcff5a059e49086bf9c2251c536bcef80977faf9b22df7e07852331c  generated-artifacts/guardian-ai-assessment-offline/guardian-deployment-composition-sbom.cdx.json
+c80e9efec40dbed890c691d33ac85cebe98dcd5aa646cedef7a3698ae326e6c2  generated-artifacts/guardian-ai-assessment-offline/osv.json
+ec246d3f0dadd5b4933e6b521fd7204a0dc178dd3331a98c79e7fd3d4a27a19e  artifacts/api-server/dist/index.mjs

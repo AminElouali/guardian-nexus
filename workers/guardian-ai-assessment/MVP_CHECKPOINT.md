@@ -2169,3 +2169,48 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
 - Límites vigentes antes de cualquier piloto: broker con identidad/DB separadas,
   IPv6 dual-stack, revisión OSV/licencias, sesión Clerk autenticada real y
   evaluación legal. No publicación, producción, clientes ni servicios externos.
+
+## Fall-closed del worker en API — 2026-11-03
+
+- Base: HEAD `0a668a289851913d1d2cd67ee3ec8c8acf64bd8f`, árbol limpio.
+- La API ya no arranca el poller local al iniciar. Disponibilidad, inspección,
+  parada, lanzamiento y encolado local fallan cerrados sin rol broker, UID
+  independiente, socket restringido al broker y principal DB de broker
+  verificado. La ruta de creación comprueba disponibilidad antes de insertar.
+- La API ahora importa un gate de admisión sin el módulo ejecutor Docker; en el
+  build API de `3.9 MB` no se encontraron marcadores del CLI Docker del worker.
+  Esto reduce código ejecutable cargado por rutas, pero no revoca el permiso
+  Unix del proceso para abrir el socket.
+- Prueba del host: UID `1000`, grupo `1000`; Docker socket `root:1000`, `0660`;
+  el proceso puede leer y escribir el socket. **La API mantiene autoridad
+  Docker a nivel Unix**. El cambio deshabilita el flujo normal de ejecución,
+  no revoca el socket ni constituye aislamiento de procesos.
+- La frontera positiva se probó solo con datos sintéticos. El grant HMAC
+  existente sigue sin estar cableado al lanzamiento ni consumido atómicamente
+  por una credencial exclusiva del broker. No se inicia un broker inseguro.
+- Pruebas seriales: API **74/74**, worker **134/134**, SDK **13/13**, UI
+  integración **8/8**, typecheck raíz/API/UI, builds API/UI/SDK y
+  `git diff --check` pasaron. El primer test UI usó un JSON v1.9 inexistente;
+  se actualizó al artefacto local v1.10 y el rerun pasó. UI build conservó
+  avisos de sourcemap y chunk `683.58 kB`.
+- El workflow API se reinició y escuchó en `8080`. No se ejecutaron E2E Qwen
+  ni Garak: la ejecución se bloquea intencionalmente sin broker verificado.
+  No hay inferencias nuevas ni remediación OSV/SBOM/licencias.
+- Revisión local offline sin rescan: SBOM imagen de 124 componentes SHA-256
+  `8eb49149a21afac04818f94ac0183eb799ed740b8f2254a9f63c453c279c5d97`;
+  SBOM compuesto de 139 componentes SHA-256
+  `2602cdf1fcff5a059e49086bf9c2251c536bcef80977faf9b22df7e07852331c`;
+  JSON OSV ya existente exit code `1`, SHA-256
+  `c80e9efec40dbed890c691d33ac85cebe98dcd5aa646cedef7a3698ae326e6c2`.
+  Sin actualización de dependencias ni revisión legal nueva. Los 9 ALLOW
+  históricos siguen siendo lecturas sintéticas acotadas (2 correo, 4 BBDD,
+  3 factura); las pruebas unitarias de alcance pasaron, pero no se repitió
+  inferencia Qwen ni esa corrida E2E.
+- Informe: `reports/broker-boundary-fail-closed-2026-11-03.md`.
+- Manifiesto SHA-256 de código, informe y artefactos offline:
+  `reports/broker-boundary-fail-closed-2026-11-03.sha256`,
+  SHA-256 `636afbe4d32cb70b98d34f9a43f193cee840ea6c5db9ca851e68c2665e840d4f`.
+- Siguen bloqueos: separar UID/socket y principal DB en host compatible;
+  consumo atómico del grant; IPv6 dual-stack; sesión Clerk real; advisories,
+  procedencia/licencias y revisión legal. No se tocó producción, el socket ni
+  el daemon; no se publicaron ni conectaron servicios externos.

@@ -46,12 +46,14 @@ import {
   AI_ASSESSMENT_JOB_MAX_ATTEMPTS,
   AI_ASSESSMENT_WORKER_VERSION,
   GARAK_PROFILE_ID,
+  isAiAssessmentJobRetryable,
+} from "../lib/assessment-queue-contract";
+import {
   isAssessmentProfileAvailable,
   enqueueLocalAssessmentJob,
   getLocalWorkerAvailability,
-  isAiAssessmentJobRetryable,
-  type AssessmentProfileId,
-} from "../lib/ai-assessment-worker";
+} from "../lib/assessment-worker-api-gate";
+import type { AssessmentProfileId } from "../lib/ai-assessment-sandbox";
 import { withWorkspaceUserTransaction } from "../lib/tenant-db";
 import { UsageQuotaError, reserveWorkspaceUsageInTransaction } from "../lib/usage";
 import { logger } from "../lib/logger";
