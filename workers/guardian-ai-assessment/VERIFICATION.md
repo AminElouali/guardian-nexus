@@ -95,6 +95,13 @@ integrados, dentro del contenedor y sin inferencia LLM. Para generar un
 resultado combinado se usa únicamente el flujo de trabajo de desarrollo
 existente y no se habilitan objetivos externos.
 
+El modo `--unit-tests` verifica el ID de imagen contra
+`profile-image-lock.json` y monta el checkout completo de este worker en
+`/opt/guardian-assessment` como solo lectura. Así, los tests, el código, los
+manifiestos y los scripts helper proceden del mismo commit; las dependencias
+instaladas proceden de la imagen fijada. Un ID distinto falla antes de crear el
+contenedor.
+
 ## Pendientes
 
 - No valida seguridad de un LLM real ni está habilitado como servicio para

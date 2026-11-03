@@ -2,6 +2,9 @@
 set -eu
 
 IMAGE="guardian-ai-assessment:garak-gve-profile-candidate"
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+WORKER_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+IMAGE_LOCK="$WORKER_ROOT/profile-image-lock.json"
 CONTAINER_ARGS="
   --rm
   --init
@@ -23,6 +26,20 @@ if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
   echo "garak_profile_image_not_built" >&2
   exit 69
 fi
+EXPECTED_IMAGE_ID="$(python3 - "$IMAGE_LOCK" <<'PY'
+import json
+import pathlib
+import sys
+
+lock = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+print(lock["images"]["garak"]["imageId"])
+PY
+)"
+ACTUAL_IMAGE_ID="$(docker image inspect --format '{{.Id}}' "$IMAGE")"
+if [ "$ACTUAL_IMAGE_ID" != "$EXPECTED_IMAGE_ID" ]; then
+  echo "garak_profile_image_id_mismatch" >&2
+  exit 69
+fi
 PROFILE_LABEL="$(docker image inspect --format '{{index .Config.Labels "org.guardian.profile"}}' "$IMAGE")"
 if [ "$PROFILE_LABEL" != "garak-gve-v1" ]; then
   echo "garak_profile_image_label_mismatch" >&2
@@ -37,8 +54,13 @@ case "${1:-}" in
       echo "A fixed local mode accepts no extra arguments." >&2
       exit 64
     fi
+    # Unit tests must see one coherent, read-only checkout (code, tests,
+    # manifests, and helper scripts). The pinned image contributes dependencies.
     # shellcheck disable=SC2086
-    exec docker run $CONTAINER_ARGS --entrypoint=python "$IMAGE" \
+    exec docker run $CONTAINER_ARGS \
+      --mount "type=bind,src=$WORKER_ROOT,dst=/opt/guardian-assessment,readonly" \
+      --workdir=/opt/guardian-assessment \
+      --entrypoint=python "$IMAGE" \
       -m unittest discover -s tests -v
     ;;
   --self-test|--validation-suite|--verification-suite)

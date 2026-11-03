@@ -103,6 +103,18 @@ class WorkerContractTests(unittest.TestCase):
         self.assertIn("--verification-suite", launcher)
         self.assertIn("--unit-tests", launcher)
 
+    def test_unit_test_runner_pins_image_and_mounts_one_read_only_checkout(self):
+        launcher = (WORKER_ROOT / "scripts/run-local.sh").read_text()
+        self.assertIn("profile-image-lock.json", launcher)
+        self.assertIn("docker image inspect --format '{{.Id}}' \"$IMAGE\"", launcher)
+        self.assertIn('EXPECTED_IMAGE_ID', launcher)
+        self.assertIn(
+            '--mount "type=bind,src=$WORKER_ROOT,dst=/opt/guardian-assessment,readonly"',
+            launcher,
+        )
+        self.assertIn("--workdir=/opt/guardian-assessment", launcher)
+        self.assertIn("image_id_mismatch", launcher)
+
     def test_report_parser_checks_garak_eval_and_binary_scores(self):
         report = "\n".join(
             [
