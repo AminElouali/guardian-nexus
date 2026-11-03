@@ -1,4 +1,4 @@
-export const GUARDIAN_NEXUS_SDK_VERSION = "0.1.0" as const;
+export const GUARDIAN_NEXUS_SDK_VERSION = "0.2.0" as const;
 
 export const AGENT_ACTION_SCENARIOS = [
   "email.allowed_draft",
@@ -8,8 +8,122 @@ export const AGENT_ACTION_SCENARIOS = [
 ] as const;
 
 export type AgentActionScenario = (typeof AGENT_ACTION_SCENARIOS)[number];
+
+export const QWEN_AGENT_PROFILE_IDS = [
+  "guardian-agent-qwen-lab-email-v1",
+  "guardian-agent-qwen-lab-database-v1",
+  "guardian-agent-qwen-lab-finance-v1",
+  "guardian-agent-qwen-lab-customer-service-v1",
+  "guardian-agent-qwen-lab-programming-v1",
+  "guardian-agent-qwen-lab-browser-v1",
+  "guardian-agent-qwen-lab-infrastructure-v1",
+  "guardian-agent-qwen-lab-multiagent-v1",
+] as const;
+
+export type QwenAgentProfileId = (typeof QWEN_AGENT_PROFILE_IDS)[number];
+export type QwenAgentVertical =
+  | "email"
+  | "database"
+  | "finance"
+  | "customer_service"
+  | "programming"
+  | "browser"
+  | "infrastructure"
+  | "multiagent";
+export type QwenToolCallOrigin =
+  | "guardian_qwen_native_markup_adapter"
+  | "unparsed_qwen_native_markup"
+  | "runtime_message_tool_calls"
+  | "no_tool_call";
+export type QwenPolicyDecision =
+  | "allow"
+  | "deny"
+  | "require_approval"
+  | "no_proposal";
+
+export interface QwenPolicyCaseSummary {
+  caseId: string;
+  label: "benign" | "adversarial";
+  language: "en" | "es";
+  toolChoice: "auto";
+  toolCallOrigin: QwenToolCallOrigin;
+  toolCallCount: number;
+  proposedTool: string | null;
+  decision: QwenPolicyDecision;
+  dispatchStatus:
+    | "not_invoked"
+    | "simulated_execution"
+    | "blocked_by_policy_before_dispatch"
+    | "approval_required_before_dispatch"
+    | "blocked_by_adapter_validation"
+    | "blocked_by_parser";
+  simulatedExecution: boolean;
+  caseEvidenceSha256: string;
+}
+
+export interface QwenPolicyLabReport {
+  source: "qwen_local_policy_lab";
+  engine: "guardian_qwen_policy_lab";
+  engineVersion: string;
+  profileId: QwenAgentProfileId;
+  verticalId: QwenAgentVertical;
+  executionMode: "real_local_qwen_inference";
+  toolChoice: "auto";
+  evidenceSha256: string;
+  counts: {
+    cases: number;
+    directRuntimeToolCallCases: number;
+    adaptedQwenMarkerCases: number;
+    unparsedMarkerCases: number;
+    noToolCallCases: number;
+    allow: number;
+    deny: number;
+    requireApproval: number;
+    noProposal: number;
+    simulatedExecutions: number;
+  };
+  cases: QwenPolicyCaseSummary[];
+}
+
+export interface QwenEvaluationSubmission {
+  source: "qwen_local_policy_lab_profile";
+  executionMode: "not_yet_verified";
+  externalDispatch: false;
+  job: Pick<
+    GuardianNexusJob,
+    "id" | "status" | "profileId" | "workerVersion" | "createdAt"
+  > & { profileId: QwenAgentProfileId };
+}
+
+export interface QwenEvaluationCompletion {
+  job: Pick<
+    GuardianNexusJob,
+    | "id"
+    | "status"
+    | "profileId"
+    | "workerVersion"
+    | "attempts"
+    | "engineVersion"
+    | "createdAt"
+    | "startedAt"
+    | "completedAt"
+  > & { profileId: QwenAgentProfileId };
+  report: QwenPolicyLabReport;
+}
+
 export type ApprovalDecision = "approve" | "deny";
 export type JobStatus = "queued" | "running" | "succeeded" | "failed";
+
+const QWEN_PROFILE_VERTICAL: Record<QwenAgentProfileId, QwenAgentVertical> = {
+  "guardian-agent-qwen-lab-email-v1": "email",
+  "guardian-agent-qwen-lab-database-v1": "database",
+  "guardian-agent-qwen-lab-finance-v1": "finance",
+  "guardian-agent-qwen-lab-customer-service-v1": "customer_service",
+  "guardian-agent-qwen-lab-programming-v1": "programming",
+  "guardian-agent-qwen-lab-browser-v1": "browser",
+  "guardian-agent-qwen-lab-infrastructure-v1": "infrastructure",
+  "guardian-agent-qwen-lab-multiagent-v1": "multiagent",
+};
 
 export interface GuardianNexusJob {
   id: string;
@@ -72,6 +186,8 @@ export interface GuardianNexusApproval {
   simulatedAt: string | null;
   simulationResultCode: string | null;
   simulationResultSha256: string | null;
+  execution?: "synthetic_action_simulated_once" | "not_performed";
+  replayBindingSha256?: string | null;
 }
 
 export interface ApprovalDecisionResult {
@@ -202,11 +318,265 @@ function expectApproval(value: unknown): GuardianNexusApproval {
     !["pending", "approved", "denied", "expired"].includes(
       String(value.status),
     ) ||
-    typeof value.expiresAt !== "string"
+    typeof value.expiresAt !== "string" ||
+    ("execution" in value &&
+      value.execution !== "synthetic_action_simulated_once" &&
+      value.execution !== "not_performed") ||
+    ("replayBindingSha256" in value &&
+      value.replayBindingSha256 !== null &&
+      !isSha256(value.replayBindingSha256))
   ) {
     throw new GuardianNexusSdkError("invalid_approval_response");
   }
   return value as unknown as GuardianNexusApproval;
+}
+
+const QWEN_CASE_ORIGINS = new Set<string>([
+  "guardian_qwen_native_markup_adapter",
+  "unparsed_qwen_native_markup",
+  "runtime_message_tool_calls",
+  "no_tool_call",
+]);
+const QWEN_CASE_DECISIONS = new Set<string>([
+  "allow",
+  "deny",
+  "require_approval",
+  "no_proposal",
+]);
+const QWEN_DISPATCH_STATUSES = new Set<string>([
+  "not_invoked",
+  "simulated_execution",
+  "blocked_by_policy_before_dispatch",
+  "approval_required_before_dispatch",
+  "blocked_by_adapter_validation",
+  "blocked_by_parser",
+]);
+
+function isSha256(value: unknown): value is string {
+  return typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
+}
+
+function requireBooleanFields(
+  value: Record<string, unknown>,
+  fields: string[],
+): boolean {
+  return fields.every((field) => value[field] === true);
+}
+
+function expectQwenPolicyReport(
+  value: unknown,
+  expectedProfileId: QwenAgentProfileId,
+): QwenPolicyLabReport {
+  if (
+    !isRecord(value) ||
+    value.evidenceVersion !== 1 ||
+    value.source !== "qwen_local_policy_lab" ||
+    value.engine !== "guardian_qwen_policy_lab" ||
+    typeof value.engineVersion !== "string" ||
+    !/^guardian-agent-qwen-policy-lab-v\d+(?:\.\d+)*$/.test(
+      value.engineVersion,
+    ) ||
+    value.profileId !== expectedProfileId ||
+    value.verticalId !== QWEN_PROFILE_VERTICAL[expectedProfileId] ||
+    value.executionMode !== "real_local_qwen_inference" ||
+    value.proposalOriginScope !==
+      "qwen_marker_adapter_or_runtime_tool_calls_only" ||
+    !isSha256(value.evidenceSha256) ||
+    !isRecord(value.provider) ||
+    value.provider.id !== "local_qwen_gguf" ||
+    value.provider.toolChoice !== "auto" ||
+    !isRecord(value.network) ||
+    value.network.networkMode !== "docker-network-none" ||
+    value.network.loopbackOnly !== true ||
+    value.network.publicIpv4 !== "blocked" ||
+    value.network.publicDns !== "blocked" ||
+    !["blocked", "unavailable"].includes(
+      String(value.network.publicIpv6),
+    ) ||
+    !isRecord(value.limits) ||
+    value.limits.concurrency !== 1 ||
+    value.limits.pids !== 64 ||
+    value.limits.cpuCores !== 1 ||
+    value.limits.memoryMiB !== 1536 ||
+    value.limits.network !== "docker-network-none" ||
+    value.limits.externalCalls !== 0 ||
+    value.limits.actualOperations !== 0 ||
+    value.limits.customerDataUsed !== false ||
+    value.limits.secretsMounted !== false ||
+    value.limits.rawPromptsStored !== false ||
+    value.limits.rawResponsesStored !== false ||
+    value.limits.rawToolArgumentsStored !== false ||
+    value.limits.maxToolCallsPerCase !== 1 ||
+    value.limits.maxModelCallsPerCase !== 1 ||
+    value.limits.maxCompletionTokensPerCall !== 96 ||
+    !isRecord(value.limits.verifiedContainerLimits) ||
+    value.limits.verifiedContainerLimits.cpuLimitVerified !== true ||
+    value.limits.verifiedContainerLimits.pidsLimitVerified !== true ||
+    value.limits.verifiedContainerLimits.memoryLimitVerified !== true ||
+    !isRecord(value.selfChecks) ||
+    !requireBooleanFields(value.selfChecks, [
+      "allCallsUsedAuto",
+      "noForcedToolSelection",
+      "onlyRealLocalQwenInference",
+      "policyBeforeDispatch",
+      "deniedCallsNeverDispatched",
+      "policyOffCloneOnly",
+      "noRawPromptsResponsesOrArguments",
+    ]) ||
+    !isRecord(value.summary) ||
+    !Array.isArray(value.cases) ||
+    value.cases.length < 2 ||
+    value.cases.length > 7
+  ) {
+    throw new GuardianNexusSdkError("invalid_qwen_policy_evidence");
+  }
+
+  const summary = value.summary;
+  const cases: QwenPolicyCaseSummary[] = [];
+  for (const rawCase of value.cases) {
+    if (
+      !isRecord(rawCase) ||
+      typeof rawCase.caseId !== "string" ||
+      rawCase.caseId.length < 1 ||
+      rawCase.caseId.length > 100 ||
+      !["benign", "adversarial"].includes(String(rawCase.label)) ||
+      !["en", "es"].includes(String(rawCase.language)) ||
+      rawCase.toolChoice !== "auto" ||
+      !QWEN_CASE_ORIGINS.has(String(rawCase.toolCallOrigin)) ||
+      !Number.isInteger(rawCase.toolCallCount) ||
+      (rawCase.toolCallCount as number) < 0 ||
+      (rawCase.toolCallCount as number) > 16 ||
+      !(typeof rawCase.proposedTool === "string" ||
+        rawCase.proposedTool === null) ||
+      !QWEN_CASE_DECISIONS.has(String(rawCase.decision)) ||
+      !QWEN_DISPATCH_STATUSES.has(String(rawCase.dispatchStatus)) ||
+      rawCase.unauthorizedActionExecuted !== false ||
+      rawCase.rawPromptStored !== false ||
+      rawCase.rawResponseStored !== false ||
+      rawCase.rawArgumentsStored !== false ||
+      !isSha256(rawCase.policyOnStateBeforeSha256) ||
+      !isSha256(rawCase.policyOnStateAfterSha256) ||
+      !isSha256(rawCase.caseEvidenceSha256) ||
+      !Array.isArray(rawCase.toolEvents) ||
+      rawCase.toolEvents.length > 2 ||
+      !isRecord(rawCase.policyOff) ||
+      rawCase.policyOff.mode !== "counterfactual_clone_only" ||
+      rawCase.policyOff.executed !== false ||
+      typeof rawCase.policyOff.wouldExecute !== "boolean" ||
+      !isSha256(rawCase.policyOff.stateBeforeSha256) ||
+      !isSha256(rawCase.policyOff.stateAfterSha256)
+    ) {
+      throw new GuardianNexusSdkError("invalid_qwen_policy_case");
+    }
+
+    let simulatedExecution = false;
+    for (const event of rawCase.toolEvents) {
+      if (
+        !isRecord(event) ||
+        !["authorization_attempt", "denied", "executed"].includes(
+          String(event.phase),
+        ) ||
+        !["not_checked", "allowed", "denied"].includes(
+          String(event.authorization),
+        ) ||
+        typeof event.executed !== "boolean" ||
+        event.simulatedOnly !== true ||
+        event.externalSideEffect !== false ||
+        !isSha256(event.argumentsSha256) ||
+        typeof event.resultCode !== "string"
+      ) {
+        throw new GuardianNexusSdkError("invalid_qwen_tool_event");
+      }
+      if (event.executed) {
+        simulatedExecution = true;
+        if (
+          rawCase.decision !== "allow" ||
+          rawCase.dispatchStatus !== "simulated_execution"
+        ) {
+          throw new GuardianNexusSdkError("invalid_qwen_dispatch_state");
+        }
+      }
+    }
+    if (
+      (rawCase.decision === "deny" ||
+        rawCase.decision === "require_approval" ||
+        rawCase.decision === "no_proposal") &&
+      simulatedExecution
+    ) {
+      throw new GuardianNexusSdkError("invalid_qwen_dispatch_state");
+    }
+    if (
+      rawCase.dispatchStatus === "simulated_execution" &&
+      !simulatedExecution
+    ) {
+      throw new GuardianNexusSdkError("invalid_qwen_dispatch_state");
+    }
+    cases.push({
+      caseId: rawCase.caseId,
+      label: rawCase.label as "benign" | "adversarial",
+      language: rawCase.language as "en" | "es",
+      toolChoice: "auto",
+      toolCallOrigin: rawCase.toolCallOrigin as QwenToolCallOrigin,
+      toolCallCount: rawCase.toolCallCount as number,
+      proposedTool: rawCase.proposedTool as string | null,
+      decision: rawCase.decision as QwenPolicyDecision,
+      dispatchStatus: rawCase.dispatchStatus as QwenPolicyCaseSummary["dispatchStatus"],
+      simulatedExecution,
+      caseEvidenceSha256: rawCase.caseEvidenceSha256,
+    });
+  }
+
+  const countOrigin = (origin: QwenToolCallOrigin) =>
+    cases.filter((item) => item.toolCallOrigin === origin).length;
+  const countDecision = (decision: QwenPolicyDecision) =>
+    cases.filter((item) => item.decision === decision).length;
+  const counts = {
+    cases: cases.length,
+    directRuntimeToolCallCases: countOrigin("runtime_message_tool_calls"),
+    adaptedQwenMarkerCases: countOrigin(
+      "guardian_qwen_native_markup_adapter",
+    ),
+    unparsedMarkerCases: countOrigin("unparsed_qwen_native_markup"),
+    noToolCallCases: countOrigin("no_tool_call"),
+    allow: countDecision("allow"),
+    deny: countDecision("deny"),
+    requireApproval: countDecision("require_approval"),
+    noProposal: countDecision("no_proposal"),
+    simulatedExecutions: cases.filter((item) => item.simulatedExecution).length,
+  };
+  if (
+    !Number.isInteger(summary.modelCalls) ||
+    summary.modelCalls !== cases.length ||
+    value.limits.maxCases !== cases.length ||
+    summary.sampleCount !== cases.length ||
+    summary.benignCases !== cases.filter((item) => item.label === "benign").length ||
+    summary.adversarialCases !==
+      cases.filter((item) => item.label === "adversarial").length ||
+    summary.noToolCalls !== counts.noToolCallCases ||
+    !Number.isInteger(summary.runtimeMessageToolCalls) ||
+    summary.runtimeMessageToolCalls !== counts.directRuntimeToolCallCases ||
+    !Number.isInteger(summary.adaptedQwenMarkupCalls) ||
+    summary.adaptedQwenMarkupCalls !== counts.adaptedQwenMarkerCases ||
+    summary.simulatedExecutions !== counts.simulatedExecutions ||
+    summary.externalCalls !== 0 ||
+    summary.unauthorizedExecutions !== 0 ||
+    summary.policyOffExecutions !== 0
+  ) {
+    throw new GuardianNexusSdkError("inconsistent_qwen_policy_summary");
+  }
+
+  return {
+    source: "qwen_local_policy_lab",
+    engine: "guardian_qwen_policy_lab",
+    engineVersion: value.engineVersion,
+    profileId: expectedProfileId,
+    verticalId: value.verticalId as QwenAgentVertical,
+    executionMode: "real_local_qwen_inference",
+    toolChoice: "auto",
+    evidenceSha256: value.evidenceSha256,
+    counts,
+    cases,
+  };
 }
 
 function retryDelay(response: Response, fallbackMs: number): number {
@@ -294,6 +664,47 @@ export class GuardianNexusClient {
     return value as unknown as AgentActionSubmission;
   }
 
+  async submitQwenEvaluation(input: {
+    profileId: QwenAgentProfileId;
+    idempotencyKey: string;
+    signal?: AbortSignal;
+  }): Promise<QwenEvaluationSubmission> {
+    if (
+      !QWEN_AGENT_PROFILE_IDS.includes(input.profileId) ||
+      !/^[A-Za-z0-9._:-]{16,128}$/.test(input.idempotencyKey)
+    ) {
+      throw new GuardianNexusSdkError("invalid_qwen_evaluation_request");
+    }
+    const value = await this.request(
+      `/workspaces/${this.options.workspaceId}/ai-security-assessments/lab/jobs`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          profileId: input.profileId,
+          idempotencyKey: input.idempotencyKey,
+        }),
+        signal: input.signal,
+        retryable: true,
+      },
+    );
+    const job = expectJob(value);
+    if (job.profileId !== input.profileId) {
+      throw new GuardianNexusSdkError("qwen_profile_response_mismatch");
+    }
+    return {
+      source: "qwen_local_policy_lab_profile",
+      executionMode: "not_yet_verified",
+      externalDispatch: false,
+      job: {
+        id: job.id,
+        status: job.status,
+        profileId: input.profileId,
+        workerVersion: job.workerVersion,
+        createdAt: job.createdAt,
+      },
+    };
+  }
+
   async getJob(jobId: string, signal?: AbortSignal): Promise<GuardianNexusJob> {
     if (!isUuid(jobId)) throw new GuardianNexusSdkError("invalid_job_id");
     const value = await this.request(
@@ -319,6 +730,42 @@ export class GuardianNexusClient {
       if (attempt + 1 < maxAttempts) await delay(intervalMs, options.signal);
     }
     throw new GuardianNexusSdkError("job_poll_timeout");
+  }
+
+  async waitForQwenEvaluation(
+    jobId: string,
+    profileId: QwenAgentProfileId,
+    options: {
+      intervalMs?: number;
+      maxAttempts?: number;
+      signal?: AbortSignal;
+    } = {},
+  ): Promise<QwenEvaluationCompletion> {
+    if (!QWEN_AGENT_PROFILE_IDS.includes(profileId)) {
+      throw new GuardianNexusSdkError("invalid_qwen_profile_id");
+    }
+    const job = await this.waitForJob(jobId, options);
+    if (job.status !== "succeeded") {
+      throw new GuardianNexusSdkError("qwen_evaluation_failed");
+    }
+    if (job.profileId !== profileId) {
+      throw new GuardianNexusSdkError("qwen_profile_response_mismatch");
+    }
+    const report = expectQwenPolicyReport(job.result, profileId);
+    return {
+      job: {
+        id: job.id,
+        status: "succeeded",
+        profileId,
+        workerVersion: job.workerVersion,
+        attempts: job.attempts,
+        engineVersion: job.engineVersion,
+        createdAt: job.createdAt,
+        startedAt: job.startedAt,
+        completedAt: job.completedAt,
+      },
+      report,
+    };
   }
 
   async listApprovals(signal?: AbortSignal): Promise<GuardianNexusApproval[]> {
@@ -373,6 +820,16 @@ export class GuardianNexusClient {
       value.execution !== "not_performed"
     ) {
       throw new GuardianNexusSdkError("invalid_approval_execution_response");
+    }
+    if (
+      value.execution === "synthetic_action_simulated_once" &&
+      (approval.status !== "approved" ||
+        approval.execution !== "synthetic_action_simulated_once" ||
+        !approval.simulatedAt ||
+        !isSha256(approval.simulationResultSha256) ||
+        !isSha256(approval.replayBindingSha256))
+    ) {
+      throw new GuardianNexusSdkError("invalid_approval_replay_evidence");
     }
     return {
       approval,

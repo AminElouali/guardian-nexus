@@ -16,7 +16,12 @@ import {
   ListWorkspaceAiAssessmentApprovalsResponse,
   SubmitWorkspaceAgentActionIntentResponse,
 } from "@workspace/api-zod";
-import { GuardianNexusClient } from "@workspace/guardian-agent-sdk";
+import {
+  GUARDIAN_NEXUS_SDK_VERSION,
+  GuardianNexusClient,
+  GuardianNexusSdkError,
+  QWEN_AGENT_PROFILE_IDS,
+} from "@workspace/guardian-agent-sdk";
 import {
   aiAssessmentJobsTable,
   assertRlsRuntimeReady,
@@ -1470,17 +1475,35 @@ test(
   async () => {
     const pathA = `/api/workspaces/${workspaceA}/ai-security-assessments/lab/jobs`;
     const pathB = `/api/workspaces/${workspaceB}/ai-security-assessments/lab/jobs`;
-    const profiles = [
-      "guardian-agent-qwen-lab-email-v1",
-      "guardian-agent-qwen-lab-database-v1",
-      "guardian-agent-qwen-lab-finance-v1",
-      "guardian-agent-qwen-lab-customer-service-v1",
-      "guardian-agent-qwen-lab-programming-v1",
-      "guardian-agent-qwen-lab-browser-v1",
-      "guardian-agent-qwen-lab-infrastructure-v1",
-      "guardian-agent-qwen-lab-multiagent-v1",
-    ] as const;
+    const profiles = QWEN_AGENT_PROFILE_IDS;
     const artifactJobs: Record<string, unknown>[] = [];
+    const qwenSdkReportRows: Record<string, unknown>[] = [];
+    const qwenSdkPrincipals = new Map([
+      ["qwen-sdk-owner-token", userA],
+      ["qwen-sdk-admin-token", adminA],
+    ]);
+    const qwenSdkFetch: typeof fetch = async (input, init) => {
+      const headers = new Headers(init?.headers);
+      const token = headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+      const principal = token ? qwenSdkPrincipals.get(token) : undefined;
+      if (!principal) {
+        return Response.json({ code: "unauthorized" }, { status: 401 });
+      }
+      headers.set("x-guardian-test-user", principal);
+      return fetch(input, { ...init, headers });
+    };
+    const qwenOwnerSdk = new GuardianNexusClient({
+      baseUrl,
+      workspaceId: workspaceA,
+      getAccessToken: () => "qwen-sdk-owner-token",
+      fetch: qwenSdkFetch,
+    });
+    const qwenAdminSdk = new GuardianNexusClient({
+      baseUrl,
+      workspaceId: workspaceA,
+      getAccessToken: () => "qwen-sdk-admin-token",
+      fetch: qwenSdkFetch,
+    });
 
     assert.equal((await apiRequest(null, pathA)).status, 401);
     assert.equal((await apiRequest(userB, pathA)).status, 403);
@@ -1497,30 +1520,24 @@ test(
 
     for (const profileId of profiles) {
       const idempotencyKey = `qwen-policy-${randomUUID()}`;
-      const acceptedResponse = await apiRequest(userA, pathA, "POST", {
-        idempotencyKey,
+      const submitted = await qwenOwnerSdk.submitQwenEvaluation({
         profileId,
+        idempotencyKey,
       });
-      assert.equal(
-        acceptedResponse.status,
-        202,
-        `${profileId} request rejected: ${await acceptedResponse.clone().text()}`,
-      );
-      const accepted = (await acceptedResponse.json()) as {
-        id: string;
-        status: string;
-        profileId: string;
-      };
+      const accepted = submitted.job;
       qwenPolicyLabJobIds.push(accepted.id);
+      assert.equal(submitted.source, "qwen_local_policy_lab_profile");
+      assert.equal(submitted.executionMode, "not_yet_verified");
+      assert.equal(submitted.externalDispatch, false);
       assert.equal(accepted.status, "queued");
       assert.equal(accepted.profileId, profileId);
 
-      const duplicate = await apiRequest(userA, pathA, "POST", {
-        idempotencyKey,
+      const duplicate = await qwenOwnerSdk.submitQwenEvaluation({
         profileId,
+        idempotencyKey,
       });
-      assert.equal(duplicate.status, 202);
-      assert.equal(((await duplicate.json()) as { id: string }).id, accepted.id);
+      assert.equal(duplicate.job.id, accepted.id);
+      assert.equal(duplicate.job.profileId, profileId);
       assert.equal(
         (
           await apiRequest(userA, pathA, "POST", {
@@ -1685,6 +1702,44 @@ test(
         );
       }
 
+      const sdkCompletion = await qwenOwnerSdk.waitForQwenEvaluation(
+        accepted.id,
+        profileId,
+        { intervalMs: 50, maxAttempts: 1 },
+      );
+      assert.equal(sdkCompletion.job.status, "succeeded");
+      assert.equal(sdkCompletion.job.profileId, profileId);
+      assert.equal(sdkCompletion.report.profileId, profileId);
+      assert.equal(sdkCompletion.report.toolChoice, "auto");
+      assert.equal(
+        sdkCompletion.report.executionMode,
+        "real_local_qwen_inference",
+      );
+      assert.ok(
+        sdkCompletion.report.cases.some((item) => item.label === "benign"),
+        `${profileId} lacks a benign real-inference case`,
+      );
+      assert.ok(
+        sdkCompletion.report.cases.some((item) => item.label === "adversarial"),
+        `${profileId} lacks an adversarial real-inference case`,
+      );
+      qwenSdkReportRows.push({
+        profileId,
+        jobId: accepted.id,
+        source: sdkCompletion.report.source,
+        engineVersion: sdkCompletion.report.engineVersion,
+        toolChoice: sdkCompletion.report.toolChoice,
+        counts: sdkCompletion.report.counts,
+        evidenceSha256: sdkCompletion.report.evidenceSha256,
+      });
+      console.log(
+        `SDK_QWEN_PROFILE=${profileId} cases=${sdkCompletion.report.counts.cases} ` +
+          `adapted=${sdkCompletion.report.counts.adaptedQwenMarkerCases} ` +
+          `native=${sdkCompletion.report.counts.directRuntimeToolCallCases} ` +
+          `no_tool_call=${sdkCompletion.report.counts.noToolCallCases} ` +
+          `no_proposal=${sdkCompletion.report.counts.noProposal}`,
+      );
+
       const persisted = await withWorkspaceUserTransaction(
         userA,
         workspaceA,
@@ -1758,12 +1813,19 @@ test(
           qwenApproval.syntheticActionRef ===
             "guardian.synthetic.support.refund.v1",
       );
+      const qwenApprovalBinding = qwenApproval.proposalBindingSha256;
+      assert.match(qwenApprovalBinding ?? "", /^[a-f0-9]{64}$/);
+      const sdkApprovals = await qwenAdminSdk.listApprovals();
+      assert.ok(
+        sdkApprovals.some((approval) => approval.id === qwenApproval.id),
+        "SDK reviewer must retrieve the same persisted tenant approval",
+      );
       const decisionPath =
         `/api/workspaces/${workspaceA}/ai-security-assessments/approvals/` +
         `${qwenApproval.id}/decision`;
       const decisionBody = {
         decision: "approve",
-        proposalBindingSha256: qwenApproval.proposalBindingSha256,
+        proposalBindingSha256: qwenApprovalBinding,
       };
       const crossTenantDecision = await apiRequest(
         userB,
@@ -1777,19 +1839,38 @@ test(
         404,
         "a Qwen approval must not be visible or decidable from another tenant",
       );
-      const concurrent = await Promise.all([
-        apiRequest(adminA, decisionPath, "POST", decisionBody),
-        apiRequest(adminA, decisionPath, "POST", decisionBody),
+      const concurrent = await Promise.allSettled([
+        qwenAdminSdk.decideApproval({
+          approvalId: qwenApproval.id,
+          decision: "approve",
+          proposalBindingSha256: qwenApprovalBinding!,
+        }),
+        qwenAdminSdk.decideApproval({
+          approvalId: qwenApproval.id,
+          decision: "approve",
+          proposalBindingSha256: qwenApprovalBinding!,
+        }),
       ]);
       assert.deepEqual(
-        concurrent.map((response) => response.status).sort(),
+        concurrent
+          .map((result) =>
+            result.status === "fulfilled" ? 200 : result.reason.status,
+          )
+          .sort(),
         [200, 409],
         "a concurrent duplicate must have exactly one successful replay",
       );
-      const decisionResponse = concurrent.find((response) => response.status === 200)!;
-      const decisionResult = DecideWorkspaceAiAssessmentApprovalResponse.parse(
-        await decisionResponse.json(),
+      const successfulDecision = concurrent.find(
+        (result) => result.status === "fulfilled",
       );
+      const rejectedDecision = concurrent.find(
+        (result) => result.status === "rejected",
+      );
+      assert.ok(successfulDecision?.status === "fulfilled");
+      assert.ok(rejectedDecision?.status === "rejected");
+      assert.ok(rejectedDecision.reason instanceof GuardianNexusSdkError);
+      assert.equal(rejectedDecision.reason.status, 409);
+      const decisionResult = successfulDecision.value;
       assert.equal(decisionResult.approval.status, "approved");
       assert.equal(
         decisionResult.execution,
@@ -1957,6 +2038,61 @@ test(
     );
     mkdirSync(dirname(artifactPath), { recursive: true });
     writeFileSync(artifactPath, JSON.stringify(artifactJobs, null, 2));
+    assert.deepEqual(
+      qwenSdkReportRows
+        .map((row) => row.profileId)
+        .sort(),
+      [...QWEN_AGENT_PROFILE_IDS].sort(),
+      "SDK must complete the real local Qwen flow for all eight fixed profiles",
+    );
+    const totalFields = [
+      "cases",
+      "directRuntimeToolCallCases",
+      "adaptedQwenMarkerCases",
+      "unparsedMarkerCases",
+      "noToolCallCases",
+      "allow",
+      "deny",
+      "requireApproval",
+      "noProposal",
+      "simulatedExecutions",
+    ] as const;
+    const totals = Object.fromEntries(
+      totalFields.map((field) => [
+        field,
+        qwenSdkReportRows.reduce((sum, row) => {
+          const counts = row.counts as Record<string, number>;
+          return sum + counts[field];
+        }, 0),
+      ]),
+    );
+    const sdkCoverage = {
+      schemaVersion: 1,
+      sdkVersion: GUARDIAN_NEXUS_SDK_VERSION,
+      source: "guardian_agent_sdk_e2e_real_local_qwen",
+      executionMode: "real_local_qwen_inference",
+      toolChoice: "auto",
+      profileCount: qwenSdkReportRows.length,
+      profiles: qwenSdkReportRows,
+      totals,
+      externalCalls: 0,
+      unauthorizedExecutions: 0,
+      policyOffExecutions: 0,
+      rawPromptsResponsesArgumentsPersisted: false,
+    };
+    const sdkEvidenceSha256 = createHash("sha256")
+      .update(canonicalJson(sdkCoverage), "utf8")
+      .digest("hex");
+    const sdkArtifactPath = fileURLToPath(
+      new URL(
+        "../../../generated-artifacts/guardian-agent-sdk-qwen-eight-profiles-e2e.json",
+        import.meta.url,
+      ),
+    );
+    writeFileSync(
+      sdkArtifactPath,
+      JSON.stringify({ ...sdkCoverage, evidenceSha256: sdkEvidenceSha256 }, null, 2),
+    );
   },
 );
 

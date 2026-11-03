@@ -12,12 +12,21 @@ const client = new GuardianNexusClient({
   getAccessToken: getHostSessionAccessToken,
 });
 
-const submitted = await client.submitIntent({
-  scenarioId: "finance.trusted_bank_change_approval",
+const submitted = await client.submitQwenEvaluation({
+  profileId: "guardian-agent-qwen-lab-email-v1",
   idempotencyKey: createIdempotencyKey(),
 });
-const result = await client.waitForJob(submitted.job.id, {
-  intervalMs: 500,
-  maxAttempts: 60,
+const result = await client.waitForQwenEvaluation(
+  submitted.job.id,
+  submitted.job.profileId,
+  {
+    intervalMs: 2_000,
+    maxAttempts: 120,
+  },
+);
+console.log({
+  status: result.job.status,
+  profile: result.report.verticalId,
+  decisions: result.report.counts,
+  evidenceSha256: result.report.evidenceSha256,
 });
-console.log({ status: result.status, jobId: result.id });

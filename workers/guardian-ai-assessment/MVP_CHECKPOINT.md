@@ -1775,3 +1775,67 @@ This update supersedes the older diskcache status, worker-test count, and OSV
   No hay conectores reales ni efectos externos. La comprobación de IPv6,
   broker y supply chain no forma parte de este hito y sigue pendiente antes de
   pilotos/clientes.
+
+## SDK Qwen local para ocho perfiles — 2026-11-03
+
+- Base al iniciar: HEAD limpio `1a9940c2b480abb55494e64b3a77eced73a3f423`.
+  El paquete `@workspace/guardian-agent-sdk` queda en v0.2.0. Se añadieron
+  solicitud/consulta de evaluaciones Qwen con ocho `profileId` fijados,
+  provenance estricta de informe, tipo de perfil estrechado tras comprobar la
+  coincidencia de respuesta, documentación y ejemplo consumible. No acepta
+  prompts, herramientas, argumentos, política, actor ni destino desde el SDK.
+- E2E serial `pnpm --filter @workspace/api-server run test:ai-assessment-e2e`:
+  API/worker **8/8**, dashboard **8/8**, exit 0; duración API/worker
+  `686466.9 ms`. La primera tentativa se detuvo antes de ejecutar inferencias
+  porque el preflight mostró worker `unavailable`; la consulta de disponibilidad
+  con RLS ya lista reportó todos los perfiles `ready`, y la repetición completa
+  terminó correctamente.
+- Qwen real local desde el SDK, `tool_choice=auto`: **28 casos** en ocho
+  perfiles; **19** propuestas por marcadores Qwen adaptados, **0**
+  `message.tool_calls` directas, **9** sin propuesta, **0** marcadores
+  incompletos; decisiones **10 ALLOW**, **7 DENY**, **2 REQUIRE_APPROVAL**,
+  con **10** simulaciones. Cero llamadas externas, ejecuciones no autorizadas
+  o Policy-OFF executions. Los resultados por perfil y SHA de evidencia están
+  en el informe enlazado más abajo. No es un benchmark A/B Policy ON/OFF.
+- Aprobaciones originadas por propuestas Qwen: dos propuestas
+  `require_approval`; una aprobada por rol admin con vínculo/hashes persistidos
+  y simulada una vez en clon ficticio; otra caducada, con respuesta de
+  conflicto al aprobar/repetir y `simulated_at=null`. La suite separada de
+  intención fija del SDK también pasó aprobación sintética **1/1**.
+- Suites separadas ejecutadas en la misma corrida: sonda nativa
+  `QWEN_NATIVE_TOOL_TRACE_COUNT=24/288` (no contabilizar como selección
+  autónoma) y batería autónoma existente
+  `QWEN_AUTONOMOUS_TOOL_TRACE_COUNT=39/42`.
+- Regresiones: worker Python en imagen Garak fijada vía
+  `sh workers/guardian-ai-assessment/scripts/run-local.sh --unit-tests`
+  **87/87**, `--network=none`, `--pull=never`; un intento de unittest en host
+  dio 115 éxitos y 1 error de importación (`garak` no está instalado en host),
+  corregido usando el perfil de contenedor previsto. API unit tests **60/60**.
+  SDK build/tests **11/11**, typecheck del ejemplo correcto; API typecheck y
+  build correctos; web typecheck y build correctos con
+  `PORT=5000 BASE_PATH=/eu-security-platform/`. El primer build web sin esas
+  variables falló por configuración requerida; el build final pasó con avisos
+  de sourcemap `tooltip.tsx` y chunk >500 kB. `git diff --check` pasó.
+- El E2E completo ocurrió antes del último estrechamiento estático de tipo
+  `profileId`. Después se repitieron SDK build/tests, compilación del ejemplo,
+  API typecheck y empaquetado/importación; el E2E completo no se repitió para
+  ese cambio de tipo que preserva el valor ya comprobado en runtime.
+- Tarball local v0.2.0 importado desde un consumidor temporal, sin registry:
+  `generated-artifacts/guardian-agent-sdk/guardian-agent-sdk-0.2.0.tgz`,
+  SHA-256 `141dc330830f04d7c4a29d5c55071d0fec26d21e45c5dfc8d1afa7b8b0b02304`.
+- Evidencia redactada:
+  `generated-artifacts/guardian-agent-sdk-qwen-eight-profiles-e2e.json`,
+  SHA-256 `ad0f0bdd427a1a37822e385488edf650c5e4bd77318c6f1e438b3aa93a827113`;
+  SHA interno `06f729655d43374da089b677224f7be651c4057a1e11333d52552708a9e5401a`.
+  Informe por perfil:
+  `reports/guardian-agent-sdk-qwen-eight-profiles-2026-11-03.md`, SHA-256
+  `645dad5c1e0aca48b7fa74468018c173782ba36336ca9aa4890c605f8ea7fe31`.
+- Inferencia: `Qwen/Qwen3-0.6B-GGUF` Q8_0, archivo SHA-256
+  `9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031`;
+  `llama-cpp-python` 0.3.36. Imagen Qwen local inmutable
+  `sha256:884d4f7bc6c11e03f6ced5cfcc9e88e7a8043d85923429f1a3a181953f07830f`,
+  sin red ni pull durante la evaluación. La muestra es sintética y pequeña;
+  no acredita eficacia general ni conectores empresariales. No se verificó
+  Clerk en navegador real. IPv6, broker host, advisories y revisión legal de
+  licencias/procedencia continúan pendientes antes de clientes. Sin publicación,
+  producción, clientes o servicios externos.
