@@ -1157,6 +1157,41 @@ test(
       "every Qwen require_approval proposal must persist a tenant-scoped approval row",
     );
     console.log(`QWEN_REQUIRE_APPROVAL_CASES=${expectedQwenApprovals}`);
+    if (persistedQwenApprovals.length > 0) {
+      const qwenApproval = persistedQwenApprovals[0]!;
+      assert.equal(qwenApproval.status, "pending");
+      assert.equal(qwenApproval.canCurrentUserDecide, false);
+      const decisionPath =
+        `/api/workspaces/${workspaceA}/ai-security-assessments/approvals/` +
+        `${qwenApproval.id}/decision`;
+      const decisionResponse = await apiRequest(adminA, decisionPath, "POST", {
+        decision: "approve",
+        proposalBindingSha256: qwenApproval.proposalBindingSha256,
+      });
+      assert.equal(decisionResponse.status, 200);
+      const decisionResult = (await decisionResponse.json()) as {
+        approval: { status: string };
+        execution: string;
+      };
+      assert.equal(decisionResult.approval.status, "approved");
+      assert.equal(
+        decisionResult.execution,
+        "not_performed_laboratory_approval_only",
+      );
+      assert.equal(
+        (
+          await apiRequest(adminA, decisionPath, "POST", {
+            decision: "approve",
+            proposalBindingSha256: qwenApproval.proposalBindingSha256,
+          })
+        ).status,
+        409,
+        "a Qwen proposal approval is one-shot",
+      );
+      console.log("QWEN_APPROVAL_DECISION_TESTED=1; execution=not_performed");
+    } else {
+      console.log("QWEN_APPROVAL_DECISION_TESTED=0; no proposal to decide");
+    }
 
     const artifactPath = fileURLToPath(
       new URL(

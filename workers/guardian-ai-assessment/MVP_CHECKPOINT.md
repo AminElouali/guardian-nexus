@@ -1397,10 +1397,17 @@ This update supersedes the older diskcache status, worker-test count, and OSV
 - La solicitud financiera benigna fue adaptada desde marcador Qwen,
   `require_approval`; la consulta autenticada del inbox encontró exactamente
   una fila tenant-scoped para ese job. La prueba falla si el número de filas
-  no coincide con los casos `require_approval`. La solicitud adversaria
-  financiera no produjo propuesta. El flujo de aprobación no ejecutó ni
-  reanudó la herramienta. El E2E separado de permisos de aprobación pasó
-  **1/1** con tres solicitudes fixture (aprobada, denegada, caducada).
+  no coincide con los casos `require_approval`. En una repetición, `adminA`
+  aprobó esa fila por API: estado `approved`, respuesta
+  `not_performed_laboratory_approval_only` y repetición de la decisión 409.
+  La repetición E2E pasó **1/1** en 220.547 s de test (222.931 s total).
+  Es una identidad de prueba, no una decisión humana en navegador. La
+  solicitud adversaria financiera no produjo propuesta. El E2E separado de
+  permisos de aprobación pasó **1/1** con tres solicitudes fixture (aprobada,
+  denegada, caducada).
+- `actionSha256` de la propuesta Qwen quedó `null`; no hay representación
+  allow-listed exacta para reconstruir la acción, por lo que replay no se
+  habilitó.
 - El modo `Policy OFF` siguió siendo contrafactual sobre clones: 0 ejecuciones.
   Cero llamadas/operaciones externas, datos de clientes, secretos montados,
   prompts/respuestas/argumentos brutos persistidos. 16/16 casos en
@@ -1408,9 +1415,15 @@ This update supersedes the older diskcache status, worker-test count, and OSV
 - Evidencia:
   `generated-artifacts/guardian-qwen-policy-labs-e2e-v1.3.0.json`,
   SHA-256 `9461b369c15c3dff5d56772d6a804e78f733e2b65646994dba65e3f9892241f6`.
+  Corrida de decisión:
+  `generated-artifacts/guardian-qwen-policy-labs-e2e-v1.3.0-approval-decision.json`,
+  SHA-256 `0ea262d9fd441c747c2303f22b695d62c5188d1149be824339aa0a6e5dbbd546`.
+  Log E2E redactado:
+  `generated-artifacts/guardian-qwen-approval-decision-e2e-v1.3.0.log`,
+  SHA-256 `de5c0a0b4dd7a36b2eff032b789cf214cd0117c3d8b6758ae5d533b480a11bc4`.
   Informe:
   `reports/qwen-policy-labs-eight-verticals-e2e-v1.3.0-2026-11-03.md`,
-  SHA-256 `2502defab62b20620d319ac9d4c1997f4bbc0936f780f223f2639346a32df762`.
+  SHA-256 `913a1aa9360e003da31636bcba716167c9012aa755b9a706b6b5925f74547a38`.
   No contiene prompts, respuestas ni argumentos crudos.
 - Regresiones tras el cambio: API **56/56**, worker **87/87**, dashboard/
   informe/exportación **8/8**, E2E aprobación **1/1**, `pnpm run typecheck`,
@@ -1420,11 +1433,11 @@ This update supersedes the older diskcache status, worker-test count, and OSV
 - Estado: las ocho verticales tienen perfiles Qwen locales probados, pero no
   son ocho agentes independientes ni conectores empresariales. Multiagente
   sigue siendo una delegación sintética de un único Qwen. La aprobación Qwen
-  queda persistida y visible en API durante el E2E; la decisión humana se
-  probó por separado con fixture, no con una sesión Clerk real en navegador.
-  El inbox actual registra decisiones, no reanuda acciones. La reanudación
-  segura exige poder reconstruir y volver a validar atómicamente la acción
-  sintética exacta ligada al hash; no se habilitó un replay.
+  queda persistida y visible por API; el test admin la aprobó sin ejecución.
+  Las pruebas de decisión usan identidades de test, no una sesión Clerk real
+  en navegador. El inbox registra decisiones, no reanuda acciones; como
+  `actionSha256` es nulo, no puede reconstruirse exactamente la propuesta y
+  el replay permanece deshabilitado.
 - Límites previos sin cambios: IPv6 no verificado (`kernel_protocol_unavailable`),
   advisories/SBOM/licencias pendientes de revisión, proceso API con autoridad
   Docker no separada en este host Replit y sesión Clerk real de navegador no
