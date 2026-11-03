@@ -12,4 +12,5 @@ export type GuardianQwenPolicyLabEvidenceEngineVersion = typeof GuardianQwenPoli
 export const GuardianQwenPolicyLabEvidenceEngineVersion = {
   'guardian-agent-qwen-policy-lab-v1': 'guardian-agent-qwen-policy-lab-v1',
   'guardian-agent-qwen-policy-lab-v110': 'guardian-agent-qwen-policy-lab-v1.1.0',
+  'guardian-agent-qwen-policy-lab-v120': 'guardian-agent-qwen-policy-lab-v1.2.0',
 } as const;

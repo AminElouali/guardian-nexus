@@ -102,6 +102,12 @@ before(async () => {
   for (const profileId of [
     "guardian-agent-qwen-lab-email-v1",
     "guardian-agent-qwen-lab-database-v1",
+    "guardian-agent-qwen-lab-finance-v1",
+    "guardian-agent-qwen-lab-customer-service-v1",
+    "guardian-agent-qwen-lab-programming-v1",
+    "guardian-agent-qwen-lab-browser-v1",
+    "guardian-agent-qwen-lab-infrastructure-v1",
+    "guardian-agent-qwen-lab-multiagent-v1",
   ]) {
     assert.equal(
       getLocalWorkerAvailability().profiles.find(
@@ -920,6 +926,11 @@ test(
       "guardian-agent-qwen-lab-email-v1",
       "guardian-agent-qwen-lab-database-v1",
       "guardian-agent-qwen-lab-finance-v1",
+      "guardian-agent-qwen-lab-customer-service-v1",
+      "guardian-agent-qwen-lab-programming-v1",
+      "guardian-agent-qwen-lab-browser-v1",
+      "guardian-agent-qwen-lab-infrastructure-v1",
+      "guardian-agent-qwen-lab-multiagent-v1",
     ] as const;
     const artifactJobs: Record<string, unknown>[] = [];
 

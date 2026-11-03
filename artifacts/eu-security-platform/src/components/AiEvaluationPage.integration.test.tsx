@@ -148,14 +148,23 @@ test("renders the real API lab response in the authenticated dashboard card", ()
   assert.match(localMarkup, /Qwen\/Qwen3-0\.6B-GGUF/);
 });
 
-test("renders real Qwen email, database, and finance evidence separately from fixtures", () => {
+test("renders real Qwen profiles separately from fixture evidence", () => {
   const artifactPath = new URL(
     "../../../../generated-artifacts/guardian-qwen-policy-labs-e2e.json",
     import.meta.url,
   );
   const jobs = JSON.parse(readFileSync(artifactPath, "utf8")) as AiAssessmentLabJob[];
-  assert.equal(jobs.length, 3);
-  for (const verticalId of ["email", "database", "finance"] as const) {
+  assert.equal(jobs.length, 8);
+  for (const verticalId of [
+    "email",
+    "database",
+    "finance",
+    "customer_service",
+    "programming",
+    "browser",
+    "infrastructure",
+    "multiagent",
+  ] as const) {
     const job = jobs.find(
       (candidate) =>
         candidate.status === "succeeded" &&

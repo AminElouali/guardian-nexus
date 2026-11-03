@@ -354,6 +354,11 @@ export const AiAssessmentLabProfileAvailabilityProfileId = {
   'guardian-agent-qwen-lab-email-v1': 'guardian-agent-qwen-lab-email-v1',
   'guardian-agent-qwen-lab-database-v1': 'guardian-agent-qwen-lab-database-v1',
   'guardian-agent-qwen-lab-finance-v1': 'guardian-agent-qwen-lab-finance-v1',
+  'guardian-agent-qwen-lab-customer-service-v1': 'guardian-agent-qwen-lab-customer-service-v1',
+  'guardian-agent-qwen-lab-programming-v1': 'guardian-agent-qwen-lab-programming-v1',
+  'guardian-agent-qwen-lab-browser-v1': 'guardian-agent-qwen-lab-browser-v1',
+  'guardian-agent-qwen-lab-infrastructure-v1': 'guardian-agent-qwen-lab-infrastructure-v1',
+  'guardian-agent-qwen-lab-multiagent-v1': 'guardian-agent-qwen-lab-multiagent-v1',
 } as const;
 
 export type AiAssessmentLabProfileAvailabilityEngine = typeof AiAssessmentLabProfileAvailabilityEngine[keyof typeof AiAssessmentLabProfileAvailabilityEngine];
@@ -410,6 +415,11 @@ export const AiAssessmentLabJobRequestProfileId = {
   'guardian-agent-qwen-lab-email-v1': 'guardian-agent-qwen-lab-email-v1',
   'guardian-agent-qwen-lab-database-v1': 'guardian-agent-qwen-lab-database-v1',
   'guardian-agent-qwen-lab-finance-v1': 'guardian-agent-qwen-lab-finance-v1',
+  'guardian-agent-qwen-lab-customer-service-v1': 'guardian-agent-qwen-lab-customer-service-v1',
+  'guardian-agent-qwen-lab-programming-v1': 'guardian-agent-qwen-lab-programming-v1',
+  'guardian-agent-qwen-lab-browser-v1': 'guardian-agent-qwen-lab-browser-v1',
+  'guardian-agent-qwen-lab-infrastructure-v1': 'guardian-agent-qwen-lab-infrastructure-v1',
+  'guardian-agent-qwen-lab-multiagent-v1': 'guardian-agent-qwen-lab-multiagent-v1',
 } as const;
 
 export interface AiAssessmentLabJobRequest {
@@ -450,6 +460,11 @@ export const AiAssessmentLabJobProfileId = {
   'guardian-agent-qwen-lab-email-v1': 'guardian-agent-qwen-lab-email-v1',
   'guardian-agent-qwen-lab-database-v1': 'guardian-agent-qwen-lab-database-v1',
   'guardian-agent-qwen-lab-finance-v1': 'guardian-agent-qwen-lab-finance-v1',
+  'guardian-agent-qwen-lab-customer-service-v1': 'guardian-agent-qwen-lab-customer-service-v1',
+  'guardian-agent-qwen-lab-programming-v1': 'guardian-agent-qwen-lab-programming-v1',
+  'guardian-agent-qwen-lab-browser-v1': 'guardian-agent-qwen-lab-browser-v1',
+  'guardian-agent-qwen-lab-infrastructure-v1': 'guardian-agent-qwen-lab-infrastructure-v1',
+  'guardian-agent-qwen-lab-multiagent-v1': 'guardian-agent-qwen-lab-multiagent-v1',
 } as const;
 
 export type AiAssessmentEvidenceSource = typeof AiAssessmentEvidenceSource[keyof typeof AiAssessmentEvidenceSource];
@@ -3200,6 +3215,7 @@ export type GuardianQwenPolicyLabEvidenceEngineVersion = typeof GuardianQwenPoli
 export const GuardianQwenPolicyLabEvidenceEngineVersion = {
   'guardian-agent-qwen-policy-lab-v1': 'guardian-agent-qwen-policy-lab-v1',
   'guardian-agent-qwen-policy-lab-v110': 'guardian-agent-qwen-policy-lab-v1.1.0',
+  'guardian-agent-qwen-policy-lab-v120': 'guardian-agent-qwen-policy-lab-v1.2.0',
 } as const;
 
 export type GuardianQwenPolicyLabEvidenceProfileId = typeof GuardianQwenPolicyLabEvidenceProfileId[keyof typeof GuardianQwenPolicyLabEvidenceProfileId];
@@ -3209,6 +3225,11 @@ export const GuardianQwenPolicyLabEvidenceProfileId = {
   'guardian-agent-qwen-lab-email-v1': 'guardian-agent-qwen-lab-email-v1',
   'guardian-agent-qwen-lab-database-v1': 'guardian-agent-qwen-lab-database-v1',
   'guardian-agent-qwen-lab-finance-v1': 'guardian-agent-qwen-lab-finance-v1',
+  'guardian-agent-qwen-lab-customer-service-v1': 'guardian-agent-qwen-lab-customer-service-v1',
+  'guardian-agent-qwen-lab-programming-v1': 'guardian-agent-qwen-lab-programming-v1',
+  'guardian-agent-qwen-lab-browser-v1': 'guardian-agent-qwen-lab-browser-v1',
+  'guardian-agent-qwen-lab-infrastructure-v1': 'guardian-agent-qwen-lab-infrastructure-v1',
+  'guardian-agent-qwen-lab-multiagent-v1': 'guardian-agent-qwen-lab-multiagent-v1',
 } as const;
 
 export type GuardianQwenPolicyLabEvidenceVerticalId = typeof GuardianQwenPolicyLabEvidenceVerticalId[keyof typeof GuardianQwenPolicyLabEvidenceVerticalId];
@@ -3218,6 +3239,11 @@ export const GuardianQwenPolicyLabEvidenceVerticalId = {
   email: 'email',
   database: 'database',
   finance: 'finance',
+  customer_service: 'customer_service',
+  programming: 'programming',
+  browser: 'browser',
+  infrastructure: 'infrastructure',
+  multiagent: 'multiagent',
 } as const;
 
 export type GuardianQwenPolicyLabEvidenceVersionsCorpus = typeof GuardianQwenPolicyLabEvidenceVersionsCorpus[keyof typeof GuardianQwenPolicyLabEvidenceVersionsCorpus];
@@ -3226,6 +3252,7 @@ export type GuardianQwenPolicyLabEvidenceVersionsCorpus = typeof GuardianQwenPol
 export const GuardianQwenPolicyLabEvidenceVersionsCorpus = {
   'guardian-qwen-policy-lab-en-es-v1': 'guardian-qwen-policy-lab-en-es-v1',
   'guardian-qwen-policy-lab-en-es-v110': 'guardian-qwen-policy-lab-en-es-v1.1.0',
+  'guardian-qwen-policy-lab-en-es-v120': 'guardian-qwen-policy-lab-en-es-v1.2.0',
 } as const;
 
 export type GuardianQwenPolicyLabEvidenceCasesItemLabel = typeof GuardianQwenPolicyLabEvidenceCasesItemLabel[keyof typeof GuardianQwenPolicyLabEvidenceCasesItemLabel];

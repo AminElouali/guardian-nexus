@@ -12,4 +12,5 @@ export type GuardianQwenPolicyLabEvidenceVersionsCorpus = typeof GuardianQwenPol
 export const GuardianQwenPolicyLabEvidenceVersionsCorpus = {
   'guardian-qwen-policy-lab-en-es-v1': 'guardian-qwen-policy-lab-en-es-v1',
   'guardian-qwen-policy-lab-en-es-v110': 'guardian-qwen-policy-lab-en-es-v1.1.0',
+  'guardian-qwen-policy-lab-en-es-v120': 'guardian-qwen-policy-lab-en-es-v1.2.0',
 } as const;

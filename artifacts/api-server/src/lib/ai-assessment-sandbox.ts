@@ -14,6 +14,11 @@ export const QWEN_POLICY_LAB_PROFILE_IDS = [
   "guardian-agent-qwen-lab-email-v1",
   "guardian-agent-qwen-lab-database-v1",
   "guardian-agent-qwen-lab-finance-v1",
+  "guardian-agent-qwen-lab-customer-service-v1",
+  "guardian-agent-qwen-lab-programming-v1",
+  "guardian-agent-qwen-lab-browser-v1",
+  "guardian-agent-qwen-lab-infrastructure-v1",
+  "guardian-agent-qwen-lab-multiagent-v1",
 ] as const;
 
 export type QwenPolicyLabProfileId = (typeof QWEN_POLICY_LAB_PROFILE_IDS)[number];

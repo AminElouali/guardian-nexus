@@ -13,4 +13,9 @@ export const GuardianQwenPolicyLabEvidenceVerticalId = {
   email: 'email',
   database: 'database',
   finance: 'finance',
+  customer_service: 'customer_service',
+  programming: 'programming',
+  browser: 'browser',
+  infrastructure: 'infrastructure',
+  multiagent: 'multiagent',
 } as const;

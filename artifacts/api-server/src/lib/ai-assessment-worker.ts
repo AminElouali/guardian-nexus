@@ -62,6 +62,16 @@ export const QWEN_DATABASE_POLICY_PROFILE_ID =
   "guardian-agent-qwen-lab-database-v1";
 export const QWEN_FINANCE_POLICY_PROFILE_ID =
   "guardian-agent-qwen-lab-finance-v1";
+export const QWEN_CUSTOMER_SERVICE_POLICY_PROFILE_ID =
+  "guardian-agent-qwen-lab-customer-service-v1";
+export const QWEN_PROGRAMMING_POLICY_PROFILE_ID =
+  "guardian-agent-qwen-lab-programming-v1";
+export const QWEN_BROWSER_POLICY_PROFILE_ID =
+  "guardian-agent-qwen-lab-browser-v1";
+export const QWEN_INFRASTRUCTURE_POLICY_PROFILE_ID =
+  "guardian-agent-qwen-lab-infrastructure-v1";
+export const QWEN_MULTIAGENT_POLICY_PROFILE_ID =
+  "guardian-agent-qwen-lab-multiagent-v1";
 export const EMAIL_POLICY_LAB_PROFILE_ID = "guardian-agent-lab-email-v1";
 export const DATABASE_POLICY_LAB_PROFILE_ID = "guardian-agent-lab-database-v1";
 export const FINANCE_POLICY_LAB_PROFILE_ID = "guardian-agent-lab-finance-v1";
@@ -436,6 +446,11 @@ export function getLocalWorkerAvailability(): LocalWorkerAvailability {
         QWEN_EMAIL_POLICY_PROFILE_ID,
         QWEN_DATABASE_POLICY_PROFILE_ID,
         QWEN_FINANCE_POLICY_PROFILE_ID,
+        QWEN_CUSTOMER_SERVICE_POLICY_PROFILE_ID,
+        QWEN_PROGRAMMING_POLICY_PROFILE_ID,
+        QWEN_BROWSER_POLICY_PROFILE_ID,
+        QWEN_INFRASTRUCTURE_POLICY_PROFILE_ID,
+        QWEN_MULTIAGENT_POLICY_PROFILE_ID,
       ].map((profileId) => ({
           profileId: profileId as AssessmentProfileId,
           engine: "guardian_qwen_policy_lab" as const,
@@ -490,6 +505,11 @@ export function getLocalWorkerAvailability(): LocalWorkerAvailability {
       QWEN_EMAIL_POLICY_PROFILE_ID,
       QWEN_DATABASE_POLICY_PROFILE_ID,
       QWEN_FINANCE_POLICY_PROFILE_ID,
+      QWEN_CUSTOMER_SERVICE_POLICY_PROFILE_ID,
+      QWEN_PROGRAMMING_POLICY_PROFILE_ID,
+      QWEN_BROWSER_POLICY_PROFILE_ID,
+      QWEN_INFRASTRUCTURE_POLICY_PROFILE_ID,
+      QWEN_MULTIAGENT_POLICY_PROFILE_ID,
     ].map((profileId) => ({
         profileId: profileId as AssessmentProfileId,
         engine: "guardian_qwen_policy_lab" as const,
@@ -932,7 +952,21 @@ export function validateGuardianQwenPolicyLabEvidence(
   raw: unknown,
   requestedProfileId: AssessmentProfileId,
 ): string | null {
-  const profileMap: Record<string, { verticalId: "email" | "database" | "finance"; cases: string[] }> = {
+  const profileMap: Record<
+    string,
+    {
+      verticalId:
+        | "email"
+        | "database"
+        | "finance"
+        | "customer_service"
+        | "programming"
+        | "browser"
+        | "infrastructure"
+        | "multiagent";
+      cases: string[];
+    }
+  > = {
     [QWEN_EMAIL_POLICY_PROFILE_ID]: {
       verticalId: "email",
       cases: ["qwen_email_benign_read_es", "qwen_email_indirect_injection_en"],
@@ -944,6 +978,41 @@ export function validateGuardianQwenPolicyLabEvidence(
     [QWEN_FINANCE_POLICY_PROFILE_ID]: {
       verticalId: "finance",
       cases: ["qwen_finance_benign_invoice_es", "qwen_finance_indirect_bank_change_en"],
+    },
+    [QWEN_CUSTOMER_SERVICE_POLICY_PROFILE_ID]: {
+      verticalId: "customer_service",
+      cases: [
+        "qwen_support_benign_reply_es",
+        "qwen_support_indirect_injection_en",
+      ],
+    },
+    [QWEN_PROGRAMMING_POLICY_PROFILE_ID]: {
+      verticalId: "programming",
+      cases: [
+        "qwen_programming_benign_review_es",
+        "qwen_programming_indirect_injection_en",
+      ],
+    },
+    [QWEN_BROWSER_POLICY_PROFILE_ID]: {
+      verticalId: "browser",
+      cases: [
+        "qwen_browser_benign_local_page_es",
+        "qwen_browser_indirect_injection_en",
+      ],
+    },
+    [QWEN_INFRASTRUCTURE_POLICY_PROFILE_ID]: {
+      verticalId: "infrastructure",
+      cases: [
+        "qwen_infra_benign_config_read_es",
+        "qwen_infra_indirect_injection_en",
+      ],
+    },
+    [QWEN_MULTIAGENT_POLICY_PROFILE_ID]: {
+      verticalId: "multiagent",
+      cases: [
+        "qwen_multiagent_benign_read_only_es",
+        "qwen_multiagent_indirect_injection_en",
+      ],
     },
   };
   const expected = profileMap[requestedProfileId];
@@ -989,6 +1058,7 @@ export function validateGuardianQwenPolicyLabEvidence(
     ![
       "guardian-agent-qwen-policy-lab-v1",
       "guardian-agent-qwen-policy-lab-v1.1.0",
+      "guardian-agent-qwen-policy-lab-v1.2.0",
     ].includes(evidence.engineVersion) ||
     evidence.profileId !== requestedProfileId ||
     evidence.verticalId !== expected.verticalId ||
@@ -1002,6 +1072,7 @@ export function validateGuardianQwenPolicyLabEvidence(
     ![
       "guardian-qwen-policy-lab-en-es-v1",
       "guardian-qwen-policy-lab-en-es-v1.1.0",
+      "guardian-qwen-policy-lab-en-es-v1.2.0",
     ].includes(evidence.versions.corpus) ||
     evidence.versions.toolMarkupAdapter !== "guardian-qwen-native-markup-v1" ||
     provider.id !== "local_qwen_gguf" ||

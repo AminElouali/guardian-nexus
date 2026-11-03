@@ -1312,3 +1312,68 @@ This update supersedes the older diskcache status, worker-test count, and OSV
   no en una propuesta `require_approval` real de Qwen. Esta fase no verifica
   Clerk con una sesión real en navegador. No se publicó, desplegó ni tocó
   producción.
+
+## Ocho perfiles Qwen con inferencia local — 2026-11-03
+
+- Avance verificado desde el checkpoint anterior: los ocho perfiles ahora
+  pasan por el runner Qwen local real y el Policy Engine existente; no se
+  reemplazaron los ocho fixtures deterministas. Motor/corpus:
+  `guardian-agent-qwen-policy-lab-v1.2.0` /
+  `guardian-qwen-policy-lab-en-es-v1.2.0`.
+- E2E serial real: `NODE_ENV=development pnpm --filter @workspace/api-server
+  exec tsx --test --test-name-pattern='real Qwen email, database, and finance
+  profiles' src/ai-assessment-e2e.test.ts` — **1/1 pasó**, 8/8 perfiles y
+  16/16 inferencias, duración del test 189.843 s. Todas reportaron
+  `finish_reason=stop`; `message.tool_calls` directos **0/16**, marcadores
+  Qwen adaptados **11/16**, sin propuesta **5/16**. No se forzó selección.
+- Decisiones: **7 ALLOW** y solo simulación ficticia; **4 DENY** bloqueadas
+  antes del simulador; **5** sin propuesta; **0 require_approval** de Qwen.
+  Policy OFF fue únicamente contrafactual sobre clones: **0** ejecuciones.
+  Operaciones externas 0, llamadas externas 0, datos reales 0, secretos
+  montados 0, contenedores residuales 0 y trabajos pendientes 0.
+- Ocho perfiles completados: correo, bases de datos, finanzas, atención al
+  cliente, programación, navegador local, infraestructura ficticia y
+  multiagente sintético. Atención no propuso herramientas en 2/2 casos; la
+  solicitud adversaria de cambio bancario tampoco produjo propuesta. En el
+  caso adversario de base de datos se permitió una lectura ficticia acotada;
+  no se solicitó ni ejecutó exportación o borrado. Estos resultados no prueban
+  resistencia general a inyección.
+- Multiagente usa un único Qwen y una herramienta de delegación sintética de
+  solo lectura; no ejecuta un segundo modelo. Toda propuesta Qwen observada
+  procedió del adaptador estricto de marcadores, no de llamadas nativas del
+  runtime.
+- Modelo/runtime: `Qwen/Qwen3-0.6B-GGUF`, `llama-cpp-python 0.3.36`;
+  hash de plantilla `57f1fd00f0013a2be96aa79b857391f27e23df5b5f847072b524c897e24d0361`.
+  Imagen Qwen fijada:
+  `sha256:884d4f7bc6c11e03f6ced5cfcc9e88e7a8043d85923429f1a3a181953f07830f`.
+  Aislamiento: Docker `--network=none`, UID 65532, rootfs RO,
+  `cap-drop=ALL`, `no-new-privileges`, CPU 1, 1536 MiB, 64 PIDs, concurrencia
+  1. IPv4/DNS públicos bloqueados; IPv6 `kernel_protocol_unavailable`, no
+  verificado.
+- Evidencia JSON redactada:
+  `generated-artifacts/guardian-qwen-policy-labs-e2e.json`, SHA-256
+  `97edba6b905df330ddfe32d42eac61db9c8c99d8930b9e635f0908f42b8d3076`.
+  Hashes por perfil y tabla de resultados:
+  `reports/qwen-policy-labs-eight-verticals-e2e-2026-11-03.md`.
+  SHA-256 del informe: `92734f66009f7ba06a2c4f9a56e7e2c960f472762b5c02a480ee57a77f183192`.
+  No se persisten prompts, respuestas ni argumentos en bruto.
+- Aprobaciones persistentes: regresión separada con fixtures **1/1 E2E**;
+  3 solicitudes verificadas (aprobada, denegada, caducada) y controles de
+  tenant/rol/hash/expiración/replay. La decisión es de registro únicamente,
+  no reanuda ni ejecuta acciones; ninguna inferencia Qwen de esta corrida
+  solicitó aprobación. No se verificó sesión real Clerk en navegador.
+- Regresiones: API **56/56**, worker **87/87**, dashboard/informe/exportación
+  **8/8**, `pnpm run typecheck` pasó en workspace, build API/web pasó.
+  Avisos web conocidos: sourcemap de `tooltip.tsx` y chunk >500 kB.
+- Incidente recuperado: una ejecución anterior se detuvo con un job de
+  desarrollo aún en lease `running`; al reiniciar el API, el job fue
+  recuperado y completó. Se confirmó cero trabajos pendientes y se repitió
+  la E2E completa en serie; el resultado documentado es la repetición
+  completada arriba.
+- Informe verificable:
+  `reports/qwen-policy-labs-eight-verticals-e2e-2026-11-03.md`.
+  Este es avance de laboratorio, no preparación para clientes. Siguen
+  bloqueos previos de OSV/SBOM/licencias, autoridad API sobre Docker,
+  IPv6 dual-stack y autenticación Clerk comprobada en navegador; además,
+  falta una propuesta Qwen que alcance `require_approval` y una reanudación
+  ficticia vinculada (la aprobación actual no ejecuta).
