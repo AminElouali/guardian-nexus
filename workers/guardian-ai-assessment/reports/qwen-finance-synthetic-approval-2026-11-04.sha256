@@ -1,0 +1,6 @@
+88ffb4bce58bc12b99df8f93bc738bb029c84a468e14cc7f46d4c51ed97f03f6  artifacts/api-server/src/lib/ai-assessment-qwen-evidence.test.ts
+3c287f1ed04238d18e187d6a0a592fa96d1e796388f3de888cd914c0963d0848  workers/guardian-ai-assessment/deployment/lab-as-code/scripts/verify-db-identities.sh
+d30fbd6c2139b7ac5888f2432bb0b49a851a5447781337043414d74af6e3e198  workers/guardian-ai-assessment/deployment/lab-as-code/README.md
+ee91c735f39ad3cd6f699be31276bac8f36814157ac97796dbbb6504db2d8f94  workers/guardian-ai-assessment/tests/test_lab_as_code_guards.py
+9bfe810fe38a3a313251282b2d21a0d4486f0db4874476ed8959dc0b9d51028c  workers/guardian-ai-assessment/reports/qwen-finance-synthetic-approval-2026-11-04.md
+a7372574d98c1e938cc4cc29288fcde7c7b72c306830e043281fdda5dbadbdd2  generated-artifacts/guardian-synthetic-approval-e2e.json

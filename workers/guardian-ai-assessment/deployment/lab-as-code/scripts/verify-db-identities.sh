@@ -168,4 +168,4 @@ THEN 'passed' ELSE 'failed' END
 
 verify_session "$api_user" "app_runtime_login" "app_runtime"
 verify_session "$broker_user" "app_ai_assessment_worker_login" "app_ai_assessment_worker"
-printf 'database_passwords_read=0 inherited_pg_credentials=0 database_mutations=0\n'
+printf 'database_passwords_read=0 inherited_pg_credentials=0 database_mutations=0 tenant_policy_predicates=not_checked\n'

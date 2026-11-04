@@ -2735,3 +2735,61 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
 - Reporte y hashes:
   `reports/cross-layer-qwen-contract-2026-11-04.md` y
   `reports/cross-layer-qwen-contract-2026-11-04.sha256`.
+
+## Incremento 2026-11-04 — allowlist de aprobación sintética financiera
+
+- Inicio: HEAD `a3daa2c52e3603455ab312ca2a5f46f3fe3cfb70`, árbol limpio.
+- Se amplió `ai-assessment-qwen-evidence.test.ts`: el caso benigno de cambio
+  bancario ficticio de finanzas se verifica contra el allowlist exacto y un
+  recibo de clon en memoria; una inyección indirecta y un nombre de herramienta
+  alternativo no son reanudables. El test deja claro que es allowlist sintético,
+  no una inferencia Qwen.
+- Pruebas ejecutadas:
+  - Test focalizado de evidencia: **10/10**.
+  - API completa: **76/76**.
+  - Guardas del kit `lab-as-code`: **10/10**.
+  - Typecheck y build de API: pasaron.
+  - E2E persistente sintético de aprobación: **1/1** con `NODE_ENV=development`.
+    Primera invocación sin ese entorno falló en la precondición, antes del
+    flujo; repetida con el entorno explícito pasó. `modelInference=false`,
+    `dockerCommandRequestedByHarness=false`; hash de corrida
+    `4ce2c83270893c97d43fbfee2c8c29ae9884457c5684a656f35d34f4ba7cd85e`;
+    JSON redactado SHA-256
+    `a7372574d98c1e938cc4cc29288fcde7c7b72c306830e043281fdda5dbadbdd2`.
+- No se ejecutó nueva inferencia Qwen, SDK/UI ni suites worker fuera del kit,
+  ni se repitió preflight real. Las pruebas no cambian el gate: la separación
+  API/broker/socket Docker/sesión DB sigue sin acreditarse. No se afirma
+  aprobación persistente nacida de Qwen.
+- Informe y hashes en `reports/qwen-finance-synthetic-approval-2026-11-04.md`
+  y `reports/qwen-finance-synthetic-approval-2026-11-04.sha256`.
+
+## Incremento 2026-11-04 — cobertura financiera y límite explícito de RLS
+
+- Inicio: HEAD limpio `a3daa2c52e3603455ab312ca2a5f46f3fe3cfb70`.
+- Añadida prueba de allowlist sintético para cambio bancario financiero:
+  hash de acción/propuesta, recibo en clon de memoria y rechazos para el caso
+  adversario de inyección y herramienta distinta. No es inferencia Qwen.
+- El verificador PostgreSQL del kit Linux ahora emite
+  `tenant_policy_predicates=not_checked`; la guía aclara que `FORCE RLS`,
+  identidades y ausencia de grants no prueban los predicados tenant. La
+  aceptación requiere además tests sintéticos positivos del tenant propio y
+  negativos de lectura/escritura cruzada para jobs/evidencias/aprobaciones.
+- Verificación secuencial:
+  - Evidencia Qwen/allowlist: **10/10**.
+  - API: **76/76**.
+  - Guardas de kit Linux: **10/10**.
+  - API typecheck y build: pasaron.
+  - E2E de aprobación persistente con fixture: **1/1**. Primera invocación sin
+    `NODE_ENV` se detuvo en precondición; repetida con `NODE_ENV=development`
+    pasó, `modelInference=false`,
+    `dockerCommandRequestedByHarness=false`. Hash de corrida
+    `4ce2c83270893c97d43fbfee2c8c29ae9884457c5684a656f35d34f4ba7cd85e`;
+    JSON SHA-256
+    `a7372574d98c1e938cc4cc29288fcde7c7b72c306830e043281fdda5dbadbdd2`.
+- No se repitieron suites worker amplias, SDK ni UI; no hubo inferencia Qwen,
+  no se inició job API→worker y no se reejecutó el preflight real. El gate
+  continúa sin cambios. No se afirma que el test de roles equivalga a una
+  verificación RLS por predicados.
+- Informe y manifiesto de hashes:
+  `reports/qwen-finance-synthetic-approval-2026-11-04.md` y
+  `reports/qwen-finance-synthetic-approval-2026-11-04.sha256`.

@@ -56,6 +56,11 @@ una configuración que no cumpla; no habilita el broker ni el runner Qwen.
    `app_runtime` y
    `app_ai_assessment_worker` deben ser `NOLOGIN`/`NOINHERIT`; los logins deben
    ser distintos, `LOGIN`/`NOINHERIT` y autenticarse por `peer`.
+   **Límite importante:** `database_session=passed` verifica identidades,
+   privilegios y presencia de FORCE RLS; no valida que las expresiones de las
+   políticas filtren correctamente por tenant ni prueba filas cruzadas.
+   `tenant_policy_predicates=not_checked` es explícito en la salida. No
+   habilitar el runner basándose solo en ese resultado.
 5. Para el worker, conservar el preflight existente
    `python3 workers/guardian-ai-assessment/scripts/run_qwen_isolation_preflight.py`.
    Las pruebas negativas IPv4/UDP/DNS y la limitación IPv6 se documentan en
@@ -64,7 +69,11 @@ una configuración que no cumpla; no habilita el broker ni el runner Qwen.
 6. Aceptar el host solo después de demostrar que el UID API no puede abrir el
    socket, que el broker usa su propio daemon rootless, que los dos logins DB
    son independientes y que los tests adversos de grants/lease/tenant/imagen
-   fallan antes de crear un contenedor.
+   fallan antes de crear un contenedor. Ejecutar además la suite de API contra
+   una base desechable `guardian_lab_*`; exigir pruebas positivas de acceso al
+   tenant propio y negativas de lectura/escritura cruzada para jobs, evidencias
+   y aprobaciones. Esa suite de datos sintéticos, no este script de metadatos,
+   es la evidencia de predicates RLS efectivos.
 
 `preflight-host.sh`, la verificación PostgreSQL contra una base real y la
 provisión de roles **no se ejecutaron** en Replit:

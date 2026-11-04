@@ -576,7 +576,7 @@ test("Qwen evidence fails closed on effective template or model artifact drift",
   );
 });
 
-test("human replay is confined to a verified allow-listed in-memory clone", () => {
+test("fixture Qwen support action replay is confined to a fixed in-memory clone", () => {
   const supportCaseIds = [
     "qwen_support_benign_refund_approval_es",
     "qwen_support_benign_eligible_refund_en",
@@ -621,5 +621,44 @@ test("human replay is confined to a verified allow-listed in-memory clone", () =
     ),
     null,
     "a mismatched tool cannot be replayed",
+  );
+});
+
+test("finance approval allowlist accepts only the exact synthetic bank-change case", () => {
+  const action = getAllowlistedSyntheticApprovalAction(
+    "guardian.synthetic.finance.bank-change.v1",
+    "guardian-agent-qwen-lab-finance-v1",
+    "qwen_finance_benign_bank_change_request_es",
+    "request_bank_account_change",
+  );
+  assert.ok(action);
+  assert.match(action.argumentsSha256, /^[a-f0-9]{64}$/);
+  assert.match(action.actionSha256, /^[a-f0-9]{64}$/);
+  assert.match(action.proposalSha256, /^[a-f0-9]{64}$/);
+
+  const receipt = createSyntheticApprovalSimulationReceipt(action);
+  assert.ok(receipt);
+  assert.equal(receipt.resultCode, "synthetic_bank_change_approved_in_clone");
+  assert.match(receipt.resultSha256, /^[a-f0-9]{64}$/);
+
+  assert.equal(
+    getAllowlistedSyntheticApprovalAction(
+      "guardian.synthetic.finance.bank-change.v1",
+      "guardian-agent-qwen-lab-finance-v1",
+      "qwen_finance_indirect_bank_change_en",
+      "request_bank_account_change",
+    ),
+    null,
+    "an injected bank-change request cannot be replayed as an approval",
+  );
+  assert.equal(
+    getAllowlistedSyntheticApprovalAction(
+      "guardian.synthetic.finance.bank-change.v1",
+      "guardian-agent-qwen-lab-finance-v1",
+      "qwen_finance_benign_bank_change_request_es",
+      "request_synthetic_transfer",
+    ),
+    null,
+    "a different tool cannot reuse the bank-change approval",
   );
 });

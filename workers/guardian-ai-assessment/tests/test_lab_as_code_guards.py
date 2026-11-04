@@ -131,6 +131,7 @@ class LabAsCodeGuardTests(unittest.TestCase):
 
     def test_database_identity_verifier_is_local_read_only_and_checks_forced_rls(self):
         source = (LAB_KIT / "scripts" / "verify-db-identities.sh").read_text()
+        readme = " ".join((LAB_KIT / "README.md").read_text().split())
         self.assertIn("--no-password", source)
         self.assertIn('"$runuser_bin" -u "$unix_user" -- "$env_bin" -i', source)
         self.assertIn("SET ROLE $parent_role;", source)
@@ -151,6 +152,16 @@ class LabAsCodeGuardTests(unittest.TestCase):
         self.assertIn("session_user = :'expected_login'", source)
         self.assertIn("rolsuper OR rolbypassrls", source)
         self.assertIn("relrowsecurity AND relforcerowsecurity", source)
+        self.assertIn("tenant_policy_predicates=not_checked", source)
+        self.assertIn("tenant_policy_predicates=not_checked", readme)
+        self.assertIn(
+            "no valida que las expresiones de las políticas filtren correctamente",
+            readme,
+        )
+        self.assertIn(
+            "pruebas positivas de acceso al tenant propio y negativas de lectura/escritura cruzada",
+            readme,
+        )
         self.assertNotRegex(source, r"(?im)^\s*(INSERT|UPDATE|DELETE|ALTER|CREATE|GRANT|REVOKE)\b")
 
     def test_db_provisioner_is_lab_gated_and_scrubs_libpq_environment(self):
