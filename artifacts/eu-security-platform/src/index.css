@@ -718,6 +718,61 @@ select.text-input { appearance: auto; }
 .roadmap-bottom b { color: #46634f; font-weight: 700; }
 .roadmap-bottom .text-link { margin-left: auto; font-size: 10px; }
 
+/* Guardian Nexus Risk Intelligence — read-only catalog */
+.risk-intelligence-page { color: var(--ink); }
+.risk-intelligence-heading { align-items: center; }
+.risk-intelligence-readonly { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 7px; border: 1px solid #d8e2d8; border-radius: 18px; padding: 8px 11px; color: #55765f; background: #eef3eb; font: 9px var(--font-mono); }
+.risk-intelligence-notice { display: grid; grid-template-columns: 28px 1fr 20px; gap: 12px; align-items: start; margin-bottom: 29px; border: 1px solid #e2d9c7; border-radius: 10px; padding: 15px; color: #6c5a38; background: #f7f2e6; }
+.risk-intelligence-notice > span { display: grid; width: 27px; height: 27px; place-items: center; border-radius: 7px; color: #9c7c43; background: #eee4ce; }
+.risk-intelligence-notice > svg { margin-top: 4px; color: #719176; }
+.risk-intelligence-notice b { font-size: 11px; }
+.risk-intelligence-notice p { margin: 5px 0 0; color: #83775f; font-size: 10px; line-height: 1.6; }
+.risk-intelligence-section-heading { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin: 0 0 14px; }
+.risk-intelligence-section-heading h2 { margin: 5px 0 0; color: #304850; font: 700 21px var(--font-display); letter-spacing: -.035em; }
+.risk-intelligence-section-heading > span { color: #87918a; font: 9px var(--font-mono); }
+.risk-intelligence-sources { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.risk-intelligence-sources article { display: flex; flex-direction: column; gap: 8px; border: 1px solid #e2e0d6; border-radius: 9px; padding: 14px; background: #fffefa; }
+.risk-intelligence-sources h3 { margin: 0; color: #364d53; font-size: 12px; }
+.risk-intelligence-sources small { color: #89918b; font-size: 9px; line-height: 1.5; }
+.risk-intelligence-sources p { margin: 0; color: #6f7b77; font-size: 10px; line-height: 1.6; }
+.risk-intelligence-source-use { padding-left: 9px; border-left: 2px solid #c5d6c8; }
+.risk-intelligence-sources a { display: inline-flex; align-items: center; gap: 4px; width: fit-content; color: #367057; font-size: 10px; font-weight: 700; }
+.risk-source-state { width: fit-content; border-radius: 20px; padding: 4px 7px; color: #63746a; background: #eef1e9; font: 8px var(--font-mono); text-transform: uppercase; }
+.risk-source-state-license_not_verified_reference_only { color: #866d3f; background: #f5f0e3; }
+.risk-source-state-not_reused { color: #667887; background: #edf1f3; }
+.risk-intelligence-model { margin-top: 33px; }
+.risk-intelligence-profiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.risk-intelligence-profile { min-width: 0; border: 1px solid #e0e1d8; border-radius: 10px; padding: 15px; background: #fffefa; }
+.risk-intelligence-profile-detailed { border-color: #cedbd0; }
+.risk-intelligence-profile-head { display: flex; align-items: center; gap: 10px; }
+.risk-intelligence-icon { display: grid; flex: 0 0 auto; width: 34px; height: 34px; place-items: center; border-radius: 9px; color: #4c7b63; background: #edf3ea; }
+.risk-intelligence-profile h3 { margin: 4px 0 0; color: #344c53; font: 700 15px var(--font-display); }
+.risk-intelligence-scope { display: flex; flex-wrap: wrap; gap: 6px; margin: 13px 0; padding: 0; list-style: none; }
+.risk-intelligence-scope li { border: 1px solid #e5e7df; border-radius: 5px; padding: 5px 7px; color: #6d7a76; background: #fafaf6; font-size: 9px; line-height: 1.4; }
+.risk-intelligence-groups { display: grid; gap: 7px; }
+.risk-intelligence-groups details { border-top: 1px solid #ecebe5; padding-top: 8px; }
+.risk-intelligence-groups summary { display: flex; cursor: pointer; justify-content: space-between; color: #52666a; font-size: 10px; font-weight: 700; }
+.risk-intelligence-groups summary span { color: #85938a; font: 9px var(--font-mono); }
+.risk-intelligence-groups ul { display: grid; gap: 8px; margin: 9px 0 1px; padding: 0; list-style: none; }
+.risk-intelligence-groups li { border-left: 2px solid #cbd9cb; padding: 2px 0 2px 9px; }
+.risk-intelligence-groups li b { color: #4a5d61; font-size: 9px; line-height: 1.5; }
+.risk-intelligence-groups li p { margin: 3px 0; color: #75817c; font-size: 9px; line-height: 1.55; }
+.risk-intelligence-groups li small { color: #909891; font-size: 8px; line-height: 1.5; }
+.risk-intelligence-pending { margin: 13px 0 0; color: #7a8580; font-size: 10px; line-height: 1.6; }
+.risk-intelligence-footnote { margin-top: 20px; border-top: 1px solid #e2e0d8; padding-top: 13px; color: #7d8781; font-size: 9px; line-height: 1.6; }
+.risk-intelligence-footnote b { color: #536d5d; }
+
+@media (max-width: 1050px) {
+  .risk-intelligence-sources, .risk-intelligence-profiles { grid-template-columns: 1fr; }
+}
+@media (max-width: 767px) {
+  .risk-intelligence-heading { align-items: start; flex-direction: column; }
+  .risk-intelligence-readonly { margin-top: -16px; }
+  .risk-intelligence-section-heading { align-items: start; flex-direction: column; }
+  .risk-intelligence-notice { grid-template-columns: 28px 1fr; }
+  .risk-intelligence-notice > svg { display: none; }
+}
+
 /* Clerk screens */
 .auth-page { display: grid; min-height: 100dvh; grid-template-columns: minmax(300px, .88fr) 1.12fr; background: #f8f6f0; }
 .auth-left { position: relative; display: flex; min-height: 100dvh; flex-direction: column; padding: 31px 39px 23px; overflow: hidden; color: #e8eee7; background: #203547; }

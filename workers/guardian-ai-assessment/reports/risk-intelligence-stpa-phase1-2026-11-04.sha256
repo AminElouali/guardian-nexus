@@ -1,0 +1,7 @@
+c89cc52e0320d2aebe36a8aecf0d0d5b01b4dd8f4a14af69aeaaca35f571de4f  artifacts/eu-security-platform/src/App.tsx
+e9a1e2df237f5c73565fe75977f126ae1bf96ff51ed852b936adf54cf34dd68c  artifacts/eu-security-platform/src/index.css
+72416b9d813251d907a0ede588f9ec6da653e2252a82faa93467b6c03a884046  artifacts/eu-security-platform/src/risk-intelligence/catalog.v1.ts
+82e0d7def4f6e36bfbedcbee0d399f8d6f538c5da111272226e59eb68111e55a  artifacts/eu-security-platform/src/components/RiskIntelligencePage.tsx
+cb4013c37a7ae733dafb9cbbd21c14dcf934efbb80d07f88bcc21a2f90a52344  artifacts/eu-security-platform/src/components/RiskIntelligencePage.test.tsx
+200e13efe6162ec49b3e0d2436a08a9eced48dba39ac14c56ca442d698cff782  workers/guardian-ai-assessment/risk-intelligence/README.md
+96e1c050ad03ba0fde0c05a75744b411e89280e39691c75e325bc16938cc7c3e  workers/guardian-ai-assessment/reports/risk-intelligence-stpa-phase1-2026-11-04.md

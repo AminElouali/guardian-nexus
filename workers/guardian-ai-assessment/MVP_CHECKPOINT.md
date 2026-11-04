@@ -1,5 +1,40 @@
 # Guardian Nexus MVP checkpoint
 
+## Risk Intelligence STPA — fase 1 (2026-11-04)
+
+- Inicio en HEAD `037e59dc8a06fbbbe52a2ade7af3902a71b61b2a`, árbol limpio.
+- Se añadió catálogo versionado `guardian-risk-intelligence-catalog/1.0.0`,
+  versión `0.1.0`, y vista autenticada de solo lectura `/risk-intelligence`.
+  No altera el Policy Engine ni contiene acciones de ejecución.
+- Correo y bases de datos tienen análisis STPA inicial (pérdidas, peligros,
+  acciones de control inseguras, escenarios causales, restricciones y cuatro
+  especificaciones sintéticas por vertical), todas `prepared_not_executed`.
+  Finanzas, soporte, programación, navegador, infraestructura y multiagente
+  figuran `design_only`; no se afirma cobertura probada.
+- Fuentes oficiales revisadas: MITRE ATLAS `AML.T0051`, `AML.T0051.001`,
+  `AML.M0020` y licencia Apache-2.0 solo para `atlas-data`; OWASP Agentic
+  Security y Top 10 2026 como referencia sin licencia explícita verificada
+  para el contenido concreto; NIST AI RMF 1.0 y política pública de NIST;
+  MIT PSASS STPA Handbook con licencia no verificada (descarga devolvió
+  mantenimiento); enlaces de garak y Hugging Face sin probes ni datasets
+  reutilizados. No se afirma dictamen legal.
+- Pruebas: `RiskIntelligencePage.test.tsx` 3/3; regresión combinada de
+  catálogo + componentes AI existentes 11/11; frontend typecheck pasó;
+  `PORT=18753 BASE_PATH=/ pnpm --filter @workspace/eu-security-platform run
+  build` pasó con avisos de sourcemap en `tooltip.tsx` y chunk >500 kB.
+  La primera invocación de build falló antes de compilar por ausencia de las
+  variables requeridas; repetida con los valores ya configurados en el
+  artefacto.
+- No se ejecutaron Qwen, Docker, worker ni API; no hay inferencia o resultado
+  de Policy Engine asociado a este catálogo. Captura sin sesión de
+  `/risk-intelligence` mostró la pantalla Clerk; no se verificó sesión real
+  autenticada en navegador.
+- Reporte: `reports/risk-intelligence-stpa-phase1-2026-11-04.md`.
+  Manifiesto SHA-256 del catálogo, vista, pruebas y documentación:
+  `reports/risk-intelligence-stpa-phase1-2026-11-04.sha256`,
+  SHA-256 `b15361f8e951964c3e6654cfdf384997e33ea208408422d235314c5a7495ac24`;
+  los siete archivos listados verificaron con `sha256sum -c`.
+
 Updated: 2026-11-02 — E2E Qwen real para correo/BBDD y digest de evidencia
 Scope: development/local laboratory only. No customer systems, external model APIs,
 paid services, production database, remote deployment, or publishing.

@@ -23,6 +23,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import IntegrationReadinessPage from '@/components/IntegrationsPage';
 import AiEvaluationPage from '@/components/AiEvaluationPage';
+import RiskIntelligencePage from '@/components/RiskIntelligencePage';
 import NotFound from '@/pages/not-found';
 
 const queryClient = new QueryClient({
@@ -202,6 +203,7 @@ const navItems = [
   { href: '/team', label: 'Equipo', icon: Users },
   { href: '/integrations', label: 'Conexiones', icon: Globe2 },
   { href: '/ai-evaluations', label: 'Seguridad IA', icon: FlaskConical },
+  { href: '/risk-intelligence', label: 'Risk Intelligence', icon: ShieldEllipsis },
   { href: '/integration-readiness', label: 'Preparación', icon: Cloud },
   { href: '/plans', label: 'Planes y uso', icon: Gauge },
   { href: '/roadmap', label: 'Hoja de ruta empresarial', icon: Layers3 },
@@ -694,6 +696,7 @@ function RoadmapRoute() { return <AuthGuard><WorkspaceFrame page={() => <Roadmap
 function IntegrationsRoute() { return <AuthGuard><WorkspaceFrame page={IntegrationsPage} /></AuthGuard>; }
 function IntegrationReadinessRoute() { return <AuthGuard><WorkspaceFrame page={({ workspace }) => <IntegrationReadinessPage workspace={workspace} />} /></AuthGuard>; }
 function AiEvaluationRoute() { return <AuthGuard><WorkspaceFrame page={({ workspace }) => <AiEvaluationPage workspace={workspace} />} /></AuthGuard>; }
+function RiskIntelligenceRoute() { return <AuthGuard><WorkspaceFrame page={() => <RiskIntelligencePage />} /></AuthGuard>; }
 
 function Router() {
   return <RoutedErrorBoundary><Switch>
@@ -706,6 +709,7 @@ function Router() {
     <Route path="/integrations" component={IntegrationsRoute} />
     <Route path="/integration-readiness" component={IntegrationReadinessRoute} />
     <Route path="/ai-evaluations" component={AiEvaluationRoute} />
+    <Route path="/risk-intelligence" component={RiskIntelligenceRoute} />
     <Route path="/plans" component={PlansRoute} />
     <Route path="/roadmap" component={RoadmapRoute} />
     <Route component={NotFound} />
