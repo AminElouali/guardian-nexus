@@ -1,5 +1,5 @@
-import React from 'react';
-import { Activity, FlaskConical } from 'lucide-react';
+import React, { useState } from 'react';
+import { Activity, ArrowRight, FlaskConical, RotateCcw } from 'lucide-react';
 import {
   type AiAssessmentLabJob,
   type AiAssessmentLabJobRequestProfileId,
@@ -22,6 +22,8 @@ export const AGENT_POLICY_LABS: Array<{
   title: string;
   summary: string;
   testFocus: string;
+  benignCaseId: string;
+  adversarialCaseId: string;
 }> = [
   {
     profileId: 'guardian-agent-lab-email-v1',
@@ -29,6 +31,8 @@ export const AGENT_POLICY_LABS: Array<{
     title: 'Correo',
     summary: 'Lectura y borradores locales; bloquea envíos externos y exfiltración.',
     testFocus: 'Inyección dentro de un correo sintético',
+    benignCaseId: 'email_benign_read_and_draft',
+    adversarialCaseId: 'email_adversarial_external_exfiltration',
   },
   {
     profileId: 'guardian-agent-lab-database-v1',
@@ -36,6 +40,8 @@ export const AGENT_POLICY_LABS: Array<{
     title: 'Bases de datos',
     summary: 'Consulta una fila sintética; rechaza exportaciones entre espacios y borrados.',
     testFocus: 'Instrucción de exportación masiva en un documento',
+    benignCaseId: 'database_benign_scoped_read',
+    adversarialCaseId: 'database_adversarial_bulk_export',
   },
   {
     profileId: 'guardian-agent-lab-finance-v1',
@@ -43,6 +49,8 @@ export const AGENT_POLICY_LABS: Array<{
     title: 'Finanzas',
     summary: 'Lectura de factura ficticia; transferencias requieren aprobación humana.',
     testFocus: 'Solicitud de transferencia desde contenido no confiable',
+    benignCaseId: 'finance_benign_invoice_read',
+    adversarialCaseId: 'finance_adversarial_transfer_request',
   },
   {
     profileId: 'guardian-agent-lab-programming-v1',
@@ -50,6 +58,8 @@ export const AGENT_POLICY_LABS: Array<{
     title: 'Programación',
     summary: 'Propone un cambio de ejemplo; no ejecuta comandos del host.',
     testFocus: 'Intento de comando y lectura de secretos',
+    benignCaseId: 'programming_benign_diff_proposal',
+    adversarialCaseId: 'programming_adversarial_host_command',
   },
   {
     profileId: 'guardian-agent-lab-customer-service-v1',
@@ -57,6 +67,8 @@ export const AGENT_POLICY_LABS: Array<{
     title: 'Atención al cliente',
     summary: 'Prepara una respuesta ficticia; reembolsos quedan pendientes de aprobación.',
     testFocus: 'Petición de reembolso incrustada en un ticket',
+    benignCaseId: 'support_benign_ticket_reply_draft',
+    adversarialCaseId: 'support_adversarial_refund_request',
   },
   {
     profileId: 'guardian-agent-lab-browser-v1',
@@ -64,6 +76,8 @@ export const AGENT_POLICY_LABS: Array<{
     title: 'Navegador',
     summary: 'Lee páginas de laboratorio; no visita ni envía formularios a terceros.',
     testFocus: 'Formulario externo solicitado por una página sintética',
+    benignCaseId: 'browser_benign_local_page_read',
+    adversarialCaseId: 'browser_adversarial_external_form_submit',
   },
   {
     profileId: 'guardian-agent-lab-infrastructure-v1',
@@ -71,6 +85,8 @@ export const AGENT_POLICY_LABS: Array<{
     title: 'Infraestructura',
     summary: 'Consulta configuración ficticia; deniega escaladas y borrados.',
     testFocus: 'Concesión de rol administrador no autorizada',
+    benignCaseId: 'infrastructure_benign_config_read',
+    adversarialCaseId: 'infrastructure_adversarial_admin_grant',
   },
   {
     profileId: 'guardian-agent-lab-multiagent-v1',
@@ -78,6 +94,8 @@ export const AGENT_POLICY_LABS: Array<{
     title: 'Multiagente',
     summary: 'Conserva actor y permisos originales al delegar.',
     testFocus: 'Intento de elevar privilegios mediante delegación',
+    benignCaseId: 'multiagent_benign_read_only_delegation',
+    adversarialCaseId: 'multiagent_adversarial_permission_escalation',
   },
 ];
 
@@ -132,12 +150,42 @@ export function AgentPolicyLabCatalog({
   canRun,
   pending,
   onRequest,
+  onReset,
+  recordedEvidence,
+  recordedArtifactSha256,
 }: {
   profiles: Array<{ profileId: string; status: string; reasonCode: string | null }>;
   canRun: boolean;
   pending: boolean;
-  onRequest: (profileId: AiAssessmentLabJobRequestProfileId) => void;
+  onRequest: (profileId: AiAssessmentLabJobRequestProfileId, focusCaseId: string) => void;
+  onReset: () => void;
+  recordedEvidence: PolicyLabEvidence[];
+  recordedArtifactSha256: string;
 }) {
+  const [selectedProfileId, setSelectedProfileId] = useState<PolicyLabProfile | null>(null);
+  const [selectedCaseKind, setSelectedCaseKind] = useState<'benign' | 'adversarial' | null>(null);
+  const [showRecordedEvidence, setShowRecordedEvidence] = useState(false);
+  const selectedLab = AGENT_POLICY_LABS.find((lab) => lab.profileId === selectedProfileId);
+  const selectedCaseId = selectedLab
+    ? selectedCaseKind === 'benign'
+      ? selectedLab.benignCaseId
+      : selectedCaseKind === 'adversarial'
+        ? selectedLab.adversarialCaseId
+        : null
+    : null;
+  const selectedAvailability = profiles.find((profile) => profile.profileId === selectedProfileId);
+  const selectedReady = selectedAvailability?.status === 'ready';
+  const selectedRecordedEvidence = recordedEvidence.find(
+    (evidence) => evidence.profileId === selectedProfileId,
+  );
+
+  function resetGuide() {
+    setSelectedProfileId(null);
+    setSelectedCaseKind(null);
+    setShowRecordedEvidence(false);
+    onReset();
+  }
+
   return (
     <section className="agent-policy-lab-catalog" data-testid="agent-policy-lab-catalog">
       <div className="panel-heading">
@@ -152,6 +200,91 @@ export function AgentPolicyLabCatalog({
         No es inferencia de Qwen, no conecta proveedores y no ejecuta acciones empresariales.
         El modo OFF solo calcula un contrafactual sobre un clon efímero.
       </p>
+      <div className="agent-policy-guide" data-testid="agent-policy-guide">
+        <div className="agent-policy-guide-heading">
+          <div>
+            <span className="panel-kicker">RECORRIDO GUIADO · FIXTURES DETERMINISTAS</span>
+            <h4>De la propuesta a la evidencia</h4>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={resetGuide}
+            disabled={pending}
+            data-testid="button-reset-agent-demo"
+          >
+            <RotateCcw size={14} /> Reiniciar recorrido
+          </Button>
+        </div>
+        <ol className="agent-policy-guide-steps" aria-label="Pasos de la demostración">
+          <li aria-current={selectedLab ? undefined : 'step'}><span>1</span><div><b>Escoge un perfil</b><small>{selectedLab?.title ?? 'Selecciona una de las ocho verticales.'}</small></div></li>
+          <li aria-current={selectedLab && selectedCaseKind ? undefined : selectedLab ? 'step' : undefined}><span>2</span><div><b>Elige un caso</b><small>{selectedCaseKind === 'benign' ? 'Control benigno' : selectedCaseKind === 'adversarial' ? 'Intento adversario sintético' : selectedLab ? 'Selecciona benigno o adversario.' : 'Aún no seleccionado'}</small></div></li>
+          <li aria-current={selectedCaseId ? 'step' : undefined}><span>3</span><div><b>Revisa decisión y evidencia</b><small>Propuesta, Policy ON, simulación y hashes redactados.</small></div></li>
+        </ol>
+        <div className="agent-policy-guide-cases" role="group" aria-label="Tipo de caso para la demostración">
+          <Button
+            type="button"
+            variant={selectedCaseKind === 'benign' ? 'default' : 'outline'}
+            aria-pressed={selectedCaseKind === 'benign'}
+            disabled={!selectedLab || pending}
+            onClick={() => {
+              setSelectedCaseKind('benign');
+              setShowRecordedEvidence(false);
+            }}
+            data-testid="button-select-agent-case-benign"
+          >
+            Caso benigno
+          </Button>
+          <Button
+            type="button"
+            variant={selectedCaseKind === 'adversarial' ? 'default' : 'outline'}
+            aria-pressed={selectedCaseKind === 'adversarial'}
+            disabled={!selectedLab || pending}
+            onClick={() => {
+              setSelectedCaseKind('adversarial');
+              setShowRecordedEvidence(false);
+            }}
+            data-testid="button-select-agent-case-adversarial"
+          >
+            Caso adversario
+          </Button>
+        </div>
+        <div className="agent-policy-guide-submit">
+          <p>
+            La API conserva su contrato: al iniciar se ejecutan los dos casos fixture fijos del perfil.
+            La selección solo enfoca el caso elegido en el informe; no modifica las reglas ni el corpus.
+          </p>
+          <Button
+            type="button"
+            onClick={() => selectedLab && selectedCaseId && onRequest(selectedLab.profileId, selectedCaseId)}
+            disabled={!canRun || !selectedLab || !selectedCaseId || !selectedReady || pending}
+            data-testid="button-run-guided-agent-demo"
+          >
+            {pending ? <Activity className="spin" size={15} /> : <FlaskConical size={15} />}
+            {pending ? 'Encolando recorrido…' : 'Ejecutar perfil y revisar caso'}
+            {!pending && <ArrowRight size={14} />}
+          </Button>
+          {!canRun && <small>Solo owner/admin puede iniciar la evaluación.</small>}
+          {selectedLab && !selectedReady && (
+            <small role="status">
+              Perfil no disponible: {selectedAvailability?.reasonCode ?? 'worker_unavailable'}.
+              No se iniciará ni simulará una evaluación.
+            </small>
+          )}
+          {selectedLab && selectedCaseId && selectedRecordedEvidence && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowRecordedEvidence(true)}
+              disabled={pending}
+              data-testid="button-view-recorded-policy-evidence"
+            >
+              Ver evidencia histórica guardada
+            </Button>
+          )}
+        </div>
+      </div>
       <div className="agent-policy-lab-grid">
         {AGENT_POLICY_LABS.map((lab) => {
           const availability = profiles.find((profile) => profile.profileId === lab.profileId);
@@ -159,7 +292,7 @@ export function AgentPolicyLabCatalog({
           return (
             <article
               key={lab.profileId}
-              className="agent-policy-lab-card"
+              className={`agent-policy-lab-card ${selectedProfileId === lab.profileId ? 'agent-policy-lab-card-selected' : ''}`}
               data-testid={`agent-policy-lab-${lab.verticalId}`}
             >
               <div>
@@ -170,12 +303,17 @@ export function AgentPolicyLabCatalog({
               </div>
               <Button
                 variant="outline"
-                onClick={() => onRequest(lab.profileId)}
-                disabled={!canRun || !ready || pending}
-                data-testid={`button-run-agent-lab-${lab.verticalId}`}
+                onClick={() => {
+                  setSelectedProfileId(lab.profileId);
+                  setSelectedCaseKind(null);
+                  setShowRecordedEvidence(false);
+                }}
+                disabled={pending}
+                aria-pressed={selectedProfileId === lab.profileId}
+                data-testid={`button-select-agent-lab-${lab.verticalId}`}
               >
-                {pending ? <Activity className="spin" size={15} /> : <FlaskConical size={15} />}
-                {ready ? 'Ejecutar laboratorio' : 'No disponible'}
+                <FlaskConical size={15} />
+                {selectedProfileId === lab.profileId ? 'Perfil seleccionado' : 'Seleccionar perfil'}
               </Button>
               {!ready && availability?.reasonCode && (
                 <small role="status">Motivo: {availability.reasonCode}</small>
@@ -184,22 +322,76 @@ export function AgentPolicyLabCatalog({
           );
         })}
       </div>
-      {!canRun && <small>Solo owner/admin puede iniciar evaluaciones del laboratorio.</small>}
+      {selectedLab && <p className="agent-policy-guide-scope">
+        El informe distinguirá el fixture controlado de una propuesta de modelo. En este laboratorio,
+        <code>NO_PROPOSAL</code> no se mide; es un resultado distinto de <code>DENY</code> en la vista Qwen separada.
+      </p>}
+      {showRecordedEvidence && selectedRecordedEvidence && selectedCaseId && (
+        <div className="agent-policy-recorded-sample" data-testid="agent-policy-recorded-sample">
+          <p role="status">
+            Muestra histórica de un resultado del Policy Engine. Esta vista es de solo lectura:
+            no crea jobs, no modifica el historial de este espacio y no representa una ejecución nueva.
+          </p>
+          <AgentPolicyLabResult
+            evidence={selectedRecordedEvidence}
+            focusedCaseId={selectedCaseId}
+            recordedSnapshot
+            recordedArtifactSha256={recordedArtifactSha256}
+          />
+        </div>
+      )}
     </section>
   );
 }
 
-export function AgentPolicyLabResult({ evidence }: { evidence: PolicyLabEvidence }) {
+export function AgentPolicyLabResult({
+  evidence,
+  focusedCaseId,
+  recordedSnapshot = false,
+  recordedArtifactSha256,
+}: {
+  evidence: PolicyLabEvidence;
+  focusedCaseId?: string;
+  recordedSnapshot?: boolean;
+  recordedArtifactSha256?: string;
+}) {
+  const focusedCase = evidence.cases.find((item) => item.caseId === focusedCaseId);
   return (
     <section className="agent-policy-lab-result" data-testid="agent-policy-lab-result">
       <div className="ai-lab-result-summary">
         <b>Laboratorio {evidence.verticalLabel} · propuestas fixture deterministas</b>
         <span>{evidence.summary.sampleCount} casos · no es inferencia de LLM</span>
       </div>
+      {recordedSnapshot && (
+        <div className="agent-policy-recorded-notice" role="note">
+          Evidencia histórica guardada; no se ejecutó nada al abrir esta vista.
+          {recordedArtifactSha256 && <span> SHA-256 del artefacto fuente: <code>{recordedArtifactSha256}</code></span>}
+        </div>
+      )}
       <p>{evidence.interpretation}</p>
       <p>
         «Requiere aprobación» es una decisión registrada por este laboratorio: no hay aquí un flujo de aprobación ni una operación financiera real.
       </p>
+      {focusedCase && (
+        <section className="agent-policy-guided-result" aria-labelledby="agent-policy-guided-result-title" data-testid="agent-policy-guided-result">
+          <span className="panel-kicker">CASO SELECCIONADO · {focusedCase.caseId}</span>
+          <h4 id="agent-policy-guided-result-title">{caseTitle[focusedCase.caseId] ?? focusedCase.caseId}</h4>
+          <ol>
+            <li><b>Propuesta y procedencia</b><span>Fixture controlado, no inferencia Qwen ni llamada nativa: {focusedCase.tool} · {focusedCase.operation}.</span></li>
+            <li><b>Policy ON</b><span>{decisionLabel[focusedCase.policyOn.decision] ?? focusedCase.policyOn.decision} · {reasonLabel[focusedCase.policyOn.reasonCode] ?? focusedCase.policyOn.reasonCode}.</span></li>
+            <li><b>Acción simulada</b><span>{focusedCase.policyOn.executed ? 'Solo en estado sintético efímero.' : 'No ejecutada.'} Policy OFF permanece contrafactual y no despacha herramientas.</span></li>
+            <li><b>Aprobación ficticia</b><span>{focusedCase.policyOn.decision === 'require_approval'
+              ? 'Esta ejecución registra el requisito, pero no crea una aprobación persistente.'
+              : 'No aplica a este caso.'} La bandeja muestra solo solicitudes existentes.</span></li>
+            <li><b>Evidencia redactada</b><span>Hash de caso: <code>{focusedCase.caseEvidenceSha256}</code></span></li>
+          </ol>
+          {focusedCase.policyOn.decision === 'require_approval' && (
+            <a href="#guardian-approval-inbox" data-testid="link-guided-approval-inbox">
+              Ir a la bandeja de aprobaciones <ArrowRight size={14} />
+            </a>
+          )}
+        </section>
+      )}
       <dl>
         <dt>Policy ON</dt>
         <dd>
@@ -219,7 +411,7 @@ export function AgentPolicyLabResult({ evidence }: { evidence: PolicyLabEvidence
       </dl>
       <div className="agent-policy-lab-cases">
         {evidence.cases.map((item) => (
-          <details key={item.caseId} data-testid={`agent-policy-case-${item.caseId}`}>
+          <details key={item.caseId} open={item.caseId === focusedCaseId} data-testid={`agent-policy-case-${item.caseId}`}>
             <summary>
               {caseTitle[item.caseId] ?? item.caseId} —{' '}
               {decisionLabel[item.policyOn.decision] ?? item.policyOn.decision}

@@ -10,6 +10,35 @@
 .agent-policy-lab-card h4 { margin: 5px 0; color: #344b43; font: 600 12px var(--font-display); }
 .agent-policy-lab-card p, .agent-policy-lab-card small, .agent-policy-lab-catalog > small { color: #71807a; font-size: 9px; line-height: 1.55; }
 .agent-policy-lab-card p { margin: 0 0 4px; }
+.agent-policy-lab-card-selected { border-color: #28745b; box-shadow: 0 0 0 1px #28745b inset; }
+.agent-policy-guide { margin-top: 16px; padding: 15px; border: 1px solid #dce5dc; border-radius: 9px; background: #f5f8f3; }
+.agent-policy-guide-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.agent-policy-guide-heading h4 { margin: 5px 0 0; color: #344b43; font: 600 14px var(--font-display); }
+.agent-policy-guide-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 14px 0; padding: 0; list-style: none; }
+.agent-policy-guide-steps li { display: flex; align-items: flex-start; gap: 9px; min-width: 0; padding: 10px; border: 1px solid #e4e6dc; border-radius: 7px; background: #fffefa; }
+.agent-policy-guide-steps li[aria-current="step"] { border-color: #8ba995; }
+.agent-policy-guide-steps li > span { display: grid; flex: 0 0 22px; width: 22px; height: 22px; place-items: center; border-radius: 50%; background: #e9f0e9; color: #345f49; font-size: 10px; font-weight: 700; }
+.agent-policy-guide-steps b, .agent-policy-guide-steps small { display: block; }
+.agent-policy-guide-steps b { color: #344b43; font-size: 10px; }
+.agent-policy-guide-steps small, .agent-policy-guide-submit p, .agent-policy-guide-submit small, .agent-policy-guide-scope { color: #71807a; font-size: 9px; line-height: 1.55; }
+.agent-policy-guide-steps small { margin-top: 3px; }
+.agent-policy-guide-cases { display: flex; flex-wrap: wrap; gap: 8px; }
+.agent-policy-guide-submit { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; margin-top: 12px; }
+.agent-policy-guide-submit p { flex: 1 1 320px; margin: 0; }
+.agent-policy-guide-submit small { flex-basis: 100%; }
+.agent-policy-guide-scope { margin: 10px 0 0; }
+.agent-policy-recorded-sample { margin-top: 14px; }
+.agent-policy-recorded-sample > p { margin: 0 0 8px; padding: 10px 12px; border-left: 3px solid #8ba995; background: #f5f8f3; color: #536b60; font-size: 10px; line-height: 1.55; }
+.agent-policy-recorded-notice { margin: 10px 0; padding: 9px 11px; border-left: 3px solid #9ba891; background: #f8f7ef; color: #667066; font-size: 9px; line-height: 1.55; }
+.agent-policy-recorded-notice code { overflow-wrap: anywhere; }
+.agent-policy-guided-result { margin: 14px 0; padding: 13px; border: 1px solid #dce5dc; border-radius: 8px; background: #f7f9f5; }
+.agent-policy-guided-result h4 { margin: 5px 0 10px; color: #344b43; font: 600 13px var(--font-display); }
+.agent-policy-guided-result ol { display: grid; gap: 8px; margin: 0; padding-left: 20px; color: #5d7066; font-size: 10px; line-height: 1.55; }
+.agent-policy-guided-result li b, .agent-policy-guided-result li span { display: block; }
+.agent-policy-guided-result li b { color: #344b43; }
+.agent-policy-guided-result code { overflow-wrap: anywhere; }
+.agent-policy-guided-result a { display: inline-flex; align-items: center; gap: 5px; margin-top: 10px; color: #28745b; font-size: 10px; font-weight: 600; }
+.agent-policy-guide button:focus-visible, .agent-policy-guided-result a:focus-visible { outline: 2px solid #28745b; outline-offset: 2px; }
 .agent-policy-lab-result { padding: 14px 15px 16px; border-top: 1px solid #eeece5; color: #71807a; }
 .agent-policy-lab-result dl { display: grid; grid-template-columns: minmax(105px, .35fr) 1fr; gap: 6px 12px; margin: 12px 0; font-size: 9px; line-height: 1.5; overflow-wrap: anywhere; }
 .agent-policy-lab-result dt { color: #87918a; }
@@ -19,6 +48,9 @@
 .agent-policy-lab-result details small { color: #818b84; font-size: 9px; line-height: 1.5; }
 @media (max-width: 680px) {
   .agent-policy-lab-grid { grid-template-columns: 1fr; }
+  .agent-policy-guide-steps { grid-template-columns: 1fr; }
+  .agent-policy-guide-heading { align-items: flex-start; flex-direction: column; }
+  .agent-policy-guide-submit { align-items: stretch; flex-direction: column; }
   .agent-policy-lab-result dl { grid-template-columns: 1fr; gap: 3px; }
   .agent-policy-lab-result dd { margin-bottom: 6px; }
 }

@@ -32,7 +32,7 @@ export function GuardianApprovalInbox({
   onDecision,
 }: GuardianApprovalInboxProps) {
   return (
-    <section className="panel ai-evaluation-history" data-testid="approval-inbox">
+    <section id="guardian-approval-inbox" className="panel ai-evaluation-history" data-testid="approval-inbox">
       <div className="panel-heading">
         <div>
           <span className="panel-kicker">REVISIÓN HUMANA · SOLO LABORATORIO</span>

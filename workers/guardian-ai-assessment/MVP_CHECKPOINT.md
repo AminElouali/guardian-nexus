@@ -2880,3 +2880,42 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   `reports/lab-host-preflight-2026-11-04.json`; manifiestos SHA-256:
   `reports/post-stpa-lab-phase-1-2026-11-04.sha256` y
   `lab-host/ubuntu-24.04/SHA256SUMS`.
+
+## Incremento 2026-11-04 — recorrido guiado y muestra histórica del laboratorio
+
+- Inicio: HEAD limpio `8c5681f2f07d2d782d40913b8aed84e6883ab363`.
+- Se mejoró la UI existente `/ai-evaluations` sin cambiar rutas API ni políticas:
+  selección de perfil, caso benigno/adversario, foco del caso en el resultado,
+  estado de worker/error, reinicio solo local y enlace real a la bandeja de
+  aprobaciones.
+- Si el broker no habilita el worker, la UI deja ver evidencia determinista
+  histórica en modo solo lectura. No crea jobs, no modifica el historial del
+  tenant y no se presenta como ejecución nueva. Artefacto fuente:
+  `generated-artifacts/guardian-agent-policy-labs-e2e.json`, 8 perfiles,
+  SHA-256 `9bbc87ca9ee5c7eac040a0d2f33defb6eeb41f95d5d9940979b5564b435960be`.
+- `REQUIRE_APPROVAL` de un fixture enlaza a la bandeja pero explica que ese
+  registro de evidencia no crea una solicitud persistente. No se inventan
+  aprobaciones. El botón de reinicio limpia selección/muestra local; no borra
+  datos ni auditoría.
+- Suites: UI **9/9**; API unitaria/contrato **76/76**; worker policy lab
+  **31/31**; SDK TypeScript **13/13**; SDK Python **8/8**. `pnpm run typecheck`
+  pasó para libs, API, web, mockup sandbox y scripts. Build web, API y SDK
+  pasaron. El build web conserva un aviso de sourcemap en `tooltip.tsx` y un
+  aviso de chunk grande (826.64 kB JS, 225.34 kB gzip).
+- Las invocaciones iniciales con `PORT`/`BASE_PATH` ausentes y `PYTHONPATH`
+  ausente fallaron en la configuración de comandos; se repitieron con el
+  entorno correcto y pasaron. Una aserción UI falló por orden de atributos
+  HTML y se ajustó; las 9 pruebas UI finales pasaron.
+- Captura de `/ai-evaluations` sin sesión mostró la pantalla de inicio de sesión
+  Clerk. No se usó bypass ni se verificó en navegador la UI autenticada. No se
+  ejecutó Qwen, Docker, un job nuevo, ni E2E contra PostgreSQL.
+- Bloqueos: `assessment_broker_identity_unverified` mantiene el worker
+  deshabilitado; la muestra es histórica y determinista, no una evaluación del
+  tenant actual. Clerk autenticado en navegador y aprobación persistente nacida
+  de una ejecución nueva siguen pendientes.
+- Informe:
+  `reports/guardian-policy-lab-guided-demo-2026-11-04.md`, SHA-256
+  `0bf70beeb34914e5a688887308fc07bbf7a96e7b1fa80f855e6be00fc39cebcf`.
+  Manifiesto de fuentes y artefacto:
+  `reports/guardian-policy-lab-guided-demo-2026-11-04.sha256`, SHA-256
+  `02666054726d319b01719731f8223fd57fb60d81fbb8ef4e45559d38de525f0c`.

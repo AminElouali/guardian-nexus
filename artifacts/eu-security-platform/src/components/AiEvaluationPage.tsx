@@ -28,6 +28,7 @@ import {
   AgentPolicyLabCatalog,
   AgentPolicyLabResult,
 } from './GuardianAgentPolicyLab';
+import recordedPolicyLabJobs from '../../../../generated-artifacts/guardian-agent-policy-labs-e2e.json';
 import {
   QwenPolicyLabCatalog,
   QwenPolicyLabResult,
@@ -86,6 +87,14 @@ type LocalLlmEvidence = Extract<
   NonNullable<AiAssessmentLabJob['result']>,
   { profileId: 'guardian-local-llm-qwen3-0.6b-v1' }
 >;
+const recordedPolicyEvidence = (recordedPolicyLabJobs as AiAssessmentLabJob[]).flatMap((job) => {
+  const result = job.result;
+  return job.status === 'succeeded' && result?.engine === 'guardian_policy_lab'
+    ? [result]
+    : [];
+});
+const recordedPolicyArtifactSha256 =
+  '9bbc87ca9ee5c7eac040a0d2f33defb6eeb41f95d5d9940979b5564b435960be';
 type NativeToolSuiteEvidence = Extract<
   NonNullable<AiAssessmentLabJob['result']>,
   { profileId: 'guardian-local-llm-native-tools-v1' }
@@ -716,11 +725,13 @@ export function LabJobCard({
   canRun,
   onRetry,
   retryPending,
+  focusedCaseId,
 }: {
   job: AiAssessmentLabJob;
   canRun: boolean;
   onRetry: (jobId: string) => void;
   retryPending: boolean;
+  focusedCaseId?: string;
 }) {
   const evidence = job.result;
   const garakEvidence = evidence?.engine === 'garak' ? evidence : null;
@@ -780,7 +791,7 @@ export function LabJobCard({
     </div>}
     {localLlmEvidence && <LocalLlmResult evidence={localLlmEvidence} />}
     {nativeToolEvidence && <NativeToolSuiteResult evidence={nativeToolEvidence} job={job} />}
-    {policyLabEvidence && <AgentPolicyLabResult evidence={policyLabEvidence} />}
+    {policyLabEvidence && <AgentPolicyLabResult evidence={policyLabEvidence} focusedCaseId={focusedCaseId} />}
     {qwenPolicyLabEvidence && <QwenPolicyLabResult evidence={qwenPolicyLabEvidence} />}
     {job.status === 'failed' && <p className="ai-lab-error">No se completó la evaluación. Código: {job.errorCode ?? 'worker_failed'}. No se guardaron salidas del agente.</p>}
     {canRun && job.status === 'failed' && job.attempts < 2 && <Button variant="outline" onClick={() => onRetry(job.id)} disabled={retryPending} data-testid="button-retry-ai-lab">
@@ -809,6 +820,10 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
   const [error, setError] = useState('');
   const [labMessage, setLabMessage] = useState('');
   const [labError, setLabError] = useState('');
+  const [guidedDemo, setGuidedDemo] = useState<{
+    jobId: string;
+    caseId: string;
+  } | null>(null);
   const [approvalMessage, setApprovalMessage] = useState('');
   const [approvalError, setApprovalError] = useState('');
   const canRun = workspace.role === 'owner' || workspace.role === 'admin';
@@ -825,15 +840,24 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
     (profile) => profile.profileId === 'guardian-local-llm-autonomous-tools-v1' && profile.status === 'ready',
   ) ?? false;
 
-  async function requestLabAssessment(profileId: AiAssessmentLabJobRequestProfileId) {
+  async function requestLabAssessment(
+    profileId: AiAssessmentLabJobRequestProfileId,
+    guidedCaseId?: string,
+  ) {
     setLabMessage('');
     setLabError('');
+    if (guidedCaseId) setGuidedDemo(null);
     try {
-      await createLabJob.mutateAsync({
+      const createdJob = await createLabJob.mutateAsync({
         workspaceId: workspace.id,
         data: { idempotencyKey: crypto.randomUUID(), profileId },
       });
-      setLabMessage('Solicitud registrada. Se ejecutará únicamente el perfil local seleccionado.');
+      if (guidedCaseId) {
+        setGuidedDemo({ jobId: createdJob.id, caseId: guidedCaseId });
+      }
+      setLabMessage(guidedCaseId
+        ? 'Solicitud registrada. Se ejecutan solo los dos fixtures fijos del perfil; el caso elegido quedará resaltado.'
+        : 'Solicitud registrada. Se ejecutará únicamente el perfil local seleccionado.');
       await cache.invalidateQueries({
         queryKey: getListWorkspaceAiAssessmentLabJobsQueryKey(workspace.id),
       });
@@ -918,7 +942,14 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
          profiles={availability.data?.profiles ?? []}
          canRun={canRun}
          pending={createLabJob.isPending}
-         onRequest={(profileId) => void requestLabAssessment(profileId)}
+          onRequest={(profileId, caseId) => void requestLabAssessment(profileId, caseId)}
+          recordedEvidence={recordedPolicyEvidence}
+          recordedArtifactSha256={recordedPolicyArtifactSha256}
+          onReset={() => {
+            setGuidedDemo(null);
+            setLabMessage('Recorrido reiniciado en esta vista. El historial y las auditorías del espacio no se han borrado.');
+            setLabError('');
+          }}
        />
        <QwenPolicyLabCatalog
          availability={availability.data?.profiles ?? []}
@@ -951,7 +982,7 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
       </div>
       {labJobs.isLoading && <div className="ai-history-empty" role="status">Cargando trabajos del laboratorio…</div>}
       {labJobs.isError && <div className="notice notice-error" role="alert">No se pudo cargar el estado del laboratorio. <Button variant="outline" onClick={() => void labJobs.refetch()}>Reintentar</Button></div>}
-      {!!labJobs.data?.length && <div className="ai-history-list">{labJobs.data.map((job) => <LabJobCard key={job.id} job={job} canRun={canRun} onRetry={(id) => void retryLabAssessment(id)} retryPending={retryLabJob.isPending} />)}</div>}
+      {!!labJobs.data?.length && <div className="ai-history-list">{labJobs.data.map((job) => <LabJobCard key={job.id} job={job} canRun={canRun} onRetry={(id) => void retryLabAssessment(id)} retryPending={retryLabJob.isPending} focusedCaseId={guidedDemo?.jobId === job.id ? guidedDemo.caseId : undefined} />)}</div>}
       <details className="ai-lab-provenance">
         <summary>Origen técnico y licencia</summary>
         <p>Garak v0.17.1 conserva su atribución de terceros y licencia Apache-2.0. La inferencia local utiliza Qwen3-0.6B-GGUF Q8_0 (Apache-2.0) mediante llama-cpp-python 0.3.36 (MIT). Sus versiones, hashes y procedencia se registran por separado en la evidencia.</p>

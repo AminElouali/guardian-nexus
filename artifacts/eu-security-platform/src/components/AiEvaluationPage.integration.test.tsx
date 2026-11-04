@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { createElement } from "react";
@@ -100,6 +101,7 @@ test("approval inbox shows tenant-safe decisions without claiming tool execution
   assert.match(markup, /data-testid="approval-inbox"/);
   assert.match(markup, /data-testid="button-approve-11111111-1111-4111-8111-111111111111"/);
   assert.match(markup, /data-testid="button-deny-11111111-1111-4111-8111-111111111111"/);
+  assert.match(markup, /id="guardian-approval-inbox"/);
   assert.match(markup, /Aprobada · solo decisión/);
   assert.match(markup, /Aprobada · simulación sintética realizada una vez/);
   assert.match(markup, /Fixture determinista · no es inferencia de modelo/);
@@ -316,6 +318,14 @@ test("renders all eight synthetic agent verticals and an API-persisted policy la
       canRun: true,
       pending: false,
       onRequest: () => undefined,
+      onReset: () => undefined,
+      recordedEvidence: jobs.flatMap((job) =>
+        job.status === "succeeded" && job.result?.engine === "guardian_policy_lab"
+          ? [job.result]
+          : [],
+      ),
+      recordedArtifactSha256:
+        "9bbc87ca9ee5c7eac040a0d2f33defb6eeb41f95d5d9940979b5564b435960be",
     }),
   );
   assert.equal(AGENT_POLICY_LABS.length, 8);
@@ -327,10 +337,68 @@ test("renders all eight synthetic agent verticals and an API-persisted policy la
     ).length,
     8,
   );
-  assert.match(catalogMarkup, /data-testid="button-run-agent-lab-email"/);
-  assert.match(catalogMarkup, /data-testid="button-run-agent-lab-database"/);
+  assert.match(catalogMarkup, /data-testid="button-select-agent-lab-email"/);
+  assert.match(catalogMarkup, /data-testid="button-select-agent-lab-database"/);
+  assert.match(catalogMarkup, /data-testid="button-select-agent-case-benign"/);
+  assert.match(catalogMarkup, /data-testid="button-select-agent-case-adversarial"/);
+  assert.match(catalogMarkup, /data-testid="button-run-guided-agent-demo"/);
+  assert.match(catalogMarkup, /data-testid="button-reset-agent-demo"/);
+  assert.match(catalogMarkup, /no modifica las reglas ni el corpus/i);
   assert.match(catalogMarkup, /multiagente/i);
   assert.match(catalogMarkup, /No es inferencia de Qwen/);
+});
+
+test("guided fixture result exposes provenance, Policy ON, non-execution and approval boundary", () => {
+  const artifactPath = new URL(
+    "../../../../generated-artifacts/guardian-agent-policy-labs-e2e.json",
+    import.meta.url,
+  );
+  const jobs = JSON.parse(readFileSync(artifactPath, "utf8")) as AiAssessmentLabJob[];
+  const financeJob = jobs.find(
+    (candidate) => candidate.profileId === "guardian-agent-lab-finance-v1",
+  );
+  assert.ok(financeJob?.result?.engine === "guardian_policy_lab");
+  if (financeJob?.result?.engine !== "guardian_policy_lab") {
+    assert.fail("finance fixture evidence is required for this UI test");
+  }
+  const approvalCase = financeJob.result.cases.find(
+    (item) => item.policyOn.decision === "require_approval",
+  );
+  assert.ok(approvalCase);
+  if (!approvalCase) assert.fail("finance fixture must preserve REQUIRE_APPROVAL");
+
+  const markup = renderToStaticMarkup(
+    createElement(AgentPolicyLabResult, {
+      evidence: financeJob.result,
+      focusedCaseId: approvalCase.caseId,
+    }),
+  );
+  assert.match(markup, /CASO SELECCIONADO/);
+  assert.match(markup, /Fixture controlado, no inferencia Qwen ni llamada nativa/);
+  assert.match(markup, /REQUIRE_APPROVAL|Requiere aprobación humana/);
+  assert.match(markup, /no crea una aprobación persistente/);
+  assert.match(markup, /Policy OFF permanece contrafactual/);
+  assert.match(markup, /data-testid="link-guided-approval-inbox"/);
+  assert.match(markup, /<details open="" data-testid="agent-policy-case-finance_trusted_bank_change_requires_approval"/);
+  assert.equal(markup.includes("Synthetic Vendor"), false);
+  assert.equal(markup.includes("prompt text"), false);
+
+  const recordedMarkup = renderToStaticMarkup(
+    createElement(AgentPolicyLabResult, {
+      evidence: financeJob.result,
+      focusedCaseId: approvalCase.caseId,
+      recordedSnapshot: true,
+      recordedArtifactSha256:
+        "9bbc87ca9ee5c7eac040a0d2f33defb6eeb41f95d5d9940979b5564b435960be",
+    }),
+  );
+  assert.match(recordedMarkup, /Evidencia histórica guardada/);
+  assert.match(recordedMarkup, /no se ejecutó nada al abrir esta vista/);
+  assert.match(recordedMarkup, /SHA-256 del artefacto fuente/);
+  const renderedArtifactHash = recordedMarkup.match(
+    /SHA-256 del artefacto fuente: <code>([a-f0-9]{64})<\/code>/,
+  )?.[1];
+  assert.equal(renderedArtifactHash, createHash("sha256").update(readFileSync(artifactPath)).digest("hex"));
 });
 
 test("downloads the allow-listed Qwen JSON report without raw case data", async () => {
