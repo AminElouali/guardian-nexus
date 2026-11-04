@@ -12,6 +12,9 @@ CREATE TABLE IF NOT EXISTS public.ai_assessment_approval_requests (
   requested_by_role text,
   binding_version integer NOT NULL DEFAULT 1,
   synthetic_action_ref text,
+  model_inference boolean,
+  execution_mode text,
+  tool_call_origin text,
   status text NOT NULL DEFAULT 'pending'
     CONSTRAINT ai_assessment_approval_status_check
     CHECK (status IN ('pending', 'approved', 'denied', 'expired')),
@@ -33,9 +36,24 @@ CREATE TABLE IF NOT EXISTS public.ai_assessment_approval_requests (
     AND (replay_binding_sha256 IS NULL OR replay_binding_sha256 ~ '^[a-f0-9]{64}$')
   ),
   CONSTRAINT ai_assessment_approval_binding_version_check CHECK (
-    binding_version IN (1, 2)
+    binding_version IN (1, 2, 3)
     AND (binding_version = 1 OR (requested_by_role IS NOT NULL
          AND synthetic_action_ref IS NOT NULL AND action_sha256 IS NOT NULL))
+    AND (binding_version <> 3 OR (model_inference IS NOT NULL
+         AND execution_mode IS NOT NULL AND tool_call_origin IS NOT NULL))
+  ),
+  CONSTRAINT ai_assessment_approval_provenance_check CHECK (
+    (model_inference IS NULL AND execution_mode IS NULL
+      AND tool_call_origin IS NULL)
+    OR (model_inference = false
+      AND execution_mode = 'deterministic_fixture'
+      AND tool_call_origin = 'controlled_fixture_not_llm')
+    OR (model_inference = true
+      AND execution_mode = 'real_local_qwen_inference'
+      AND tool_call_origin IN (
+        'guardian_qwen_native_markup_adapter',
+        'runtime_message_tool_calls'
+      ))
   ),
   CONSTRAINT ai_assessment_approval_action_ref_check CHECK (
     (synthetic_action_ref IS NULL AND action_sha256 IS NULL)
@@ -72,11 +90,38 @@ ALTER TABLE public.ai_assessment_approval_requests
   ADD COLUMN IF NOT EXISTS requested_by_role text,
   ADD COLUMN IF NOT EXISTS binding_version integer NOT NULL DEFAULT 1,
   ADD COLUMN IF NOT EXISTS synthetic_action_ref text,
+  ADD COLUMN IF NOT EXISTS model_inference boolean,
+  ADD COLUMN IF NOT EXISTS execution_mode text,
+  ADD COLUMN IF NOT EXISTS tool_call_origin text,
   ADD COLUMN IF NOT EXISTS decided_by_role text,
   ADD COLUMN IF NOT EXISTS simulated_at timestamptz,
   ADD COLUMN IF NOT EXISTS simulation_result_code text,
   ADD COLUMN IF NOT EXISTS simulation_result_sha256 text,
   ADD COLUMN IF NOT EXISTS replay_binding_sha256 text;
+ALTER TABLE public.ai_assessment_approval_requests
+  DROP CONSTRAINT IF EXISTS ai_assessment_approval_binding_version_check,
+  DROP CONSTRAINT IF EXISTS ai_assessment_approval_provenance_check;
+ALTER TABLE public.ai_assessment_approval_requests
+  ADD CONSTRAINT ai_assessment_approval_binding_version_check CHECK (
+    binding_version IN (1, 2, 3)
+    AND (binding_version = 1 OR (requested_by_role IS NOT NULL
+         AND synthetic_action_ref IS NOT NULL AND action_sha256 IS NOT NULL))
+    AND (binding_version <> 3 OR (model_inference IS NOT NULL
+         AND execution_mode IS NOT NULL AND tool_call_origin IS NOT NULL))
+  ),
+  ADD CONSTRAINT ai_assessment_approval_provenance_check CHECK (
+    (model_inference IS NULL AND execution_mode IS NULL
+      AND tool_call_origin IS NULL)
+    OR (model_inference = false
+      AND execution_mode = 'deterministic_fixture'
+      AND tool_call_origin = 'controlled_fixture_not_llm')
+    OR (model_inference = true
+      AND execution_mode = 'real_local_qwen_inference'
+      AND tool_call_origin IN (
+        'guardian_qwen_native_markup_adapter',
+        'runtime_message_tool_calls'
+      ))
+  );
 CREATE UNIQUE INDEX IF NOT EXISTS ai_assessment_approval_job_case_idx
   ON public.ai_assessment_approval_requests (workspace_id, job_id, case_id);
 CREATE INDEX IF NOT EXISTS ai_assessment_approval_workspace_status_expiry_idx

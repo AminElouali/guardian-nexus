@@ -4,6 +4,49 @@ export type SyntheticApprovalActionRef =
   | "guardian.synthetic.finance.bank-change.v1"
   | "guardian.synthetic.support.refund.v1";
 
+export type ApprovalEvidenceProvenance = {
+  modelInference: boolean;
+  executionMode: "deterministic_fixture" | "real_local_qwen_inference";
+  toolCallOrigin:
+    | "controlled_fixture_not_llm"
+    | "guardian_qwen_native_markup_adapter"
+    | "runtime_message_tool_calls";
+};
+
+export function resolveApprovalEvidenceProvenance(input: {
+  engine: unknown;
+  executionMode: unknown;
+  modelInference: unknown;
+  toolCallOrigin: unknown;
+}): ApprovalEvidenceProvenance | null {
+  if (
+    input.engine === "guardian_policy_lab" &&
+    input.executionMode === "deterministic_fixture" &&
+    input.modelInference === false &&
+    input.toolCallOrigin === "controlled_fixture_not_llm"
+  ) {
+    return {
+      modelInference: false,
+      executionMode: "deterministic_fixture",
+      toolCallOrigin: "controlled_fixture_not_llm",
+    };
+  }
+  if (
+    input.engine === "guardian_qwen_policy_lab" &&
+    input.executionMode === "real_local_qwen_inference" &&
+    input.modelInference === true &&
+    (input.toolCallOrigin === "guardian_qwen_native_markup_adapter" ||
+      input.toolCallOrigin === "runtime_message_tool_calls")
+  ) {
+    return {
+      modelInference: true,
+      executionMode: "real_local_qwen_inference",
+      toolCallOrigin: input.toolCallOrigin,
+    };
+  }
+  return null;
+}
+
 type AllowlistedSyntheticAction = {
   actionRef: SyntheticApprovalActionRef;
   profileId: string;
@@ -290,6 +333,36 @@ export function computeApprovalProposalBindingV2(approval: {
     requestedByUserId: approval.requestedByUserId,
     requestedByRole: approval.requestedByRole,
     expiresAt: approval.expiresAt.toISOString(),
+  });
+}
+
+export function computeApprovalProposalBindingV3(
+  approval: {
+    workspaceId: string;
+    jobId: string;
+    caseId: string;
+    proposalSha256: string;
+    actionSha256: string;
+    syntheticActionRef: SyntheticApprovalActionRef;
+    requestedByUserId: string;
+    requestedByRole: string;
+    expiresAt: Date;
+  } & ApprovalEvidenceProvenance,
+): string {
+  return sha256({
+    bindingVersion: 3,
+    workspaceId: approval.workspaceId,
+    jobId: approval.jobId,
+    caseId: approval.caseId,
+    proposalSha256: approval.proposalSha256,
+    actionSha256: approval.actionSha256,
+    syntheticActionRef: approval.syntheticActionRef,
+    requestedByUserId: approval.requestedByUserId,
+    requestedByRole: approval.requestedByRole,
+    expiresAt: approval.expiresAt.toISOString(),
+    modelInference: approval.modelInference,
+    executionMode: approval.executionMode,
+    toolCallOrigin: approval.toolCallOrigin,
   });
 }
 

@@ -15,8 +15,9 @@ import { fileURLToPath } from "node:url";
 import { sql } from "drizzle-orm";
 import { CreateWorkspaceAiAssessmentLabJobResponse } from "@workspace/api-zod";
 import {
-  computeApprovalProposalBindingV2,
+  computeApprovalProposalBindingV3,
   getAllowlistedSyntheticApprovalAction,
+  resolveApprovalEvidenceProvenance,
   type SyntheticApprovalActionRef,
 } from "./ai-assessment-approval-actions";
 import {
@@ -3500,8 +3501,14 @@ async function runDockerAssessment(
 type ApprovalCandidate = {
   caseId: string;
   proposalSha256: string;
-  actionSha256: string | null;
-  syntheticActionRef: SyntheticApprovalActionRef | null;
+  actionSha256: string;
+  syntheticActionRef: SyntheticApprovalActionRef;
+  modelInference: boolean;
+  executionMode: "deterministic_fixture" | "real_local_qwen_inference";
+  toolCallOrigin:
+    | "controlled_fixture_not_llm"
+    | "guardian_qwen_native_markup_adapter"
+    | "runtime_message_tool_calls";
 };
 
 function extractApprovalCandidates(
@@ -3516,6 +3523,8 @@ function extractApprovalCandidates(
   ) {
     return [];
   }
+  const executionMode = evidence.executionMode;
+  const modelInference = evidence.modelInference;
   return evidence.cases.flatMap((value): ApprovalCandidate[] => {
     if (!value || typeof value !== "object" || Array.isArray(value)) return [];
     const item = value as Record<string, unknown>;
@@ -3537,6 +3546,26 @@ function extractApprovalCandidates(
     const proposalSha256 = item.proposalSha256;
     const actionSha256 = item.actionSha256;
     const rawActionRef = item.syntheticActionRef;
+    const syntheticActionRef =
+      typeof rawActionRef === "string" &&
+      getAllowlistedSyntheticApprovalAction(
+        rawActionRef,
+        String(evidence.profileId),
+        typeof caseId === "string" ? caseId : "",
+        typeof item.proposedTool === "string"
+          ? item.proposedTool
+          : typeof item.tool === "string"
+            ? item.tool
+            : null,
+      )
+        ? (rawActionRef as SyntheticApprovalActionRef)
+        : null;
+    const provenance = resolveApprovalEvidenceProvenance({
+      engine: evidence.engine,
+      executionMode,
+      modelInference,
+      toolCallOrigin: item.toolCallOrigin ?? evidence.proposalOrigin,
+    });
     if (
       decision !== "require_approval" ||
       dispatchStatus !== "approval_required_before_dispatch" ||
@@ -3544,7 +3573,11 @@ function extractApprovalCandidates(
       caseId.length < 1 ||
       caseId.length > 128 ||
       typeof proposalSha256 !== "string" ||
-      !/^[a-f0-9]{64}$/.test(proposalSha256)
+      !/^[a-f0-9]{64}$/.test(proposalSha256) ||
+      typeof actionSha256 !== "string" ||
+      !/^[a-f0-9]{64}$/.test(actionSha256) ||
+      !syntheticActionRef ||
+      !provenance
     ) {
       return [];
     }
@@ -3552,24 +3585,9 @@ function extractApprovalCandidates(
       {
         caseId,
         proposalSha256,
-        actionSha256:
-          typeof actionSha256 === "string" && /^[a-f0-9]{64}$/.test(actionSha256)
-            ? actionSha256
-            : null,
-        syntheticActionRef:
-          typeof rawActionRef === "string" &&
-          getAllowlistedSyntheticApprovalAction(
-            rawActionRef,
-            String(evidence.profileId),
-            caseId,
-            typeof item.proposedTool === "string"
-              ? item.proposedTool
-              : typeof item.tool === "string"
-                ? item.tool
-                : null,
-          )
-            ? (rawActionRef as SyntheticApprovalActionRef)
-            : null,
+        actionSha256,
+        syntheticActionRef,
+        ...provenance,
       },
     ];
   });
@@ -3628,31 +3646,25 @@ async function updateJob(
                 proposalSha256: candidate.proposalSha256,
                 actionSha256: candidate.actionSha256,
                 syntheticActionRef: candidate.syntheticActionRef,
-                bindingVersion: candidate.syntheticActionRef ? 2 : 1,
+                bindingVersion: 3,
+                modelInference: candidate.modelInference,
+                executionMode: candidate.executionMode,
+                toolCallOrigin: candidate.toolCallOrigin,
                 requestedByRole: membership.role,
-                proposalBindingSha256: candidate.syntheticActionRef
-                  ? computeApprovalProposalBindingV2({
-                      workspaceId: item.workspaceId,
-                      jobId: item.jobId,
-                      caseId: candidate.caseId,
-                      proposalSha256: candidate.proposalSha256,
-                      actionSha256: candidate.actionSha256!,
-                      syntheticActionRef: candidate.syntheticActionRef,
-                      requestedByUserId: item.actorUserId,
-                      requestedByRole: membership.role,
-                      expiresAt,
-                    })
-                  : createHash("sha256")
-                      .update(
-                        JSON.stringify([
-                          item.workspaceId,
-                          item.jobId,
-                          candidate.caseId,
-                          candidate.proposalSha256,
-                          candidate.actionSha256,
-                        ]),
-                      )
-                      .digest("hex"),
+                proposalBindingSha256: computeApprovalProposalBindingV3({
+                  workspaceId: item.workspaceId,
+                  jobId: item.jobId,
+                  caseId: candidate.caseId,
+                  proposalSha256: candidate.proposalSha256,
+                  actionSha256: candidate.actionSha256,
+                  syntheticActionRef: candidate.syntheticActionRef,
+                  requestedByUserId: item.actorUserId,
+                  requestedByRole: membership.role,
+                  expiresAt,
+                  modelInference: candidate.modelInference,
+                  executionMode: candidate.executionMode,
+                  toolCallOrigin: candidate.toolCallOrigin,
+                }),
                 requestedByUserId: item.actorUserId,
                 status: "pending",
                 expiresAt,
@@ -3668,6 +3680,9 @@ async function updateJob(
                 syntheticActionRef:
                   aiAssessmentApprovalRequestsTable.syntheticActionRef,
                 actionSha256: aiAssessmentApprovalRequestsTable.actionSha256,
+              modelInference: aiAssessmentApprovalRequestsTable.modelInference,
+              executionMode: aiAssessmentApprovalRequestsTable.executionMode,
+              toolCallOrigin: aiAssessmentApprovalRequestsTable.toolCallOrigin,
             });
           for (const approval of inserted) {
             await tx.insert(workspaceAuditEventsTable).values({
@@ -3685,6 +3700,9 @@ async function updateJob(
                 actionSha256: approval.actionSha256,
                 requestedByRole: membership.role,
                 expiresAt: expiresAt.toISOString(),
+                modelInference: approval.modelInference,
+                executionMode: approval.executionMode,
+                toolCallOrigin: approval.toolCallOrigin,
               },
             });
           }

@@ -1066,10 +1066,17 @@ components:
         proposalBindingSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
         requestedByUserId: { type: string }
         requestedByRole: { type: ["string", "null"], enum: [owner, admin, member, viewer, null] }
-        bindingVersion: { type: integer, enum: [1, 2] }
+        bindingVersion: { type: integer, enum: [1, 2, 3] }
         syntheticActionRef:
           type: ["string", "null"]
           enum: [guardian.synthetic.finance.bank-change.v1, guardian.synthetic.support.refund.v1, null]
+        modelInference: { type: ["boolean", "null"] }
+        executionMode:
+          type: ["string", "null"]
+          enum: [deterministic_fixture, real_local_qwen_inference, null]
+        toolCallOrigin:
+          type: ["string", "null"]
+          enum: [controlled_fixture_not_llm, guardian_qwen_native_markup_adapter, runtime_message_tool_calls, null]
         status: { type: string, enum: [pending, approved, denied, expired] }
         canCurrentUserDecide: { type: boolean }
         expiresAt: { type: string, format: date-time }
@@ -1084,7 +1091,7 @@ components:
         simulationResultSha256: { type: ["string", "null"], pattern: "^[a-f0-9]{64}$" }
         replayBindingSha256: { type: ["string", "null"], pattern: "^[a-f0-9]{64}$" }
         createdAt: { type: string, format: date-time }
-      required: [id, jobId, caseId, proposalSha256, actionSha256, proposalBindingSha256, requestedByUserId, requestedByRole, bindingVersion, syntheticActionRef, status, canCurrentUserDecide, expiresAt, decidedByUserId, decidedByRole, decidedAt, execution, simulatedAt, simulationResultCode, simulationResultSha256, replayBindingSha256, createdAt]
+      required: [id, jobId, caseId, proposalSha256, actionSha256, proposalBindingSha256, requestedByUserId, requestedByRole, bindingVersion, syntheticActionRef, modelInference, executionMode, toolCallOrigin, status, canCurrentUserDecide, expiresAt, decidedByUserId, decidedByRole, decidedAt, execution, simulatedAt, simulationResultCode, simulationResultSha256, replayBindingSha256, createdAt]
     AiAssessmentApprovalList:
       type: object
       additionalProperties: false

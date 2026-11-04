@@ -36,6 +36,9 @@ test("approval inbox shows tenant-safe decisions without claiming tool execution
     requestedByRole: "member",
     bindingVersion: 1,
     syntheticActionRef: null,
+    modelInference: false,
+    executionMode: "deterministic_fixture",
+    toolCallOrigin: "controlled_fixture_not_llm",
     status: "pending",
     canCurrentUserDecide: true,
     expiresAt: "2026-11-04T12:00:00.000Z",
@@ -67,9 +70,23 @@ test("approval inbox shows tenant-safe decisions without claiming tool execution
     simulationResultSha256: "d".repeat(64),
     replayBindingSha256: "e".repeat(64),
   };
+  const qwenAdapted: AiAssessmentApproval = {
+    ...pending,
+    id: "44444444-4444-4444-8444-444444444444",
+    modelInference: true,
+    executionMode: "real_local_qwen_inference",
+    toolCallOrigin: "guardian_qwen_native_markup_adapter",
+  };
+  const qwenNative: AiAssessmentApproval = {
+    ...pending,
+    id: "55555555-5555-4555-8555-555555555555",
+    modelInference: true,
+    executionMode: "real_local_qwen_inference",
+    toolCallOrigin: "runtime_message_tool_calls",
+  };
   const markup = renderToStaticMarkup(
     createElement(GuardianApprovalInbox, {
-      approvals: [pending, approved, simulated],
+      approvals: [pending, approved, simulated, qwenAdapted, qwenNative],
       canDecide: true,
       loading: false,
       error: false,
@@ -85,6 +102,9 @@ test("approval inbox shows tenant-safe decisions without claiming tool execution
   assert.match(markup, /data-testid="button-deny-11111111-1111-4111-8111-111111111111"/);
   assert.match(markup, /Aprobada · solo decisión/);
   assert.match(markup, /Aprobada · simulación sintética realizada una vez/);
+  assert.match(markup, /Fixture determinista · no es inferencia de modelo/);
+  assert.match(markup, /marcador adaptado; no es tool call nativa/);
+  assert.match(markup, /message\.tool_calls nativa/);
   assert.match(markup, /nunca se llama a herramientas ni sistemas externos/);
   assert.equal(markup.includes("prompt"), false);
   assert.equal(markup.includes("arguments"), false);

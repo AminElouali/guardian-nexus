@@ -79,6 +79,20 @@ export function GuardianApprovalInbox({
       {approvals.length > 0 && (
         <div className="ai-history-list">
           {approvals.map((approval) => {
+            const provenanceLabel =
+              approval.modelInference === true &&
+              approval.executionMode === "real_local_qwen_inference" &&
+              approval.toolCallOrigin === "guardian_qwen_native_markup_adapter"
+                ? "Inferencia Qwen local · marcador adaptado; no es tool call nativa"
+                : approval.modelInference === true &&
+                    approval.executionMode === "real_local_qwen_inference" &&
+                    approval.toolCallOrigin === "runtime_message_tool_calls"
+                  ? "Inferencia Qwen local · message.tool_calls nativa"
+                  : approval.modelInference === false &&
+                      approval.executionMode === "deterministic_fixture" &&
+                      approval.toolCallOrigin === "controlled_fixture_not_llm"
+                    ? "Fixture determinista · no es inferencia de modelo"
+                    : "Procedencia no verificada en este registro";
             const statusLabel = {
               pending: "Pendiente",
               approved:
@@ -115,6 +129,9 @@ export function GuardianApprovalInbox({
                 <details>
                   <summary>Vínculo de evidencia y trazabilidad</summary>
                   <p>Job: {approval.jobId}</p>
+                  <p data-testid={`approval-provenance-${approval.id}`}>
+                    Origen: {provenanceLabel}
+                  </p>
                   <p>SHA-256 de propuesta: {approval.proposalSha256}</p>
                   <p>SHA-256 de vínculo: {approval.proposalBindingSha256}</p>
                 </details>

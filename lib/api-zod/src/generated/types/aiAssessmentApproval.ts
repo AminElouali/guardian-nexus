@@ -8,10 +8,12 @@
 import type { AiAssessmentApprovalBindingVersion } from './aiAssessmentApprovalBindingVersion';
 import type { AiAssessmentApprovalDecidedByRole } from './aiAssessmentApprovalDecidedByRole';
 import type { AiAssessmentApprovalExecution } from './aiAssessmentApprovalExecution';
+import type { AiAssessmentApprovalExecutionMode } from './aiAssessmentApprovalExecutionMode';
 import type { AiAssessmentApprovalRequestedByRole } from './aiAssessmentApprovalRequestedByRole';
 import type { AiAssessmentApprovalSimulationResultCode } from './aiAssessmentApprovalSimulationResultCode';
 import type { AiAssessmentApprovalStatus } from './aiAssessmentApprovalStatus';
 import type { AiAssessmentApprovalSyntheticActionRef } from './aiAssessmentApprovalSyntheticActionRef';
+import type { AiAssessmentApprovalToolCallOrigin } from './aiAssessmentApprovalToolCallOrigin';
 
 export interface AiAssessmentApproval {
   id: string;
@@ -32,6 +34,12 @@ export interface AiAssessmentApproval {
   bindingVersion: AiAssessmentApprovalBindingVersion;
   /** @nullable */
   syntheticActionRef: AiAssessmentApprovalSyntheticActionRef;
+  /** @nullable */
+  modelInference: boolean | null;
+  /** @nullable */
+  executionMode: AiAssessmentApprovalExecutionMode;
+  /** @nullable */
+  toolCallOrigin: AiAssessmentApprovalToolCallOrigin;
   status: AiAssessmentApprovalStatus;
   canCurrentUserDecide: boolean;
   expiresAt: Date;

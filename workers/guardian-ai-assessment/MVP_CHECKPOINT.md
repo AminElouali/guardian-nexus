@@ -2626,3 +2626,31 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   revisión legal siguen sin acreditarse en esta fase. Estado detallado,
   comandos y hashes: `reports/phase1-lab-contracts-and-regressions-2026-11-04.md`
   y su manifiesto SHA-256 acompañante.
+
+## Incremento 2026-11-04 — procedencia de aprobaciones v3
+
+- Partida: HEAD `9f63d1a35d421a5c477678ccf5e2d4dba873229b`; los cambios de este
+  incremento son aditivos. Nuevas aprobaciones usan binding v3 con hashes de
+  propuesta/acción, workspace, job, caso, actor/rol, expiración, modo de
+  inferencia y origen de tool call. Worker/API solo aceptan tuplas de
+  procedencia coherentes y acciones sintéticas allow-listed; `no_proposal` no
+  crea aprobación. Filas antiguas permanecen legibles como origen no verificado;
+  una fila Qwen v2 sin binding de procedencia no se puede consumir.
+- PostgreSQL/Drizzle/OpenAPI/Zod se actualizaron; la política/RLS se aplicó
+  únicamente a la base de desarrollo. La bandeja diferencia fixture, marcador
+  adaptado, llamada nativa y origen legado no verificado.
+- Validación final: API **75/75**; E2E de aprobación sintético **1/1**,
+  `modelInference=false`, `dockerCommandRequestedByHarness=false`, hash de
+  evidencia `485d0f7bbebb2a679be6f77dd8d7572f4216f1003c5432a59afb410b2fb5ebb7`;
+  UI **8/8**; SDK TS **13/13** y build; SDK Python **8/8**; API build, web build
+  y typecheck del workspace pasaron. No hubo inferencia Qwen nueva. `pytest`
+  no está instalado, por lo que no se ejecutó la suite Python del worker.
+- Artefacto E2E redactado SHA-256:
+  `637011265bd2aab632586383868b6789cbfe8d1e70d3f471770f11a43cc3bec3`.
+  Evidencia, comandos y hashes de fuentes:
+  `reports/approval-provenance-binding-v3-2026-11-04.md` y su manifiesto.
+- Estado Qwen y preflight siguen siendo históricos, no repetidos ni alterados:
+  8 inferencias anteriores, 7 marcadores adaptados, 0 llamadas nativas y
+  1 `no_proposal`; el preflight sigue bloqueado por socket Docker accesible,
+  entorno sensible presente e identidades broker/DB no demostradas. No se
+  ejecutó Qwen/Docker ni se autenticó Clerk en navegador.

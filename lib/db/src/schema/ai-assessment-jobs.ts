@@ -1,5 +1,6 @@
 import { sql, type SQLWrapper } from "drizzle-orm";
 import {
+  boolean,
   check,
   index,
   integer,
@@ -1290,6 +1291,9 @@ export const aiAssessmentApprovalRequestsTable = pgTable(
     requestedByRole: text("requested_by_role"),
     bindingVersion: integer("binding_version").notNull().default(1),
     syntheticActionRef: text("synthetic_action_ref"),
+    modelInference: boolean("model_inference"),
+    executionMode: text("execution_mode"),
+    toolCallOrigin: text("tool_call_origin"),
     status: text("status").notNull().default("pending"),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     decidedByUserId: text("decided_by_user_id"),
@@ -1328,7 +1332,11 @@ export const aiAssessmentApprovalRequestsTable = pgTable(
     ),
     check(
       "ai_assessment_approval_binding_version_check",
-      sql`${table.bindingVersion} IN (1, 2) AND (${table.bindingVersion} = 1 OR (${table.requestedByRole} IS NOT NULL AND ${table.syntheticActionRef} IS NOT NULL AND ${table.actionSha256} IS NOT NULL))`,
+      sql`${table.bindingVersion} IN (1, 2, 3) AND (${table.bindingVersion} = 1 OR (${table.requestedByRole} IS NOT NULL AND ${table.syntheticActionRef} IS NOT NULL AND ${table.actionSha256} IS NOT NULL)) AND (${table.bindingVersion} <> 3 OR (${table.modelInference} IS NOT NULL AND ${table.executionMode} IS NOT NULL AND ${table.toolCallOrigin} IS NOT NULL))`,
+    ),
+    check(
+      "ai_assessment_approval_provenance_check",
+      sql`(${table.modelInference} IS NULL AND ${table.executionMode} IS NULL AND ${table.toolCallOrigin} IS NULL) OR (${table.modelInference} = false AND ${table.executionMode} = 'deterministic_fixture' AND ${table.toolCallOrigin} = 'controlled_fixture_not_llm') OR (${table.modelInference} = true AND ${table.executionMode} = 'real_local_qwen_inference' AND ${table.toolCallOrigin} IN ('guardian_qwen_native_markup_adapter', 'runtime_message_tool_calls'))`,
     ),
     check(
       "ai_assessment_approval_action_ref_check",

@@ -19,7 +19,7 @@ import {
 } from "@workspace/db";
 import {
   canonicalApprovalJson,
-  computeApprovalProposalBindingV2,
+  computeApprovalProposalBindingV3,
   getAllowlistedSyntheticApprovalAction,
 } from "./lib/ai-assessment-approval-actions";
 import { createAiAssessmentLabRouter } from "./routes/ai-assessment-lab";
@@ -274,7 +274,12 @@ async function seedApproval(
   assert.ok(action, "fixture proposal must resolve to a fixed synthetic action");
   assert.equal(fixtureCase.actionSha256, action.actionSha256);
   assert.equal(fixtureCase.proposalSha256, action.proposalSha256);
-  const proposalBindingSha256 = computeApprovalProposalBindingV2({
+  const approvalProvenance = {
+    modelInference: false,
+    executionMode: "deterministic_fixture" as const,
+    toolCallOrigin: "controlled_fixture_not_llm" as const,
+  };
+  const proposalBindingSha256 = computeApprovalProposalBindingV3({
     workspaceId: input.workspaceId,
     jobId,
     caseId: input.caseId,
@@ -286,13 +291,17 @@ async function seedApproval(
     requestedByUserId: input.requesterId,
     requestedByRole: "owner",
     expiresAt: input.expiry,
+    ...approvalProvenance,
   });
   const inserted = await fixturePool.query<{ id: string }>(
     `INSERT INTO public.ai_assessment_approval_requests
        (workspace_id, job_id, case_id, proposal_sha256, action_sha256,
         proposal_binding_sha256, requested_by_user_id, requested_by_role,
-        binding_version, synthetic_action_ref, status, expires_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, 'owner', 2, $8, 'pending', $9)
+        binding_version, synthetic_action_ref, model_inference, execution_mode,
+        tool_call_origin, status, expires_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, 'owner', 3, $8, false,
+             'deterministic_fixture', 'controlled_fixture_not_llm',
+             'pending', $9)
      RETURNING id`,
     [
       input.workspaceId,
@@ -496,10 +505,100 @@ test(
       const pending = ListWorkspaceAiAssessmentApprovalsResponse.parse(
         await (await request(workspaceAAdmin, approvalPath)).json(),
       );
-      assert.equal(
-        pending.approvals.find((item) => item.id === approval.approvalId)?.status,
-        "pending",
+      const pendingApproval = pending.approvals.find(
+        (item) => item.id === approval.approvalId,
       );
+      assert.equal(pendingApproval?.status, "pending");
+      assert.equal(pendingApproval?.modelInference, false);
+      assert.equal(pendingApproval?.executionMode, "deterministic_fixture");
+      assert.equal(
+        pendingApproval?.toolCallOrigin,
+        "controlled_fixture_not_llm",
+      );
+      if (approval === approvals[0]) {
+        const [persisted] = (
+          await fixturePool.query<{
+            workspace_id: string;
+            job_id: string;
+            case_id: string;
+            proposal_sha256: string;
+            action_sha256: string;
+            synthetic_action_ref: string;
+            requested_by_user_id: string;
+            requested_by_role: string;
+            expires_at: Date;
+          }>(
+            `SELECT workspace_id::text, job_id::text, case_id,
+                    proposal_sha256, action_sha256, synthetic_action_ref,
+                    requested_by_user_id, requested_by_role, expires_at
+             FROM public.ai_assessment_approval_requests WHERE id = $1`,
+            [approval.approvalId],
+          )
+        ).rows;
+        assert.ok(persisted);
+        const tamperedBinding = computeApprovalProposalBindingV3({
+          workspaceId: persisted.workspace_id,
+          jobId: persisted.job_id,
+          caseId: persisted.case_id,
+          proposalSha256: persisted.proposal_sha256,
+          actionSha256: persisted.action_sha256,
+          syntheticActionRef: persisted.synthetic_action_ref as
+            | "guardian.synthetic.finance.bank-change.v1"
+            | "guardian.synthetic.support.refund.v1",
+          requestedByUserId: persisted.requested_by_user_id,
+          requestedByRole: persisted.requested_by_role,
+          expiresAt: persisted.expires_at,
+          modelInference: true,
+          executionMode: "real_local_qwen_inference",
+          toolCallOrigin: "guardian_qwen_native_markup_adapter",
+        });
+        try {
+          await fixturePool.query(
+            `UPDATE public.ai_assessment_approval_requests
+             SET model_inference = true,
+                 execution_mode = 'real_local_qwen_inference',
+                 tool_call_origin = 'guardian_qwen_native_markup_adapter',
+                 proposal_binding_sha256 = $2
+             WHERE id = $1`,
+            [approval.approvalId, tamperedBinding],
+          );
+          const tamperedDecision = await request(
+            workspaceAAdmin,
+            decisionPath,
+            "POST",
+            {
+              decision: "approve",
+              proposalBindingSha256: tamperedBinding,
+            },
+          );
+          assert.equal(
+            tamperedDecision.status,
+            409,
+            "Qwen provenance cannot be substituted for linked fixture evidence",
+          );
+          const unchangedResult: {
+            rows: Array<{ status: string; simulated_at: Date | null }>;
+          } = await fixturePool.query(
+            `SELECT status, simulated_at
+             FROM public.ai_assessment_approval_requests WHERE id = $1`,
+            [approval.approvalId],
+          );
+          const unchanged: { status: string; simulated_at: Date | null } | undefined =
+            unchangedResult.rows[0];
+          assert.equal(unchanged?.status, "pending");
+          assert.equal(unchanged?.simulated_at, null);
+        } finally {
+          await fixturePool.query(
+            `UPDATE public.ai_assessment_approval_requests
+             SET model_inference = false,
+                 execution_mode = 'deterministic_fixture',
+                 tool_call_origin = 'controlled_fixture_not_llm',
+                 proposal_binding_sha256 = $2
+             WHERE id = $1`,
+            [approval.approvalId, approval.binding],
+          );
+        }
+      }
     }
 
     const finance = approvals[0]!;

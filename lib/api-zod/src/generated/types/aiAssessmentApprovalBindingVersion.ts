@@ -12,4 +12,5 @@ export type AiAssessmentApprovalBindingVersion = typeof AiAssessmentApprovalBind
 export const AiAssessmentApprovalBindingVersion = {
   NUMBER_1: 1,
   NUMBER_2: 2,
+  NUMBER_3: 3,
 } as const;

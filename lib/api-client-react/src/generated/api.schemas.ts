@@ -3872,6 +3872,7 @@ export type AiAssessmentApprovalBindingVersion = typeof AiAssessmentApprovalBind
 export const AiAssessmentApprovalBindingVersion = {
   NUMBER_1: 1,
   NUMBER_2: 2,
+  NUMBER_3: 3,
 } as const;
 
 /**
@@ -3883,6 +3884,29 @@ export type AiAssessmentApprovalSyntheticActionRef = typeof AiAssessmentApproval
 export const AiAssessmentApprovalSyntheticActionRef = {
   'guardiansyntheticfinancebank-changev1': 'guardian.synthetic.finance.bank-change.v1',
   guardiansyntheticsupportrefundv1: 'guardian.synthetic.support.refund.v1',
+} as const;
+
+/**
+ * @nullable
+ */
+export type AiAssessmentApprovalExecutionMode = typeof AiAssessmentApprovalExecutionMode[keyof typeof AiAssessmentApprovalExecutionMode] | null;
+
+
+export const AiAssessmentApprovalExecutionMode = {
+  deterministic_fixture: 'deterministic_fixture',
+  real_local_qwen_inference: 'real_local_qwen_inference',
+} as const;
+
+/**
+ * @nullable
+ */
+export type AiAssessmentApprovalToolCallOrigin = typeof AiAssessmentApprovalToolCallOrigin[keyof typeof AiAssessmentApprovalToolCallOrigin] | null;
+
+
+export const AiAssessmentApprovalToolCallOrigin = {
+  controlled_fixture_not_llm: 'controlled_fixture_not_llm',
+  guardian_qwen_native_markup_adapter: 'guardian_qwen_native_markup_adapter',
+  runtime_message_tool_calls: 'runtime_message_tool_calls',
 } as const;
 
 export type AiAssessmentApprovalStatus = typeof AiAssessmentApprovalStatus[keyof typeof AiAssessmentApprovalStatus];
@@ -3946,6 +3970,12 @@ export interface AiAssessmentApproval {
   bindingVersion: AiAssessmentApprovalBindingVersion;
   /** @nullable */
   syntheticActionRef: AiAssessmentApprovalSyntheticActionRef;
+  /** @nullable */
+  modelInference: boolean | null;
+  /** @nullable */
+  executionMode: AiAssessmentApprovalExecutionMode;
+  /** @nullable */
+  toolCallOrigin: AiAssessmentApprovalToolCallOrigin;
   status: AiAssessmentApprovalStatus;
   canCurrentUserDecide: boolean;
   expiresAt: string;

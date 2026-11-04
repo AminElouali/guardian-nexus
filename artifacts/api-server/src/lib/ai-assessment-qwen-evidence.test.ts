@@ -8,7 +8,9 @@ import {
 } from "./ai-assessment-worker";
 import {
   createSyntheticApprovalSimulationReceipt,
+  computeApprovalProposalBindingV3,
   getAllowlistedSyntheticApprovalAction,
+  resolveApprovalEvidenceProvenance,
 } from "./ai-assessment-approval-actions";
 
 type QwenEvidence = Parameters<
@@ -35,6 +37,73 @@ test("schema diagnostics identify the Qwen result branch without retaining rejec
     JSON.stringify(branches),
     /must-not-appear-in-diagnostics|secretSentinel/,
   );
+});
+
+test("approval binding v3 is provenance-bound and rejects unverified origins", () => {
+  const fixture = resolveApprovalEvidenceProvenance({
+    engine: "guardian_policy_lab",
+    executionMode: "deterministic_fixture",
+    modelInference: false,
+    toolCallOrigin: "controlled_fixture_not_llm",
+  });
+  assert.deepEqual(fixture, {
+    modelInference: false,
+    executionMode: "deterministic_fixture",
+    toolCallOrigin: "controlled_fixture_not_llm",
+  });
+
+  const adaptedQwen = resolveApprovalEvidenceProvenance({
+    engine: "guardian_qwen_policy_lab",
+    executionMode: "real_local_qwen_inference",
+    modelInference: true,
+    toolCallOrigin: "guardian_qwen_native_markup_adapter",
+  });
+  assert.deepEqual(adaptedQwen, {
+    modelInference: true,
+    executionMode: "real_local_qwen_inference",
+    toolCallOrigin: "guardian_qwen_native_markup_adapter",
+  });
+  assert.equal(
+    resolveApprovalEvidenceProvenance({
+      engine: "guardian_qwen_policy_lab",
+      executionMode: "real_local_qwen_inference",
+      modelInference: true,
+      toolCallOrigin: "no_tool_call",
+    }),
+    null,
+  );
+  assert.equal(
+    resolveApprovalEvidenceProvenance({
+      engine: "guardian_policy_lab",
+      executionMode: "real_local_qwen_inference",
+      modelInference: true,
+      toolCallOrigin: "guardian_qwen_native_markup_adapter",
+    }),
+    null,
+  );
+
+  const base = {
+    workspaceId: "workspace-1",
+    jobId: "job-1",
+    caseId: "support-refund-case",
+    proposalSha256: HASH,
+    actionSha256: "b".repeat(64),
+    syntheticActionRef: "guardian.synthetic.support.refund.v1" as const,
+    requestedByUserId: "requester-1",
+    requestedByRole: "member",
+    expiresAt: new Date("2026-11-04T12:00:00.000Z"),
+  };
+  const adaptedBinding = computeApprovalProposalBindingV3({
+    ...base,
+    ...adaptedQwen!,
+  });
+  const nativeBinding = computeApprovalProposalBindingV3({
+    ...base,
+    ...adaptedQwen!,
+    toolCallOrigin: "runtime_message_tool_calls",
+  });
+  assert.match(adaptedBinding, /^[a-f0-9]{64}$/);
+  assert.notEqual(adaptedBinding, nativeBinding);
 });
 
 function canonicalJson(value: unknown): string {

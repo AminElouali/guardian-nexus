@@ -30,8 +30,10 @@ import {
   canonicalApprovalJson,
   createSyntheticApprovalSimulationReceipt,
   computeApprovalProposalBindingV2,
+  computeApprovalProposalBindingV3,
   computeApprovalReplayBinding,
   getAllowlistedSyntheticApprovalAction,
+  resolveApprovalEvidenceProvenance,
   type SyntheticApprovalActionRef,
 } from "../lib/ai-assessment-approval-actions";
 import { canRunAiEvaluation } from "../lib/access-control";
@@ -324,6 +326,9 @@ function formatApproval(
     requestedByRole: string | null;
     bindingVersion: number;
     syntheticActionRef: string | null;
+    modelInference: boolean | null;
+    executionMode: string | null;
+    toolCallOrigin: string | null;
   status: string;
   expiresAt: Date;
   decidedByUserId: string | null;
@@ -367,10 +372,46 @@ function computeApprovalBinding(approval: {
   actionSha256: string | null;
   bindingVersion: number;
   syntheticActionRef: string | null;
+  modelInference: boolean | null;
+  executionMode: string | null;
+  toolCallOrigin: string | null;
   requestedByUserId: string;
   requestedByRole: string | null;
   expiresAt: Date;
 }): string {
+  if (
+    approval.bindingVersion === 3 &&
+    approval.syntheticActionRef &&
+    approval.actionSha256 &&
+    approval.requestedByRole &&
+    approval.modelInference !== null &&
+    approval.executionMode &&
+    approval.toolCallOrigin
+  ) {
+    const provenance = resolveApprovalEvidenceProvenance({
+      engine:
+        approval.modelInference === true
+          ? "guardian_qwen_policy_lab"
+          : "guardian_policy_lab",
+      executionMode: approval.executionMode,
+      modelInference: approval.modelInference,
+      toolCallOrigin: approval.toolCallOrigin,
+    });
+    if (!provenance) return "";
+    return computeApprovalProposalBindingV3({
+      workspaceId: approval.workspaceId,
+      jobId: approval.jobId,
+      caseId: approval.caseId,
+      proposalSha256: approval.proposalSha256,
+      actionSha256: approval.actionSha256,
+      syntheticActionRef:
+        approval.syntheticActionRef as SyntheticApprovalActionRef,
+      requestedByUserId: approval.requestedByUserId,
+      requestedByRole: approval.requestedByRole,
+      expiresAt: approval.expiresAt,
+      ...provenance,
+    });
+  }
   if (
     approval.bindingVersion === 2 &&
     approval.syntheticActionRef &&
@@ -412,6 +453,10 @@ function verifyPersistedApprovalEvidence(
     actionSha256: string | null;
     syntheticActionRef: string | null;
     requestedByUserId: string;
+    bindingVersion: number;
+    modelInference: boolean | null;
+    executionMode: string | null;
+    toolCallOrigin: string | null;
   },
   job: AiAssessmentJob | undefined,
 ) {
@@ -430,6 +475,11 @@ function verifyPersistedApprovalEvidence(
     raw.engine === "guardian_policy_lab" &&
     raw.executionMode === "deterministic_fixture" &&
     raw.modelInference === false;
+  if (approval.bindingVersion === 2 && isQwenEvidence) {
+    // Legacy Qwen approvals are readable, but cannot be consumed because v2
+    // did not bind inference mode or the native/adapted tool-call origin.
+    return null;
+  }
   if (
     (!isQwenEvidence && !isDeterministicPolicyEvidence) ||
     raw.profileId !== job.profileId ||
@@ -471,6 +521,22 @@ function verifyPersistedApprovalEvidence(
     return null;
   }
   const item = caseRecord as Record<string, unknown>;
+  if (approval.bindingVersion === 3) {
+    const provenance = resolveApprovalEvidenceProvenance({
+      engine: raw.engine,
+      executionMode: raw.executionMode,
+      modelInference: raw.modelInference,
+      toolCallOrigin: item.toolCallOrigin ?? raw.proposalOrigin,
+    });
+    if (
+      !provenance ||
+      approval.modelInference !== provenance.modelInference ||
+      approval.executionMode !== provenance.executionMode ||
+      approval.toolCallOrigin !== provenance.toolCallOrigin
+    ) {
+      return null;
+    }
+  }
   const caseDigest = item.caseEvidenceSha256;
   const unsignedCase = { ...item };
   if (isQwenEvidence) {
@@ -791,7 +857,7 @@ routes.post(
         let replayBindingSha256: string | null = null;
         if (
           status === "approved" &&
-          approval.bindingVersion === 2 &&
+          [2, 3].includes(approval.bindingVersion) &&
           approval.syntheticActionRef &&
           approval.actionSha256
         ) {
@@ -820,7 +886,7 @@ routes.post(
           });
         } else if (
           status === "approved" &&
-          approval.bindingVersion === 2
+          [2, 3].includes(approval.bindingVersion)
         ) {
           return { kind: "evidence_invalid" as const };
         }
