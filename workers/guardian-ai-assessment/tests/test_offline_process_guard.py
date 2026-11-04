@@ -31,9 +31,12 @@ class OfflineProcessGuardTests(unittest.TestCase):
             """
             import errno
             import json
+            import os
             import socket
             import sys
+            import threading
             from pathlib import Path
+            import ctypes
 
             sys.path.insert(0, str(Path(sys.argv[1])))
             from guardian_ai_assessment.offline_process_guard import (
@@ -54,16 +57,54 @@ class OfflineProcessGuardTests(unittest.TestCase):
                 else:
                     socket_denials.append(False)
             try:
-                __import__("os").execve("/bin/true", ["true"], {})
+                os.execve("/bin/true", ["true"], {})
             except OSError as exc:
                 exec_denied = exc.errno == errno.EPERM
             else:
                 exec_denied = False
+
+            thread_result = []
+            thread = threading.Thread(target=lambda: thread_result.append("thread-ok"))
+            thread.start()
+            thread.join(timeout=2)
+            thread_created = not thread.is_alive() and thread_result == ["thread-ok"]
+
+            try:
+                os.fork()
+            except OSError as exc:
+                fork_denied = exc.errno == errno.EPERM
+            else:
+                fork_denied = False
+                os.wait()
+
+            libc = ctypes.CDLL(None, use_errno=True)
+            syscall = libc.syscall
+            syscall.restype = ctypes.c_long
+            syscall.argtypes = [
+                ctypes.c_long, ctypes.c_ulong, ctypes.c_ulong,
+                ctypes.c_ulong, ctypes.c_ulong, ctypes.c_ulong,
+            ]
+            clone3_result = syscall(435, 0, 0, 0, 0, 0)
+            clone3_errno = ctypes.get_errno()
+            # Missing CLONE_THREAD and a namespace/process flag are denied
+            # before the kernel can create a process.
+            clone_missing_thread = syscall(56, 0, 0, 0, 0, 0)
+            clone_missing_thread_errno = ctypes.get_errno()
+            clone_namespace = syscall(56, 0x00010100 | 0x02000000, 0, 0, 0, 0)
+            clone_namespace_errno = ctypes.get_errno()
             print(json.dumps({
                 "network": network,
                 "limits": limits,
                 "socketDenials": socket_denials,
                 "execDenied": exec_denied,
+                "threadCreated": thread_created,
+                "forkDenied": fork_denied,
+                "clone3Errno": clone3_errno,
+                "clone3Result": clone3_result,
+                "cloneMissingThreadErrno": clone_missing_thread_errno,
+                "cloneMissingThreadResult": clone_missing_thread,
+                "cloneNamespaceErrno": clone_namespace_errno,
+                "cloneNamespaceResult": clone_namespace,
             }, sort_keys=True))
             """
         )
@@ -83,6 +124,14 @@ class OfflineProcessGuardTests(unittest.TestCase):
         self.assertEqual(evidence["network"]["destinationReachabilityProbes"], "not_performed")
         self.assertEqual(evidence["socketDenials"], [True, True])
         self.assertTrue(evidence["execDenied"])
+        self.assertTrue(evidence["threadCreated"])
+        self.assertTrue(evidence["forkDenied"])
+        self.assertEqual(evidence["clone3Result"], -1)
+        self.assertEqual(evidence["clone3Errno"], 38)  # ENOSYS
+        self.assertEqual(evidence["cloneMissingThreadResult"], -1)
+        self.assertEqual(evidence["cloneMissingThreadErrno"], 1)  # EPERM
+        self.assertEqual(evidence["cloneNamespaceResult"], -1)
+        self.assertEqual(evidence["cloneNamespaceErrno"], 1)  # EPERM
         self.assertEqual(evidence["limits"]["cpuAffinityCount"], 1)
         self.assertEqual(evidence["limits"]["concurrency"], 1)
         self.assertTrue(evidence["limits"]["limitsVerified"])

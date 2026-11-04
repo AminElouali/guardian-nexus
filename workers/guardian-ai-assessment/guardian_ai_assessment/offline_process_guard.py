@@ -25,8 +25,38 @@ _SECCOMP_RET_KILL_PROCESS = 0x80000000
 _SECCOMP_RET_ERRNO = 0x00050000
 _BPF_LD_W_ABS = 0x20
 _BPF_JMP_JEQ_K = 0x15
+_BPF_ALU_AND_K = 0x54
 _BPF_RET_K = 0x06
 _EPERM_RETURN = _SECCOMP_RET_ERRNO | errno.EPERM
+_ENOSYS_RETURN = _SECCOMP_RET_ERRNO | errno.ENOSYS
+_SECCOMP_ALLOW = 0x7FFF0000
+_X32_SYSCALL_BIT = 0x40000000
+
+# clone3 receives a pointer to clone_args, which classic seccomp BPF cannot
+# dereference. Return ENOSYS so libc can fall back to clone; clone is allowed
+# only when its flags match this bounded pthread-only mask.
+_CLONE_VM = 0x00000100
+_CLONE_FS = 0x00000200
+_CLONE_FILES = 0x00000400
+_CLONE_SIGHAND = 0x00000800
+_CLONE_THREAD = 0x00010000
+_CLONE_SYSVSEM = 0x00040000
+_CLONE_SETTLS = 0x00080000
+_CLONE_PARENT_SETTID = 0x00100000
+_CLONE_CHILD_CLEARTID = 0x00200000
+_CLONE_CHILD_SETTID = 0x01000000
+_REQUIRED_THREAD_CLONE_FLAGS = _CLONE_VM | _CLONE_SIGHAND | _CLONE_THREAD
+_ALLOWED_THREAD_CLONE_FLAGS = (
+    _REQUIRED_THREAD_CLONE_FLAGS
+    | _CLONE_FS
+    | _CLONE_FILES
+    | _CLONE_SYSVSEM
+    | _CLONE_SETTLS
+    | _CLONE_PARENT_SETTID
+    | _CLONE_CHILD_CLEARTID
+    | _CLONE_CHILD_SETTID
+)
+_FORBIDDEN_THREAD_CLONE_FLAGS = (~_ALLOWED_THREAD_CLONE_FLAGS) & 0xFFFFFFFF
 
 # Audit architecture and syscall numbers are deliberately allowlisted. Unknown
 # architectures or kernel-call layouts must not silently fall back to a weaker
@@ -45,6 +75,7 @@ _ARCHITECTURES: dict[str, tuple[int, dict[str, int]]] = {
             "bind": 49,
             "listen": 50,
             "socketpair": 53,
+            "clone": 56,
             "fork": 57,
             "vfork": 58,
             "execve": 59,
@@ -81,7 +112,6 @@ _DENIED_CALLS = (
     "execveat",
     "fork",
     "vfork",
-    "clone3",
 )
 
 
@@ -158,18 +188,50 @@ def _set_process_limits() -> dict[str, Any]:
         "openFilesLimit": open_soft,
         "coreDumpLimit": core_soft,
         "concurrency": 1,
-        "subprocessExecution": "seccomp_denied",
+        "subprocessExecution": "fork_vfork_exec_denied_thread_clone_only",
         "pidsCgroupLimit": "not_available_in_host_process_mode",
         "limitsVerified": True,
     }
 
 
 def _install_filter(architecture_id: int, syscall_numbers: dict[str, int]) -> None:
+    clone_number = syscall_numbers.get("clone")
+    clone3_number = syscall_numbers.get("clone3")
+    if clone_number is None or clone3_number is None:
+        raise RuntimeError("offline_seccomp_syscall_table_incomplete")
+
     instructions = [
         _SockFilter(_BPF_LD_W_ABS, 0, 0, 4),  # seccomp_data.arch
         _SockFilter(_BPF_JMP_JEQ_K, 1, 0, architecture_id),
         _SockFilter(_BPF_RET_K, 0, 0, _SECCOMP_RET_KILL_PROCESS),
         _SockFilter(_BPF_LD_W_ABS, 0, 0, 0),  # seccomp_data.nr
+        # Reject x32 ABI syscall aliases instead of allowing an alternate
+        # syscall-number encoding to bypass the x86_64 deny rules.
+        _SockFilter(_BPF_ALU_AND_K, 0, 0, _X32_SYSCALL_BIT),
+        _SockFilter(_BPF_JMP_JEQ_K, 1, 0, 0),
+        _SockFilter(_BPF_RET_K, 0, 0, _EPERM_RETURN),
+        _SockFilter(_BPF_LD_W_ABS, 0, 0, 0),
+        # clone3's flags are behind a pointer and cannot be checked here.
+        # ENOSYS is the libc fallback signal; the fallback clone is filtered
+        # below. Never allow clone3 based on an unchecked pointer.
+        _SockFilter(_BPF_JMP_JEQ_K, 0, 1, clone3_number),
+        _SockFilter(_BPF_RET_K, 0, 0, _ENOSYS_RETURN),
+        # Only pthread-style clone flags are allowed. The jf jump skips the
+        # eleven-instruction special case for every non-clone syscall.
+        _SockFilter(_BPF_JMP_JEQ_K, 0, 11, clone_number),
+        _SockFilter(_BPF_LD_W_ABS, 0, 0, 16),  # clone arg0: low flags word
+        _SockFilter(
+            _BPF_JMP_JEQ_K, 1, 0, _REQUIRED_THREAD_CLONE_FLAGS
+        ),
+        _SockFilter(_BPF_RET_K, 0, 0, _EPERM_RETURN),
+        _SockFilter(_BPF_LD_W_ABS, 0, 0, 16),
+        _SockFilter(_BPF_ALU_AND_K, 0, 0, _FORBIDDEN_THREAD_CLONE_FLAGS),
+        _SockFilter(_BPF_JMP_JEQ_K, 1, 0, 0),
+        _SockFilter(_BPF_RET_K, 0, 0, _EPERM_RETURN),
+        _SockFilter(_BPF_LD_W_ABS, 0, 0, 20),  # reject high flags word
+        _SockFilter(_BPF_JMP_JEQ_K, 1, 0, 0),
+        _SockFilter(_BPF_RET_K, 0, 0, _EPERM_RETURN),
+        _SockFilter(_BPF_RET_K, 0, 0, _SECCOMP_ALLOW),
     ]
     for name in _DENIED_CALLS:
         syscall_number = syscall_numbers.get(name)
@@ -181,7 +243,7 @@ def _install_filter(architecture_id: int, syscall_numbers: dict[str, int]) -> No
                 _SockFilter(_BPF_RET_K, 0, 0, _EPERM_RETURN),
             )
         )
-    instructions.append(_SockFilter(_BPF_RET_K, 0, 0, 0x7FFF0000))  # ALLOW
+    instructions.append(_SockFilter(_BPF_RET_K, 0, 0, _SECCOMP_ALLOW))
 
     filters = (_SockFilter * len(instructions))(*instructions)
     program = _SockFprog(len(instructions), ctypes.cast(filters, ctypes.POINTER(_SockFilter)))
@@ -268,7 +330,9 @@ def offline_network_evidence(proof: object) -> dict[str, Any]:
         "seccompMode": 2,
         "noNewPrivileges": True,
         "socketSyscalls": "denied_and_self_tested_with_eperm",
-        "subprocessExecution": "execve_denied",
+        "subprocessExecution": "fork_vfork_exec_denied_thread_clone_only",
+        "clone3Behavior": "enosys_fallback_to_clone_flags_filtered",
+        "cloneBehavior": "required_thread_flags_allowlisted_unknown_flags_denied",
         "inheritedSocketFileDescriptors": _ACTIVE_GUARD_INHERITED_SOCKETS,
         "destinationReachabilityProbes": "not_performed",
         "ipv4Egress": "socket_syscalls_denied_not_destination_probed",
