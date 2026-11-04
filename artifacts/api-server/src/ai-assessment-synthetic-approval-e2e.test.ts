@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
 import { createServer, type Server } from "node:http";
 import { dirname, resolve } from "node:path";
@@ -62,6 +62,70 @@ function sha256(value: unknown): string {
   return createHash("sha256")
     .update(canonicalApprovalJson(value), "utf8")
     .digest("hex");
+}
+
+function runPythonSdkApprovalClient(input: {
+  apiBase: string;
+  workspaceId: string;
+  testUser: string;
+  approvalId: string;
+  binding: string;
+}): Promise<string> {
+  const sdkSource = resolve(
+    workerRoot,
+    "../../lib/guardian-agent-sdk-python/src",
+  );
+  const sdkClient = resolve(
+    workerRoot,
+    "tests/python_sdk_approval_api_client.py",
+  );
+  return new Promise((resolveSdk, rejectSdk) => {
+    const child = spawn("python3", [sdkClient], {
+      cwd: workerRoot,
+      stdio: ["ignore", "pipe", "ignore"],
+      env: {
+        PATH: process.env.PATH ?? "/usr/bin:/bin",
+        PYTHONPATH: sdkSource,
+        PYTHONDONTWRITEBYTECODE: "1",
+        GUARDIAN_API_BASE_URL: input.apiBase,
+        GUARDIAN_WORKSPACE_ID: input.workspaceId,
+        GUARDIAN_TEST_USER: input.testUser,
+        GUARDIAN_APPROVAL_ID: input.approvalId,
+        GUARDIAN_PROPOSAL_BINDING_SHA256: input.binding,
+      },
+    });
+    let stdout = "";
+    let settled = false;
+    const timeout = setTimeout(() => {
+      child.kill("SIGKILL");
+      finish(new Error("python_sdk_e2e_timeout"));
+    }, 15_000);
+    const finish = (error?: Error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      if (error) rejectSdk(error);
+      else resolveSdk(stdout.trim());
+    };
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => {
+      if (settled) return;
+      if (Buffer.byteLength(stdout) + Buffer.byteLength(chunk) > 4_096) {
+        child.kill("SIGKILL");
+        finish(new Error("python_sdk_e2e_output_limit"));
+        return;
+      }
+      stdout += chunk;
+    });
+    child.on("error", () => finish(new Error("python_sdk_e2e_spawn_failed")));
+    child.on("close", (code) => {
+      if (code !== 0) {
+        finish(new Error(`python_sdk_e2e_failed:exit_${code ?? "unknown"}`));
+      } else {
+        finish();
+      }
+    });
+  });
 }
 
 type SyntheticWorkerEvidence = {
@@ -483,21 +547,16 @@ test(
 
     const support = approvals[1]!;
     const supportDecisionPath = `${approvalPath}/${support.approvalId}/decision`;
-    const supportApproved = DecideWorkspaceAiAssessmentApprovalResponse.parse(
-      await (
-        await request(workspaceAAdmin, supportDecisionPath, "POST", {
-          decision: "approve",
-          proposalBindingSha256: support.binding,
-        })
-      ).json(),
-    );
+    const pythonSdkOutcome = await runPythonSdkApprovalClient({
+      apiBase,
+      workspaceId: workspaceA,
+      testUser: workspaceAAdmin,
+      approvalId: support.approvalId,
+      binding: support.binding,
+    });
     assert.equal(
-      supportApproved.execution,
-      "synthetic_action_simulated_once",
-    );
-    assert.equal(
-      supportApproved.approval.simulationResultCode,
-      support.expectedResult,
+      pythonSdkOutcome,
+      "PYTHON_SDK_APPROVAL_E2E status=approved execution=synthetic_action_simulated_once",
     );
     assert.equal(
       (
@@ -565,10 +624,58 @@ test(
     assert.equal(expiredRows.rows[0]?.status, "expired");
     assert.equal(expiredRows.rows[0]?.simulated_at, null);
 
+    const roleRevoked = await seedApproval(fixturePool, {
+      workspaceId: workspaceA,
+      requesterId: workspaceAOwner,
+      profileId: finance.profileId,
+      caseId: finance.caseId,
+      expiry: expireFuture(),
+      idempotencyKey: `synthetic-role-revoked-${randomUUID()}`,
+    });
+    const revokedMembership = await fixturePool.query(
+      `UPDATE public.workspace_memberships
+          SET role = 'viewer'
+        WHERE workspace_id = $1
+          AND user_id = $2
+          AND role = 'admin'`,
+      [workspaceA, workspaceAAdmin2],
+    );
+    assert.equal(revokedMembership.rowCount, 1);
+    const revokedRoleResponse = await request(
+      workspaceAAdmin2,
+      `${approvalPath}/${roleRevoked.approvalId}/decision`,
+      "POST",
+      {
+        decision: "approve",
+        proposalBindingSha256: roleRevoked.binding,
+      },
+    );
+    assert.equal(
+      revokedRoleResponse.status,
+      403,
+      "a previously authorized approver is denied after role revocation",
+    );
+    const roleRevokedRows = await fixturePool.query<{
+      status: string;
+      simulated_at: Date | null;
+    }>(
+      `SELECT status, simulated_at
+         FROM public.ai_assessment_approval_requests
+        WHERE id = $1`,
+      [roleRevoked.approvalId],
+    );
+    assert.equal(roleRevokedRows.rows[0]?.status, "pending");
+    assert.equal(
+      roleRevokedRows.rows[0]?.simulated_at,
+      null,
+      "revoked role must not consume or simulate the pending proposal",
+    );
+
     for (const approval of [
       ...approvals,
       supportDenied,
       expired,
+      roleRevoked,
     ]) {
       const audit = await fixturePool.query<{ count: string }>(
         `SELECT count(*)::text AS count
@@ -593,16 +700,21 @@ test(
       modelInference: false,
       brokerUsed: false,
       dockerCommandRequestedByHarness: false,
+      pythonSdkApprovalApiE2e: true,
+      authenticationMode: "synthetic_test_header",
       fixtureWorkerProcesses: fixtureWorkerProcessCount,
       externalEffects: false,
       profiles: cases.map((item) => item.profileId),
-      approvalRequests: approvals.length + 2,
+      approvalRequests: approvals.length + 3,
       approvalDecisions: {
         approvedOnce: 2,
         deniedWithoutSimulation: 1,
         expiredWithoutSimulation: 1,
         concurrentSingleWinner: 1,
+        revokedRoleRejected: true,
+        revokedRoleNoSimulation: true,
         replayRejected: true,
+        pythonSdkApprovalApiE2e: true,
         crossTenantRejected: true,
         roleAndSelfApprovalRejected: true,
         bindingMutationRejected: true,

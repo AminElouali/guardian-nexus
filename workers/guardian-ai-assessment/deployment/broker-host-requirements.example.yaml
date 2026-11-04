@@ -6,7 +6,8 @@ purpose: >
 
 api:
   unixIdentity: guardian-api
-  postgresRole: app_api
+  postgresLogin: app_runtime_login
+  postgresRole: app_runtime
   dockerSocketAccess: forbidden
   mayClaimAssessmentJobs: false
   maySubmitAuthenticatedRequests: true
@@ -14,7 +15,8 @@ api:
 
 broker:
   unixIdentity: guardian-assessment-broker
-  postgresRole: app_assessment_worker
+  postgresLogin: app_ai_assessment_worker_login
+  postgresRole: app_ai_assessment_worker
   dockerDaemon: dedicated-rootless-daemon-owned-by-broker
   dockerSocketAccess: broker-only
   acceptedProfiles:

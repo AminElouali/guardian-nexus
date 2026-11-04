@@ -2387,3 +2387,56 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   separación de sesiones DB no se verificó. La ruta standalone rechaza el
   inicio, el gate integrado sigue cerrado, y el resultado determinista no se
   presenta como inferencia.
+
+## Fase 1: SDK Python, revisión de ALLOW y kit de transferencia — 2026-11-04
+
+- Base comprobada antes del cambio: HEAD
+  `7b6aeb2c20db43ca0105eea411912b1549c83521`, árbol limpio.
+- Se añadió revisión reproducible, solo análisis, de los nueve `ALLOW`
+  históricos: 2 correo, 4 base de datos y 3 lectura de factura. Se clasifican
+  como lecturas sintéticas acotadas, no como prueba general ni vulnerabilidad
+  automática. Fuente histórica (55 casos: 37 marcadores adaptados, 0
+  `message.tool_calls` nativas, 18 `no_proposal`):
+  `generated-artifacts/guardian-qwen-policy-labs-e2e-v1.10.0.json`,
+  SHA-256
+  `2500000f271bdf95333a048551dab2d2b08fe0ee835434b336f5cffc3eed61ec`.
+  Esta fase no ejecutó inferencia Qwen nueva.
+- Se añadió SDK Python `0.1.0`, sin dependencias runtime de terceros, además
+  de cliente de aprobación local y documentación. Rueda importada correctamente
+  desde `generated-artifacts/guardian-nexus-sdk-python/`; SHA-256
+  `2cc45ee7ef083f0c09ad7938903f89f794e7ebd72cc6c97eb781b6bd059f803b`.
+  Se construyó con setuptools `80.9.0.post0`; no se instaló `pip` ni paquetes.
+- El E2E sintético de aprobación ahora consume el SDK Python desde un
+  subproceso asíncrono contra la API de desarrollo. Añade revocación del rol:
+  devuelve 403 y no simula. Artefacto
+  `generated-artifacts/guardian-synthetic-approval-e2e.json`, hash de archivo
+  `b5ac74aa719fa6b4f614897693300e5653ace7cc2d4b232de003c97de5af1adf`,
+  hash de evidencia
+  `76b7cd37bebaddb52ab99ad904a3ca231b2a917ce3c08172ddc1628e7d376e44`.
+  Hashes de evidencias de aprobación:
+  `39a221adac8374cc3917df1afc239d34409195dd469c3ff975bec0b4bdc4a897`,
+  `8504f5bd1cec1893de29e60f2c5ffdc1c0a2158a2a486e302ca90f8367901117`.
+  Declara `modelInference=false`, `deterministic_fixture_worker_harness`,
+  `synthetic_test_header`, `brokerUsed=false` y `externalEffects=false`.
+  Hubo 5 solicitudes sintéticas; se comprobaron carrera 200/409, replay,
+  caducidad, mutación, cross-tenant, autoaprobación, viewer y revocación.
+  No es Qwen, Clerk real ni ejecución Docker.
+- Se añadió kit `deployment/lab-as-code/` con preflight de identidades, socket,
+  grupos y base PostgreSQL separada; plantillas SQL/config/systemd exigen
+  entorno de laboratorio y no incluyen contraseñas. No se crearon usuarios,
+  roles, servicios ni bases. Su preflight en Replit terminó con exit 1:
+  `BLOCKED run_as_host_admin_for_identity_checks`; no alteró el host. La
+  identidad API/broker y la separación efectiva de DB siguen sin verificar.
+- Validación serial: worker **160/160** excepto `test_corpus_validation.py`
+  (Garak no está disponible y no se instaló); guardas del kit **4/4** tras el
+  último cambio; API **74/74**; API/aprobación E2E **1/1**; SDK Python **8/8**;
+  SDK TypeScript **13/13**; UI **8/8**. Typecheck raíz, API y web pasaron;
+  builds API y SDK pasaron; build web pasó con advertencias de sourcemap y
+  tamaño de chunk >500 kB. La rueda Python se construyó e importó correctamente.
+- Bloqueos sin cambio: broker con identidad Unix realmente separada; Qwen real
+  bloqueado por el gate de socket compartido; Clerk navegador real; Garak en
+  host; IPv6 dual-stack; nuevo SBOM/OSV y revisión jurídica de `langdetect`.
+  No se publicó ni conectó ningún servicio.
+- Informe:
+  `reports/phase1-lab-implementation-2026-11-04.md`; manifiesto de hashes:
+  `reports/phase1-lab-implementation-2026-11-04.sha256`.

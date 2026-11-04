@@ -1,0 +1,37 @@
+# Reference only. Not startable until a separately isolated broker exists.
+# Keep PostgreSQL and Docker access on local Unix sockets; no Internet sockets.
+[Unit]
+Description=Guardian assessment broker (not yet implemented)
+ConditionPathExists=/usr/local/libexec/guardian-assessment-broker
+After=local-fs.target
+
+[Service]
+Type=simple
+User=guardian-assessment-broker
+Group=guardian-assessment-broker
+ExecStart=/usr/local/libexec/guardian-assessment-broker --config /etc/guardian/broker.toml
+EnvironmentFile=-/etc/guardian/broker.env
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateNetwork=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+LockPersonality=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX
+ReadWritePaths=/var/lib/guardian-assessment-broker
+TasksMax=64
+MemoryMax=1G
+CPUQuota=200%
+UMask=0077
+Restart=on-failure
+RestartSec=3s
+
+[Install]
+WantedBy=multi-user.target

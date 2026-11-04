@@ -1,0 +1,4 @@
+# Install only on the authorized disposable lab host.
+# Map distinct OS users to existing database login identities.
+guardian-local-lab guardian-api app_runtime_login
+guardian-local-lab guardian-assessment-broker app_ai_assessment_worker_login

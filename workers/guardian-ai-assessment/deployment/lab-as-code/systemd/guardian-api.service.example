@@ -1,0 +1,33 @@
+# Reference only. Adapt paths and environment using the authorized lab host.
+# The API executable is not packaged by this repository yet.
+[Unit]
+Description=Guardian Nexus API (isolated laboratory template)
+ConditionPathExists=/srv/guardian-nexus/current/bin/guardian-api
+After=network.target
+
+[Service]
+Type=simple
+User=guardian-api
+Group=guardian-api
+WorkingDirectory=/srv/guardian-nexus/current
+ExecStart=/srv/guardian-nexus/current/bin/guardian-api
+EnvironmentFile=-/etc/guardian/api.env
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+LockPersonality=yes
+RestrictSUIDSGID=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/guardian-api /var/log/guardian-api
+UMask=0077
+Restart=on-failure
+RestartSec=3s
+
+[Install]
+WantedBy=multi-user.target

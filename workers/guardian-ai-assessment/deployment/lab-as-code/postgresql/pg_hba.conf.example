@@ -1,0 +1,3 @@
+# Local-socket peer mappings only. Do not copy into production.
+local guardian_lab_dev app_runtime_login peer map=guardian-local-lab
+local guardian_lab_dev app_ai_assessment_worker_login peer map=guardian-local-lab
