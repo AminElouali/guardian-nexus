@@ -71,6 +71,29 @@ class LabAsCodeGuardTests(unittest.TestCase):
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_host_preflight_checks_both_sides_without_invoking_docker(self):
+        source = (LAB_KIT / "scripts" / "preflight-host.sh").read_text()
+        self.assertIn('runuser -u "$api_user" -- test -r', source)
+        self.assertIn('runuser -u "$api_user" -- test -w', source)
+        self.assertIn('runuser -u "$broker_user" -- test -r "$socket"', source)
+        self.assertIn('runuser -u "$broker_user" -- test -w "$socket"', source)
+        self.assertIn('fail "shared_uid"', source)
+        self.assertIn('fail "api_can_access_docker_socket"', source)
+        self.assertIn('fail "broker_rootless_daemon_not_running"', source)
+        self.assertNotRegex(source, r"(?m)^\s*(docker|dockerd)\s+")
+        self.assertNotRegex(source, r"(?m)^\s*(chmod|chown|useradd|usermod|systemctl|psql)\b")
+
+    def test_database_identity_verifier_is_local_read_only_and_checks_forced_rls(self):
+        source = (LAB_KIT / "scripts" / "verify-db-identities.sh").read_text()
+        self.assertIn("--no-password", source)
+        self.assertIn('--host="$socket_dir"', source)
+        self.assertIn("session_user = :'expected_login'", source)
+        self.assertIn("rolsuper OR rolbypassrls", source)
+        self.assertIn("relrowsecurity AND relforcerowsecurity", source)
+        self.assertIn("verify_session \"app_runtime_login\"", source)
+        self.assertIn("verify_session \"app_ai_assessment_worker_login\"", source)
+        self.assertNotRegex(source, r"(?im)^\s*(INSERT|UPDATE|DELETE|ALTER|CREATE|GRANT|REVOKE)\b")
+
     def test_role_template_has_no_password_material(self):
         sql = (LAB_KIT / "sql" / "provision-worker-login.sql").read_text()
         env_example = (LAB_KIT / ".env.example").read_text()

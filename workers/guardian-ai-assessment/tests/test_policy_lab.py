@@ -26,6 +26,7 @@ from guardian_ai_assessment.qwen_policy_lab import (
     SYNTHETIC_ACCOUNT_ID as QWEN_SYNTHETIC_ACCOUNT_ID,
     SYNTHETIC_IBAN as QWEN_SYNTHETIC_IBAN,
     _action_for,
+    _classify_qwen_tool_call_result,
     SUPPORT_TOOLS,
     _bind_trusted_goal_scope,
     SYNTHETIC_REFUND_AMOUNT_CENTS,
@@ -36,6 +37,7 @@ from guardian_ai_assessment.qwen_policy_lab import (
     _digest,
     _js_iso_timestamp,
     _resolve_dispatch,
+    _one_case,
     run_qwen_policy_lab,
     _select_profile_cases,
 )
@@ -48,6 +50,177 @@ from guardian_ai_assessment.tool_adapter import (
 
 
 class GuardianAgentPolicyLabTests(unittest.TestCase):
+    def test_qwen_call_origin_requires_explicit_parser_provenance(self):
+        call = {
+            "id": "synthetic-call-1",
+            "type": "function",
+            "function": {
+                "name": "read_synthetic_email",
+                "arguments": '{"email_id":"EMAIL-SYNTH-001"}',
+            },
+        }
+        self.assertEqual(
+            _classify_qwen_tool_call_result(
+                {"tool_calls": [call]},
+                {"status": "runtime_message_tool_calls"},
+            ),
+            ("runtime_message_tool_calls", [call]),
+        )
+        self.assertEqual(
+            _classify_qwen_tool_call_result(
+                {"tool_calls": [call]},
+                {"status": "qwen_native_markup_adapter"},
+            ),
+            ("guardian_qwen_native_markup_adapter", [call]),
+        )
+        self.assertEqual(
+            _classify_qwen_tool_call_result(
+                {"tool_calls": []},
+                {"status": "qwen_native_markup_adapter"},
+            ),
+            ("unparsed_qwen_native_markup", []),
+        )
+        self.assertEqual(
+            _classify_qwen_tool_call_result(
+                {"content": "No tool call."},
+                {"status": "no_marker"},
+            ),
+            ("no_tool_call", []),
+        )
+        self.assertEqual(
+            _classify_qwen_tool_call_result(
+                {"tool_calls": {"malformed": True}},
+                {"status": "no_marker"},
+            ),
+            ("unparsed_qwen_native_markup", []),
+        )
+        self.assertEqual(
+            _classify_qwen_tool_call_result(
+                {"content": "ambiguous"},
+                {"status": "unknown"},
+            ),
+            ("unparsed_qwen_native_markup", []),
+        )
+
+    def test_malformed_qwen_tool_shape_is_denied_before_simulator_not_no_proposal(self):
+        class FixedResponseClient:
+            def __init__(self, response):
+                self.response = response
+                self.observed_tool_choice = None
+
+            def complete_native(self, **kwargs):
+                self.observed_tool_choice = kwargs.get("tool_choice")
+                return self.response
+
+        case = QWEN_POLICY_CASES[QWEN_EMAIL_PROFILE][0]
+        malformed_client = FixedResponseClient(
+            {
+                "choices": [
+                    {
+                        "message": {"role": "assistant", "tool_calls": {"bad": "shape"}},
+                        "finish_reason": "stop",
+                    }
+                ],
+                "usage": {},
+                "_guardianToolMarkupParse": {"status": "no_marker"},
+            }
+        )
+        with patch(
+            "guardian_ai_assessment.qwen_policy_lab.call_synthetic_tool"
+        ) as dispatch:
+            evidence, _usage = _one_case(
+                client=malformed_client,
+                vertical="email",
+                case=case,
+                tools=[],
+            )
+        self.assertEqual(malformed_client.observed_tool_choice, "auto")
+        self.assertEqual(evidence["toolCallOrigin"], "unparsed_qwen_native_markup")
+        self.assertEqual(evidence["decision"], "deny")
+        self.assertEqual(evidence["reasonCode"], "malformed_tool_proposal")
+        self.assertEqual(evidence["dispatchStatus"], "blocked_by_parser")
+        self.assertFalse(evidence["unauthorizedActionExecuted"])
+        self.assertEqual(evidence["toolEvents"], [])
+        dispatch.assert_not_called()
+
+        multi_call_client = FixedResponseClient(
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "tool_calls": [
+                                {
+                                    "id": "native-1",
+                                    "function": {
+                                        "name": "read_synthetic_email",
+                                        "arguments": '{"email_id":"EMAIL-SYNTH-001"}',
+                                    },
+                                },
+                                {
+                                    "id": "native-2",
+                                    "function": {
+                                        "name": "read_synthetic_email",
+                                        "arguments": '{"email_id":"EMAIL-SYNTH-001"}',
+                                    },
+                                },
+                            ],
+                        },
+                        "finish_reason": "tool_calls",
+                    }
+                ],
+                "usage": {},
+                "_guardianToolMarkupParse": {"status": "runtime_message_tool_calls"},
+            }
+        )
+        with patch(
+            "guardian_ai_assessment.qwen_policy_lab.call_synthetic_tool"
+        ) as dispatch:
+            multi_evidence, _usage = _one_case(
+                client=multi_call_client,
+                vertical="email",
+                case=case,
+                tools=[],
+            )
+        self.assertEqual(multi_call_client.observed_tool_choice, "auto")
+        self.assertEqual(multi_evidence["toolCallOrigin"], "runtime_message_tool_calls")
+        self.assertEqual(multi_evidence["toolCallCount"], 2)
+        self.assertEqual(multi_evidence["decision"], "deny")
+        self.assertEqual(multi_evidence["reasonCode"], "tool_call_count_limit")
+        self.assertEqual(multi_evidence["dispatchStatus"], "blocked_by_parser")
+        self.assertEqual(multi_evidence["toolEvents"], [])
+        dispatch.assert_not_called()
+
+    def test_only_explicit_no_marker_is_reported_as_no_proposal_not_deny(self):
+        class FixedResponseClient:
+            def complete_native(self, **kwargs):
+                self.tool_choice = kwargs.get("tool_choice")
+                return {
+                    "choices": [
+                        {
+                            "message": {"role": "assistant", "content": "No tool call."},
+                            "finish_reason": "stop",
+                        }
+                    ],
+                    "usage": {},
+                    "_guardianToolMarkupParse": {"status": "no_marker"},
+                }
+
+        client = FixedResponseClient()
+        case = QWEN_POLICY_CASES[QWEN_EMAIL_PROFILE][0]
+        evidence, _usage = _one_case(
+            client=client,
+            vertical="email",
+            case=case,
+            tools=[],
+        )
+        self.assertEqual(client.tool_choice, "auto")
+        self.assertEqual(evidence["toolCallOrigin"], "no_tool_call")
+        self.assertEqual(evidence["decision"], "no_proposal")
+        self.assertEqual(evidence["reasonCode"], "no_tool_call")
+        self.assertEqual(evidence["dispatchStatus"], "not_invoked")
+        self.assertEqual(evidence["toolCallCount"], 0)
+
     def test_eight_synthetic_verticals_have_allow_and_blocked_adversarial_cases(self):
         self.assertEqual(len(PROFILE_TO_VERTICAL), 8)
         for profile_id, vertical in PROFILE_TO_VERTICAL.items():

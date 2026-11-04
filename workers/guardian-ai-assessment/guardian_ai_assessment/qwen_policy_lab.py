@@ -1299,6 +1299,36 @@ def _allowlisted_approval_action(
     )
 
 
+def _classify_qwen_tool_call_result(
+    message: dict[str, Any], markup: Any
+) -> tuple[str, list[Any]]:
+    """Keep native calls, adapted markers, absent calls, and invalid output distinct."""
+    status = markup.get("status") if isinstance(markup, dict) else None
+    has_tool_calls = "tool_calls" in message
+    raw_calls = message.get("tool_calls")
+    calls = raw_calls if isinstance(raw_calls, list) else []
+
+    if status == "qwen_native_markup_adapter":
+        if calls:
+            return "guardian_qwen_native_markup_adapter", calls
+        return "unparsed_qwen_native_markup", []
+    if status == "runtime_message_tool_calls":
+        if calls:
+            return "runtime_message_tool_calls", calls
+        return "unparsed_qwen_native_markup", []
+    if status == "unparsed_markup":
+        return "unparsed_qwen_native_markup", calls
+    if status == "invalid_runtime_tool_calls":
+        return "unparsed_qwen_native_markup", []
+    if status == "no_marker":
+        if not has_tool_calls or raw_calls is None or raw_calls == []:
+            return "no_tool_call", []
+        return "unparsed_qwen_native_markup", []
+
+    # A missing/unknown parser status cannot establish absence or origin.
+    return "unparsed_qwen_native_markup", calls
+
+
 def _one_case(
     *,
     client: llm_lab.LocalQwenClient,
@@ -1321,16 +1351,7 @@ def _one_case(
     )
     message, prompt_tokens, completion_tokens, finish_reason = llm_lab._native_message_result(response)
     markup = response.get("_guardianToolMarkupParse")
-    raw_calls = message.get("tool_calls")
-    calls = raw_calls if isinstance(raw_calls, list) else []
-    if isinstance(markup, dict) and markup.get("status") == "qwen_native_markup_adapter":
-        origin = "guardian_qwen_native_markup_adapter"
-    elif isinstance(markup, dict) and markup.get("status") == "unparsed_markup":
-        origin = "unparsed_qwen_native_markup"
-    elif calls:
-        origin = "runtime_message_tool_calls"
-    else:
-        origin = "no_tool_call"
+    origin, calls = _classify_qwen_tool_call_result(message, markup)
 
     proposal: dict[str, Any] | None = None
     decision = "no_proposal"
@@ -1350,81 +1371,91 @@ def _one_case(
     policy_off_after = policy_off_before
     policy_off_would_execute = False
     authorization_duration_ms: int | None = None
-    if origin in {"guardian_qwen_native_markup_adapter", "runtime_message_tool_calls"} and len(calls) == MAX_TOOL_CALLS:
-        name, arguments, valid_arguments = llm_lab._native_call_arguments(calls[0])
-        proposal_arguments = arguments
-        tool_name = name if name in TOOL_IDS else "unknown"
-        argument_hash = _digest(arguments)
-        if not valid_arguments:
-            origin = "unparsed_qwen_native_markup"
-            reason = "tool_arguments_invalid"
-            dispatch = "blocked_by_parser"
-        else:
-            proposal_hash = _digest(
-                {"caseId": case["caseId"], "tool": tool_name, "argumentsSha256": argument_hash}
-            )
-            proposal = {"tool": tool_name, "proposalSha256": proposal_hash}
-            authorization_started_ns = time.perf_counter_ns()
-            valid, validation_code = validate_synthetic_tool_arguments(tool_name, arguments)
-            action, permissions, _required = _action_for(vertical, tool_name, arguments, case)
-            agent_id = f"qwen-synthetic-{vertical}-v1"
-            action.update(
-                {
-                    "toolId": tool_name,
-                    "profileId": PROFILE_BY_VERTICAL[vertical],
-                    "caseId": case["caseId"],
-                    "actorId": "SYNTHETIC-LAB-OPERATOR",
-                    "agentId": agent_id,
-                    "proposalSha256": proposal_hash,
-                    "trustedGoalScopeRequired": True,
-                    "trustedGoalScope": _bind_trusted_goal_scope(
-                        vertical=vertical,
-                        case_id=case["caseId"],
-                        agent_id=agent_id,
-                        proposal_sha256=proposal_hash,
-                        allowed_actions=_trusted_goal_actions(vertical, case["caseId"]),
-                    ),
-                }
-            )
-            trusted_scope_sha256 = action["trustedGoalScope"]["scopeSha256"]
-            trusted_scope_status = trusted_goal_scope_status(action)
-            instruction_provenance = action.get("instructionProvenance", "unknown")
-            decision, reason = evaluate_synthetic_action_policy(vertical, action, permissions)
-            decision, reason, dispatch = _resolve_dispatch(
-                decision, reason, valid, validation_code
-            )
-            authorization_duration_ms = max(
-                0,
-                round(
-                    (time.perf_counter_ns() - authorization_started_ns)
-                    / 1_000_000
-                ),
-            )
-            policy_off_would_execute = valid
-            if valid:
-                policy_off_after = _digest(
-                    {
-                        "clone": "after-counterfactual",
-                        "case": case["caseId"],
-                        "proposal": proposal,
-                    }
-                )
-            if decision == "allow":
-                events, _private_result = call_synthetic_tool(
-                    tool=tool_name,
-                    arguments=arguments,
-                    source=SOURCE,
-                    tool_call_id=f"{case['caseId']}-qwen-1",
-                    permitted_tools={tool_name},
-                )
-                tool_events = events
-    elif calls:
-        origin = "unparsed_qwen_native_markup"
+    accepted_call_origin = origin in {
+        "guardian_qwen_native_markup_adapter",
+        "runtime_message_tool_calls",
+    }
+    if origin == "unparsed_qwen_native_markup":
+        decision = "deny"
+        reason = "malformed_tool_proposal"
+        dispatch = "blocked_by_parser"
+    elif accepted_call_origin and len(calls) != MAX_TOOL_CALLS:
+        decision = "deny"
         reason = "tool_call_count_limit"
         dispatch = "blocked_by_parser"
-    elif origin == "unparsed_qwen_native_markup":
-        reason = "markup_not_accepted"
-        dispatch = "blocked_by_parser"
+    elif accepted_call_origin:
+        if not isinstance(calls[0], dict):
+            decision = "deny"
+            reason = "malformed_tool_proposal"
+            dispatch = "blocked_by_parser"
+        else:
+            name, arguments, valid_arguments = llm_lab._native_call_arguments(calls[0])
+            proposal_arguments = arguments
+            tool_name = name if name in TOOL_IDS else "unknown"
+            argument_hash = _digest(arguments)
+            if not valid_arguments:
+                decision = "deny"
+                reason = "tool_arguments_invalid"
+                dispatch = "blocked_by_parser"
+            else:
+                proposal_hash = _digest(
+                    {"caseId": case["caseId"], "tool": tool_name, "argumentsSha256": argument_hash}
+                )
+                proposal = {"tool": tool_name, "proposalSha256": proposal_hash}
+                authorization_started_ns = time.perf_counter_ns()
+                valid, validation_code = validate_synthetic_tool_arguments(tool_name, arguments)
+                action, permissions, _required = _action_for(vertical, tool_name, arguments, case)
+                agent_id = f"qwen-synthetic-{vertical}-v1"
+                action.update(
+                    {
+                        "toolId": tool_name,
+                        "profileId": PROFILE_BY_VERTICAL[vertical],
+                        "caseId": case["caseId"],
+                        "actorId": "SYNTHETIC-LAB-OPERATOR",
+                        "agentId": agent_id,
+                        "proposalSha256": proposal_hash,
+                        "trustedGoalScopeRequired": True,
+                        "trustedGoalScope": _bind_trusted_goal_scope(
+                            vertical=vertical,
+                            case_id=case["caseId"],
+                            agent_id=agent_id,
+                            proposal_sha256=proposal_hash,
+                            allowed_actions=_trusted_goal_actions(vertical, case["caseId"]),
+                        ),
+                    }
+                )
+                trusted_scope_sha256 = action["trustedGoalScope"]["scopeSha256"]
+                trusted_scope_status = trusted_goal_scope_status(action)
+                instruction_provenance = action.get("instructionProvenance", "unknown")
+                decision, reason = evaluate_synthetic_action_policy(vertical, action, permissions)
+                decision, reason, dispatch = _resolve_dispatch(
+                    decision, reason, valid, validation_code
+                )
+                authorization_duration_ms = max(
+                    0,
+                    round(
+                        (time.perf_counter_ns() - authorization_started_ns)
+                        / 1_000_000
+                    ),
+                )
+                policy_off_would_execute = valid
+                if valid:
+                    policy_off_after = _digest(
+                        {
+                            "clone": "after-counterfactual",
+                            "case": case["caseId"],
+                            "proposal": proposal,
+                        }
+                    )
+                if decision == "allow":
+                    events, _private_result = call_synthetic_tool(
+                        tool=tool_name,
+                        arguments=arguments,
+                        source=SOURCE,
+                        tool_call_id=f"{case['caseId']}-qwen-1",
+                        permitted_tools={tool_name},
+                    )
+                    tool_events = events
 
     action_ref, action_sha256 = _allowlisted_approval_action(
         vertical=vertical,
