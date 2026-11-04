@@ -535,6 +535,43 @@ paths:
               schema: { $ref: "#/components/schemas/AiAssessmentLabAvailability" }
         "403":
           description: User is not a workspace member
+  /workspaces/{workspaceId}/ai-security-assessments/lab/policy-preview:
+    post:
+      operationId: previewWorkspaceAiAssessmentPolicyLab
+      tags: [ai-evaluations]
+      summary: Evaluate a fixed deterministic policy-lab profile without Docker
+      description: >-
+        Development-only synchronous preview. The request selects only one
+        allow-listed fixture profile; the server runs the deterministic Policy
+        Engine and in-memory synthetic adapter, with no LLM, Docker command,
+        customer input, external call, or persistent job/history write. This is
+        not an isolated worker: host network and Docker-socket access are not
+        restricted or verified. Policy OFF remains counterfactual only.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GuardianPolicyLabPreviewRequest" }
+      responses:
+        "200":
+          description: Fresh deterministic fixture decision evidence; no durable job was created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GuardianPolicyLabPreviewResponse" }
+        "400":
+          description: Invalid profile or request body
+        "403":
+          description: Workspace owner or admin role required
+        "429":
+          description: Another deterministic preview is already running
+        "503":
+          description: Preview runner unavailable, timed out, or evidence failed validation
   /workspaces/{workspaceId}/ai-security-assessments/lab/jobs:
     get:
       operationId: listWorkspaceAiAssessmentLabJobs
@@ -960,6 +997,21 @@ components:
           enum: [guardian-local-agent-v1, guardian-local-llm-qwen3-0.6b-v1, guardian-local-llm-native-tools-v1, guardian-local-llm-autonomous-tools-v1, guardian-agent-lab-email-v1, guardian-agent-lab-database-v1, guardian-agent-lab-finance-v1, guardian-agent-lab-programming-v1, guardian-agent-lab-customer-service-v1, guardian-agent-lab-browser-v1, guardian-agent-lab-infrastructure-v1, guardian-agent-lab-multiagent-v1, guardian-agent-qwen-lab-email-v1, guardian-agent-qwen-lab-database-v1, guardian-agent-qwen-lab-finance-v1, guardian-agent-qwen-lab-customer-service-v1, guardian-agent-qwen-lab-programming-v1, guardian-agent-qwen-lab-browser-v1, guardian-agent-qwen-lab-infrastructure-v1, guardian-agent-qwen-lab-multiagent-v1]
           default: guardian-local-agent-v1
       required: [idempotencyKey]
+    GuardianPolicyLabPreviewRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        profileId:
+          type: string
+          enum: [guardian-agent-lab-email-v1, guardian-agent-lab-database-v1, guardian-agent-lab-finance-v1, guardian-agent-lab-programming-v1, guardian-agent-lab-customer-service-v1, guardian-agent-lab-browser-v1, guardian-agent-lab-infrastructure-v1, guardian-agent-lab-multiagent-v1]
+      required: [profileId]
+    GuardianPolicyLabPreviewResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        source: { type: string, const: fresh_deterministic_policy_preview }
+        evidence: { $ref: "#/components/schemas/GuardianAgentPolicyLabEvidence" }
+      required: [source, evidence]
     AiAssessmentLabJob:
       type: object
       properties:
@@ -1466,10 +1518,10 @@ components:
       type: object
       additionalProperties: false
       properties:
-        evidenceVersion: { type: integer, enum: [1, 2] }
+        evidenceVersion: { type: integer, enum: [1, 2, 3] }
         source: { type: string, const: synthetic_policy_scenarios }
         engine: { type: string, const: guardian_policy_lab }
-        engineVersion: { type: string, enum: [guardian-agent-policy-lab-v1, guardian-agent-policy-lab-v2] }
+        engineVersion: { type: string, enum: [guardian-agent-policy-lab-v1, guardian-agent-policy-lab-v2, guardian-agent-policy-lab-v3] }
         profileId:
           type: string
           enum: [guardian-agent-lab-email-v1, guardian-agent-lab-database-v1, guardian-agent-lab-finance-v1, guardian-agent-lab-programming-v1, guardian-agent-lab-customer-service-v1, guardian-agent-lab-browser-v1, guardian-agent-lab-infrastructure-v1, guardian-agent-lab-multiagent-v1]
@@ -1478,6 +1530,7 @@ components:
           enum: [email, database, finance, programming, customer_service, browser, infrastructure, multiagent]
         verticalLabel: { type: string, maxLength: 80 }
         executionMode: { type: string, const: deterministic_fixture }
+        executionContext: { type: string, enum: [isolated_docker_worker, api_policy_preview] }
         proposalOrigin: { type: string, const: controlled_fixture_not_llm }
         modelInference: { type: boolean, const: false }
         agentIdentity:
@@ -1704,13 +1757,15 @@ components:
           type: object
           additionalProperties: false
           properties:
-            network: { type: string, const: docker-network-none }
+            network: { type: string, enum: [docker-network-none, host_network_unisolated] }
             concurrency: { type: integer, const: 1 }
             maxCases: { type: integer, enum: [2, 3] }
             customerDataUsed: { type: boolean, const: false }
             secretsMounted: { type: boolean, const: false }
             modelWeightsMounted: { type: boolean, const: false }
             dockerSocketMounted: { type: boolean, const: false }
+            dockerSocketAccess: { type: string, enum: [not_assessed] }
+            processIsolation: { type: string, enum: [shared_api_identity] }
             externalCalls: { type: integer, const: 0 }
             actualOperations: { type: integer, const: 0 }
             rawPromptsStored: { type: boolean, const: false }

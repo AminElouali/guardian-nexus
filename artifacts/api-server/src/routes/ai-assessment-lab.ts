@@ -8,6 +8,9 @@ import {
   CreateWorkspaceAiAssessmentLabJobBody,
   CreateWorkspaceAiAssessmentLabJobParams,
   CreateWorkspaceAiAssessmentLabJobResponse,
+  PreviewWorkspaceAiAssessmentPolicyLabBody,
+  PreviewWorkspaceAiAssessmentPolicyLabParams,
+  PreviewWorkspaceAiAssessmentPolicyLabResponse,
   DecideWorkspaceAiAssessmentApprovalBody,
   DecideWorkspaceAiAssessmentApprovalParams,
   DecideWorkspaceAiAssessmentApprovalResponse,
@@ -37,6 +40,10 @@ import {
   type SyntheticApprovalActionRef,
 } from "../lib/ai-assessment-approval-actions";
 import { canRunAiEvaluation } from "../lib/access-control";
+import {
+  PolicyLabPreviewError,
+  runPolicyLabPreview,
+} from "../lib/policy-lab-preview";
 import {
   buildAgentActionIntent,
   deriveAgentActionIdempotencyKey,
@@ -649,6 +656,72 @@ routes.get(
         getLocalWorkerAvailability(),
       ),
     );
+  },
+);
+
+routes.post(
+  "/workspaces/:workspaceId/ai-security-assessments/lab/policy-preview",
+  async (req, res): Promise<void> => {
+    if (process.env.NODE_ENV !== "development") {
+      res.status(404).json({ error: "Policy preview is development-only" });
+      return;
+    }
+    const params = PreviewWorkspaceAiAssessmentPolicyLabParams.safeParse(
+      req.params,
+    );
+    const body = PreviewWorkspaceAiAssessmentPolicyLabBody.safeParse(req.body);
+    if (
+      !params.success ||
+      !UUID_PATTERN.test(params.data.workspaceId) ||
+      !body.success
+    ) {
+      res.status(400).json({ error: "Invalid policy preview request" });
+      return;
+    }
+
+    const access = await withWorkspaceUserTransaction(
+      req.authUserId!,
+      params.data.workspaceId,
+      async (_tx, membership) => canRunAiEvaluation(membership.role),
+    );
+    if (!access.authorized) {
+      res.status(403).json({ error: "Workspace membership required" });
+      return;
+    }
+    if (!access.value) {
+      res.status(403).json({
+        error: "Workspace owner or admin role required",
+      });
+      return;
+    }
+
+    try {
+      const evidence = await runPolicyLabPreview(body.data.profileId);
+      res.status(200).json(
+        PreviewWorkspaceAiAssessmentPolicyLabResponse.parse({
+          source: "fresh_deterministic_policy_preview",
+          evidence,
+        }),
+      );
+    } catch (error) {
+      const code =
+        error instanceof PolicyLabPreviewError
+          ? error.code
+          : "policy_preview_runner_failed";
+      req.log.warn(
+        { code, profileId: body.data.profileId },
+        "Deterministic policy preview did not complete",
+      );
+      if (code === "policy_preview_busy") {
+        res.setHeader("Retry-After", "2");
+        res.status(429).json({ error: "Policy preview already running" });
+        return;
+      }
+      res.status(503).json({
+        error: "Deterministic policy preview unavailable",
+        code,
+      });
+    }
   },
 );
 

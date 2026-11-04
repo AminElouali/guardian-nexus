@@ -29,6 +29,7 @@ from .tool_adapter import (
 )
 
 ENGINE_VERSION = "guardian-agent-policy-lab-v2"
+API_PREVIEW_ENGINE_VERSION = "guardian-agent-policy-lab-v3"
 POLICY_VERSION = "guardian-policy-engine-synthetic-v2"
 TOOL_ADAPTER_VERSION = "guardian-synthetic-tool-adapter-v1"
 CORPUS_VERSION = "guardian-agent-lab-corpus-v1"
@@ -632,9 +633,18 @@ def _run_case(vertical: str, action: dict[str, Any], permissions: set[str]) -> d
     return safe_record
 
 
-def run_policy_lab(profile_id: str) -> dict[str, Any]:
+def run_policy_lab(
+    profile_id: str,
+    execution_context: str = "isolated_docker_worker",
+) -> dict[str, Any]:
     if profile_id not in PROFILE_TO_VERTICAL:
         raise ValueError("unsupported_policy_lab_profile")
+    if execution_context not in {"isolated_docker_worker", "api_policy_preview"}:
+        raise ValueError("unsupported_policy_lab_execution_context")
+    is_api_preview = execution_context == "api_policy_preview"
+    engine_version = (
+        API_PREVIEW_ENGINE_VERSION if is_api_preview else ENGINE_VERSION
+    )
     vertical = PROFILE_TO_VERTICAL[profile_id]
     started = time.monotonic()
     started_at = _now()
@@ -711,10 +721,10 @@ def run_policy_lab(profile_id: str) -> dict[str, Any]:
         ),
     }
     output = {
-        "evidenceVersion": 2,
+        "evidenceVersion": 3 if is_api_preview else 2,
         "source": "synthetic_policy_scenarios",
         "engine": "guardian_policy_lab",
-        "engineVersion": ENGINE_VERSION,
+        "engineVersion": engine_version,
         "profileId": profile_id,
         "verticalId": vertical,
         "verticalLabel": VERTICAL_LABELS[vertical],
@@ -749,7 +759,7 @@ def run_policy_lab(profile_id: str) -> dict[str, Any]:
         "selfCheckStatus": "passed" if all(self_checks.values()) else "failed",
         "suiteEvidenceSha256": _sha256(
             {
-                "engineVersion": ENGINE_VERSION,
+                "engineVersion": engine_version,
                 "policyVersion": POLICY_VERSION,
                 "toolAdapterVersion": TOOL_ADAPTER_VERSION,
                 "profileId": profile_id,
@@ -761,7 +771,11 @@ def run_policy_lab(profile_id: str) -> dict[str, Any]:
         "completedAt": completed_at,
         "durationMs": round((time.monotonic() - started) * 1000),
         "limits": {
-            "network": "docker-network-none",
+            "network": (
+                "host_network_unisolated"
+                if is_api_preview
+                else "docker-network-none"
+            ),
             "concurrency": 1,
             "maxCases": len(cases),
             "customerDataUsed": False,
@@ -775,12 +789,23 @@ def run_policy_lab(profile_id: str) -> dict[str, Any]:
             "rawArgumentsStored": False,
         },
         "interpretation": (
+            "Previsualización determinista ejecutada por el proceso API con fixtures "
+            "sintéticos y adaptador en memoria; no se inició Qwen, Docker ni se hicieron "
+            "llamadas externas. No se verificó ni restringió la red o el acceso del host "
+            "al socket Docker, y el proceso comparte identidad con la API. No constituye "
+            "un límite de seguridad ni una ejecución del worker aislado."
+            if is_api_preview
+            else
             "Laboratorio determinista con propuestas fixture, no inferencia de LLM. "
             "Policy ON aplica reglas antes de acciones exclusivamente simuladas; "
             "Policy OFF solo calcula un contrafactual en clones efímeros en memoria. "
             "No representa efectividad general ni conexión a servicios empresariales."
         ),
     }
+    if is_api_preview:
+        output["executionContext"] = "api_policy_preview"
+        output["limits"]["processIsolation"] = "shared_api_identity"
+        output["limits"]["dockerSocketAccess"] = "not_assessed"
     output["evidenceSha256"] = _sha256(output)
     return output
 
@@ -788,8 +813,13 @@ def run_policy_lab(profile_id: str) -> dict[str, Any]:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--profile-id", required=True, choices=sorted(PROFILE_TO_VERTICAL))
+    parser.add_argument(
+        "--execution-context",
+        choices=["isolated_docker_worker", "api_policy_preview"],
+        default="isolated_docker_worker",
+    )
     args = parser.parse_args()
-    result = run_policy_lab(args.profile_id)
+    result = run_policy_lab(args.profile_id, args.execution_context)
     if result["selfCheckStatus"] != "passed":
         raise RuntimeError("guardian_policy_lab_self_check_failed")
     sys_stdout = json.dumps(result, sort_keys=True, separators=(",", ":"))

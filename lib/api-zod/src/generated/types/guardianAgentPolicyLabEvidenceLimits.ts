@@ -5,16 +5,21 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { GuardianAgentPolicyLabEvidenceLimitsDockerSocketAccess } from './guardianAgentPolicyLabEvidenceLimitsDockerSocketAccess';
 import type { GuardianAgentPolicyLabEvidenceLimitsMaxCases } from './guardianAgentPolicyLabEvidenceLimitsMaxCases';
+import type { GuardianAgentPolicyLabEvidenceLimitsNetwork } from './guardianAgentPolicyLabEvidenceLimitsNetwork';
+import type { GuardianAgentPolicyLabEvidenceLimitsProcessIsolation } from './guardianAgentPolicyLabEvidenceLimitsProcessIsolation';
 
 export type GuardianAgentPolicyLabEvidenceLimits = {
-  network: 'docker-network-none';
+  network: GuardianAgentPolicyLabEvidenceLimitsNetwork;
   concurrency: 1;
   maxCases: GuardianAgentPolicyLabEvidenceLimitsMaxCases;
   customerDataUsed: false;
   secretsMounted: false;
   modelWeightsMounted: false;
   dockerSocketMounted: false;
+  dockerSocketAccess?: GuardianAgentPolicyLabEvidenceLimitsDockerSocketAccess;
+  processIsolation?: GuardianAgentPolicyLabEvidenceLimitsProcessIsolation;
   externalCalls: 0;
   actualOperations: 0;
   rawPromptsStored: false;

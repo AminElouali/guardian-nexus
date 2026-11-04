@@ -9,6 +9,7 @@ import type { GuardianAgentPolicyLabEvidenceAgentIdentity } from './guardianAgen
 import type { GuardianAgentPolicyLabEvidenceCasesItem } from './guardianAgentPolicyLabEvidenceCasesItem';
 import type { GuardianAgentPolicyLabEvidenceEngineVersion } from './guardianAgentPolicyLabEvidenceEngineVersion';
 import type { GuardianAgentPolicyLabEvidenceEvidenceVersion } from './guardianAgentPolicyLabEvidenceEvidenceVersion';
+import type { GuardianAgentPolicyLabEvidenceExecutionContext } from './guardianAgentPolicyLabEvidenceExecutionContext';
 import type { GuardianAgentPolicyLabEvidenceLimits } from './guardianAgentPolicyLabEvidenceLimits';
 import type { GuardianAgentPolicyLabEvidenceProfileId } from './guardianAgentPolicyLabEvidenceProfileId';
 import type { GuardianAgentPolicyLabEvidenceSelfChecks } from './guardianAgentPolicyLabEvidenceSelfChecks';
@@ -26,6 +27,7 @@ export interface GuardianAgentPolicyLabEvidence {
   /** @maxLength 80 */
   verticalLabel: string;
   executionMode: 'deterministic_fixture';
+  executionContext?: GuardianAgentPolicyLabEvidenceExecutionContext;
   proposalOrigin: 'controlled_fixture_not_llm';
   modelInference: false;
   agentIdentity: GuardianAgentPolicyLabEvidenceAgentIdentity;

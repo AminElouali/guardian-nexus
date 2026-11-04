@@ -518,6 +518,40 @@ class GuardianAgentPolicyLabTests(unittest.TestCase):
         )
         self.assertEqual(first["suiteEvidenceSha256"], second["suiteEvidenceSha256"])
 
+    def test_api_preview_reports_unisolated_host_capabilities_without_claiming_docker_isolation(self):
+        result = run_policy_lab(
+            "guardian-agent-lab-email-v1",
+            execution_context="api_policy_preview",
+        )
+        self.assertEqual(result["evidenceVersion"], 3)
+        self.assertEqual(result["engineVersion"], "guardian-agent-policy-lab-v3")
+        self.assertEqual(result["executionContext"], "api_policy_preview")
+        self.assertEqual(result["limits"]["network"], "host_network_unisolated")
+        self.assertEqual(result["limits"]["processIsolation"], "shared_api_identity")
+        self.assertEqual(result["limits"]["dockerSocketAccess"], "not_assessed")
+        self.assertEqual(result["limits"]["externalCalls"], 0)
+        self.assertEqual(result["limits"]["actualOperations"], 0)
+        self.assertEqual(result["selfCheckStatus"], "passed")
+        self.assertFalse(result["modelInference"])
+        self.assertIn("no se verificó ni restringió la red", result["interpretation"])
+        self.assertTrue(
+            all(not case["policyOff"]["executed"] for case in result["cases"])
+        )
+
+        default_result = run_policy_lab("guardian-agent-lab-email-v1")
+        self.assertEqual(default_result["evidenceVersion"], 2)
+        self.assertNotIn("executionContext", default_result)
+        self.assertEqual(default_result["limits"]["network"], "docker-network-none")
+
+    def test_api_preview_rejects_unknown_execution_context(self):
+        with self.assertRaisesRegex(
+            ValueError, "unsupported_policy_lab_execution_context"
+        ):
+            run_policy_lab(
+                "guardian-agent-lab-email-v1",
+                execution_context="qwen",
+            )
+
 
 class QwenPolicyLabDispatchSelfCheckTests(unittest.TestCase):
     def test_direct_offline_entrypoint_requires_integrated_host_boundary(self):

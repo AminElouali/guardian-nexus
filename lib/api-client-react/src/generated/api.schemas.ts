@@ -431,6 +431,584 @@ export interface AiAssessmentLabJobRequest {
   profileId?: AiAssessmentLabJobRequestProfileId;
 }
 
+export type GuardianPolicyLabPreviewRequestProfileId = typeof GuardianPolicyLabPreviewRequestProfileId[keyof typeof GuardianPolicyLabPreviewRequestProfileId];
+
+
+export const GuardianPolicyLabPreviewRequestProfileId = {
+  'guardian-agent-lab-email-v1': 'guardian-agent-lab-email-v1',
+  'guardian-agent-lab-database-v1': 'guardian-agent-lab-database-v1',
+  'guardian-agent-lab-finance-v1': 'guardian-agent-lab-finance-v1',
+  'guardian-agent-lab-programming-v1': 'guardian-agent-lab-programming-v1',
+  'guardian-agent-lab-customer-service-v1': 'guardian-agent-lab-customer-service-v1',
+  'guardian-agent-lab-browser-v1': 'guardian-agent-lab-browser-v1',
+  'guardian-agent-lab-infrastructure-v1': 'guardian-agent-lab-infrastructure-v1',
+  'guardian-agent-lab-multiagent-v1': 'guardian-agent-lab-multiagent-v1',
+} as const;
+
+export interface GuardianPolicyLabPreviewRequest {
+  profileId: GuardianPolicyLabPreviewRequestProfileId;
+}
+
+export type GuardianAgentPolicyLabEvidenceEvidenceVersion = typeof GuardianAgentPolicyLabEvidenceEvidenceVersion[keyof typeof GuardianAgentPolicyLabEvidenceEvidenceVersion];
+
+
+export const GuardianAgentPolicyLabEvidenceEvidenceVersion = {
+  NUMBER_1: 1,
+  NUMBER_2: 2,
+  NUMBER_3: 3,
+} as const;
+
+export type GuardianAgentPolicyLabEvidenceEngineVersion = typeof GuardianAgentPolicyLabEvidenceEngineVersion[keyof typeof GuardianAgentPolicyLabEvidenceEngineVersion];
+
+
+export const GuardianAgentPolicyLabEvidenceEngineVersion = {
+  'guardian-agent-policy-lab-v1': 'guardian-agent-policy-lab-v1',
+  'guardian-agent-policy-lab-v2': 'guardian-agent-policy-lab-v2',
+  'guardian-agent-policy-lab-v3': 'guardian-agent-policy-lab-v3',
+} as const;
+
+export type GuardianAgentPolicyLabEvidenceProfileId = typeof GuardianAgentPolicyLabEvidenceProfileId[keyof typeof GuardianAgentPolicyLabEvidenceProfileId];
+
+
+export const GuardianAgentPolicyLabEvidenceProfileId = {
+  'guardian-agent-lab-email-v1': 'guardian-agent-lab-email-v1',
+  'guardian-agent-lab-database-v1': 'guardian-agent-lab-database-v1',
+  'guardian-agent-lab-finance-v1': 'guardian-agent-lab-finance-v1',
+  'guardian-agent-lab-programming-v1': 'guardian-agent-lab-programming-v1',
+  'guardian-agent-lab-customer-service-v1': 'guardian-agent-lab-customer-service-v1',
+  'guardian-agent-lab-browser-v1': 'guardian-agent-lab-browser-v1',
+  'guardian-agent-lab-infrastructure-v1': 'guardian-agent-lab-infrastructure-v1',
+  'guardian-agent-lab-multiagent-v1': 'guardian-agent-lab-multiagent-v1',
+} as const;
+
+export type GuardianAgentPolicyLabEvidenceVerticalId = typeof GuardianAgentPolicyLabEvidenceVerticalId[keyof typeof GuardianAgentPolicyLabEvidenceVerticalId];
+
+
+export const GuardianAgentPolicyLabEvidenceVerticalId = {
+  email: 'email',
+  database: 'database',
+  finance: 'finance',
+  programming: 'programming',
+  customer_service: 'customer_service',
+  browser: 'browser',
+  infrastructure: 'infrastructure',
+  multiagent: 'multiagent',
+} as const;
+
+export type GuardianAgentPolicyLabEvidenceExecutionContext = typeof GuardianAgentPolicyLabEvidenceExecutionContext[keyof typeof GuardianAgentPolicyLabEvidenceExecutionContext];
+
+
+export const GuardianAgentPolicyLabEvidenceExecutionContext = {
+  isolated_docker_worker: 'isolated_docker_worker',
+  api_policy_preview: 'api_policy_preview',
+} as const;
+
+export type GuardianAgentPolicyLabEvidenceVersionsPolicy = typeof GuardianAgentPolicyLabEvidenceVersionsPolicy[keyof typeof GuardianAgentPolicyLabEvidenceVersionsPolicy];
+
+
+export const GuardianAgentPolicyLabEvidenceVersionsPolicy = {
+  'guardian-policy-engine-synthetic-v1': 'guardian-policy-engine-synthetic-v1',
+  'guardian-policy-engine-synthetic-v2': 'guardian-policy-engine-synthetic-v2',
+  'guardian-policy-engine-synthetic-v3': 'guardian-policy-engine-synthetic-v3',
+} as const;
+
+export type GuardianAgentPolicyLabEvidenceVersionsToolAdapter = typeof GuardianAgentPolicyLabEvidenceVersionsToolAdapter[keyof typeof GuardianAgentPolicyLabEvidenceVersionsToolAdapter];
+
+
+export const GuardianAgentPolicyLabEvidenceVersionsToolAdapter = {
+  'guardian-synthetic-tool-adapter-v1': 'guardian-synthetic-tool-adapter-v1',
+  'guardian-synthetic-tool-adapter-v2': 'guardian-synthetic-tool-adapter-v2',
+} as const;
+
+export type GuardianAgentPolicyLabEvidenceCasesItemLabel = typeof GuardianAgentPolicyLabEvidenceCasesItemLabel[keyof typeof GuardianAgentPolicyLabEvidenceCasesItemLabel];
+
+
+export const GuardianAgentPolicyLabEvidenceCasesItemLabel = {
+  benign: 'benign',
+  adversarial: 'adversarial',
+} as const;
+
+export type GuardianAgentPolicyLabEvidenceCasesItemLanguage = typeof GuardianAgentPolicyLabEvidenceCasesItemLanguage[keyof typeof GuardianAgentPolicyLabEvidenceCasesItemLanguage];
+
+
+export const GuardianAgentPolicyLabEvidenceCasesItemLanguage = {
+  en: 'en',
+  es: 'es',
+} as const;
+
+export type GuardianAgentPolicyLabEvidenceCasesItemResourceWorkspaceId = typeof GuardianAgentPolicyLabEvidenceCasesItemResourceWorkspaceId[keyof typeof GuardianAgentPolicyLabEvidenceCasesItemResourceWorkspaceId];
+
+
+export const GuardianAgentPolicyLabEvidenceCasesItemResourceWorkspaceId = {
+  'SYNTHETIC-WORKSPACE': 'SYNTHETIC-WORKSPACE',
+  'SYNTHETIC-OTHER-WORKSPACE': 'SYNTHETIC-OTHER-WORKSPACE',
+} as const;
+
+export type GuardianAgentPolicyLabEvidenceCasesItemSensitivity = typeof GuardianAgentPolicyLabEvidenceCasesItemSensitivity[keyof typeof GuardianAgentPolicyLabEvidenceCasesItemSensitivity];
+
+
+export const GuardianAgentPolicyLabEvidenceCasesItemSensitivity = {
+  public: 'public',
+  internal: 'internal',
+  confidential: 'confidential',
+  restricted: 'restricted',
+} as const;
+
+export type GuardianAgentPolicyLabEvidenceCasesItemInstructionProvenance = typeof GuardianAgentPolicyLabEvidenceCasesItemInstructionProvenance[keyof typeof GuardianAgentPolicyLabEvidenceCasesItemInstructionProvenance];
+
+
+export const GuardianAgentPolicyLabEvidenceCasesItemInstructionProvenance = {
+  trusted_user_request: 'trusted_user_request',
+  untrusted_email: 'untrusted_email',
+  untrusted_document: 'untrusted_document',
+  untrusted_ticket: 'untrusted_ticket',
+  untrusted_web_content: 'untrusted_web_content',
+  delegated_agent: 'delegated_agent',
+} as const;
+
+export type GuardianAgentPolicyLabEvidenceCasesItemActorType = typeof GuardianAgentPolicyLabEvidenceCasesItemActorType[keyof typeof GuardianAgentPolicyLabEvidenceCasesItemActorType];
+
+
+export const GuardianAgentPolicyLabEvidenceCasesItemActorType = {
+  synthetic_user: 'synthetic_user',
+  delegated_agent: 'delegated_agent',
+} as const;
+
+export type GuardianAgentPolicyLabEvidenceCasesItemSyntheticActionRef = typeof GuardianAgentPolicyLabEvidenceCasesItemSyntheticActionRef[keyof typeof GuardianAgentPolicyLabEvidenceCasesItemSyntheticActionRef];
+
+
+export const GuardianAgentPolicyLabEvidenceCasesItemSyntheticActionRef = {
+  'guardiansyntheticfinancebank-changev1': 'guardian.synthetic.finance.bank-change.v1',
+  guardiansyntheticsupportrefundv1: 'guardian.synthetic.support.refund.v1',
+} as const;
+
+export type GuardianAgentPolicyLabEvidenceCasesItemPolicyOnDecision = typeof GuardianAgentPolicyLabEvidenceCasesItemPolicyOnDecision[keyof typeof GuardianAgentPolicyLabEvidenceCasesItemPolicyOnDecision];
+
+
+export const GuardianAgentPolicyLabEvidenceCasesItemPolicyOnDecision = {
+  allow: 'allow',
+  deny: 'deny',
+  require_approval: 'require_approval',
+} as const;
+
+export type GuardianAgentPolicyLabEvidenceCasesItemPolicyOnEventPhasesItem = typeof GuardianAgentPolicyLabEvidenceCasesItemPolicyOnEventPhasesItem[keyof typeof GuardianAgentPolicyLabEvidenceCasesItemPolicyOnEventPhasesItem];
+
+
+export const GuardianAgentPolicyLabEvidenceCasesItemPolicyOnEventPhasesItem = {
+  proposed: 'proposed',
+  attempted: 'attempted',
+  authorization_check: 'authorization_check',
+  allow: 'allow',
+  deny: 'deny',
+  require_approval: 'require_approval',
+  authorized: 'authorized',
+  executed: 'executed',
+} as const;
+
+export type GuardianAgentPolicyLabEvidenceCasesItemPolicyOffEventPhasesItem = typeof GuardianAgentPolicyLabEvidenceCasesItemPolicyOffEventPhasesItem[keyof typeof GuardianAgentPolicyLabEvidenceCasesItemPolicyOffEventPhasesItem];
+
+
+export const GuardianAgentPolicyLabEvidenceCasesItemPolicyOffEventPhasesItem = {
+  proposed: 'proposed',
+  attempted: 'attempted',
+  policy_bypassed: 'policy_bypassed',
+  counterfactual_would_execute: 'counterfactual_would_execute',
+} as const;
+
+export type GuardianAgentPolicyLabEvidenceCasesItemToolTraceToolName = typeof GuardianAgentPolicyLabEvidenceCasesItemToolTraceToolName[keyof typeof GuardianAgentPolicyLabEvidenceCasesItemToolTraceToolName];
+
+
+export const GuardianAgentPolicyLabEvidenceCasesItemToolTraceToolName = {
+  send_email_simulated: 'send_email_simulated',
+  query_synthetic_database: 'query_synthetic_database',
+  consult_synthetic_invoice: 'consult_synthetic_invoice',
+  request_bank_account_change: 'request_bank_account_change',
+  propose_synthetic_code_diff: 'propose_synthetic_code_diff',
+  draft_synthetic_support_reply: 'draft_synthetic_support_reply',
+  read_local_synthetic_page: 'read_local_synthetic_page',
+  read_synthetic_infrastructure_config: 'read_synthetic_infrastructure_config',
+  delegate_synthetic_read_only_task: 'delegate_synthetic_read_only_task',
+} as const;
+
+export type GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOnDispatchStatus = typeof GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOnDispatchStatus[keyof typeof GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOnDispatchStatus];
+
+
+export const GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOnDispatchStatus = {
+  simulated_execution: 'simulated_execution',
+  adapter_validation_denied: 'adapter_validation_denied',
+  approval_required_before_dispatch: 'approval_required_before_dispatch',
+  blocked_by_policy_before_dispatch: 'blocked_by_policy_before_dispatch',
+} as const;
+
+export type GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOnEventsItemPhase = typeof GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOnEventsItemPhase[keyof typeof GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOnEventsItemPhase];
+
+
+export const GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOnEventsItemPhase = {
+  authorization_attempt: 'authorization_attempt',
+  denied: 'denied',
+  executed: 'executed',
+} as const;
+
+export type GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOnEventsItemAuthorization = typeof GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOnEventsItemAuthorization[keyof typeof GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOnEventsItemAuthorization];
+
+
+export const GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOnEventsItemAuthorization = {
+  not_checked: 'not_checked',
+  allowed: 'allowed',
+  denied: 'denied',
+} as const;
+
+export type GuardianAgentPolicyLabEvidenceLimitsNetwork = typeof GuardianAgentPolicyLabEvidenceLimitsNetwork[keyof typeof GuardianAgentPolicyLabEvidenceLimitsNetwork];
+
+
+export const GuardianAgentPolicyLabEvidenceLimitsNetwork = {
+  'docker-network-none': 'docker-network-none',
+  host_network_unisolated: 'host_network_unisolated',
+} as const;
+
+export type GuardianAgentPolicyLabEvidenceLimitsMaxCases = typeof GuardianAgentPolicyLabEvidenceLimitsMaxCases[keyof typeof GuardianAgentPolicyLabEvidenceLimitsMaxCases];
+
+
+export const GuardianAgentPolicyLabEvidenceLimitsMaxCases = {
+  NUMBER_2: 2,
+  NUMBER_3: 3,
+} as const;
+
+export type GuardianAgentPolicyLabEvidenceLimitsDockerSocketAccess = typeof GuardianAgentPolicyLabEvidenceLimitsDockerSocketAccess[keyof typeof GuardianAgentPolicyLabEvidenceLimitsDockerSocketAccess];
+
+
+export const GuardianAgentPolicyLabEvidenceLimitsDockerSocketAccess = {
+  not_assessed: 'not_assessed',
+} as const;
+
+export type GuardianAgentPolicyLabEvidenceLimitsProcessIsolation = typeof GuardianAgentPolicyLabEvidenceLimitsProcessIsolation[keyof typeof GuardianAgentPolicyLabEvidenceLimitsProcessIsolation];
+
+
+export const GuardianAgentPolicyLabEvidenceLimitsProcessIsolation = {
+  shared_api_identity: 'shared_api_identity',
+} as const;
+
+export type GuardianAgentPolicyLabEvidenceAgentIdentity = {
+  /** @maxLength 100 */
+  agentId: string;
+  agentType: 'deterministic_synthetic_agent';
+  actorId: 'SYNTHETIC-LAB-OPERATOR';
+  actorType: 'synthetic_user';
+  tenantContext: 'SYNTHETIC-WORKSPACE';
+  /**
+     * @maxLength 100
+     * @nullable
+     */
+  parentAgentId: string | null;
+  /**
+     * @maxItems 16
+     * @items.maxLength 80
+     */
+  permissions: string[];
+  identityPreservedAcrossDelegation: true;
+};
+
+export type GuardianAgentPolicyLabEvidenceVersions = {
+  policy: GuardianAgentPolicyLabEvidenceVersionsPolicy;
+  corpus: 'guardian-agent-lab-corpus-v1';
+  oracle: 'guardian-policy-oracle-v1';
+  toolAdapter?: GuardianAgentPolicyLabEvidenceVersionsToolAdapter;
+};
+
+export type GuardianAgentPolicyLabEvidenceCasesItemPolicyOn = {
+  decision: GuardianAgentPolicyLabEvidenceCasesItemPolicyOnDecision;
+  /** @maxLength 80 */
+  reasonCode: string;
+  proposed: true;
+  attempted: true;
+  authorized: boolean;
+  executed: boolean;
+  simulatedOnly: true;
+  stateChanged: boolean;
+  /** @pattern ^[a-f0-9]{64}$ */
+  stateBeforeSha256: string;
+  /** @pattern ^[a-f0-9]{64}$ */
+  stateAfterSha256: string;
+  /** @maxItems 6 */
+  eventPhases: GuardianAgentPolicyLabEvidenceCasesItemPolicyOnEventPhasesItem[];
+};
+
+export type GuardianAgentPolicyLabEvidenceCasesItemPolicyOff = {
+  mode: 'counterfactual_clone_only';
+  decision: 'bypassed_counterfactual';
+  proposed: true;
+  attempted: true;
+  /** @nullable */
+  authorized: null;
+  executed: false;
+  counterfactualWouldExecute: true;
+  counterfactualCloneStateChanged: boolean;
+  /** @pattern ^[a-f0-9]{64}$ */
+  stateBeforeSha256: string;
+  /** @pattern ^[a-f0-9]{64}$ */
+  stateAfterSha256: string;
+  simulatedOnly: true;
+  /** @maxItems 5 */
+  eventPhases: GuardianAgentPolicyLabEvidenceCasesItemPolicyOffEventPhasesItem[];
+};
+
+export type GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOnEventsItem = {
+  /** @maxLength 100 */
+  toolCallId: string;
+  source: 'guardian_policy_lab_fixture';
+  /** @maxLength 100 */
+  tool: string;
+  phase: GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOnEventsItemPhase;
+  authorization: GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOnEventsItemAuthorization;
+  executed: boolean;
+  simulatedOnly: true;
+  stateChanged: false;
+  externalSideEffect: false;
+  /** @pattern ^[a-f0-9]{64}$ */
+  argumentsSha256: string;
+  /** @maxLength 100 */
+  resultCode: string;
+};
+
+export type GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOn = {
+  invoked: boolean;
+  dispatchStatus: GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOnDispatchStatus;
+  /** @maxItems 2 */
+  events: GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOnEventsItem[];
+  externalSideEffect: false;
+  persistentStateMutation: false;
+};
+
+export type GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOffEventsItem = { [key: string]: unknown };
+
+export type GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOff = {
+  invoked: false;
+  dispatchStatus: 'counterfactual_clone_only';
+  /** @maxItems 0 */
+  events: GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOffEventsItem[];
+  externalSideEffect: false;
+  persistentStateMutation: false;
+};
+
+export type GuardianAgentPolicyLabEvidenceCasesItemToolTrace = {
+  adapterVersion: 'guardian-synthetic-tool-adapter-v1';
+  toolName: GuardianAgentPolicyLabEvidenceCasesItemToolTraceToolName;
+  policyOn: GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOn;
+  policyOff: GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOff;
+};
+
+export type GuardianAgentPolicyLabEvidenceCasesItemDelegation = {
+  isDelegatedAction: boolean;
+  originalActorPreserved: true;
+  /**
+     * @maxLength 100
+     * @nullable
+     */
+  parentAgentId: string | null;
+  permissionElevationRequested: boolean;
+  permissionElevationAllowed: false;
+};
+
+export type GuardianAgentPolicyLabEvidenceCasesItem = {
+  /** @maxLength 100 */
+  caseId: string;
+  label: GuardianAgentPolicyLabEvidenceCasesItemLabel;
+  language: GuardianAgentPolicyLabEvidenceCasesItemLanguage;
+  /** @maxLength 100 */
+  tool: string;
+  /** @maxLength 100 */
+  operation: string;
+  /** @maxLength 80 */
+  resourceType: string;
+  /** @maxLength 180 */
+  resourceId: string;
+  resourceWorkspaceId: GuardianAgentPolicyLabEvidenceCasesItemResourceWorkspaceId;
+  sensitivity: GuardianAgentPolicyLabEvidenceCasesItemSensitivity;
+  instructionProvenance: GuardianAgentPolicyLabEvidenceCasesItemInstructionProvenance;
+  /** @maxLength 100 */
+  agentId: string;
+  actorId: 'SYNTHETIC-LAB-OPERATOR';
+  actorType: GuardianAgentPolicyLabEvidenceCasesItemActorType;
+  /**
+     * @maxItems 16
+     * @items.maxLength 80
+     */
+  grantedPermissions: string[];
+  /**
+     * @maxItems 8
+     * @items.maxLength 80
+     */
+  requestedPermissions: string[];
+  /**
+     * @maxItems 8
+     * @items.maxLength 80
+     */
+  requiredPermissions: string[];
+  /** @pattern ^[a-f0-9]{64}$ */
+  actionSha256: string;
+  /** @pattern ^[a-f0-9]{64}$ */
+  proposalSha256: string;
+  syntheticActionRef?: GuardianAgentPolicyLabEvidenceCasesItemSyntheticActionRef;
+  policyOn: GuardianAgentPolicyLabEvidenceCasesItemPolicyOn;
+  policyOff: GuardianAgentPolicyLabEvidenceCasesItemPolicyOff;
+  toolTrace?: GuardianAgentPolicyLabEvidenceCasesItemToolTrace;
+  delegation: GuardianAgentPolicyLabEvidenceCasesItemDelegation;
+  unauthorizedActionExecuted: false;
+  rawArgumentsStored: false;
+  rawInstructionStored: false;
+  /** @pattern ^[a-f0-9]{64}$ */
+  caseEvidenceSha256: string;
+};
+
+export type GuardianAgentPolicyLabEvidenceSummary = {
+  /**
+     * @minimum 2
+     * @maximum 3
+     */
+  sampleCount: number;
+  /**
+     * @minimum 1
+     * @maximum 2
+     */
+  benignCases: number;
+  adversarialCases: 1;
+  /**
+     * @minimum 2
+     * @maximum 3
+     */
+  proposed: number;
+  /**
+     * @minimum 2
+     * @maximum 3
+     */
+  attempted: number;
+  /**
+     * @minimum 0
+     * @maximum 3
+     */
+  allowed: number;
+  /**
+     * @minimum 0
+     * @maximum 3
+     */
+  denied: number;
+  /**
+     * @minimum 0
+     * @maximum 3
+     */
+  requiresApproval: number;
+  /**
+     * @minimum 0
+     * @maximum 3
+     */
+  simulatedExecutions: number;
+  unauthorizedExecutions: 0;
+  /**
+     * @minimum 2
+     * @maximum 3
+     */
+  policyOffCounterfactualWouldExecute: number;
+  /**
+     * @minimum 0
+     * @maximum 3
+     */
+  policyOffCloneStateChanges: number;
+  actualOperations: 0;
+  persistentStateChanges: 0;
+  externalCalls: 0;
+};
+
+export type GuardianAgentPolicyLabEvidenceSelfChecks = {
+  hasBenignAndAdversarialCases: true;
+  everyProposalHasIndependentPolicyDecision: true;
+  resourceScopeIsEnforced: true;
+  noUnauthorizedActionExecuted: true;
+  policyOffNeverExecutes: true;
+  policyOffUsesClonesOnly: true;
+  delegationCannotElevatePermissions: true;
+  noPersistentOrExternalEffects: true;
+  rawPromptsArgumentsAndInstructionsNotStored: true;
+  policyRunsBeforeToolDispatch?: true;
+  policyOffNeverInvokesToolAdapter?: true;
+};
+
+export type GuardianAgentPolicyLabEvidenceLimits = {
+  network: GuardianAgentPolicyLabEvidenceLimitsNetwork;
+  concurrency: 1;
+  maxCases: GuardianAgentPolicyLabEvidenceLimitsMaxCases;
+  customerDataUsed: false;
+  secretsMounted: false;
+  modelWeightsMounted: false;
+  dockerSocketMounted: false;
+  dockerSocketAccess?: GuardianAgentPolicyLabEvidenceLimitsDockerSocketAccess;
+  processIsolation?: GuardianAgentPolicyLabEvidenceLimitsProcessIsolation;
+  externalCalls: 0;
+  actualOperations: 0;
+  rawPromptsStored: false;
+  rawResponsesStored: false;
+  rawArgumentsStored: false;
+};
+
+export interface GuardianAgentPolicyLabEvidence {
+  evidenceVersion: GuardianAgentPolicyLabEvidenceEvidenceVersion;
+  source: 'synthetic_policy_scenarios';
+  engine: 'guardian_policy_lab';
+  engineVersion: GuardianAgentPolicyLabEvidenceEngineVersion;
+  profileId: GuardianAgentPolicyLabEvidenceProfileId;
+  verticalId: GuardianAgentPolicyLabEvidenceVerticalId;
+  /** @maxLength 80 */
+  verticalLabel: string;
+  executionMode: 'deterministic_fixture';
+  executionContext?: GuardianAgentPolicyLabEvidenceExecutionContext;
+  proposalOrigin: 'controlled_fixture_not_llm';
+  modelInference: false;
+  agentIdentity: GuardianAgentPolicyLabEvidenceAgentIdentity;
+  versions: GuardianAgentPolicyLabEvidenceVersions;
+  seed: 20261102;
+  /**
+     * @minimum 2
+     * @maximum 3
+     */
+  sampleCount: number;
+  /**
+     * @minItems 2
+     * @maxItems 3
+     */
+  cases: GuardianAgentPolicyLabEvidenceCasesItem[];
+  summary: GuardianAgentPolicyLabEvidenceSummary;
+  selfChecks: GuardianAgentPolicyLabEvidenceSelfChecks;
+  selfCheckStatus: 'passed';
+  /** @pattern ^[a-f0-9]{64}$ */
+  suiteEvidenceSha256: string;
+  /**
+     * @minLength 20
+     * @maxLength 40
+     * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$
+     */
+  startedAt: string;
+  /**
+     * @minLength 20
+     * @maxLength 40
+     * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$
+     */
+  completedAt: string;
+  /**
+     * @minimum 0
+     * @maximum 30000
+     */
+  durationMs: number;
+  limits: GuardianAgentPolicyLabEvidenceLimits;
+  /** @maxLength 500 */
+  interpretation: string;
+  /** @pattern ^[a-f0-9]{64}$ */
+  evidenceSha256: string;
+}
+
+export interface GuardianPolicyLabPreviewResponse {
+  source: 'fresh_deterministic_policy_preview';
+  evidence: GuardianAgentPolicyLabEvidence;
+}
+
 export type AiAssessmentLabJobStatus = typeof AiAssessmentLabJobStatus[keyof typeof AiAssessmentLabJobStatus];
 
 
@@ -2776,526 +3354,6 @@ export type GuardianLocalLlmAutonomousToolSelectionEvidence = GuardianLocalLlmTo
   /** @maxItems 42 */
   toolTrace?: GuardianNativeToolTraceEvent[];
 };
-
-export type GuardianAgentPolicyLabEvidenceEvidenceVersion = typeof GuardianAgentPolicyLabEvidenceEvidenceVersion[keyof typeof GuardianAgentPolicyLabEvidenceEvidenceVersion];
-
-
-export const GuardianAgentPolicyLabEvidenceEvidenceVersion = {
-  NUMBER_1: 1,
-  NUMBER_2: 2,
-} as const;
-
-export type GuardianAgentPolicyLabEvidenceEngineVersion = typeof GuardianAgentPolicyLabEvidenceEngineVersion[keyof typeof GuardianAgentPolicyLabEvidenceEngineVersion];
-
-
-export const GuardianAgentPolicyLabEvidenceEngineVersion = {
-  'guardian-agent-policy-lab-v1': 'guardian-agent-policy-lab-v1',
-  'guardian-agent-policy-lab-v2': 'guardian-agent-policy-lab-v2',
-} as const;
-
-export type GuardianAgentPolicyLabEvidenceProfileId = typeof GuardianAgentPolicyLabEvidenceProfileId[keyof typeof GuardianAgentPolicyLabEvidenceProfileId];
-
-
-export const GuardianAgentPolicyLabEvidenceProfileId = {
-  'guardian-agent-lab-email-v1': 'guardian-agent-lab-email-v1',
-  'guardian-agent-lab-database-v1': 'guardian-agent-lab-database-v1',
-  'guardian-agent-lab-finance-v1': 'guardian-agent-lab-finance-v1',
-  'guardian-agent-lab-programming-v1': 'guardian-agent-lab-programming-v1',
-  'guardian-agent-lab-customer-service-v1': 'guardian-agent-lab-customer-service-v1',
-  'guardian-agent-lab-browser-v1': 'guardian-agent-lab-browser-v1',
-  'guardian-agent-lab-infrastructure-v1': 'guardian-agent-lab-infrastructure-v1',
-  'guardian-agent-lab-multiagent-v1': 'guardian-agent-lab-multiagent-v1',
-} as const;
-
-export type GuardianAgentPolicyLabEvidenceVerticalId = typeof GuardianAgentPolicyLabEvidenceVerticalId[keyof typeof GuardianAgentPolicyLabEvidenceVerticalId];
-
-
-export const GuardianAgentPolicyLabEvidenceVerticalId = {
-  email: 'email',
-  database: 'database',
-  finance: 'finance',
-  programming: 'programming',
-  customer_service: 'customer_service',
-  browser: 'browser',
-  infrastructure: 'infrastructure',
-  multiagent: 'multiagent',
-} as const;
-
-export type GuardianAgentPolicyLabEvidenceVersionsPolicy = typeof GuardianAgentPolicyLabEvidenceVersionsPolicy[keyof typeof GuardianAgentPolicyLabEvidenceVersionsPolicy];
-
-
-export const GuardianAgentPolicyLabEvidenceVersionsPolicy = {
-  'guardian-policy-engine-synthetic-v1': 'guardian-policy-engine-synthetic-v1',
-  'guardian-policy-engine-synthetic-v2': 'guardian-policy-engine-synthetic-v2',
-  'guardian-policy-engine-synthetic-v3': 'guardian-policy-engine-synthetic-v3',
-} as const;
-
-export type GuardianAgentPolicyLabEvidenceVersionsToolAdapter = typeof GuardianAgentPolicyLabEvidenceVersionsToolAdapter[keyof typeof GuardianAgentPolicyLabEvidenceVersionsToolAdapter];
-
-
-export const GuardianAgentPolicyLabEvidenceVersionsToolAdapter = {
-  'guardian-synthetic-tool-adapter-v1': 'guardian-synthetic-tool-adapter-v1',
-  'guardian-synthetic-tool-adapter-v2': 'guardian-synthetic-tool-adapter-v2',
-} as const;
-
-export type GuardianAgentPolicyLabEvidenceCasesItemLabel = typeof GuardianAgentPolicyLabEvidenceCasesItemLabel[keyof typeof GuardianAgentPolicyLabEvidenceCasesItemLabel];
-
-
-export const GuardianAgentPolicyLabEvidenceCasesItemLabel = {
-  benign: 'benign',
-  adversarial: 'adversarial',
-} as const;
-
-export type GuardianAgentPolicyLabEvidenceCasesItemLanguage = typeof GuardianAgentPolicyLabEvidenceCasesItemLanguage[keyof typeof GuardianAgentPolicyLabEvidenceCasesItemLanguage];
-
-
-export const GuardianAgentPolicyLabEvidenceCasesItemLanguage = {
-  en: 'en',
-  es: 'es',
-} as const;
-
-export type GuardianAgentPolicyLabEvidenceCasesItemResourceWorkspaceId = typeof GuardianAgentPolicyLabEvidenceCasesItemResourceWorkspaceId[keyof typeof GuardianAgentPolicyLabEvidenceCasesItemResourceWorkspaceId];
-
-
-export const GuardianAgentPolicyLabEvidenceCasesItemResourceWorkspaceId = {
-  'SYNTHETIC-WORKSPACE': 'SYNTHETIC-WORKSPACE',
-  'SYNTHETIC-OTHER-WORKSPACE': 'SYNTHETIC-OTHER-WORKSPACE',
-} as const;
-
-export type GuardianAgentPolicyLabEvidenceCasesItemSensitivity = typeof GuardianAgentPolicyLabEvidenceCasesItemSensitivity[keyof typeof GuardianAgentPolicyLabEvidenceCasesItemSensitivity];
-
-
-export const GuardianAgentPolicyLabEvidenceCasesItemSensitivity = {
-  public: 'public',
-  internal: 'internal',
-  confidential: 'confidential',
-  restricted: 'restricted',
-} as const;
-
-export type GuardianAgentPolicyLabEvidenceCasesItemInstructionProvenance = typeof GuardianAgentPolicyLabEvidenceCasesItemInstructionProvenance[keyof typeof GuardianAgentPolicyLabEvidenceCasesItemInstructionProvenance];
-
-
-export const GuardianAgentPolicyLabEvidenceCasesItemInstructionProvenance = {
-  trusted_user_request: 'trusted_user_request',
-  untrusted_email: 'untrusted_email',
-  untrusted_document: 'untrusted_document',
-  untrusted_ticket: 'untrusted_ticket',
-  untrusted_web_content: 'untrusted_web_content',
-  delegated_agent: 'delegated_agent',
-} as const;
-
-export type GuardianAgentPolicyLabEvidenceCasesItemActorType = typeof GuardianAgentPolicyLabEvidenceCasesItemActorType[keyof typeof GuardianAgentPolicyLabEvidenceCasesItemActorType];
-
-
-export const GuardianAgentPolicyLabEvidenceCasesItemActorType = {
-  synthetic_user: 'synthetic_user',
-  delegated_agent: 'delegated_agent',
-} as const;
-
-export type GuardianAgentPolicyLabEvidenceCasesItemSyntheticActionRef = typeof GuardianAgentPolicyLabEvidenceCasesItemSyntheticActionRef[keyof typeof GuardianAgentPolicyLabEvidenceCasesItemSyntheticActionRef];
-
-
-export const GuardianAgentPolicyLabEvidenceCasesItemSyntheticActionRef = {
-  'guardiansyntheticfinancebank-changev1': 'guardian.synthetic.finance.bank-change.v1',
-  guardiansyntheticsupportrefundv1: 'guardian.synthetic.support.refund.v1',
-} as const;
-
-export type GuardianAgentPolicyLabEvidenceCasesItemPolicyOnDecision = typeof GuardianAgentPolicyLabEvidenceCasesItemPolicyOnDecision[keyof typeof GuardianAgentPolicyLabEvidenceCasesItemPolicyOnDecision];
-
-
-export const GuardianAgentPolicyLabEvidenceCasesItemPolicyOnDecision = {
-  allow: 'allow',
-  deny: 'deny',
-  require_approval: 'require_approval',
-} as const;
-
-export type GuardianAgentPolicyLabEvidenceCasesItemPolicyOnEventPhasesItem = typeof GuardianAgentPolicyLabEvidenceCasesItemPolicyOnEventPhasesItem[keyof typeof GuardianAgentPolicyLabEvidenceCasesItemPolicyOnEventPhasesItem];
-
-
-export const GuardianAgentPolicyLabEvidenceCasesItemPolicyOnEventPhasesItem = {
-  proposed: 'proposed',
-  attempted: 'attempted',
-  authorization_check: 'authorization_check',
-  allow: 'allow',
-  deny: 'deny',
-  require_approval: 'require_approval',
-  authorized: 'authorized',
-  executed: 'executed',
-} as const;
-
-export type GuardianAgentPolicyLabEvidenceCasesItemPolicyOffEventPhasesItem = typeof GuardianAgentPolicyLabEvidenceCasesItemPolicyOffEventPhasesItem[keyof typeof GuardianAgentPolicyLabEvidenceCasesItemPolicyOffEventPhasesItem];
-
-
-export const GuardianAgentPolicyLabEvidenceCasesItemPolicyOffEventPhasesItem = {
-  proposed: 'proposed',
-  attempted: 'attempted',
-  policy_bypassed: 'policy_bypassed',
-  counterfactual_would_execute: 'counterfactual_would_execute',
-} as const;
-
-export type GuardianAgentPolicyLabEvidenceCasesItemToolTraceToolName = typeof GuardianAgentPolicyLabEvidenceCasesItemToolTraceToolName[keyof typeof GuardianAgentPolicyLabEvidenceCasesItemToolTraceToolName];
-
-
-export const GuardianAgentPolicyLabEvidenceCasesItemToolTraceToolName = {
-  send_email_simulated: 'send_email_simulated',
-  query_synthetic_database: 'query_synthetic_database',
-  consult_synthetic_invoice: 'consult_synthetic_invoice',
-  request_bank_account_change: 'request_bank_account_change',
-  propose_synthetic_code_diff: 'propose_synthetic_code_diff',
-  draft_synthetic_support_reply: 'draft_synthetic_support_reply',
-  read_local_synthetic_page: 'read_local_synthetic_page',
-  read_synthetic_infrastructure_config: 'read_synthetic_infrastructure_config',
-  delegate_synthetic_read_only_task: 'delegate_synthetic_read_only_task',
-} as const;
-
-export type GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOnDispatchStatus = typeof GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOnDispatchStatus[keyof typeof GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOnDispatchStatus];
-
-
-export const GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOnDispatchStatus = {
-  simulated_execution: 'simulated_execution',
-  adapter_validation_denied: 'adapter_validation_denied',
-  approval_required_before_dispatch: 'approval_required_before_dispatch',
-  blocked_by_policy_before_dispatch: 'blocked_by_policy_before_dispatch',
-} as const;
-
-export type GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOnEventsItemPhase = typeof GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOnEventsItemPhase[keyof typeof GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOnEventsItemPhase];
-
-
-export const GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOnEventsItemPhase = {
-  authorization_attempt: 'authorization_attempt',
-  denied: 'denied',
-  executed: 'executed',
-} as const;
-
-export type GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOnEventsItemAuthorization = typeof GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOnEventsItemAuthorization[keyof typeof GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOnEventsItemAuthorization];
-
-
-export const GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOnEventsItemAuthorization = {
-  not_checked: 'not_checked',
-  allowed: 'allowed',
-  denied: 'denied',
-} as const;
-
-export type GuardianAgentPolicyLabEvidenceLimitsMaxCases = typeof GuardianAgentPolicyLabEvidenceLimitsMaxCases[keyof typeof GuardianAgentPolicyLabEvidenceLimitsMaxCases];
-
-
-export const GuardianAgentPolicyLabEvidenceLimitsMaxCases = {
-  NUMBER_2: 2,
-  NUMBER_3: 3,
-} as const;
-
-export type GuardianAgentPolicyLabEvidenceAgentIdentity = {
-  /** @maxLength 100 */
-  agentId: string;
-  agentType: 'deterministic_synthetic_agent';
-  actorId: 'SYNTHETIC-LAB-OPERATOR';
-  actorType: 'synthetic_user';
-  tenantContext: 'SYNTHETIC-WORKSPACE';
-  /**
-     * @maxLength 100
-     * @nullable
-     */
-  parentAgentId: string | null;
-  /**
-     * @maxItems 16
-     * @items.maxLength 80
-     */
-  permissions: string[];
-  identityPreservedAcrossDelegation: true;
-};
-
-export type GuardianAgentPolicyLabEvidenceVersions = {
-  policy: GuardianAgentPolicyLabEvidenceVersionsPolicy;
-  corpus: 'guardian-agent-lab-corpus-v1';
-  oracle: 'guardian-policy-oracle-v1';
-  toolAdapter?: GuardianAgentPolicyLabEvidenceVersionsToolAdapter;
-};
-
-export type GuardianAgentPolicyLabEvidenceCasesItemPolicyOn = {
-  decision: GuardianAgentPolicyLabEvidenceCasesItemPolicyOnDecision;
-  /** @maxLength 80 */
-  reasonCode: string;
-  proposed: true;
-  attempted: true;
-  authorized: boolean;
-  executed: boolean;
-  simulatedOnly: true;
-  stateChanged: boolean;
-  /** @pattern ^[a-f0-9]{64}$ */
-  stateBeforeSha256: string;
-  /** @pattern ^[a-f0-9]{64}$ */
-  stateAfterSha256: string;
-  /** @maxItems 6 */
-  eventPhases: GuardianAgentPolicyLabEvidenceCasesItemPolicyOnEventPhasesItem[];
-};
-
-export type GuardianAgentPolicyLabEvidenceCasesItemPolicyOff = {
-  mode: 'counterfactual_clone_only';
-  decision: 'bypassed_counterfactual';
-  proposed: true;
-  attempted: true;
-  /** @nullable */
-  authorized: null;
-  executed: false;
-  counterfactualWouldExecute: true;
-  counterfactualCloneStateChanged: boolean;
-  /** @pattern ^[a-f0-9]{64}$ */
-  stateBeforeSha256: string;
-  /** @pattern ^[a-f0-9]{64}$ */
-  stateAfterSha256: string;
-  simulatedOnly: true;
-  /** @maxItems 5 */
-  eventPhases: GuardianAgentPolicyLabEvidenceCasesItemPolicyOffEventPhasesItem[];
-};
-
-export type GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOnEventsItem = {
-  /** @maxLength 100 */
-  toolCallId: string;
-  source: 'guardian_policy_lab_fixture';
-  /** @maxLength 100 */
-  tool: string;
-  phase: GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOnEventsItemPhase;
-  authorization: GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOnEventsItemAuthorization;
-  executed: boolean;
-  simulatedOnly: true;
-  stateChanged: false;
-  externalSideEffect: false;
-  /** @pattern ^[a-f0-9]{64}$ */
-  argumentsSha256: string;
-  /** @maxLength 100 */
-  resultCode: string;
-};
-
-export type GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOn = {
-  invoked: boolean;
-  dispatchStatus: GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOnDispatchStatus;
-  /** @maxItems 2 */
-  events: GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOnEventsItem[];
-  externalSideEffect: false;
-  persistentStateMutation: false;
-};
-
-export type GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOffEventsItem = { [key: string]: unknown };
-
-export type GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOff = {
-  invoked: false;
-  dispatchStatus: 'counterfactual_clone_only';
-  /** @maxItems 0 */
-  events: GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOffEventsItem[];
-  externalSideEffect: false;
-  persistentStateMutation: false;
-};
-
-export type GuardianAgentPolicyLabEvidenceCasesItemToolTrace = {
-  adapterVersion: 'guardian-synthetic-tool-adapter-v1';
-  toolName: GuardianAgentPolicyLabEvidenceCasesItemToolTraceToolName;
-  policyOn: GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOn;
-  policyOff: GuardianAgentPolicyLabEvidenceCasesItemToolTracePolicyOff;
-};
-
-export type GuardianAgentPolicyLabEvidenceCasesItemDelegation = {
-  isDelegatedAction: boolean;
-  originalActorPreserved: true;
-  /**
-     * @maxLength 100
-     * @nullable
-     */
-  parentAgentId: string | null;
-  permissionElevationRequested: boolean;
-  permissionElevationAllowed: false;
-};
-
-export type GuardianAgentPolicyLabEvidenceCasesItem = {
-  /** @maxLength 100 */
-  caseId: string;
-  label: GuardianAgentPolicyLabEvidenceCasesItemLabel;
-  language: GuardianAgentPolicyLabEvidenceCasesItemLanguage;
-  /** @maxLength 100 */
-  tool: string;
-  /** @maxLength 100 */
-  operation: string;
-  /** @maxLength 80 */
-  resourceType: string;
-  /** @maxLength 180 */
-  resourceId: string;
-  resourceWorkspaceId: GuardianAgentPolicyLabEvidenceCasesItemResourceWorkspaceId;
-  sensitivity: GuardianAgentPolicyLabEvidenceCasesItemSensitivity;
-  instructionProvenance: GuardianAgentPolicyLabEvidenceCasesItemInstructionProvenance;
-  /** @maxLength 100 */
-  agentId: string;
-  actorId: 'SYNTHETIC-LAB-OPERATOR';
-  actorType: GuardianAgentPolicyLabEvidenceCasesItemActorType;
-  /**
-     * @maxItems 16
-     * @items.maxLength 80
-     */
-  grantedPermissions: string[];
-  /**
-     * @maxItems 8
-     * @items.maxLength 80
-     */
-  requestedPermissions: string[];
-  /**
-     * @maxItems 8
-     * @items.maxLength 80
-     */
-  requiredPermissions: string[];
-  /** @pattern ^[a-f0-9]{64}$ */
-  actionSha256: string;
-  /** @pattern ^[a-f0-9]{64}$ */
-  proposalSha256: string;
-  syntheticActionRef?: GuardianAgentPolicyLabEvidenceCasesItemSyntheticActionRef;
-  policyOn: GuardianAgentPolicyLabEvidenceCasesItemPolicyOn;
-  policyOff: GuardianAgentPolicyLabEvidenceCasesItemPolicyOff;
-  toolTrace?: GuardianAgentPolicyLabEvidenceCasesItemToolTrace;
-  delegation: GuardianAgentPolicyLabEvidenceCasesItemDelegation;
-  unauthorizedActionExecuted: false;
-  rawArgumentsStored: false;
-  rawInstructionStored: false;
-  /** @pattern ^[a-f0-9]{64}$ */
-  caseEvidenceSha256: string;
-};
-
-export type GuardianAgentPolicyLabEvidenceSummary = {
-  /**
-     * @minimum 2
-     * @maximum 3
-     */
-  sampleCount: number;
-  /**
-     * @minimum 1
-     * @maximum 2
-     */
-  benignCases: number;
-  adversarialCases: 1;
-  /**
-     * @minimum 2
-     * @maximum 3
-     */
-  proposed: number;
-  /**
-     * @minimum 2
-     * @maximum 3
-     */
-  attempted: number;
-  /**
-     * @minimum 0
-     * @maximum 3
-     */
-  allowed: number;
-  /**
-     * @minimum 0
-     * @maximum 3
-     */
-  denied: number;
-  /**
-     * @minimum 0
-     * @maximum 3
-     */
-  requiresApproval: number;
-  /**
-     * @minimum 0
-     * @maximum 3
-     */
-  simulatedExecutions: number;
-  unauthorizedExecutions: 0;
-  /**
-     * @minimum 2
-     * @maximum 3
-     */
-  policyOffCounterfactualWouldExecute: number;
-  /**
-     * @minimum 0
-     * @maximum 3
-     */
-  policyOffCloneStateChanges: number;
-  actualOperations: 0;
-  persistentStateChanges: 0;
-  externalCalls: 0;
-};
-
-export type GuardianAgentPolicyLabEvidenceSelfChecks = {
-  hasBenignAndAdversarialCases: true;
-  everyProposalHasIndependentPolicyDecision: true;
-  resourceScopeIsEnforced: true;
-  noUnauthorizedActionExecuted: true;
-  policyOffNeverExecutes: true;
-  policyOffUsesClonesOnly: true;
-  delegationCannotElevatePermissions: true;
-  noPersistentOrExternalEffects: true;
-  rawPromptsArgumentsAndInstructionsNotStored: true;
-  policyRunsBeforeToolDispatch?: true;
-  policyOffNeverInvokesToolAdapter?: true;
-};
-
-export type GuardianAgentPolicyLabEvidenceLimits = {
-  network: 'docker-network-none';
-  concurrency: 1;
-  maxCases: GuardianAgentPolicyLabEvidenceLimitsMaxCases;
-  customerDataUsed: false;
-  secretsMounted: false;
-  modelWeightsMounted: false;
-  dockerSocketMounted: false;
-  externalCalls: 0;
-  actualOperations: 0;
-  rawPromptsStored: false;
-  rawResponsesStored: false;
-  rawArgumentsStored: false;
-};
-
-export interface GuardianAgentPolicyLabEvidence {
-  evidenceVersion: GuardianAgentPolicyLabEvidenceEvidenceVersion;
-  source: 'synthetic_policy_scenarios';
-  engine: 'guardian_policy_lab';
-  engineVersion: GuardianAgentPolicyLabEvidenceEngineVersion;
-  profileId: GuardianAgentPolicyLabEvidenceProfileId;
-  verticalId: GuardianAgentPolicyLabEvidenceVerticalId;
-  /** @maxLength 80 */
-  verticalLabel: string;
-  executionMode: 'deterministic_fixture';
-  proposalOrigin: 'controlled_fixture_not_llm';
-  modelInference: false;
-  agentIdentity: GuardianAgentPolicyLabEvidenceAgentIdentity;
-  versions: GuardianAgentPolicyLabEvidenceVersions;
-  seed: 20261102;
-  /**
-     * @minimum 2
-     * @maximum 3
-     */
-  sampleCount: number;
-  /**
-     * @minItems 2
-     * @maxItems 3
-     */
-  cases: GuardianAgentPolicyLabEvidenceCasesItem[];
-  summary: GuardianAgentPolicyLabEvidenceSummary;
-  selfChecks: GuardianAgentPolicyLabEvidenceSelfChecks;
-  selfCheckStatus: 'passed';
-  /** @pattern ^[a-f0-9]{64}$ */
-  suiteEvidenceSha256: string;
-  /**
-     * @minLength 20
-     * @maxLength 40
-     * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$
-     */
-  startedAt: string;
-  /**
-     * @minLength 20
-     * @maxLength 40
-     * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$
-     */
-  completedAt: string;
-  /**
-     * @minimum 0
-     * @maximum 30000
-     */
-  durationMs: number;
-  limits: GuardianAgentPolicyLabEvidenceLimits;
-  /** @maxLength 500 */
-  interpretation: string;
-  /** @pattern ^[a-f0-9]{64}$ */
-  evidenceSha256: string;
-}
 
 export type GuardianQwenPolicyLabEvidenceEngineVersion = typeof GuardianQwenPolicyLabEvidenceEngineVersion[keyof typeof GuardianQwenPolicyLabEvidenceEngineVersion];
 

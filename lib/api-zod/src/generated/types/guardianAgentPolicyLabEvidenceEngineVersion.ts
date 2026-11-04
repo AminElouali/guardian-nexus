@@ -12,4 +12,5 @@ export type GuardianAgentPolicyLabEvidenceEngineVersion = typeof GuardianAgentPo
 export const GuardianAgentPolicyLabEvidenceEngineVersion = {
   'guardian-agent-policy-lab-v1': 'guardian-agent-policy-lab-v1',
   'guardian-agent-policy-lab-v2': 'guardian-agent-policy-lab-v2',
+  'guardian-agent-policy-lab-v3': 'guardian-agent-policy-lab-v3',
 } as const;
