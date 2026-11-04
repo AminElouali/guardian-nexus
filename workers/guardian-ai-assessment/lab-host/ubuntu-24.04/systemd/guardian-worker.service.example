@@ -1,0 +1,25 @@
+[Unit]
+Description=Guardian Nexus non-privileged assessment worker (dedicated laboratory)
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=guardian-worker
+Group=guardian-worker
+ExecStart=/opt/guardian-nexus/current/bin/start-worker
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_UNIX
+IPAddressDeny=any
+EnvironmentFile=/etc/guardian-nexus/worker.env
+
+[Install]
+WantedBy=multi-user.target

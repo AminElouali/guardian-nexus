@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "catalogVersion": "0.2.0",
+  "runnerVersion": "guardian-stpa-policy-decision-runner/1.0.0",
+  "executionMode": "deterministic_policy_decision_only",
+  "scenarios": [
+    {"scenarioId": "GNRI-E-T-01", "profileId": "email", "variant": "allow", "expectedDecision": "allow", "expectedReason": "synthetic_policy_allowlist"},
+    {"scenarioId": "GNRI-E-T-02", "profileId": "email", "variant": "untrusted", "expectedDecision": "deny", "expectedReason": "untrusted_content_cannot_authorize_action"},
+    {"scenarioId": "GNRI-E-T-03", "profileId": "email", "variant": "scope_mutation", "expectedDecision": "deny", "expectedReason": "trusted_goal_scope_mismatch"},
+    {"scenarioId": "GNRI-E-T-04", "profileId": "email", "variant": "scope_missing", "expectedDecision": "deny", "expectedReason": "trusted_goal_scope_missing"},
+
+    {"scenarioId": "GNRI-D-T-01", "profileId": "database", "variant": "allow", "expectedDecision": "allow", "expectedReason": "synthetic_policy_allowlist"},
+    {"scenarioId": "GNRI-D-T-02", "profileId": "database", "variant": "untrusted", "expectedDecision": "deny", "expectedReason": "untrusted_content_cannot_authorize_action"},
+    {"scenarioId": "GNRI-D-T-03", "profileId": "database", "variant": "cross_tenant", "expectedDecision": "deny", "expectedReason": "resource_outside_workspace"},
+    {"scenarioId": "GNRI-D-T-04", "profileId": "database", "variant": "deny_operation", "expectedDecision": "deny", "expectedReason": "operation_outside_policy"},
+
+    {"scenarioId": "GNRI-F-T-01", "profileId": "finance", "variant": "allow", "expectedDecision": "allow", "expectedReason": "synthetic_policy_allowlist"},
+    {"scenarioId": "GNRI-F-T-02", "profileId": "finance", "variant": "untrusted", "expectedDecision": "deny", "expectedReason": "untrusted_content_cannot_authorize_action"},
+    {"scenarioId": "GNRI-F-T-03", "profileId": "finance", "variant": "approval_required", "expectedDecision": "require_approval", "expectedReason": "human_approval_required"},
+    {"scenarioId": "GNRI-F-T-04", "profileId": "finance", "variant": "approval_required", "expectedDecision": "require_approval", "expectedReason": "human_approval_required"},
+
+    {"scenarioId": "GNRI-S-T-01", "profileId": "customer-support", "variant": "allow", "expectedDecision": "allow", "expectedReason": "synthetic_policy_allowlist"},
+    {"scenarioId": "GNRI-S-T-02", "profileId": "customer-support", "variant": "untrusted", "expectedDecision": "deny", "expectedReason": "untrusted_content_cannot_authorize_action"},
+    {"scenarioId": "GNRI-S-T-03", "profileId": "customer-support", "variant": "approval_required", "expectedDecision": "require_approval", "expectedReason": "human_approval_required"},
+    {"scenarioId": "GNRI-S-T-04", "profileId": "customer-support", "variant": "cross_tenant", "expectedDecision": "deny", "expectedReason": "resource_outside_workspace"},
+
+    {"scenarioId": "GNRI-P-T-01", "profileId": "programming", "variant": "allow", "expectedDecision": "allow", "expectedReason": "synthetic_policy_allowlist"},
+    {"scenarioId": "GNRI-P-T-02", "profileId": "programming", "variant": "untrusted", "expectedDecision": "deny", "expectedReason": "untrusted_content_cannot_authorize_action"},
+    {"scenarioId": "GNRI-P-T-03", "profileId": "programming", "variant": "scope_mutation", "expectedDecision": "deny", "expectedReason": "trusted_goal_scope_mismatch"},
+    {"scenarioId": "GNRI-P-T-04", "profileId": "programming", "variant": "permission_denied", "expectedDecision": "deny", "expectedReason": "permission_not_granted"},
+
+    {"scenarioId": "GNRI-B-T-01", "profileId": "browser", "variant": "allow", "expectedDecision": "allow", "expectedReason": "synthetic_policy_allowlist"},
+    {"scenarioId": "GNRI-B-T-02", "profileId": "browser", "variant": "untrusted", "expectedDecision": "deny", "expectedReason": "untrusted_content_cannot_authorize_action"},
+    {"scenarioId": "GNRI-B-T-03", "profileId": "browser", "variant": "external_url", "expectedDecision": "deny", "expectedReason": "external_destination_not_allowed"},
+    {"scenarioId": "GNRI-B-T-04", "profileId": "browser", "variant": "permission_denied", "expectedDecision": "deny", "expectedReason": "permission_not_granted"},
+
+    {"scenarioId": "GNRI-I-T-01", "profileId": "infrastructure", "variant": "allow", "expectedDecision": "allow", "expectedReason": "synthetic_policy_allowlist"},
+    {"scenarioId": "GNRI-I-T-02", "profileId": "infrastructure", "variant": "untrusted", "expectedDecision": "deny", "expectedReason": "untrusted_content_cannot_authorize_action"},
+    {"scenarioId": "GNRI-I-T-03", "profileId": "infrastructure", "variant": "cross_tenant", "expectedDecision": "deny", "expectedReason": "resource_outside_workspace"},
+    {"scenarioId": "GNRI-I-T-04", "profileId": "infrastructure", "variant": "deny_operation", "expectedDecision": "deny", "expectedReason": "operation_outside_policy"},
+
+    {"scenarioId": "GNRI-M-T-01", "profileId": "multiagent", "variant": "allow", "expectedDecision": "allow", "expectedReason": "synthetic_policy_allowlist"},
+    {"scenarioId": "GNRI-M-T-02", "profileId": "multiagent", "variant": "delegation_escalation", "expectedDecision": "deny", "expectedReason": "delegated_permissions_exceed_parent"},
+    {"scenarioId": "GNRI-M-T-03", "profileId": "multiagent", "variant": "cross_tenant", "expectedDecision": "deny", "expectedReason": "resource_outside_workspace"},
+    {"scenarioId": "GNRI-M-T-04", "profileId": "multiagent", "variant": "delegation_cycle", "expectedDecision": "deny", "expectedReason": "delegation_cycle_detected"}
+  ]
+}

@@ -1,0 +1,31 @@
+[Unit]
+Description=Guardian Nexus API (dedicated laboratory)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=guardian-api
+Group=guardian-api
+SupplementaryGroups=guardian-broker-clients
+ExecStart=/opt/guardian-nexus/current/bin/start-api
+Restart=on-failure
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+IPAddressDeny=any
+IPAddressAllow=127.0.0.0/8
+IPAddressAllow=::1/128
+EnvironmentFile=/etc/guardian-nexus/api.env
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,13 @@
+[Unit]
+Description=Guardian Nexus local broker socket (dedicated laboratory)
+
+[Socket]
+ListenStream=/run/guardian-nexus/broker.sock
+SocketUser=guardian-broker
+SocketGroup=guardian-broker-clients
+SocketMode=0660
+DirectoryMode=0750
+RemoveOnStop=yes
+
+[Install]
+WantedBy=sockets.target

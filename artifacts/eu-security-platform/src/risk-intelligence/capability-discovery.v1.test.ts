@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { analyzeDeclaredCapabilities } from "./capability-discovery.v1";
 import { RISK_INTELLIGENCE_CATALOG } from "./catalog.v1";
@@ -63,6 +64,39 @@ test("all eight profiles produce only catalog-linked pending findings", () => {
     assert.equal(result.actionDispatched, false);
     assert.equal(result.policyDecision, null);
   }
+});
+
+test("the deterministic STPA policy manifest covers exactly the catalog scenario IDs", () => {
+  const manifest = JSON.parse(
+    readFileSync(
+      new URL(
+        "../../../../workers/guardian-ai-assessment/guardian_ai_assessment/risk_intelligence_stpa_policy_manifest.v1.json",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  ) as {
+    schemaVersion: number;
+    catalogVersion: string;
+    executionMode: string;
+    scenarios: Array<{ scenarioId: string; profileId: string }>;
+  };
+  const catalogSpecs = RISK_INTELLIGENCE_CATALOG.profiles.flatMap((profile) =>
+    profile.syntheticTestSpecs.map((spec) => ({
+      scenarioId: spec.id,
+      profileId: profile.id,
+    })),
+  );
+  assert.equal(manifest.schemaVersion, 1);
+  assert.equal(manifest.catalogVersion, RISK_INTELLIGENCE_CATALOG.catalogVersion);
+  assert.equal(manifest.executionMode, "deterministic_policy_decision_only");
+  assert.equal(manifest.scenarios.length, 32);
+  assert.deepEqual(
+    manifest.scenarios
+      .map(({ scenarioId, profileId }) => ({ scenarioId, profileId }))
+      .sort((left, right) => left.scenarioId.localeCompare(right.scenarioId)),
+    [...catalogSpecs].sort((left, right) => left.scenarioId.localeCompare(right.scenarioId)),
+  );
 });
 
 test("strict declaration schema rejects identity, tenant, authorization and unknown capability fields", () => {
