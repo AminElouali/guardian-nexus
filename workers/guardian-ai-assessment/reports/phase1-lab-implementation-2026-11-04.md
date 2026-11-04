@@ -115,21 +115,15 @@ asíncrono con timeout y límite de salida, y el E2E pasó.
 
 ## Estado de objetivos y límites
 
-- **Completo en este incremento:** revisión reproducible de los nueve `ALLOW`
-  históricos; paquete Python SDK sin dependencias runtime; consumo de una
-  aprobación sintética por API; pruebas automatizadas del kit de transferencia;
-  validación serial indicada arriba.
-- **No ejecutado / bloqueado por el host:** inferencia Qwen nueva; el preflight
-  anterior registra acceso escribible del UID compartido al socket Docker y el
-  runner debe fallar cerrado. No se lanzó Docker ni se intentó elevar
-  privilegios.
-- **No acreditado:** proceso broker con UID distinto y acceso exclusivo a
-  Docker, credenciales PostgreSQL independientes realmente conectadas, sesión
-  Clerk autenticada en navegador, Garak real en este host, nuevo escaneo
-  SBOM/OSV, licencia ambigua de `langdetect` y prueba IPv6 dual-stack.
-- **No cambiado:** las ocho verticales Qwen, los ocho fixtures, Policy Engine,
-  RLS/RBAC/Clerk, cola, límites Docker, UI visual y resultados históricos.
-  No se conectaron sistemas ni se ejecutaron acciones externas.
+| Estado | Alcance |
+|---|---|
+| **COMPLETO en Replit** | Revisión reproducible de los nueve `ALLOW` históricos; SDK Python sin dependencias runtime, empaquetado e importado; consumo de una aprobación sintética desde el SDK por la API local; pruebas seriales indicadas arriba; kit de transferencia y sus guardas estáticas. |
+| **BLOQUEADO POR HOST** | Inferencia Qwen nueva y ejecución Docker aislada. El preflight anterior detectó socket Docker escribible por el UID compartido; el runner permanece fail-closed. El preflight del kit requiere permisos de administrador para verificar ambas identidades. No se lanzó Docker ni se elevaron privilegios. |
+| **PENDIENTE** | Acreditar broker/API con UID y logins DB distintos en un host autorizado; sesión Clerk real; Garak en este host; nuevo SBOM/OSV; resolución legal de `langdetect`; verificación IPv6 en dual-stack. |
+
+Las ocho verticales Qwen, los ocho fixtures, Policy Engine, RLS/RBAC/Clerk,
+cola, límites Docker, UI visual y evidencias históricas se conservaron sin
+cambios. No se conectaron sistemas ni se ejecutaron acciones externas.
 
 Antes de pilotos con clientes siguen siendo bloqueantes el aislamiento real del
 broker/API y las credenciales de DB separadas, además de revisión de

@@ -2437,6 +2437,15 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   bloqueado por el gate de socket compartido; Clerk navegador real; Garak en
   host; IPv6 dual-stack; nuevo SBOM/OSV y revisión jurídica de `langdetect`.
   No se publicó ni conectó ningún servicio.
+- Matriz de salida:
+  - **COMPLETO:** SDK Python construido/importado y usado por el E2E sintético;
+    revisión de nueve `ALLOW` históricos; regresiones indicadas arriba; kit de
+    transferencia preparado y guardado.
+  - **BLOQUEADO POR HOST:** Qwen/Docker aislado y acreditación de broker/API con
+    identidades distintas. El preflight histórico detectó socket escribible por
+    el UID compartido; el preflight del kit requiere administración del host.
+  - **PENDIENTE:** sesión Clerk real, Garak disponible en host, SBOM/OSV nuevo,
+    revisión legal de `langdetect` e IPv6 dual-stack.
 - Informe:
   `reports/phase1-lab-implementation-2026-11-04.md`; manifiesto de hashes:
   `reports/phase1-lab-implementation-2026-11-04.sha256`.
