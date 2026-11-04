@@ -1,6 +1,6 @@
 # Guardian Nexus — fase local post-STPA v0.2.0
 
-Fecha: 2026-11-04  
+Fecha: 2026-11-04
 HEAD de inicio: `953e75d87b1101c607fa837f47cbcaf85511fb72` (árbol limpio).
 
 ## Resultado de escenarios
@@ -22,7 +22,7 @@ ejecuciones de agentes, no inferencias Qwen, no pruebas de propagación de
 daño y no evidencia de eficacia general. Risk Intelligence sigue siendo
 consultivo; el Policy Engine existente conserva la decisión.
 
-SHA-256 del resumen de evidencia del ejecutor:  
+SHA-256 del resumen de evidencia del ejecutor:
 `05e940b0832d083c56033c7d8e2ef4deda61eccab38966909bc872b7b3814cd1`.
 
 ## Preflight observado en Replit
