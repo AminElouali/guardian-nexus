@@ -2828,3 +2828,55 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
 - Informe y manifiesto de hashes:
   `reports/qwen-finance-synthetic-approval-2026-11-04.md` y
   `reports/qwen-finance-synthetic-approval-2026-11-04.sha256`.
+
+## Incremento 2026-11-04 — runner STPA de decisiones y paquete Ubuntu externo
+
+- Inicio solicitado: HEAD limpio `953e75d87b1101c607fa837f47cbcaf85511fb72`.
+  Durante la edición se observó un checkpoint intermedio
+  `43923a95f1d4758186a86c317cdda14c841dac84`; los cambios restantes siguieron
+  en el árbol y se validaron antes del commit final.
+- Se añadió el manifiesto de política STPA v1 y un runner determinista de
+  decisiones que usa exclusivamente `evaluate_synthetic_action_policy` para
+  los 32 IDs del catálogo. Resultado: 32/32 decisiones y motivos esperados;
+  8 ALLOW, 21 DENY y 3 REQUIRE_APPROVAL. Sin dispatcher ni simulador;
+  `qwenCalls=0`, `toolDispatches=0`, `simulatorInvocations=0`,
+  `databaseConnections=0`, `externalConnections=0`,
+  `fullScenarioObjectivesVerified=0`. Es verificación de decisiones de
+  política, no ejecución completa de escenarios STPA ni prueba de agentes.
+- Paridad UI/manifiesto: 6/6; el catálogo conserva 32 escenarios consultivos.
+  Risk Intelligence no modifica políticas ni concede autorización.
+- Paquete externo `lab-host/ubuntu-24.04/`: modo `--plan`, script condicionado
+  de aprovisionamiento, rollback, cuentas y grupos separados, grupo IPC
+  API→broker distinto del grupo Docker, ejemplos de systemd y autenticación
+  PostgreSQL local por peer sin contraseñas. `SHA256SUMS` verificado.
+  Solo se ejecutaron `bash -n` y `provision.sh --plan`; no se aplicaron
+  cambios de host ni se creó VM.
+- Preflight local de solo lectura: salida 2, `hostBoundaryReady=false`,
+  `integratedAssessmentReady=false`; el proceso actual puede leer/escribir
+  `/var/run/docker.sock` (UID propietario 0, grupo `runner`, modo 0660),
+  4 nombres de variables sensibles presentes, sin leer ni registrar nombres
+  o valores. UID/GID de servicio, ACL por identidad, sesiones DB, proceso hijo
+  worker y sandbox Qwen no verificados. `databaseConnectionsMade=0`,
+  `dockerCallsMade=0`, `qwenInferenceRun=false`. SHA-256 interno de evidencia:
+  `e1dbb18fed636bda22387b180714d28877e73998494d46dbd7a973811061eade`.
+  Qwen permanece bloqueado.
+- Pruebas finales focalizadas: worker runner/preflight/policy lab/guardas
+  **50/50**; API unitarias seleccionadas **53/53**; SDK Python **8/8**;
+  SDK TypeScript **13/13**; catálogo UI/manifiesto **6/6**; typecheck del
+  monorepo pasó; builds API, web y SDK pasaron. El build web conserva el aviso
+  de sourcemap de `tooltip.tsx` y un chunk JS de 747.22 kB.
+- Runner de política: evidencia en
+  `reports/risk-intelligence-stpa-policy-run-2026-11-04.json`,
+  `evidenceSha256=05e940b0832d083c56033c7d8e2ef4deda61eccab38966909bc872b7b3814cd1`.
+  No se ejecutó E2E de aprobación API persistente porque requiere
+  `DATABASE_URL` y abre PostgreSQL; no se leyeron credenciales ni se conectó DB.
+- No se ejecutó suite worker completa, inferencia Qwen, Docker, aprovisionamiento,
+  producción, despliegue ni servicios externos. El paquete Ubuntu no se aplicó
+  ni probó en VM. Desbloqueo: host Ubuntu 24.04 dedicado con UID/GID separados,
+  socket accesible solo por broker, sesiones peer DB independientes y luego
+  verificación del guard offline dentro del worker. IPv6 y RLS real no se
+  verificaron.
+- Informe: `reports/post-stpa-lab-phase-1-2026-11-04.md`; preflight redactado:
+  `reports/lab-host-preflight-2026-11-04.json`; manifiestos SHA-256:
+  `reports/post-stpa-lab-phase-1-2026-11-04.sha256` y
+  `lab-host/ubuntu-24.04/SHA256SUMS`.

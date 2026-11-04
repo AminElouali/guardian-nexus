@@ -1,6 +1,8 @@
 import unittest
+from unittest.mock import patch
 
 from guardian_ai_assessment.lab_host_preflight import evaluate_lab_host_observations
+from guardian_ai_assessment.lab_host_preflight import collect_local_preflight_report
 
 
 def _passing_observations():
@@ -32,6 +34,7 @@ def _passing_observations():
         "databaseSessions": {
             role: {
                 "status": "verified",
+                "databaseName": "guardian_nexus",
                 "sessionUser": f"guardian_{role}_login",
                 "currentUser": f"guardian_{role}_login",
                 "superuser": False,
@@ -142,6 +145,36 @@ class LabHostPreflightTests(unittest.TestCase):
         self.assertIn("lab_docker_socket_access_not_denied_worker", result["reasonCodes"])
         self.assertIn("lab_api_database_privilege_excess", result["reasonCodes"])
         self.assertFalse(result["hostBoundaryReady"])
+
+    def test_database_target_and_read_only_probe_are_required(self):
+        observations = _passing_observations()
+        observations["databaseSessions"]["worker"]["readOnly"] = False
+        observations["databaseSessions"]["broker"]["databaseName"] = "other_db"
+        result = evaluate_lab_host_observations(
+            observations,
+            observation_origin="mocked_test_observation",
+        )
+        self.assertIn("lab_worker_database_probe_not_read_only", result["reasonCodes"])
+        self.assertIn("lab_broker_database_name_mismatch", result["reasonCodes"])
+
+    @patch("guardian_ai_assessment.lab_host_preflight._probe_database_sessions")
+    @patch("guardian_ai_assessment.lab_host_preflight._probe_child_worker_identity")
+    @patch("guardian_ai_assessment.lab_host_preflight._run_identity_access_probe")
+    @patch("guardian_ai_assessment.lab_host_preflight.collect_local_read_only_observations")
+    def test_opt_in_probes_do_not_run_on_container_or_non_target_host(
+        self, collect, access_probe, child_probe, database_probe
+    ):
+        observations = _passing_observations()
+        observations["host"]["container"] = True
+        collect.return_value = observations
+        report = collect_local_preflight_report(
+            probe_database=True,
+            probe_worker_child=True,
+        )
+        self.assertFalse(report["hostBoundaryReady"])
+        access_probe.assert_not_called()
+        child_probe.assert_not_called()
+        database_probe.assert_not_called()
 
     def test_environment_output_contains_counts_not_secret_names_or_values(self):
         result = evaluate_lab_host_observations(

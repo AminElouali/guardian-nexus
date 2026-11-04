@@ -65,9 +65,18 @@ check_role_memberships() {
   [[ " $worker_groups " != *" docker "* && " $worker_groups " != *" guardian-docker-broker "* ]] \
     || fail "worker_has_docker_authority"
   [[ " $broker_groups " == *" guardian-docker-broker "* ]] || fail "broker_socket_group_missing"
+  [[ " $api_groups " == *" guardian-broker-clients "* ]] || fail "api_broker_client_group_missing"
+  [[ " $broker_groups " == *" guardian-broker-clients "* ]] || fail "broker_client_group_missing"
+  [[ " $worker_groups " != *" guardian-broker-clients "* ]] || fail "worker_broker_client_group_present"
   [[ "$(id -u guardian-api)" != "$(id -u guardian-worker)" ]] || fail "api_worker_uid_not_distinct"
   [[ "$(id -u guardian-api)" != "$(id -u guardian-broker)" ]] || fail "api_broker_uid_not_distinct"
   [[ "$(id -u guardian-worker)" != "$(id -u guardian-broker)" ]] || fail "worker_broker_uid_not_distinct"
+  [[ "$(id -g guardian-api)" != "$(id -g guardian-worker)" ]] || fail "api_worker_gid_not_distinct"
+  [[ "$(id -g guardian-api)" != "$(id -g guardian-broker)" ]] || fail "api_broker_gid_not_distinct"
+  [[ "$(id -g guardian-worker)" != "$(id -g guardian-broker)" ]] || fail "worker_broker_gid_not_distinct"
+  [[ "$(id -gn guardian-api)" == "guardian-api" ]] || fail "api_primary_group_mismatch"
+  [[ "$(id -gn guardian-worker)" == "guardian-worker" ]] || fail "worker_primary_group_mismatch"
+  [[ "$(id -gn guardian-broker)" == "guardian-broker" ]] || fail "broker_primary_group_mismatch"
 }
 
 verify_socket_access() {

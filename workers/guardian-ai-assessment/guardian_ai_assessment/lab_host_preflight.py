@@ -40,6 +40,7 @@ EXPECTED_DB_ROLES = {
     "worker": "guardian_worker_login",
     "broker": "guardian_broker_login",
 }
+EXPECTED_DATABASE = "guardian_nexus"
 PG_SERVICE_FILE = "/etc/guardian-nexus/pg_service.conf"
 _ROLE_KEYS = {"api", "worker", "broker"}
 
@@ -163,6 +164,8 @@ def evaluate_lab_host_observations(
         if not isinstance(session, Mapping):
             reasons.append(f"lab_{role}_database_session_unverified")
             continue
+        if session.get("databaseName") != EXPECTED_DATABASE:
+            reasons.append(f"lab_{role}_database_name_mismatch")
         current_user = session.get("currentUser")
         session_user = session.get("sessionUser")
         if session.get("status") != "verified" or current_user != expected or session_user != expected:
@@ -209,6 +212,55 @@ def evaluate_lab_host_observations(
             "imageIdPinned",
         )
     )
+    socket_summary = (
+        {
+            key: socket.get(key)
+            for key in (
+                "status",
+                "ownerUid",
+                "groupName",
+                "mode",
+                "aclChecked",
+                "currentProbeProcessAccess",
+                "accessByRole",
+            )
+        }
+        if isinstance((socket := observations.get("dockerSocket")), Mapping)
+        else None
+    )
+    database_summary = {
+        role: {
+            key: session.get(key)
+            for key in (
+                "status",
+                "databaseName",
+                "sessionUser",
+                "currentUser",
+                "superuser",
+                "bypassRls",
+                "createRole",
+                "createDatabase",
+                "readOnly",
+            )
+        }
+        for role, session in database.items()
+        if isinstance(session, Mapping)
+    }
+    child_summary = (
+        {
+            key: child.get(key)
+            for key in (
+                "status",
+                "probeType",
+                "uid",
+                "dockerSocketAccessible",
+                "inheritedSocketFdCount",
+                "sensitiveEnvironmentNameCount",
+            )
+        }
+        if isinstance((child := observations.get("qwenChildProbe")), Mapping)
+        else None
+    )
     return {
         "schemaVersion": 1,
         "mode": "read_only_host_preflight",
@@ -226,10 +278,23 @@ def evaluate_lab_host_observations(
         "credentialValuesRead": False,
         "sensitiveEnvironmentNameCount": env_count,
         "identities": identity_summary,
+        "dockerSocket": socket_summary,
+        "currentProbeProcessSocketAccess": (
+            socket_summary.get("currentProbeProcessAccess")
+            if isinstance(socket_summary, Mapping)
+            else None
+        ),
+        "dockerSocketAccessByRole": (
+            socket_summary.get("accessByRole", {})
+            if isinstance(socket_summary, Mapping)
+            else {}
+        ),
         "databaseRoleSeparationVerified": len(seen_db_roles) == 3 and len(set(seen_db_roles)) == 3,
+        "databaseSessions": database_summary,
         "childIdentityProbeVerified": not any(
             reason == "lab_qwen_child_boundary_unverified" for reason in reasons
         ),
+        "childIdentityProbe": child_summary,
         "qwenSandboxContractVerified": qwen_sandbox_verified,
         "runtimeGateReasonCodes": (
             [] if qwen_sandbox_verified else ["lab_qwen_sandbox_contract_unverified"]
@@ -241,6 +306,9 @@ def evaluate_lab_host_observations(
                 "hostConditionsPassed": conditions_pass,
                 "reasonCodes": sorted(set(reasons)),
                 "identities": identity_summary,
+                "dockerSocket": socket_summary,
+                "databaseSessions": database_summary,
+                "childIdentityProbe": child_summary,
                 "databaseRoleSeparationVerified": len(seen_db_roles) == 3
                 and len(set(seen_db_roles)) == 3,
             }
@@ -288,6 +356,7 @@ def collect_local_read_only_observations() -> dict[str, Any]:
         "status": "unverified",
         "aclChecked": False,
         "accessByRole": {},
+        "currentProbeProcessAccess": None,
     }
     for path in dict.fromkeys(socket_candidates):
         try:
@@ -309,6 +378,10 @@ def collect_local_read_only_observations() -> dict[str, Any]:
                 "groupName": group_name,
                 "mode": stat.S_IMODE(metadata.st_mode),
                 "path": str(path),
+                "currentProbeProcessAccess": {
+                    "read": os.access(str(path), os.R_OK, effective_ids=True),
+                    "write": os.access(str(path), os.W_OK, effective_ids=True),
+                },
             }
         )
         break
@@ -444,7 +517,7 @@ def _probe_database_sessions() -> dict[str, dict[str, Any]] | None:
     if shutil.which("psql") is None or shutil.which("runuser") is None:
         return None
     query = (
-        "SELECT session_user,current_user,"
+        "SELECT current_database(),session_user,current_user,"
         "CASE WHEN rolsuper THEN 't' ELSE 'f' END,"
         "CASE WHEN rolbypassrls THEN 't' ELSE 'f' END,"
         "CASE WHEN rolcreaterole THEN 't' ELSE 'f' END,"
@@ -491,12 +564,13 @@ def _probe_database_sessions() -> dict[str, dict[str, Any]] | None:
         except (OSError, subprocess.TimeoutExpired):
             results[role] = {"status": "unverified"}
             continue
-        if completed.returncode != 0 or len(fields) != 7:
+        if completed.returncode != 0 or len(fields) != 8:
             results[role] = {"status": "unverified"}
             continue
-        session_user, current_user, superuser, bypass_rls, create_role, create_db, read_only = fields
+        database_name, session_user, current_user, superuser, bypass_rls, create_role, create_db, read_only = fields
         results[role] = {
             "status": "verified" if session_user == expected and current_user == expected else "mismatch",
+            "databaseName": database_name,
             "sessionUser": session_user,
             "currentUser": current_user,
             "superuser": superuser == "t",

@@ -1,0 +1,6 @@
+# Example local-only rules for a dedicated lab. Review ordering before use.
+# Do not add host/hostssl trust rules. Keep remote TCP rejected by the host's
+# existing restrictive policy; these entries grant only local peer identity.
+local guardian_nexus guardian_api_login peer map=guardian_nexus_service_map
+local guardian_nexus guardian_worker_login peer map=guardian_nexus_service_map
+local guardian_nexus guardian_broker_login peer map=guardian_nexus_service_map

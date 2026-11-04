@@ -1,0 +1,4 @@
+# Example only; peer maps are local-host identities, not reusable passwords.
+guardian_nexus_service_map guardian-api guardian_api_login
+guardian_nexus_service_map guardian-worker guardian_worker_login
+guardian_nexus_service_map guardian-broker guardian_broker_login

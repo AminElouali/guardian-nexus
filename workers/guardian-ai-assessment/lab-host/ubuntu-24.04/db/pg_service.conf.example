@@ -1,0 +1,19 @@
+# Example only. Install on the dedicated Ubuntu 24.04 lab after DBA review.
+# Uses local Unix sockets and peer authentication; no password or URL appears.
+[guardian_api]
+host=/var/run/postgresql
+dbname=guardian_nexus
+user=guardian_api_login
+application_name=guardian-nexus-preflight-api
+
+[guardian_worker]
+host=/var/run/postgresql
+dbname=guardian_nexus
+user=guardian_worker_login
+application_name=guardian-nexus-preflight-worker
+
+[guardian_broker]
+host=/var/run/postgresql
+dbname=guardian_nexus
+user=guardian_broker_login
+application_name=guardian-nexus-preflight-broker

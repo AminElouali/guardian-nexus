@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only local host metadata check. It never starts Qwen or opens Docker/DB."""
+"""Fail-closed lab check; default is metadata-only and never starts Qwen/Docker/DB."""
 
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ def main() -> int:
         probe_worker_child=args.probe_worker_child,
     )
     print(json.dumps(report, sort_keys=True, separators=(",", ":")))
-    return 0 if report["hostBoundaryReady"] else 2
+    return 0 if report["integratedAssessmentReady"] else 2
 
 
 if __name__ == "__main__":

@@ -1,0 +1,11 @@
+-- Example only; apply after DBA review of the dedicated lab database.
+-- Peer auth means there are no passwords or secret values in this repository.
+-- These roles receive no direct table grants here; privilege groups remain
+-- NOLOGIN and ungranted until the schema/RLS audit defines least privilege.
+CREATE ROLE guardian_api_login LOGIN INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+CREATE ROLE guardian_worker_login LOGIN INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+CREATE ROLE guardian_broker_login LOGIN INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+
+GRANT guardian_api_privileges TO guardian_api_login;
+GRANT guardian_worker_privileges TO guardian_worker_login;
+GRANT guardian_broker_privileges TO guardian_broker_login;

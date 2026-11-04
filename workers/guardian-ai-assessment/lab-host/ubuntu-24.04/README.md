@@ -23,10 +23,11 @@ has not been run on Replit, and it is not a production installation.
   exist until a separately reviewed application release is installed. They
   are not copied, enabled, or started by `provision.sh`.
 - The role SQL creates only non-login role skeletons. It grants no table
-  privileges and does not establish live database sessions. An operator must
-  create distinct login identities and credentials outside this repository,
-  assign narrowly reviewed grants, and verify RLS/forced RLS against the
-  actual schema before treating database separation as established.
+  privileges and does not establish live database sessions. The example
+  `pg_service.conf`, `pg_ident.conf`, `pg_hba.conf`, and peer-login SQL show a
+  passwordless local-peer pattern with distinct OS/DB identities; they are
+  examples only and must be reviewed by the DBA. Exact table/function grants
+  and RLS predicates remain schema-specific and unconfigured.
 - The host preflight report is evidence of observed configuration only. It
   does not authorize tools or replace Guardian Policy Engine.
 
@@ -52,19 +53,25 @@ has not been run on Replit, and it is not a production installation.
    credentials, enable services, or start Qwen.
 5. Review `systemd/guardian-broker.socket.example` and the service-unit examples.
    The broker socket template requires a socket-activation-compatible broker
-   entrypoint; it is not started by provisioning. Verify the three database login sessions independently through the
-   approved local secret mechanism; run `db/verify-roles.sql` as each service
-   role. Do not use a superuser runtime role or `BYPASSRLS`. The role skeleton
-   SQL is not an authorization grant.
+   entrypoint; it is not started by provisioning. Configure peer authentication
+   only after review, then verify the three DB identities with the read-only
+   `db/verify-roles.sql`. Do not use a superuser runtime role or `BYPASSRLS`.
+   The role skeleton SQL is not an authorization grant.
 6. Install and review the service-unit examples only after an application
    release exists at `/opt/guardian-nexus/current`. Keep API bound to loopback
    behind a reviewed local reverse proxy. Set service-specific environment
    files outside the repository with owner/mode `root:<service-group>` and
    mode `0640`; no file should be shared across API, worker, and broker.
-7. Run the portable host preflight and then the application’s existing offline
-   process guard. A host-preflight pass is necessary but not sufficient for
-   Qwen: the runner must also verify its own process/container boundary and
-   fixed model hashes. Do not start Qwen until all checks pass.
+7. Run the portable host preflight. The default invocation only reads host
+   metadata and sensitive environment-variable **names/count**, not values.
+   On the authorized Ubuntu lab only, `--probe-database` uses the three local
+   peer-auth service profiles in a read-only transaction, and
+   `--probe-worker-child` runs a minimal identity check as `guardian-worker`;
+   neither starts Qwen. A host-boundary pass is necessary but not sufficient:
+   run the existing offline process guard inside the intended worker boundary
+   and verify fixed model hashes before a separate, approved inference run.
+   The preflight CLI exits nonzero until the combined runtime evidence is
+   present. Do not use the opt-in flags in the Replit workspace.
 
 ## Rollback
 
