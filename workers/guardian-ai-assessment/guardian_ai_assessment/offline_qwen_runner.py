@@ -403,7 +403,9 @@ def _build_bundle(
 def run_offline_evaluation(workspace: Path) -> tuple[dict[str, Any], Path]:
     """Verify local artifacts, install a syscall guard, then run all eight profiles."""
     workspace = workspace.resolve()
-    require_offline_no_docker_socket_access()
+    from .offline_isolation_preflight import require_offline_qwen_process_ready
+
+    require_offline_qwen_process_ready()
     artifact_path = workspace / (
         "generated-artifacts/guardian-qwen-offline/"
         "qwen-policy-lab-eight-profiles.json"

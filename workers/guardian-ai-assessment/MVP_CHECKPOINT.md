@@ -2345,3 +2345,45 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   esa frontera. Clerk browser autorizado y Garak import en el host también
   siguen sin verificarse. IPv6, advisories y licencias mantienen sus estados
   previos; este incremento no los aborda.
+
+## Preflight portable de aislamiento para Qwen — 2026-11-04
+
+- Base: HEAD `d5947296a611cb69b40ed2365ce5fe739796d596`, árbol limpio y sin
+  proceso de runner Qwen activo observado antes de los cambios.
+- Se añadió un diagnóstico local de solo lectura y se conectó antes de creación
+  de artefactos/manifiestos/modelo en `run_offline_evaluation`. Comprueba UID,
+  GID y grupos efectivos; variables de endpoint Docker por nombre; permisos
+  efectivos de lectura/escritura de sockets conocidos sin conectarlos;
+  descriptores socket heredados y presencia de nombres de credenciales sin
+  recuperar sus valores. La identidad del broker y las identidades DB
+  autenticadas API/worker quedan `unverified` si no hay prueba real; el
+  diagnóstico no acepta nombres de rol declarados como evidencia.
+- Host observado por `scripts/run_qwen_isolation_preflight.py`: exit code 1,
+  UID:GID `1000:1000`, grupos `[1000]`, sin endpoint Docker configurado,
+  sockets `/var/run/docker.sock` y `/run/docker.sock` accesibles para lectura y
+  escritura, socket rootless ausente, cero FDs socket heredados y cuatro nombres
+  de variables de credenciales presentes. Sus nombres y valores no se incluyen
+  en el artefacto. `offlineQwenProcessReady=false`,
+  `apiWorkerBoundaryReady=false`, `integratedAssessmentReady=false`; cero
+  conexiones externas/DB realizadas.
+- El gate API conserva `status=disabled` y
+  `assessment_broker_identity_unverified`. No se cambió UID, grupo, socket,
+  secretos, permisos ni configuración del daemon.
+- Pruebas seriales: worker Python en host **152/152** excluyendo únicamente
+  `test_corpus_validation.py` (requiere Garak, ausente; no se instaló);
+  preflight **8/8**, offline process/seccomp **10/10**, Policy Lab determinista
+  **26/26** y contrato/gate API-broker **4/4**. Las tres suites detalladas están
+  incluidas en 152. La prueba del runner verifica bloqueo antes de crear
+  artefactos o cargar manifiestos/modelo. No hubo inferencia Qwen, llamada
+  Docker, conexión PostgreSQL, dependencia instalada ni build de artefacto.
+- Evidencia redacted:
+  `generated-artifacts/guardian-isolation-preflight/current.json`,
+  SHA-256 `ddfd8720016f745d93ddbb01d33100ab1e4d1180d3157418268797e04af69d42`.
+  Informe y manifiesto de hashes:
+  `reports/qwen-isolation-preflight-2026-11-04.md` y
+  `reports/qwen-isolation-preflight-2026-11-04.sha256`.
+- Bloqueo: el proceso local de Qwen tiene acceso al socket Docker y hereda
+  variables de credenciales; el proceso broker no está acreditado y la
+  separación de sesiones DB no se verificó. La ruta standalone rechaza el
+  inicio, el gate integrado sigue cerrado, y el resultado determinista no se
+  presenta como inferencia.
