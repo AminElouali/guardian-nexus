@@ -2654,3 +2654,49 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   1 `no_proposal`; el preflight sigue bloqueado por socket Docker accesible,
   entorno sensible presente e identidades broker/DB no demostradas. No se
   ejecutó Qwen/Docker ni se autenticó Clerk en navegador.
+
+## Incremento 2026-11-04 — assurance cualitativa y gates de los ocho perfiles
+
+- Inicio verificado en HEAD limpio `d9bbe8f73228963114726ad079e41ec704d32e0d`.
+  Se añadió una matriz cualitativa STPA, Swiss Cheese, Bow-Tie y FMEA ligada a
+  18 resultados de los ocho Policy Lab fixtures existentes. La matriz es
+  explicativa y de pruebas; no es entrada de política, no modifica
+  autorizaciones y no asigna puntuaciones ni RPN.
+- Los tests ejecutan los resultados fixture actuales: lecturas sintéticas
+  permitidas; ataques de exportación, exfiltración, comandos, formularios,
+  grants y escalada denegados antes del despacho; finanzas y soporte conservan
+  `require_approval` sin invocar simulador. La suite comprueba que ninguna
+  acción no autorizada se ejecuta y que el catálogo no contiene una decisión
+  utilizable como autoridad.
+- El test del gate API ahora enumera los ocho perfiles Qwen y comprueba que
+  permanecen `disabled` con `assessment_broker_identity_unverified`, y que no
+  se habilita enqueue local.
+- Validación de este incremento, en serie:
+  - Worker `unittest` focalizado: política/Qwen **31/31**, delegación **8/8**,
+    revisión de 9 ALLOW históricos **4/4**, assurance nueva **3/3**; total
+    focalizado **46/46**. No se instaló pytest ni se ejecutó la suite Python
+    completa del worker.
+  - API **75/75**; UI **8/8**; SDK TypeScript **13/13**; SDK Python **8/8**.
+  - E2E persistente de aprobación fixture **1/1**: dos aprobaciones
+    simuladas una sola vez, denegación, expiración, concurrencia con ganador
+    único, replay, revocación de rol, cross-tenant y mutación de binding
+    rechazados. Evidencia `modelInference=false`, Docker no solicitado.
+    Hash de corrida `d3aca0961f117af2b57b1c955a52fbee68301d535187efe4c1e9acfd83fbf569`;
+    JSON redactado SHA-256
+    `f29a9a4203d7545b63c5407a8c2b1321ab1a2fe045b3280563da7fef9f177935`.
+  - Typecheck workspace, build API, web y SDK TypeScript pasaron. El build web
+    requiere `PORT=18753 BASE_PATH=/`; conserva el aviso de sourcemap y chunk
+    de 684.24 kB.
+- No se ejecutó nueva inferencia Qwen, no se creó job Qwen API y no se probó
+  aprobación persistente con una propuesta originada por Qwen. Evidencia
+  histórica (no de este incremento): 8 inferencias, 7 marcadores adaptados,
+  0 `message.tool_calls` nativas, 1 `no_proposal`. La ejecución standalone no
+  es el camino API→worker ni persistencia de aprobación.
+- No se repitió preflight en esta fase; el artefacto más reciente conocido
+  sigue indicando bloqueo por socket Docker accesible, entorno sensible
+  presente y ausencia de verificación independiente de broker/sesión DB.
+  No se hizo bypass, no se lanzó Docker, no se usó producción ni servicios
+  externos. Clerk de navegador e IPv6 dual-stack continúan sin verificar.
+- Reporte y SHA-256 de fuentes/evidencias:
+  `reports/laboratory-safety-assurance-2026-11-04.md` y
+  `reports/laboratory-safety-assurance-2026-11-04.sha256`.

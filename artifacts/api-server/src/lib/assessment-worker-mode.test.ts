@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { isLocalDockerWorkerAllowed } from "./ai-assessment-worker";
+import { QWEN_POLICY_LAB_PROFILE_IDS } from "./ai-assessment-sandbox";
 import {
   enqueueLocalAssessmentJob,
   getLocalWorkerAvailability,
@@ -44,6 +45,19 @@ test("API gate remains unavailable and cannot enqueue without a verified broker"
   assert.equal(availability.reasonCode, "assessment_broker_identity_unverified");
   assert.ok(availability.profiles.length >= 8);
   assert.ok(availability.profiles.every((profile) => profile.status === "disabled"));
+  for (const profileId of QWEN_POLICY_LAB_PROFILE_IDS) {
+    const profile = availability.profiles.find(
+      (candidate) => candidate.profileId === profileId,
+    );
+    assert.ok(profile, `Qwen profile remains registered: ${profileId}`);
+    assert.equal(profile.engine, "guardian_qwen_policy_lab");
+    assert.equal(profile.status, "disabled");
+    assert.equal(
+      profile.reasonCode,
+      "assessment_broker_identity_unverified",
+      "Qwen remains fail-closed until the isolated broker is verified",
+    );
+  }
   assert.equal(
     enqueueLocalAssessmentJob({
       jobId: "00000000-0000-4000-8000-000000000001",

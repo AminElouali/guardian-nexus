@@ -1,0 +1,7 @@
+db1d993885b91490adec673ff1323402809687f1179806b6c3d30fea7acc6621  workers/guardian-ai-assessment/guardian_ai_assessment/safety_assurance.py
+7c3f5ce2958cdaa9afababf6b95e96cf55fc825ecc454b770c9a8937e48d0406  workers/guardian-ai-assessment/tests/test_safety_assurance.py
+63c8a68f0ac23bf23373c107167038a875b9771a58779bcdd3604c02e99b69ec  artifacts/api-server/src/lib/assessment-worker-mode.test.ts
+1eca55cc743e7a92dae89c2f7b1d2bd3b93c99ce138c5e145b8acfea09d5938b  workers/guardian-ai-assessment/reports/laboratory-safety-assurance-2026-11-04.md
+f29a9a4203d7545b63c5407a8c2b1321ab1a2fe045b3280563da7fef9f177935  generated-artifacts/guardian-synthetic-approval-e2e.json
+6a1e54658f745074a7a5a937204181c219ec28d184a866845dd09513497ee1d9  generated-artifacts/guardian-qwen-offline/qwen-policy-lab-eight-profiles.json
+0b6246f76877a2874dc7834cacba1c76979a61e7871b1371515268dee8e85f52  generated-artifacts/guardian-qwen-offline/preflight-status-2026-11-04.json
