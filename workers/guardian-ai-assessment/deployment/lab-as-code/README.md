@@ -46,10 +46,16 @@ una configuración que no cumpla; no habilita el broker ni el runner Qwen.
    a crear el rol de login del broker y otorgarle el rol de worker existente.
 4. Configurar `pg_ident.conf` / `pg_hba.conf` desde los ejemplos y verificar
    con `GUARDIAN_LAB_ACK=verify-local-lab-db ... bash
-   scripts/verify-db-identities.sh`. El verificador solo consulta; exige socket
-   PostgreSQL local, base `guardian_lab_*`, roles distintos, no superuser,
-   no `BYPASSRLS`, no propiedad de tablas tenant y RLS forzada en tablas públicas
-   que tengan `tenant_id` o `workspace_id`.
+   scripts/verify-db-identities.sh` como administrador del host. El verificador
+   solo consulta: ejecuta `psql` como cada identidad Unix con `runuser`, limpia
+   el entorno de libpq (no usa `PGPASSWORD`, servicios ni opciones heredadas),
+   realiza `SET ROLE` al rol efectivo esperado y verifica que login y rol sean
+   distintos, no privilegiados, sin herencia implícita, propiedad de tablas ni
+   grants directos a tablas/columnas tenant para los logins. También exige RLS
+   forzada en tablas públicas con `tenant_id` o `workspace_id`. Los roles grupo
+   `app_runtime` y
+   `app_ai_assessment_worker` deben ser `NOLOGIN`/`NOINHERIT`; los logins deben
+   ser distintos, `LOGIN`/`NOINHERIT` y autenticarse por `peer`.
 5. Para el worker, conservar el preflight existente
    `python3 workers/guardian-ai-assessment/scripts/run_qwen_isolation_preflight.py`.
    Las pruebas negativas IPv4/UDP/DNS y la limitación IPv6 se documentan en
@@ -60,7 +66,8 @@ una configuración que no cumpla; no habilita el broker ni el runner Qwen.
    son independientes y que los tests adversos de grants/lease/tenant/imagen
    fallan antes de crear un contenedor.
 
-`preflight-host.sh` y los scripts PostgreSQL **no se ejecutaron** en Replit:
+`preflight-host.sh`, la verificación PostgreSQL contra una base real y la
+provisión de roles **no se ejecutaron** en Replit:
 este entorno comparte el socket Docker, no cumple la frontera y no tiene
 autorización para tocar un host o una base externos. El preflight de Qwen actual
 permanece fail-closed.

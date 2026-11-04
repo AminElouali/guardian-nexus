@@ -1,0 +1,9 @@
+4f865fa6d33bd3bfa8ace3d9e1de1780f956cc42f99bb72255417db96c055ead  workers/guardian-ai-assessment/MVP_CHECKPOINT.md
+39d38bec5cc57505a011a438237beed0aad55834e3a077ac7c1ec9830a562a94  workers/guardian-ai-assessment/deployment/lab-as-code/README.md
+1a4a4a7967ffeb9d885d691247bf1701703281e2627d09daabbfdbbb927d52b3  workers/guardian-ai-assessment/deployment/lab-as-code/scripts/provision-worker-login.sh
+58aded907bd2ea6f83e6dd042d3dd809df5804232f8c1e7e3a749d0607d77d84  workers/guardian-ai-assessment/deployment/lab-as-code/scripts/verify-db-identities.sh
+71b0bfcb1cd6366f51087e360aed934a21530a24a1684277cda9fd937ed956d5  workers/guardian-ai-assessment/deployment/lab-as-code/sql/provision-worker-login.sql
+58e22a3cf18b4ff6dbe5441b8ffbdabeb11fc611a89419566b179f28fc55106c  workers/guardian-ai-assessment/tests/test_lab_as_code_guards.py
+14a1312f7400f61a594eec83a1f8bbf94c0b1ebb3c8f155a5a3b047c6ffe2ed3  workers/guardian-ai-assessment/tests/test_policy_lab.py
+2b0323cdf5a99a62511f4d7326f3b720bc187956a57159d98fc37b9412b6905e  workers/guardian-ai-assessment/reports/phase1-lab-contracts-and-regressions-2026-11-04.md
+d370a31c1852be0b9f86df48bc9c7e80ad3b9d68df757dab027d43c9948a9282  generated-artifacts/guardian-qwen-offline/phase1-continued-2026-11-04/evidence-files.sha256

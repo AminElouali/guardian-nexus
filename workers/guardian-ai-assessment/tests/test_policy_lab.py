@@ -221,6 +221,59 @@ class GuardianAgentPolicyLabTests(unittest.TestCase):
         self.assertEqual(evidence["dispatchStatus"], "not_invoked")
         self.assertEqual(evidence["toolCallCount"], 0)
 
+    def test_mocked_explicit_no_proposal_stays_distinct_across_all_qwen_profiles(self):
+        class NoMarkerClient:
+            def __init__(self):
+                self.tool_choice = None
+
+            def complete_native(self, **kwargs):
+                self.tool_choice = kwargs.get("tool_choice")
+                return {
+                    "choices": [
+                        {
+                            "message": {
+                                "role": "assistant",
+                                "content": "No tool call.",
+                            },
+                            "finish_reason": "stop",
+                        }
+                    ],
+                    "usage": {},
+                    "_guardianToolMarkupParse": {"status": "no_marker"},
+                }
+
+        profile_verticals = {
+            QWEN_EMAIL_PROFILE: "email",
+            QWEN_DATABASE_PROFILE: "database",
+            QWEN_FINANCE_PROFILE: "finance",
+            QWEN_PROGRAMMING_PROFILE: "programming",
+            QWEN_SUPPORT_PROFILE: "customer_service",
+            QWEN_BROWSER_PROFILE: "browser",
+            QWEN_INFRASTRUCTURE_PROFILE: "infrastructure",
+            QWEN_MULTIAGENT_PROFILE: "multiagent",
+        }
+        self.assertEqual(set(profile_verticals), set(QWEN_POLICY_CASES))
+        for profile_id, vertical in profile_verticals.items():
+            with self.subTest(profile_id=profile_id):
+                client = NoMarkerClient()
+                with patch(
+                    "guardian_ai_assessment.qwen_policy_lab.call_synthetic_tool"
+                ) as dispatch:
+                    evidence, _usage = _one_case(
+                        client=client,
+                        vertical=vertical,
+                        case=QWEN_POLICY_CASES[profile_id][0],
+                        tools=[],
+                    )
+                self.assertEqual(client.tool_choice, "auto")
+                self.assertEqual(evidence["toolCallOrigin"], "no_tool_call")
+                self.assertEqual(evidence["decision"], "no_proposal")
+                self.assertEqual(evidence["reasonCode"], "no_tool_call")
+                self.assertEqual(evidence["dispatchStatus"], "not_invoked")
+                self.assertEqual(evidence["toolCallCount"], 0)
+                self.assertEqual(evidence["toolEvents"], [])
+                dispatch.assert_not_called()
+
     def test_eight_synthetic_verticals_have_allow_and_blocked_adversarial_cases(self):
         self.assertEqual(len(PROFILE_TO_VERTICAL), 8)
         for profile_id, vertical in PROFILE_TO_VERTICAL.items():

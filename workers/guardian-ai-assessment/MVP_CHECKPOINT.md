@@ -2565,3 +2565,64 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   normalización numérica al recalcular el hash. Se corrigió el test, quedó
   registrado su log fallido y el rerun pasó **174/174**; hashes de logs y fuentes
   en `reports/qwen-55-case-reconciliation-2026-11-04.sha256`.
+
+## Continuación Fase 1 — regresiones offline y verificación de identidades DB
+
+- Base inspeccionada antes del trabajo: HEAD `29953c8c31b12b297abab02c3fd26d7b9345eec7`,
+  árbol limpio. No se ejecutó Docker, el runner Qwen, servicios externos ni
+  credenciales. El gate de aislamiento permanece sin cambio y no se generó
+  inferencia Qwen nueva.
+- Se añadió una regresión **mockeada** para los ocho perfiles Qwen: una salida
+  explícita sin marcador queda `no_tool_call` / `NO_PROPOSAL`, con
+  `tool_choice=auto`, sin despacho ni eventos. No es inferencia ni evidencia
+  nueva del modelo. Los ocho Policy Labs deterministas permanecen como baseline
+  separado.
+- La suite ejecutada también cubre los ocho fixtures adversarios (DENY o
+  REQUIRE_APPROVAL antes de despacho, Policy OFF solo clon contrafactual) y la
+  revisión preexistente de los nueve ALLOW históricos: fija IDs y SHA de fuente,
+  comprueba procedencia/decisión/despacho, evidencia sin datos crudos y ausencia
+  de efectos externos, y rechaza mutaciones de evidencia. Es revisión histórica,
+  no una detección nueva ni una conclusión general de vulnerabilidad.
+- Se reforzó `verify-db-identities.sh`: exige dos UIDs Unix no-root distintos,
+  ejecuta cada sesión bajo su identidad con `runuser`, elimina el entorno de
+  libpq heredado, usa socket Unix local, realiza el `SET ROLE` esperado y
+  comprueba login/rol efectivos, `NOLOGIN`/`NOINHERIT` de los roles de grupo,
+  restricciones de privilegio, ausencia de propiedad y grants directos de
+  tabla/columna tenant para los logins, y RLS `FORCE`.
+  La provisión de login broker sigue requiriendo ACK/base `guardian_lab_*`,
+  utiliza `--no-password`, limpia variables libpq y crea/requiere `NOINHERIT`;
+  no cambia roles fuera de una base lab expresamente autorizada.
+- El kit de host sigue siendo preparatorio: en Replit no se ejecutaron
+  `preflight-host.sh`, `verify-db-identities.sh` contra PostgreSQL ni la
+  provisión. Se agregaron pruebas de contrato y rechazo sin socket local; no
+  acreditan que existan dos usuarios, sesiones peer independientes, broker
+  Docker aislado ni ejecución Qwen en un host real.
+- Validación final serial: worker **179/179** en **25** archivos; se omitió solo
+  `test_corpus_validation.py`, cuyo import requiere Garak ausente. No se instaló
+  Garak. `compileall` y `bash -n` de los tres scripts del kit pasaron.
+  `test_lab_as_code_guards.py`: **10/10**.
+- API **74/74**; E2E de aprobación persistente sintético **1/1**, SHA-256
+  `0f8482c2ca59134933d7464d79df57ff24feb2eeb1f367664c7d176be32c4f81`,
+  `modelInference=false`, `dockerCommandRequestedByHarness=false`. Cubre el
+  harness determinista, no Qwen→PostgreSQL.
+- SDK Python **8/8**; SDK TypeScript **13/13** y build; UI **8/8**; typecheck
+  raíz y build raíz pasaron. El build web conserva avisos de sourcemap y bundle
+  de **683.62 kB**. Un primer comando de UI no resolvió el alias `@/`; se
+  repitió con el `tsconfig` web y pasó. Un descubrimiento worker global no pudo
+  importar el módulo de corpus por `ModuleNotFoundError: garak`; la ejecución
+  final por archivo excluyó únicamente ese módulo.
+- Evidencia Qwen histórica, no nueva, sigue siendo
+  `generated-artifacts/guardian-qwen-offline/qwen-policy-lab-eight-profiles.json`,
+  SHA-256 `6a1e54658f745074a7a5a937204181c219ec28d184a866845dd09513497ee1d9`:
+  8 inferencias previas, 7 marcadores adaptados, 0 `message.tool_calls` nativas
+  y 1 `no_proposal`. El preflight histórico bloqueado permanece en
+  `preflight-status-2026-11-04.json`, SHA-256
+  `0b6246f76877a2874dc7834cacba1c76979a61e7871b1371515268dee8e85f52`.
+  No se volvió a ejecutar el preflight ni se alteró ese resultado.
+- Bloqueos: separar realmente API/broker y credenciales exige un host Linux de
+  laboratorio con privilegios autorizados, UIDs distintos, daemon/socket
+  rootless dedicado y PostgreSQL local con peer; Garak requiere dependencia no
+  instalada. Clerk real en navegador, IPv6 dual-stack, OSV/supply chain y
+  revisión legal siguen sin acreditarse en esta fase. Estado detallado,
+  comandos y hashes: `reports/phase1-lab-contracts-and-regressions-2026-11-04.md`
+  y su manifiesto SHA-256 acompañante.
