@@ -16,7 +16,10 @@ from guardian_ai_assessment.offline_isolation_preflight import (  # noqa: E402
     collect_offline_isolation_preflight,
     require_offline_qwen_process_ready,
 )
-from guardian_ai_assessment import offline_qwen_runner  # noqa: E402
+from guardian_ai_assessment import (  # noqa: E402
+    offline_isolation_preflight,
+    offline_qwen_runner,
+)
 
 
 class KeyOnlyEnvironment(Mapping[str, str]):
@@ -51,6 +54,13 @@ class OfflineIsolationPreflightTests(unittest.TestCase):
         self.assertTrue(report["offlineQwenProcessReady"])
         self.assertFalse(report["apiWorkerBoundaryReady"])
         self.assertFalse(report["integratedAssessmentReady"])
+        self.assertEqual(
+            report["apiWorkerBoundaryReasonCodes"],
+            [
+                "assessment_broker_identity_unverified",
+                "assessment_database_session_identity_unverified",
+            ],
+        )
         self.assertEqual(report["brokerIdentity"]["status"], "unverified")
         self.assertEqual(
             report["apiWorkerDatabaseIdentity"]["status"], "unverified"
@@ -142,6 +152,98 @@ class OfflineIsolationPreflightTests(unittest.TestCase):
                 environment=KeyOnlyEnvironment({"DOCKER_CONTEXT"}),
                 socket_paths=[Path("/missing/docker.sock")],
             )
+
+    def test_process_only_preflight_never_authorizes_qwen_without_host_boundary(self):
+        report = {
+            "offlineQwenProcessReady": True,
+            "reasonCodes": [],
+            "apiWorkerBoundaryReady": False,
+            "apiWorkerBoundaryReasonCodes": [
+                "assessment_broker_identity_unverified",
+                "assessment_database_session_identity_unverified",
+            ],
+            "integratedAssessmentReady": False,
+        }
+        with patch.object(
+            offline_isolation_preflight,
+            "collect_offline_isolation_preflight",
+            return_value=report,
+        ):
+            with self.assertRaisesRegex(
+                RuntimeError, "assessment_broker_identity_unverified"
+            ):
+                require_offline_qwen_process_ready()
+
+    def test_full_qwen_runner_stops_before_artifacts_when_boundary_is_unverified(self):
+        report = {
+            "offlineQwenProcessReady": True,
+            "reasonCodes": [],
+            "apiWorkerBoundaryReady": False,
+            "apiWorkerBoundaryReasonCodes": [
+                "assessment_broker_identity_unverified",
+                "assessment_database_session_identity_unverified",
+            ],
+            "integratedAssessmentReady": False,
+        }
+        with tempfile.TemporaryDirectory(prefix="guardian-qwen-boundary-order-") as root:
+            workspace = Path(root)
+            with (
+                patch.object(
+                    offline_isolation_preflight,
+                    "collect_offline_isolation_preflight",
+                    return_value=report,
+                ),
+                patch.object(
+                    offline_qwen_runner, "_load_verified_manifests"
+                ) as load_manifests,
+            ):
+                with self.assertRaisesRegex(
+                    RuntimeError, "assessment_broker_identity_unverified"
+                ):
+                    offline_qwen_runner.run_offline_evaluation(workspace)
+            load_manifests.assert_not_called()
+            self.assertFalse(
+                (workspace / "generated-artifacts/guardian-qwen-offline").exists()
+            )
+
+    def test_profile_readiness_matrix_lists_eight_profiles_without_fake_counts(self):
+        report = {
+            "offlineQwenProcessReady": True,
+            "reasonCodes": [],
+            "apiWorkerBoundaryReady": False,
+            "apiWorkerBoundaryReasonCodes": [
+                "assessment_broker_identity_unverified"
+            ],
+            "integratedAssessmentReady": False,
+        }
+        matrix = offline_qwen_runner.offline_profile_readiness_matrix(report)
+        self.assertEqual(
+            [item["profileId"] for item in matrix],
+            [
+                "guardian-agent-qwen-lab-email-v1",
+                "guardian-agent-qwen-lab-database-v1",
+                "guardian-agent-qwen-lab-finance-v1",
+                "guardian-agent-qwen-lab-programming-v1",
+                "guardian-agent-qwen-lab-customer-service-v1",
+                "guardian-agent-qwen-lab-browser-v1",
+                "guardian-agent-qwen-lab-infrastructure-v1",
+                "guardian-agent-qwen-lab-multiagent-v1",
+            ],
+        )
+        self.assertTrue(all(len(item["selectedCaseIds"]) == 1 for item in matrix))
+        self.assertTrue(
+            all(item["suiteStatus"] == "blocked_host_boundary" for item in matrix)
+        )
+        self.assertTrue(all(item["qwenInferenceCount"] is None for item in matrix))
+        self.assertTrue(all(item["nativeToolCalls"] is None for item in matrix))
+        self.assertTrue(all(item["adaptedMarkerProposals"] is None for item in matrix))
+        self.assertTrue(all(item["noProposal"] is None for item in matrix))
+        self.assertTrue(
+            all(
+                item["fixtureBaseline"] == "separate_not_loaded"
+                for item in matrix
+            )
+        )
 
     def test_qwen_runner_stops_at_preflight_before_artifact_or_model_loading(self):
         with tempfile.TemporaryDirectory(prefix="guardian-qwen-preflight-order-") as root:

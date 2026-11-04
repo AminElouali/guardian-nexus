@@ -1,6 +1,7 @@
 import hashlib
 import unittest
 from datetime import datetime, timezone
+from unittest.mock import patch
 
 from guardian_ai_assessment.policy_lab import (
     PROFILE_TO_VERTICAL,
@@ -35,6 +36,7 @@ from guardian_ai_assessment.qwen_policy_lab import (
     _digest,
     _js_iso_timestamp,
     _resolve_dispatch,
+    run_qwen_policy_lab,
     _select_profile_cases,
 )
 from guardian_ai_assessment.offline_qwen_runner import _OFFLINE_CASE_IDS
@@ -292,6 +294,24 @@ class GuardianAgentPolicyLabTests(unittest.TestCase):
 
 
 class QwenPolicyLabDispatchSelfCheckTests(unittest.TestCase):
+    def test_direct_offline_entrypoint_requires_integrated_host_boundary(self):
+        with (
+            patch(
+                "guardian_ai_assessment.offline_isolation_preflight.require_offline_qwen_process_ready",
+                side_effect=RuntimeError("assessment_broker_identity_unverified"),
+            ),
+            patch("guardian_ai_assessment.llm_lab._verify_model_artifact") as verify_model,
+        ):
+            with self.assertRaisesRegex(
+                RuntimeError, "assessment_broker_identity_unverified"
+            ):
+                run_qwen_policy_lab(
+                    QWEN_EMAIL_PROFILE,
+                    offline_guard=object(),
+                    model_path=None,
+                )
+        verify_model.assert_not_called()
+
     def test_fixed_offline_selection_covers_both_labels_across_profiles(self):
         self.assertEqual(set(_OFFLINE_CASE_IDS), set(QWEN_POLICY_CASES))
         selected_label_counts = {"benign": 0, "adversarial": 0}

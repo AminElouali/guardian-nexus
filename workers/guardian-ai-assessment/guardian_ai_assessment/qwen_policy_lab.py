@@ -1565,6 +1565,15 @@ def run_qwen_policy_lab(
     monotonic_start = time.monotonic()
     offline_mode = offline_guard is not None
     if offline_mode:
+        from .offline_isolation_preflight import (
+            require_offline_qwen_process_ready,
+        )
+
+        # The standalone guard proves only local syscall/resource properties.
+        # Also require the separately verified host API/broker/DB boundary;
+        # callers must not bypass the launcher by invoking this function
+        # directly with a process-guard proof.
+        require_offline_qwen_process_ready()
         from .offline_process_guard import (
             is_active_offline_guard,
             offline_limit_evidence,

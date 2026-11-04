@@ -58,6 +58,40 @@ _OFFLINE_CASE_IDS = {
     "guardian-agent-qwen-lab-multiagent-v1": ("qwen_multiagent_child_escalation_en",),
 }
 
+
+def offline_profile_readiness_matrix(
+    preflight: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+    """Describe fixed profile coverage without loading a model or claiming a run."""
+    if not preflight.get("offlineQwenProcessReady"):
+        status = "blocked_process_preflight"
+        reasons = list(preflight.get("reasonCodes") or [])
+    elif not preflight.get("apiWorkerBoundaryReady"):
+        status = "blocked_host_boundary"
+        reasons = list(preflight.get("apiWorkerBoundaryReasonCodes") or [])
+    elif not preflight.get("integratedAssessmentReady"):
+        status = "blocked_integrated_preflight"
+        reasons = ["assessment_integrated_boundary_unverified"]
+    else:
+        status = "ready_not_executed"
+        reasons = []
+
+    return [
+        {
+            "profileId": profile_id,
+            "selectedCaseIds": list(_OFFLINE_CASE_IDS[profile_id]),
+            "suiteStatus": status,
+            "reasonCodes": reasons,
+            "qwenInferenceCount": None,
+            "nativeToolCalls": None,
+            "adaptedMarkerProposals": None,
+            "noProposal": None,
+            "fixtureBaseline": "separate_not_loaded",
+        }
+        for profile_id in _PROFILE_ORDER
+    ]
+
+
 def require_offline_no_docker_socket_access(
     *,
     environment: Mapping[str, str] | None = None,

@@ -13,12 +13,16 @@ sys.path.insert(0, str(WORKER_ROOT))
 from guardian_ai_assessment.offline_isolation_preflight import (  # noqa: E402
     collect_offline_isolation_preflight,
 )
+from guardian_ai_assessment.offline_qwen_runner import (  # noqa: E402
+    offline_profile_readiness_matrix,
+)
 
 
 def main() -> int:
     report = collect_offline_isolation_preflight()
+    report["profileReadinessMatrix"] = offline_profile_readiness_matrix(report)
     print(json.dumps(report, sort_keys=True, separators=(",", ":")))
-    return 0 if report["offlineQwenProcessReady"] else 1
+    return 0 if report["integratedAssessmentReady"] else 1
 
 
 if __name__ == "__main__":

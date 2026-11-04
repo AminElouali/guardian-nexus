@@ -7,7 +7,7 @@ import re
 import sys
 from pathlib import Path
 
-_SAFE_ERROR_CODE = re.compile(r"^offline_[a-z0-9_]{1,64}$")
+_SAFE_ERROR_CODE = re.compile(r"^(?:offline|assessment)_[a-z0-9_]{1,64}$")
 
 
 def main() -> int:

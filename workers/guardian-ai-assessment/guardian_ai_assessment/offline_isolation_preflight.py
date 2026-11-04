@@ -167,6 +167,14 @@ def collect_offline_isolation_preflight(
         reasons.append("offline_inherited_socket_fd_unverified")
 
     process_ready = not reasons
+    host_boundary_reasons = [
+        "assessment_broker_identity_unverified",
+        "assessment_database_session_identity_unverified",
+    ]
+    # This process-only check cannot attest how the API, broker, or their live
+    # PostgreSQL sessions are isolated. Keep that boundary unknown until a
+    # host-level verifier is integrated; absence of an observation is not a pass.
+    api_worker_boundary_ready = False
     return {
         "schemaVersion": 1,
         "mode": "read_only_local_metadata",
@@ -189,8 +197,9 @@ def collect_offline_isolation_preflight(
             "databaseConnectionsMade": 0,
             "credentialValuesRead": False,
         },
-        "apiWorkerBoundaryReady": False,
-        "integratedAssessmentReady": False,
+        "apiWorkerBoundaryReasonCodes": host_boundary_reasons,
+        "apiWorkerBoundaryReady": api_worker_boundary_ready,
+        "integratedAssessmentReady": process_ready and api_worker_boundary_ready,
         "externalConnectionsMade": 0,
     }
 
@@ -200,11 +209,20 @@ def require_offline_qwen_process_ready(
     environment: Mapping[str, str] | None = None,
     socket_paths: Sequence[Path] | None = None,
 ) -> dict[str, Any]:
-    """Block Qwen startup unless this process itself has a clean local context."""
+    """Block Qwen unless process isolation and host boundaries are both attested."""
     report = collect_offline_isolation_preflight(
         environment=environment,
         socket_paths=socket_paths,
     )
     if not report["offlineQwenProcessReady"]:
         raise RuntimeError(report["reasonCodes"][0])
+    if not report["apiWorkerBoundaryReady"]:
+        boundary_reasons = report.get("apiWorkerBoundaryReasonCodes", [])
+        raise RuntimeError(
+            boundary_reasons[0]
+            if boundary_reasons
+            else "assessment_api_worker_boundary_unverified"
+        )
+    if not report["integratedAssessmentReady"]:
+        raise RuntimeError("assessment_integrated_boundary_unverified")
     return report
