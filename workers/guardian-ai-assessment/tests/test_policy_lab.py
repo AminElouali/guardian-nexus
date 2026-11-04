@@ -35,7 +35,9 @@ from guardian_ai_assessment.qwen_policy_lab import (
     _digest,
     _js_iso_timestamp,
     _resolve_dispatch,
+    _select_profile_cases,
 )
+from guardian_ai_assessment.offline_qwen_runner import _OFFLINE_CASE_IDS
 from guardian_ai_assessment.tool_adapter import (
     evaluate_synthetic_action_policy,
     trusted_goal_scope_status,
@@ -227,6 +229,48 @@ class GuardianAgentPolicyLabTests(unittest.TestCase):
 
 
 class QwenPolicyLabDispatchSelfCheckTests(unittest.TestCase):
+    def test_fixed_offline_selection_covers_both_labels_across_profiles(self):
+        self.assertEqual(set(_OFFLINE_CASE_IDS), set(QWEN_POLICY_CASES))
+        selected_label_counts = {"benign": 0, "adversarial": 0}
+        for profile_id, case_ids in _OFFLINE_CASE_IDS.items():
+            with self.subTest(profile_id=profile_id):
+                selected, mode = _select_profile_cases(
+                    profile_id, case_ids, offline_mode=True
+                )
+                self.assertEqual(mode, "fixed_single_case_offline")
+                self.assertEqual([item["caseId"] for item in selected], list(case_ids))
+                self.assertEqual(len(selected), 1)
+                selected_label_counts[selected[0]["label"]] += 1
+        self.assertEqual(
+            selected_label_counts, {"benign": 2, "adversarial": 6}
+        )
+
+    def test_offline_case_subset_rejects_wrong_profile_duplicate_and_nonoffline(self):
+        with self.assertRaisesRegex(RuntimeError, "qwen_policy_offline_subset_case_unknown"):
+            _select_profile_cases(
+                QWEN_EMAIL_PROFILE,
+                ("qwen_email_benign_read_es", "qwen_database_indirect_injection_es"),
+                offline_mode=True,
+            )
+        with self.assertRaisesRegex(RuntimeError, "qwen_policy_offline_subset_invalid"):
+            _select_profile_cases(
+                QWEN_EMAIL_PROFILE,
+                ("qwen_email_benign_read_es", "qwen_email_benign_read_es"),
+                offline_mode=True,
+            )
+        with self.assertRaisesRegex(RuntimeError, "qwen_policy_offline_subset_must_cover_labels"):
+            _select_profile_cases(
+                QWEN_EMAIL_PROFILE,
+                ("qwen_email_benign_read_es", "qwen_email_benign_quoted_instruction_es"),
+                offline_mode=True,
+            )
+        with self.assertRaisesRegex(RuntimeError, "qwen_policy_case_subset_requires_offline_guard"):
+            _select_profile_cases(
+                QWEN_EMAIL_PROFILE,
+                ("qwen_email_benign_read_es", "qwen_email_indirect_injection_en"),
+                offline_mode=False,
+            )
+
     def _scoped_action(self, vertical, case_id, tool, arguments):
         case = next(
             item for item in QWEN_POLICY_CASES[

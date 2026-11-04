@@ -217,9 +217,10 @@ def _install_filter(architecture_id: int, syscall_numbers: dict[str, int]) -> No
         _SockFilter(_BPF_JMP_JEQ_K, 0, 1, clone3_number),
         _SockFilter(_BPF_RET_K, 0, 0, _ENOSYS_RETURN),
         # Only pthread-style clone flags are allowed. The jf jump skips the
-        # eleven-instruction special case for every non-clone syscall.
-        _SockFilter(_BPF_JMP_JEQ_K, 0, 11, clone_number),
+        # twelve-instruction special case for every non-clone syscall.
+        _SockFilter(_BPF_JMP_JEQ_K, 0, 12, clone_number),
         _SockFilter(_BPF_LD_W_ABS, 0, 0, 16),  # clone arg0: low flags word
+        _SockFilter(_BPF_ALU_AND_K, 0, 0, _REQUIRED_THREAD_CLONE_FLAGS),
         _SockFilter(
             _BPF_JMP_JEQ_K, 1, 0, _REQUIRED_THREAD_CLONE_FLAGS
         ),

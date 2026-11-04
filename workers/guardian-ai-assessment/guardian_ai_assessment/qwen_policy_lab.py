@@ -1522,12 +1522,42 @@ def _resolve_dispatch(
     return "deny", reason, "blocked_by_policy_before_dispatch"
 
 
+def _select_profile_cases(
+    profile_id: str,
+    case_ids: tuple[str, ...] | None,
+    *,
+    offline_mode: bool,
+) -> tuple[tuple[dict[str, Any], ...], str]:
+    profile_cases = CASES[profile_id]
+    if case_ids is None:
+        return profile_cases, "full_profile_corpus"
+    if not offline_mode:
+        raise RuntimeError("qwen_policy_case_subset_requires_offline_guard")
+    if len(case_ids) not in {1, 2} or len(set(case_ids)) != len(case_ids):
+        raise RuntimeError("qwen_policy_offline_subset_invalid")
+    cases_by_id = {case["caseId"]: case for case in profile_cases}
+    if any(case_id not in cases_by_id for case_id in case_ids):
+        raise RuntimeError("qwen_policy_offline_subset_case_unknown")
+    selected_cases = tuple(cases_by_id[case_id] for case_id in case_ids)
+    if len(selected_cases) == 2 and {
+        case["label"] for case in selected_cases
+    } != {"benign", "adversarial"}:
+        raise RuntimeError("qwen_policy_offline_subset_must_cover_labels")
+    selection_mode = (
+        "fixed_single_case_offline"
+        if len(selected_cases) == 1
+        else "fixed_benign_adversarial_subset_offline"
+    )
+    return selected_cases, selection_mode
+
+
 def run_qwen_policy_lab(
     profile_id: str,
     *,
     offline_guard: object | None = None,
     model_path: Path | None = None,
     shared_client: Any | None = None,
+    case_ids: tuple[str, ...] | None = None,
 ) -> dict[str, Any]:
     if profile_id not in CASES:
         raise ValueError("qwen_policy_profile_invalid")
@@ -1552,6 +1582,8 @@ def run_qwen_policy_lab(
     else:
         if model_path is not None or shared_client is not None:
             raise RuntimeError("qwen_policy_offline_options_require_guard")
+        if case_ids is not None:
+            raise RuntimeError("qwen_policy_case_subset_requires_offline_guard")
         from .__main__ import verify_network_isolation
 
         selected_model_path = llm_lab.MODEL_PATH
@@ -1604,11 +1636,14 @@ def run_qwen_policy_lab(
         if vertical == "multiagent"
         else FINANCE_TOOLS
     )
+    profile_cases, selection_mode = _select_profile_cases(
+        profile_id, case_ids, offline_mode=offline_mode
+    )
     cases = []
     usage = {"promptTokens": 0, "completionTokens": 0, "modelCalls": 0}
     inference_latencies_ms: list[int] = []
     authorization_latencies_ms: list[int] = []
-    for case in CASES[profile_id]:
+    for case in profile_cases:
         evidence, counts = _one_case(client=client, vertical=vertical, case=case, tools=tools)
         cases.append(evidence)
         inference_latencies_ms.append(evidence["inferenceDurationMs"])
@@ -1629,7 +1664,8 @@ def run_qwen_policy_lab(
             "cpuTimeLimitSeconds": limits["cpuTimeLimitSeconds"],
             "openFilesLimit": limits["openFilesLimit"],
             "concurrency": 1,
-            "maxCases": CASE_LIMITS[profile_id],
+            "maxCases": len(profile_cases),
+            "fullCorpusCaseCount": CASE_LIMITS[profile_id],
             "maxCompletionTokensPerCall": MAX_COMPLETION_TOKENS,
             "maxModelCallsPerCase": 1,
             "maxToolCallsPerCase": MAX_TOOL_CALLS,
@@ -1653,7 +1689,7 @@ def run_qwen_policy_lab(
             "memoryMiB": 1536,
             "pids": 64,
             "concurrency": 1,
-            "maxCases": CASE_LIMITS[profile_id],
+            "maxCases": len(profile_cases),
             "maxCompletionTokensPerCall": MAX_COMPLETION_TOKENS,
             "maxModelCallsPerCase": 1,
             "maxToolCallsPerCase": MAX_TOOL_CALLS,
@@ -1814,6 +1850,17 @@ def run_qwen_policy_lab(
             "contrafactual. No prueba eficacia general ni conecta servicios."
         ),
     }
+    if offline_mode:
+        evidence["corpusSelection"] = {
+            "mode": selection_mode,
+            "selectedCaseIds": [case["caseId"] for case in profile_cases],
+            "selectedCaseCount": len(profile_cases),
+            "fullCorpusCaseCount": CASE_LIMITS[profile_id],
+        }
+        evidence["selfChecks"]["selectedCasesBelongToProfile"] = all(
+            case["caseId"] in {item["caseId"] for item in CASES[profile_id]}
+            for case in cases
+        )
     evidence["evidenceSha256"] = _digest(evidence)
     return evidence
 

@@ -2214,3 +2214,43 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   consumo atómico del grant; IPv6 dual-stack; sesión Clerk real; advisories,
   procedencia/licencias y revisión legal. No se tocó producción, el socket ni
   el daemon; no se publicaron ni conectaron servicios externos.
+
+## Qwen offline de ocho perfiles y seccomp de hilos — 2026-11-04
+
+- Base Git verificada antes de cerrar este incremento: `628a8356122dd60f3d398cf1c91a540e112036c1`.
+- Se ajustó el filtro seccomp del proceso offline: `clone` solo acepta la
+  combinación de banderas pthread requerida y sus banderas permitidas; `clone3`
+  devuelve `ENOSYS` para fallback a `clone` filtrado. Fork/vfork/exec/execveat y
+  syscalls de sockets siguen denegados. No se relajó seccomp global.
+- Inferencia real local, sin Docker y bajo el guard de proceso: 8 casos fijos
+  (uno por perfil), 2 benignos y 6 adversarios; `tool_choice=auto` en todos.
+  Resultado: 7 propuestas mediante marcadores Qwen adaptados, 0
+  `message.tool_calls` nativas, 1 `no_proposal`; Policy ON: 2 ALLOW, 3 DENY,
+  2 REQUIRE_APPROVAL, 1 NO_PROPOSAL; 2 lecturas sintéticas simuladas, 0
+  ejecuciones no autorizadas, 0 efectos externos y 0 ejecuciones Policy OFF.
+  Dos casos adversarios fueron ALLOW porque Qwen propuso lecturas sintéticas
+  acotadas; no se contaron como detecciones y no demuestran eficacia general.
+- Todas las comprobaciones internas del artefacto pasaron; campos de prompts,
+  respuestas y argumentos en bruto no se almacenaron. Modelo Qwen3-0.6B Q8_0,
+  llama-cpp-python 0.3.36, sha256 del modelo
+  `9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031`.
+- Artefacto generado fuera de Git:
+  `generated-artifacts/guardian-qwen-offline/qwen-policy-lab-eight-profiles.json`,
+  SHA-256 `6a1e54658f745074a7a5a937204181c219ec28d184a866845dd09513497ee1d9`.
+  El corpus completo de 55 y el subconjunto de 16 casos habían terminado por
+  timeout con 0 perfiles/casos; no se elevaron límites. Los ocho fixtures
+  deterministas permanecen separados.
+- Pruebas: seccomp **3/3**, política Qwen **25/25**, worker en imagen local
+  fijada y sin red **139/139**, API **74/74**, SDK **13/13** más build, UI
+  integración **8/8**, typecheck raíz y builds API/SDK/UI pasaron. El test
+  completo desde Python del host tuvo 1 error de importación por falta de
+  `garak`; la suite completa pasó dentro de la imagen que sí lo incluye. El
+  E2E API/worker fue **0/9** porque el gate de worker está `disabled` sin broker
+  aislado; el componente UI integrado sí pasó **8/8**.
+- Esta corrida offline no crea jobs API ni persiste aprobaciones. El E2E no
+  verificó una sesión Clerk real. No se acreditan broker/UID independiente,
+  cgroup de PIDs, IPv6 dual-stack, destinos de red, supply-chain nueva ni
+  licencias. El guard es de proceso local y no sustituye aislamiento Docker.
+- Informe y manifiesto SHA-256:
+  `reports/offline-qwen-seccomp-validation-2026-11-04.md` y
+  `reports/offline-qwen-seccomp-validation-2026-11-04.sha256`.

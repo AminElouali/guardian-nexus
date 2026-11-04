@@ -92,6 +92,22 @@ class OfflineProcessGuardTests(unittest.TestCase):
             clone_missing_thread_errno = ctypes.get_errno()
             clone_namespace = syscall(56, 0x00010100 | 0x02000000, 0, 0, 0, 0)
             clone_namespace_errno = ctypes.get_errno()
+            # If vfork were unexpectedly allowed, its child exits immediately
+            # inside this disposable test subprocess; the expected path is
+            # EPERM before a child is created.
+            ctypes.set_errno(0)
+            vfork_result = syscall(58, 0, 0, 0, 0, 0)
+            if vfork_result == 0:
+                libc._exit(99)
+            vfork_errno = ctypes.get_errno()
+            if vfork_result > 0:
+                os.waitpid(vfork_result, 0)
+            execveat_path = ctypes.create_string_buffer(b"/bin/true")
+            ctypes.set_errno(0)
+            execveat_result = syscall(
+                322, 0xFFFFFFFF, ctypes.addressof(execveat_path), 0, 0, 0
+            )
+            execveat_errno = ctypes.get_errno()
             print(json.dumps({
                 "network": network,
                 "limits": limits,
@@ -105,6 +121,10 @@ class OfflineProcessGuardTests(unittest.TestCase):
                 "cloneMissingThreadResult": clone_missing_thread,
                 "cloneNamespaceErrno": clone_namespace_errno,
                 "cloneNamespaceResult": clone_namespace,
+                "vforkErrno": vfork_errno,
+                "vforkResult": vfork_result,
+                "execveatErrno": execveat_errno,
+                "execveatResult": execveat_result,
             }, sort_keys=True))
             """
         )
@@ -132,6 +152,10 @@ class OfflineProcessGuardTests(unittest.TestCase):
         self.assertEqual(evidence["cloneMissingThreadErrno"], 1)  # EPERM
         self.assertEqual(evidence["cloneNamespaceResult"], -1)
         self.assertEqual(evidence["cloneNamespaceErrno"], 1)  # EPERM
+        self.assertEqual(evidence["vforkResult"], -1)
+        self.assertEqual(evidence["vforkErrno"], 1)  # EPERM
+        self.assertEqual(evidence["execveatResult"], -1)
+        self.assertEqual(evidence["execveatErrno"], 1)  # EPERM
         self.assertEqual(evidence["limits"]["cpuAffinityCount"], 1)
         self.assertEqual(evidence["limits"]["concurrency"], 1)
         self.assertTrue(evidence["limits"]["limitsVerified"])
