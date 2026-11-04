@@ -822,27 +822,105 @@ test(
       "revoked role must not consume or simulate the pending proposal",
     );
 
-    for (const approval of [
-      ...approvals,
-      supportDenied,
-      expired,
-      roleRevoked,
-    ]) {
-      const audit = await fixturePool.query<{ count: string }>(
-        `SELECT count(*)::text AS count
+    const expectedAuditEvents = [
+      {
+        approval: finance,
+        action: "ai_assessment.approval_approved",
+        simulated: true,
+      },
+      {
+        approval: support,
+        action: "ai_assessment.approval_approved",
+        simulated: true,
+      },
+      {
+        approval: supportDenied,
+        action: "ai_assessment.approval_denied",
+        simulated: false,
+      },
+      {
+        approval: expired,
+        action: "ai_assessment.approval_expired",
+        simulated: false,
+      },
+    ] as const;
+    for (const { approval, action, simulated } of expectedAuditEvents) {
+      const audit = await fixturePool.query<{
+        action: string;
+        metadata: Record<string, unknown>;
+      }>(
+        `SELECT action, metadata
            FROM public.workspace_audit_events
           WHERE workspace_id = $1
             AND resource_id = $2
-            AND action LIKE 'ai_assessment.approval_%'`,
+            AND action LIKE 'ai_assessment.approval_%'
+          ORDER BY created_at`,
         [workspaceA, approval.approvalId],
       );
-      if (
-        approval.approvalId === finance.approvalId ||
-        approval.approvalId === support.approvalId
-      ) {
-        assert.ok(Number(audit.rows[0]?.count ?? 0) >= 1);
+      assert.equal(
+        audit.rows.length,
+        1,
+        "the successful transition is audited once; replay adds no audit event",
+      );
+      const event = audit.rows[0]!;
+      assert.equal(event.action, action);
+      if (simulated) {
+        assert.equal(event.metadata.externalSideEffect, false);
+        assert.equal(
+          event.metadata.proposalBindingSha256,
+          approval.binding,
+        );
+        assert.match(
+          String(event.metadata.simulationResultSha256 ?? ""),
+          /^[a-f0-9]{64}$/,
+        );
+        if (approval === finance) {
+          assert.match(
+            String(event.metadata.replayBindingSha256 ?? ""),
+            /^[a-f0-9]{64}$/,
+          );
+        }
       }
     }
+
+    for (const approval of [finance, support]) {
+      const persisted = await fixturePool.query<{
+        status: string;
+        decided_by_role: string | null;
+        simulated_at: Date | null;
+        simulation_result_code: string | null;
+        simulation_result_sha256: string | null;
+        replay_binding_sha256: string | null;
+      }>(
+        `SELECT status, decided_by_role, simulated_at, simulation_result_code,
+                simulation_result_sha256, replay_binding_sha256
+           FROM public.ai_assessment_approval_requests
+          WHERE id = $1 AND workspace_id = $2`,
+        [approval.approvalId, workspaceA],
+      );
+      const row = persisted.rows[0];
+      assert.ok(row, "approval decision must be persisted in its workspace");
+      assert.equal(row.status, "approved");
+      assert.equal(row.decided_by_role, "admin");
+      assert.ok(row.simulated_at);
+      assert.equal(row.simulation_result_code, approval.expectedResult);
+      assert.match(row.simulation_result_sha256 ?? "", /^[a-f0-9]{64}$/);
+      assert.match(row.replay_binding_sha256 ?? "", /^[a-f0-9]{64}$/);
+    }
+
+    const revokedAudit = await fixturePool.query<{ count: string }>(
+      `SELECT count(*)::text AS count
+         FROM public.workspace_audit_events
+        WHERE workspace_id = $1
+          AND resource_id = $2
+          AND action = 'ai_assessment.approval_approved'`,
+      [workspaceA, roleRevoked.approvalId],
+    );
+    assert.equal(
+      Number(revokedAudit.rows[0]?.count ?? 0),
+      0,
+      "a revoked approver cannot create an approval audit/simulation event",
+    );
 
     const summary = {
       source: "deterministic_fixture_worker_harness",

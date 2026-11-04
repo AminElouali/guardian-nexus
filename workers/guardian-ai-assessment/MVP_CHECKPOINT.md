@@ -2960,3 +2960,48 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   Manifiesto de fuentes y artefacto:
   `reports/guardian-policy-lab-guided-demo-2026-11-04.sha256`, SHA-256
   `02666054726d319b01719731f8223fd57fb60d81fbb8ef4e45559d38de525f0c`.
+
+## Incremento 2026-11-04 — aprobación sintética y claridad del preflight Qwen
+
+- Inicio desde HEAD `3fae71c14fa856cac91908fe797941e33d1def74`, árbol limpio.
+- Se reforzó el E2E persistente de aprobación ficticia de finanzas y soporte:
+  consulta de filas aprobadas, roles, expiración, rechazo, revocación, binding
+  alterado, cross-tenant, carrera 200/409, replay 409, idempotencia del job y
+  eventos de auditoría de aprobación/denegación/caducidad. Dos aprobaciones se
+  reanudaron una sola vez solo en simulación. El harness marca
+  `modelInference=false`, `brokerUsed=false`,
+  `dockerCommandRequestedByHarness=false`, `externalEffects=false`.
+- Los tests de los ocho perfiles ahora verifican procedencia adversaria
+  específica por vertical, DENY antes del adaptador y un intento cross-tenant
+  por perfil denegado antes del despacho. La prueba de inyección es sintética y
+  determinista; no es inferencia de Qwen.
+- La UI muestra un estado accesible de “no ejecutado” cuando el preflight no
+  confirma disponibilidad; distingue historial, fixtures y
+  `NO_PROPOSAL` de `DENY`.
+- Verificación: worker focalizado **3/3** (incluye los ocho perfiles),
+  E2E de aprobaciones **1/1**, UI **10/10**, `pnpm run typecheck` pasó, y
+  `PORT=3000 BASE_PATH=/ pnpm run build` pasó para API, web, mockup sandbox y
+  SDK. Un build inicial sin variables requeridas por Vite falló antes de
+  compilar; al fijarlas, el build completó. Persiste aviso de chunk web >500 kB.
+- E2E redactado:
+  `generated-artifacts/guardian-synthetic-approval-e2e.json`,
+  SHA-256 `715c113b7037a91b8ea6c927839e5807c63ed4c9931e91ab6d335d56e1d36944`;
+  hash interno `f0a6aedccee3930ca2765fd78d026a4aad3395c8f30dedf9d2abd64c583da864`.
+  Reporte:
+  `reports/guardian-approvals-and-preflight-clarity-2026-11-04.md`,
+  SHA-256 `462fb3b8907319dcdbeb3d3547509a5bc296d75b20c95d29c6190dcc8a4abcea`.
+  Manifiesto SHA-256:
+  `reports/guardian-approvals-and-preflight-clarity-2026-11-04.sha256`,
+  SHA-256 `ec19a0c6071d8c1678510ecefc01247fcf956a3d53b0e745393b6dc22d3cc0d6`;
+  todas sus entradas verificaron con `sha256sum -c`.
+- Qwen nuevo permanece **no ejecutado**: el último preflight disponible
+  bloqueaba por acceso al socket Docker desde la identidad actual, presencia de
+  variables sensibles y falta de verificación de identidades separadas de
+  broker/API y sesiones DB. No se leyeron valores de secretos ni se inició
+  Qwen/Docker. Los conteos 7 marcadores adaptados, 0 llamadas nativas y 1
+  `NO_PROPOSAL` siguen siendo históricos. No se verificó Clerk en navegador con
+  sesión real.
+- Próximo desbloqueo: host Linux de laboratorio con UID/GID API y broker
+  distintos, socket inaccesible para API, identidades/sesiones DB separadas y
+  preflight aprobado. Para UI autenticada se requiere una sesión Clerk de
+  desarrollo previamente autorizada; no hay bypass.

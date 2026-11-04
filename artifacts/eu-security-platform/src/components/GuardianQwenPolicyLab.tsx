@@ -146,6 +146,10 @@ export function QwenPolicyLabCatalog({
   pending: boolean;
   onRequest: (profileId: QwenPolicyProfile) => void;
 }) {
+  const unavailableCount = profiles.filter((profile) => {
+    const worker = availability.find((item) => item.profileId === profile.profileId);
+    return worker?.status !== 'ready';
+  }).length;
   return (
     <section className="agent-policy-lab" data-testid="qwen-policy-lab-catalog">
       <div className="panel-heading">
@@ -162,6 +166,19 @@ export function QwenPolicyLabCatalog({
         antes de un simulador ficticio. La ausencia de propuesta no cuenta como bloqueo
         preventivo.
       </p>
+      {unavailableCount > 0 && (
+        <div
+          className="ai-lab-unavailable"
+          role="status"
+          aria-live="polite"
+          data-testid="qwen-preflight-not-run"
+        >
+          <b>No se ejecutaron inferencias Qwen nuevas desde esta vista.</b>{' '}
+          El preflight no confirma disponibilidad para {unavailableCount} perfil(es).
+          Cualquier evidencia Qwen registrada es histórica; los fixtures siguen separados,
+          y <code>NO_PROPOSAL</code> no equivale a <code>DENY</code>.
+        </div>
+      )}
       <div className="agent-policy-lab-grid">
         {profiles.map((profile) => {
           const worker = availability.find((item) => item.profileId === profile.profileId);

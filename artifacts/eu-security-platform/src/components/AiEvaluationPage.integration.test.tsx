@@ -279,6 +279,20 @@ test("renders real Qwen profiles separately from fixture evidence", () => {
   assert.match(catalog, /button-run-qwen-policy-database/);
   assert.match(catalog, /button-run-qwen-policy-finance/);
   assert.match(catalog, /NO CONECTADO A CLIENTES/i);
+
+  const blockedCatalog = renderToStaticMarkup(
+    createElement(QwenPolicyLabCatalog, {
+      availability: [],
+      canRun: true,
+      pending: false,
+      onRequest: () => undefined,
+    }),
+  );
+  assert.match(blockedCatalog, /data-testid="qwen-preflight-not-run"/);
+  assert.match(blockedCatalog, /No se ejecutaron inferencias Qwen nuevas/);
+  assert.match(blockedCatalog, /evidencia Qwen registrada es histórica/);
+  assert.match(blockedCatalog, /NO_PROPOSAL<\/code> no equivale a <code>DENY/);
+  assert.match(blockedCatalog, /disabled/);
 });
 
 test("renders all eight synthetic agent verticals and an API-persisted policy lab report", () => {

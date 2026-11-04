@@ -425,14 +425,28 @@ def _apply_to_clone(state: dict[str, Any], action_hash: str, effect: str) -> Non
         state["simulatedRecords"].append(action_hash)
 
 
-def _run_case(vertical: str, action: dict[str, Any], permissions: set[str]) -> dict[str, Any]:
+def _run_case(
+    vertical: str,
+    action: dict[str, Any],
+    permissions: set[str],
+    resource_workspace_id_override: str | None = None,
+) -> dict[str, Any]:
     initial_state = {"tenant": "SYNTHETIC-WORKSPACE", "simulatedRecords": []}
     initial_hash = _sha256(initial_state)
     resource_workspace_id = (
-        "SYNTHETIC-OTHER-WORKSPACE"
-        if action["caseId"] == "database_adversarial_bulk_export"
-        else "SYNTHETIC-WORKSPACE"
+        resource_workspace_id_override
+        if resource_workspace_id_override is not None
+        else (
+            "SYNTHETIC-OTHER-WORKSPACE"
+            if action["caseId"] == "database_adversarial_bulk_export"
+            else "SYNTHETIC-WORKSPACE"
+        )
     )
+    if resource_workspace_id not in {
+        "SYNTHETIC-WORKSPACE",
+        "SYNTHETIC-OTHER-WORKSPACE",
+    }:
+        raise ValueError("unsupported_synthetic_workspace")
     agent_id = (
         "guardian-multiagent-specialist-v1"
         if vertical == "multiagent" and action["delegated"]

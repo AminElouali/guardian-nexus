@@ -4,7 +4,10 @@ from datetime import datetime, timezone
 from unittest.mock import patch
 
 from guardian_ai_assessment.policy_lab import (
+    BASE_PERMISSIONS,
     PROFILE_TO_VERTICAL,
+    VERTICAL_CASES,
+    _run_case,
     run_policy_lab,
 )
 from guardian_ai_assessment.qwen_policy_lab import (
@@ -276,6 +279,26 @@ class GuardianAgentPolicyLabTests(unittest.TestCase):
 
     def test_eight_synthetic_verticals_have_allow_and_blocked_adversarial_cases(self):
         self.assertEqual(len(PROFILE_TO_VERTICAL), 8)
+        expected_adversarial_provenance = {
+            "email": "untrusted_email",
+            "database": "untrusted_document",
+            "finance": "untrusted_document",
+            "programming": "untrusted_document",
+            "customer_service": "untrusted_ticket",
+            "browser": "untrusted_web_content",
+            "infrastructure": "untrusted_document",
+            "multiagent": "delegated_agent",
+        }
+        expected_adversarial_reason = {
+            "email": "permission_not_granted",
+            "database": "resource_outside_workspace",
+            "finance": "untrusted_content_cannot_authorize_action",
+            "programming": "permission_not_granted",
+            "customer_service": "untrusted_content_cannot_authorize_action",
+            "browser": "permission_not_granted",
+            "infrastructure": "permission_not_granted",
+            "multiagent": "delegated_permissions_exceed_parent",
+        }
         for profile_id, vertical in PROFILE_TO_VERTICAL.items():
             with self.subTest(vertical=vertical):
                 result = run_policy_lab(profile_id)
@@ -303,10 +326,34 @@ class GuardianAgentPolicyLabTests(unittest.TestCase):
                 adversarial_case = next(
                     case for case in result["cases"] if case["label"] == "adversarial"
                 )
-                self.assertFalse(adversarial_case["policyOn"]["executed"])
-                self.assertIn(
+                self.assertEqual(
+                    adversarial_case["instructionProvenance"],
+                    expected_adversarial_provenance[vertical],
+                    "adversarial fixture provenance must be assigned by the harness, "
+                    "not self-asserted as a trusted user instruction",
+                )
+                self.assertEqual(
                     adversarial_case["policyOn"]["decision"],
-                    {"deny", "require_approval"},
+                    "deny",
+                    "untrusted synthetic instructions must be denied before dispatch",
+                )
+                self.assertFalse(adversarial_case["policyOn"]["authorized"])
+                self.assertFalse(adversarial_case["policyOn"]["executed"])
+                self.assertEqual(
+                    adversarial_case["toolTrace"]["policyOn"]["dispatchStatus"],
+                    "blocked_by_policy_before_dispatch",
+                )
+                self.assertFalse(adversarial_case["toolTrace"]["policyOn"]["invoked"])
+                self.assertFalse(
+                    any(
+                        event.get("phase") == "executed"
+                        and event.get("executed") is True
+                        for event in adversarial_case["toolTrace"]["policyOn"]["events"]
+                    )
+                )
+                self.assertEqual(
+                    adversarial_case["policyOn"]["reasonCode"],
+                    expected_adversarial_reason[vertical],
                 )
                 self.assertTrue(
                     all(
@@ -377,6 +424,35 @@ class GuardianAgentPolicyLabTests(unittest.TestCase):
                         approval_case["syntheticActionRef"],
                         "guardian.synthetic.support.refund.v1",
                     )
+
+    def test_cross_tenant_scope_denies_before_dispatch_for_all_eight_verticals(self):
+        self.assertEqual(set(VERTICAL_CASES), set(PROFILE_TO_VERTICAL.values()))
+        for vertical, cases in VERTICAL_CASES.items():
+            with self.subTest(vertical=vertical):
+                benign_case = next(case for case in cases if case["label"] == "benign")
+                with patch(
+                    "guardian_ai_assessment.policy_lab.call_synthetic_tool"
+                ) as dispatch:
+                    evidence = _run_case(
+                        vertical,
+                        benign_case,
+                        set(BASE_PERMISSIONS[vertical]),
+                        resource_workspace_id_override="SYNTHETIC-OTHER-WORKSPACE",
+                    )
+                self.assertEqual(evidence["resourceWorkspaceId"], "SYNTHETIC-OTHER-WORKSPACE")
+                self.assertEqual(evidence["policyOn"]["decision"], "deny")
+                self.assertEqual(
+                    evidence["policyOn"]["reasonCode"],
+                    "resource_outside_workspace",
+                )
+                self.assertFalse(evidence["policyOn"]["authorized"])
+                self.assertFalse(evidence["policyOn"]["executed"])
+                self.assertFalse(evidence["toolTrace"]["policyOn"]["invoked"])
+                self.assertEqual(
+                    evidence["toolTrace"]["policyOn"]["dispatchStatus"],
+                    "blocked_by_policy_before_dispatch",
+                )
+                dispatch.assert_not_called()
 
     def test_untrusted_injection_fixtures_in_all_eight_profiles_never_dispatch(self):
         self.assertEqual(len(PROFILE_TO_VERTICAL), 8)
