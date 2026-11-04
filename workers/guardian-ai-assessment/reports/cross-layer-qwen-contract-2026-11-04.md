@@ -30,6 +30,13 @@ del broker y la sesión de base de datos. El runner offline sigue fail-closed.
   runner se detiene antes de cargar manifiestos/modelo cuando el límite de
   host está sin verificar.
 - API: **75/75**.
+- E2E persistente sintético de aprobación: **1/1** con
+  `deterministic_fixture_worker_harness`, `modelInference=false` y sin solicitud
+  Docker. La corrida verificó una sola aprobación por propuesta y rechazó
+  replay, expiración, rol revocado, tenant cruzado y cambio del binding; hash de
+  corrida `162d12e6dbbdc11baa12e4285f66b2b16d0f2e8823ee52a618cc6941c67b0e49`;
+  JSON redactado SHA-256
+  `99117918f7ad99aad0cb9d24c09e78479327a504e559105d1bf4772fd667489c`.
 - La primera invocación Python sin `PYTHONPATH` no pudo importar el paquete;
   repetida con `PYTHONPATH=workers/guardian-ai-assessment`, pasó. En el test
   transversal, las primeras ejecuciones detectaron un error en el propio

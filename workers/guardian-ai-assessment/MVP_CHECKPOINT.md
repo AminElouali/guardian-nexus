@@ -2718,8 +2718,14 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   `PYTHONPATH=workers/guardian-ai-assessment`, pasó. El extractor AST de la
   prueba nueva también falló inicialmente y fue corregido; resultado final
   **2/2**.
-- No se ejecutó SDK/UI/E2E en esta iteración porque no se cambió su runtime;
-  sus últimos resultados verificados permanecen en el checkpoint anterior.
+- No se ejecutó SDK/UI en esta iteración porque no se cambió su runtime; sus
+  últimos resultados verificados permanecen en el checkpoint anterior. Sí se
+  repitió el E2E persistente sintético: **1/1**, `modelInference=false`,
+  `dockerCommandRequestedByHarness=false`, replay/caducidad/revocación/
+  cross-tenant/mutación rechazados. Hash de corrida
+  `162d12e6dbbdc11baa12e4285f66b2b16d0f2e8823ee52a618cc6941c67b0e49`;
+  JSON redactado SHA-256
+  `99117918f7ad99aad0cb9d24c09e78479327a504e559105d1bf4772fd667489c`.
   No se ejecutó inferencia Qwen ni se generó evidencia nueva. Los ocho IDs
   coincidentes son contratos, no ocho ejecuciones reales.
 - Bloqueo sin cambios: el último preflight registrado mantiene socket Docker
