@@ -55,9 +55,14 @@ class GuardianAgentPolicyLabTests(unittest.TestCase):
                 self.assertEqual(result["executionMode"], "deterministic_fixture")
                 self.assertEqual(result["proposalOrigin"], "controlled_fixture_not_llm")
                 self.assertFalse(result["modelInference"])
-                expected_count = 3 if vertical == "finance" else 2
+                expected_count = (
+                    3 if vertical in {"finance", "customer_service"} else 2
+                )
                 self.assertEqual(result["sampleCount"], expected_count)
-                self.assertEqual(result["summary"]["benignCases"], 2 if vertical == "finance" else 1)
+                self.assertEqual(
+                    result["summary"]["benignCases"],
+                    2 if vertical in {"finance", "customer_service"} else 1,
+                )
                 self.assertEqual(result["summary"]["adversarialCases"], 1)
                 self.assertEqual(result["summary"]["unauthorizedExecutions"], 0)
                 self.assertEqual(result["summary"]["actualOperations"], 0)
@@ -67,9 +72,12 @@ class GuardianAgentPolicyLabTests(unittest.TestCase):
                 self.assertTrue(all(result["selfChecks"].values()))
                 self.assertTrue(result["selfChecks"]["resourceScopeIsEnforced"])
                 self.assertEqual(result["cases"][0]["policyOn"]["decision"], "allow")
-                self.assertFalse(result["cases"][1]["policyOn"]["executed"])
+                adversarial_case = next(
+                    case for case in result["cases"] if case["label"] == "adversarial"
+                )
+                self.assertFalse(adversarial_case["policyOn"]["executed"])
                 self.assertIn(
-                    result["cases"][1]["policyOn"]["decision"],
+                    adversarial_case["policyOn"]["decision"],
                     {"deny", "require_approval"},
                 )
                 self.assertTrue(
@@ -123,6 +131,48 @@ class GuardianAgentPolicyLabTests(unittest.TestCase):
                         approval_case["syntheticActionRef"],
                         "guardian.synthetic.finance.bank-change.v1",
                     )
+                if vertical == "customer_service":
+                    approval_case = next(
+                        case
+                        for case in result["cases"]
+                        if case["caseId"] == "support_trusted_refund_requires_approval"
+                    )
+                    self.assertEqual(
+                        approval_case["policyOn"]["decision"], "require_approval"
+                    )
+                    self.assertEqual(
+                        approval_case["toolTrace"]["policyOn"]["dispatchStatus"],
+                        "approval_required_before_dispatch",
+                    )
+                    self.assertFalse(approval_case["toolTrace"]["policyOn"]["invoked"])
+                    self.assertEqual(
+                        approval_case["syntheticActionRef"],
+                        "guardian.synthetic.support.refund.v1",
+                    )
+
+    def test_untrusted_injection_fixtures_in_all_eight_profiles_never_dispatch(self):
+        self.assertEqual(len(PROFILE_TO_VERTICAL), 8)
+        for profile_id, vertical in PROFILE_TO_VERTICAL.items():
+            with self.subTest(vertical=vertical):
+                result = run_policy_lab(profile_id)
+                adversarial = next(
+                    case for case in result["cases"] if case["label"] == "adversarial"
+                )
+                self.assertNotEqual(
+                    adversarial["instructionProvenance"],
+                    "trusted_user_request",
+                )
+                self.assertIn(
+                    adversarial["policyOn"]["decision"],
+                    {"deny", "require_approval"},
+                )
+                self.assertFalse(adversarial["policyOn"]["executed"])
+                self.assertFalse(adversarial["unauthorizedActionExecuted"])
+                self.assertFalse(adversarial["toolTrace"]["policyOn"]["invoked"])
+                self.assertEqual(adversarial["toolTrace"]["policyOn"]["events"], [])
+                self.assertFalse(adversarial["toolTrace"]["policyOff"]["invoked"])
+                self.assertEqual(result["executionMode"], "deterministic_fixture")
+                self.assertFalse(result["modelInference"])
 
     def test_database_rejects_cross_workspace_resource_before_action(self):
         result = run_policy_lab("guardian-agent-lab-database-v1")
@@ -143,7 +193,15 @@ class GuardianAgentPolicyLabTests(unittest.TestCase):
         ):
             with self.subTest(profile_id=profile_id):
                 result = run_policy_lab(profile_id)
-                action = result["cases"][1]["policyOn"]
+                case_id = (
+                    "finance_adversarial_transfer_request"
+                    if profile_id == "guardian-agent-lab-finance-v1"
+                    else "support_adversarial_refund_request"
+                )
+                case = next(
+                    item for item in result["cases"] if item["caseId"] == case_id
+                )
+                action = case["policyOn"]
                 self.assertEqual(action["decision"], "deny")
                 self.assertEqual(
                     action["reasonCode"], "untrusted_content_cannot_authorize_action"
@@ -155,7 +213,12 @@ class GuardianAgentPolicyLabTests(unittest.TestCase):
         for profile_id in PROFILE_TO_VERTICAL:
             with self.subTest(profile_id=profile_id):
                 result = run_policy_lab(profile_id)
-                benign, adversarial = result["cases"][:2]
+                benign = next(
+                    case for case in result["cases"] if case["label"] == "benign"
+                )
+                adversarial = next(
+                    case for case in result["cases"] if case["label"] == "adversarial"
+                )
                 benign_trace = benign["toolTrace"]
                 adversarial_trace = adversarial["toolTrace"]
 

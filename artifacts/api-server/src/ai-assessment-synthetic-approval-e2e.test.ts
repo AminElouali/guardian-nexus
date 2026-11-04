@@ -1,0 +1,636 @@
+import assert from "node:assert/strict";
+import { createHash, randomUUID } from "node:crypto";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { once } from "node:events";
+import { createServer, type Server } from "node:http";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { test } from "node:test";
+import express, { type RequestHandler } from "express";
+import pg from "pg";
+import {
+  DecideWorkspaceAiAssessmentApprovalResponse,
+  ListWorkspaceAiAssessmentApprovalsResponse,
+} from "@workspace/api-zod";
+import {
+  assertRlsRuntimeReady,
+  pool as appPool,
+} from "@workspace/db";
+import {
+  canonicalApprovalJson,
+  computeApprovalProposalBindingV2,
+  getAllowlistedSyntheticApprovalAction,
+} from "./lib/ai-assessment-approval-actions";
+import { createAiAssessmentLabRouter } from "./routes/ai-assessment-lab";
+
+/*
+ * This is an explicitly fixture-only integration harness. It executes the
+ * deterministic Python policy worker locally, without Docker, then provisions
+ * its redacted evidence as a completed fixture job so the real authenticated
+ * approval API and RLS transaction path can be tested. It is not Qwen evidence,
+ * a broker test, or a production job-queue consumer.
+ */
+
+const workerRoot = resolve(
+  fileURLToPath(new URL("../../../workers/guardian-ai-assessment", import.meta.url)),
+);
+const databaseUrl = process.env.DATABASE_URL;
+const workspaceAOwner = `synthetic-e2e-owner-${randomUUID()}`;
+const workspaceAAdmin = `synthetic-e2e-admin-${randomUUID()}`;
+const workspaceAAdmin2 = `synthetic-e2e-admin2-${randomUUID()}`;
+const workspaceAViewer = `synthetic-e2e-viewer-${randomUUID()}`;
+const workspaceBOwner = `synthetic-e2e-other-owner-${randomUUID()}`;
+const authorizedUsers = new Set([
+  workspaceAOwner,
+  workspaceAAdmin,
+  workspaceAAdmin2,
+  workspaceAViewer,
+  workspaceBOwner,
+]);
+const authForTest: RequestHandler = (req, res, next) => {
+  const userId = req.get("x-guardian-test-user");
+  if (!userId || !authorizedUsers.has(userId)) {
+    res.status(401).json({ error: "Test identity required" });
+    return;
+  }
+  req.authUserId = userId;
+  next();
+};
+
+function sha256(value: unknown): string {
+  return createHash("sha256")
+    .update(canonicalApprovalJson(value), "utf8")
+    .digest("hex");
+}
+
+type SyntheticWorkerEvidence = {
+  engine: "guardian_policy_lab";
+  executionMode: "deterministic_fixture";
+  modelInference: false;
+  profileId: string;
+  cases: Array<Record<string, unknown>>;
+  evidenceSha256: string;
+  summary: Record<string, unknown>;
+};
+
+const workerEvidenceCache = new Map<string, SyntheticWorkerEvidence>();
+let fixtureWorkerProcessCount = 0;
+
+function runDeterministicFixtureWorker(profileId: string): SyntheticWorkerEvidence {
+  const cached = workerEvidenceCache.get(profileId);
+  if (cached) return cached;
+  const result = spawnSync(
+    "python3",
+    ["-m", "guardian_ai_assessment.policy_lab", "--profile-id", profileId],
+    {
+      cwd: workerRoot,
+      encoding: "utf8",
+      timeout: 15_000,
+      maxBuffer: 1024 * 1024,
+      env: {
+        PATH: process.env.PATH ?? "/usr/bin:/bin",
+        PYTHONPATH: workerRoot,
+        PYTHONDONTWRITEBYTECODE: "1",
+        PYTHONHASHSEED: "0",
+        LANG: "C.UTF-8",
+        LC_ALL: "C.UTF-8",
+      },
+    },
+  );
+  fixtureWorkerProcessCount += 1;
+  assert.equal(result.error, undefined, "fixture worker must finish locally");
+  assert.equal(result.status, 0, result.stderr);
+  const evidence = JSON.parse(result.stdout) as SyntheticWorkerEvidence;
+  assert.equal(evidence.engine, "guardian_policy_lab");
+  assert.equal(evidence.executionMode, "deterministic_fixture");
+  assert.equal(evidence.modelInference, false);
+  assert.equal(evidence.profileId, profileId);
+  assert.equal(evidence.summary.externalCalls, 0);
+  assert.equal(evidence.summary.actualOperations, 0);
+  assert.equal(evidence.summary.persistentStateChanges, 0);
+  workerEvidenceCache.set(profileId, evidence);
+  return evidence;
+}
+
+async function createFixtureJob(
+  fixturePool: pg.Pool,
+  workspaceId: string,
+  requesterId: string,
+  profileId: string,
+  idempotencyKey: string,
+  evidence: SyntheticWorkerEvidence,
+): Promise<string> {
+  const inserted = await fixturePool.query<{ id: string }>(
+    `INSERT INTO public.ai_assessment_jobs
+       (workspace_id, requested_by_user_id, idempotency_key, profile_id,
+        worker_version, engine_version, status, result, completed_at)
+     VALUES ($1, $2, $3, $4, 'synthetic-fixture-no-broker-v1',
+             'guardian-agent-policy-lab-v2', 'succeeded', $5::jsonb, now())
+     ON CONFLICT (workspace_id, idempotency_key) DO NOTHING
+     RETURNING id`,
+    [workspaceId, requesterId, idempotencyKey, profileId, JSON.stringify(evidence)],
+  );
+  if (inserted.rows[0]?.id) return inserted.rows[0].id;
+  const existing = await fixturePool.query<{
+    id: string;
+    profile_id: string;
+    status: string;
+    result: SyntheticWorkerEvidence;
+  }>(
+    `SELECT id, profile_id, status, result
+       FROM public.ai_assessment_jobs
+      WHERE workspace_id = $1 AND idempotency_key = $2`,
+    [workspaceId, idempotencyKey],
+  );
+  const row = existing.rows[0];
+  assert.ok(row);
+  assert.equal(row.profile_id, profileId);
+  assert.equal(row.status, "succeeded");
+  assert.equal(row.result.evidenceSha256, evidence.evidenceSha256);
+  return row.id;
+}
+
+async function seedApproval(
+  fixturePool: pg.Pool,
+  input: {
+    workspaceId: string;
+    requesterId: string;
+    profileId: string;
+    caseId: string;
+    expiry: Date;
+    idempotencyKey: string;
+  },
+): Promise<{ jobId: string; approvalId: string; binding: string }> {
+  const evidence = runDeterministicFixtureWorker(input.profileId);
+  const fixtureCase = evidence.cases.find((item) => item.caseId === input.caseId);
+  assert.ok(fixtureCase, `fixture worker omitted ${input.caseId}`);
+  const policyOn = fixtureCase.policyOn as Record<string, unknown>;
+  const toolTrace = fixtureCase.toolTrace as {
+    policyOn?: Record<string, unknown>;
+  };
+  assert.equal(policyOn?.decision, "require_approval");
+  assert.equal(fixtureCase.instructionProvenance, "trusted_user_request");
+  assert.equal(
+    toolTrace?.policyOn?.dispatchStatus,
+    "approval_required_before_dispatch",
+  );
+  assert.equal(fixtureCase.unauthorizedActionExecuted, false);
+  assert.equal(fixtureCase.rawArgumentsStored, false);
+  assert.equal(fixtureCase.rawInstructionStored, false);
+
+  const jobId = await createFixtureJob(
+    fixturePool,
+    input.workspaceId,
+    input.requesterId,
+    input.profileId,
+    input.idempotencyKey,
+    evidence,
+  );
+  assert.equal(
+    await createFixtureJob(
+      fixturePool,
+      input.workspaceId,
+      input.requesterId,
+      input.profileId,
+      input.idempotencyKey,
+      evidence,
+    ),
+    jobId,
+    "repeating a fixture completion with the same key must reuse the same job",
+  );
+  const actionRef = String(fixtureCase.syntheticActionRef);
+  const tool = String(fixtureCase.tool);
+  const action = getAllowlistedSyntheticApprovalAction(
+    actionRef,
+    input.profileId,
+    input.caseId,
+    tool,
+  );
+  assert.ok(action, "fixture proposal must resolve to a fixed synthetic action");
+  assert.equal(fixtureCase.actionSha256, action.actionSha256);
+  assert.equal(fixtureCase.proposalSha256, action.proposalSha256);
+  const proposalBindingSha256 = computeApprovalProposalBindingV2({
+    workspaceId: input.workspaceId,
+    jobId,
+    caseId: input.caseId,
+    proposalSha256: action.proposalSha256,
+    actionSha256: action.actionSha256,
+    syntheticActionRef: actionRef as
+      | "guardian.synthetic.finance.bank-change.v1"
+      | "guardian.synthetic.support.refund.v1",
+    requestedByUserId: input.requesterId,
+    requestedByRole: "owner",
+    expiresAt: input.expiry,
+  });
+  const inserted = await fixturePool.query<{ id: string }>(
+    `INSERT INTO public.ai_assessment_approval_requests
+       (workspace_id, job_id, case_id, proposal_sha256, action_sha256,
+        proposal_binding_sha256, requested_by_user_id, requested_by_role,
+        binding_version, synthetic_action_ref, status, expires_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, 'owner', 2, $8, 'pending', $9)
+     RETURNING id`,
+    [
+      input.workspaceId,
+      jobId,
+      input.caseId,
+      action.proposalSha256,
+      action.actionSha256,
+      proposalBindingSha256,
+      input.requesterId,
+      actionRef,
+      input.expiry,
+    ],
+  );
+  const approvalId = inserted.rows[0]?.id;
+  assert.ok(approvalId);
+  return { jobId, approvalId, binding: proposalBindingSha256 };
+}
+
+test(
+  "deterministic worker fixtures exercise persistent approval API without Docker",
+  { timeout: 60_000 },
+  async (t) => {
+    assert.equal(process.env.NODE_ENV, "development");
+    assert.notEqual(process.env.REPLIT_DEPLOYMENT, "1");
+    assert.ok(databaseUrl, "development DATABASE_URL is required");
+    await assertRlsRuntimeReady();
+    const fixturePool = new pg.Pool({ connectionString: databaseUrl });
+    const app = express();
+    app.use(express.json({ limit: "8kb" }));
+    app.use("/api", createAiAssessmentLabRouter(authForTest));
+
+    let workspaceA = "";
+    let workspaceB = "";
+    let server: Server | undefined;
+    t.after(async () => {
+      if (server?.listening) {
+        await new Promise<void>((resolveClose, reject) => {
+          server!.close((error) => (error ? reject(error) : resolveClose()));
+        });
+      }
+      if (workspaceA) {
+        await fixturePool.query("DELETE FROM public.workspaces WHERE id = $1", [
+          workspaceA,
+        ]);
+      }
+      if (workspaceB) {
+        await fixturePool.query("DELETE FROM public.workspaces WHERE id = $1", [
+          workspaceB,
+        ]);
+      }
+      await fixturePool.end();
+    });
+
+    const workspaces = await Promise.all([
+      fixturePool.query<{ id: string }>(
+        `INSERT INTO public.workspaces (name, plan_id, created_by_user_id)
+         VALUES ('Synthetic approval harness A', 'small', $1) RETURNING id`,
+        [workspaceAOwner],
+      ),
+      fixturePool.query<{ id: string }>(
+        `INSERT INTO public.workspaces (name, plan_id, created_by_user_id)
+         VALUES ('Synthetic approval harness B', 'small', $1) RETURNING id`,
+        [workspaceBOwner],
+      ),
+    ]);
+    workspaceA = workspaces[0].rows[0]!.id;
+    workspaceB = workspaces[1].rows[0]!.id;
+    await fixturePool.query(
+      `INSERT INTO public.workspace_memberships (workspace_id, user_id, role)
+       VALUES ($1, $2, 'owner'), ($1, $3, 'admin'), ($1, $4, 'admin'),
+              ($1, $5, 'viewer'), ($6, $7, 'owner')`,
+      [
+        workspaceA,
+        workspaceAOwner,
+        workspaceAAdmin,
+        workspaceAAdmin2,
+        workspaceAViewer,
+        workspaceB,
+        workspaceBOwner,
+      ],
+    );
+
+    server = createServer(app);
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    const address = server.address();
+    assert.ok(address && typeof address !== "string");
+    const apiBase = `http://127.0.0.1:${address.port}`;
+    const request = async (
+      userId: string | null,
+      path: string,
+      method = "GET",
+      body?: unknown,
+    ) =>
+      fetch(`${apiBase}${path}`, {
+        method,
+        headers: {
+          ...(userId ? { "x-guardian-test-user": userId } : {}),
+          ...(body ? { "content-type": "application/json" } : {}),
+        },
+        ...(body ? { body: JSON.stringify(body) } : {}),
+      });
+    const approvalPath = `/api/workspaces/${workspaceA}/ai-security-assessments/approvals`;
+    const expireFuture = () => new Date(Date.now() + 60 * 60 * 1000);
+    const queuePath = `/api/workspaces/${workspaceA}/ai-security-assessments/lab/jobs`;
+    const beforeBlockedEnqueue = await fixturePool.query<{ count: string }>(
+      `SELECT count(*)::text AS count
+         FROM public.ai_assessment_jobs
+        WHERE workspace_id = $1`,
+      [workspaceA],
+    );
+    const blockedEnqueue = await request(workspaceAOwner, queuePath, "POST", {
+      idempotencyKey: `broker-disabled-${randomUUID()}`,
+      profileId: "guardian-agent-lab-finance-v1",
+    });
+    assert.equal(
+      blockedEnqueue.status,
+      503,
+      "API enqueue remains unavailable without the isolated assessment worker",
+    );
+    const afterBlockedEnqueue = await fixturePool.query<{ count: string }>(
+      `SELECT count(*)::text AS count
+         FROM public.ai_assessment_jobs
+        WHERE workspace_id = $1`,
+      [workspaceA],
+    );
+    assert.equal(
+      afterBlockedEnqueue.rows[0]?.count,
+      beforeBlockedEnqueue.rows[0]?.count,
+      "disabled worker must reject before creating a job",
+    );
+
+    const cases = [
+      {
+        profileId: "guardian-agent-lab-finance-v1",
+        caseId: "finance_trusted_bank_change_requires_approval",
+        idempotencyKey: `synthetic-finance-${randomUUID()}`,
+        expectedResult: "synthetic_bank_change_approved_in_clone",
+      },
+      {
+        profileId: "guardian-agent-lab-customer-service-v1",
+        caseId: "support_trusted_refund_requires_approval",
+        idempotencyKey: `synthetic-support-${randomUUID()}`,
+        expectedResult: "synthetic_refund_approved_in_clone",
+      },
+    ] as const;
+
+    const approvals = [];
+    for (const fixture of cases) {
+      const evidence = runDeterministicFixtureWorker(fixture.profileId);
+      assert.equal(evidence.modelInference, false);
+      assert.equal(evidence.executionMode, "deterministic_fixture");
+      const seeded = await seedApproval(fixturePool, {
+        workspaceId: workspaceA,
+        requesterId: workspaceAOwner,
+        profileId: fixture.profileId,
+        caseId: fixture.caseId,
+        expiry: expireFuture(),
+        idempotencyKey: fixture.idempotencyKey,
+      });
+      approvals.push({ ...seeded, ...fixture });
+    }
+
+    assert.equal((await request(null, approvalPath)).status, 401);
+    assert.equal((await request(workspaceBOwner, approvalPath)).status, 403);
+
+    for (const approval of approvals) {
+      const decisionPath = `${approvalPath}/${approval.approvalId}/decision`;
+      assert.equal(
+        (await request(workspaceAOwner, decisionPath, "POST", {
+          decision: "approve",
+          proposalBindingSha256: approval.binding,
+        })).status,
+        403,
+        "requester cannot approve their own fixture proposal",
+      );
+      assert.equal(
+        (await request(workspaceAViewer, decisionPath, "POST", {
+          decision: "approve",
+          proposalBindingSha256: approval.binding,
+        })).status,
+        403,
+        "viewer cannot approve",
+      );
+      assert.equal(
+        (await request(workspaceBOwner, decisionPath, "POST", {
+          decision: "approve",
+          proposalBindingSha256: approval.binding,
+        })).status,
+        403,
+        "cross-tenant decision is denied",
+      );
+      assert.equal(
+        (await request(workspaceAAdmin, decisionPath, "POST", {
+          decision: "approve",
+          proposalBindingSha256: "0".repeat(64),
+        })).status,
+        409,
+        "tampered proposal binding is rejected",
+      );
+      const pending = ListWorkspaceAiAssessmentApprovalsResponse.parse(
+        await (await request(workspaceAAdmin, approvalPath)).json(),
+      );
+      assert.equal(
+        pending.approvals.find((item) => item.id === approval.approvalId)?.status,
+        "pending",
+      );
+    }
+
+    const finance = approvals[0]!;
+    const financeDecisionPath = `${approvalPath}/${finance.approvalId}/decision`;
+    const concurrent = await Promise.all([
+      request(workspaceAAdmin, financeDecisionPath, "POST", {
+        decision: "approve",
+        proposalBindingSha256: finance.binding,
+      }),
+      request(workspaceAAdmin2, financeDecisionPath, "POST", {
+        decision: "approve",
+        proposalBindingSha256: finance.binding,
+      }),
+    ]);
+    assert.deepEqual(
+      concurrent.map((response) => response.status).sort(),
+      [200, 409],
+      "exactly one concurrent approval may consume the proposal",
+    );
+    const approvedResponse = DecideWorkspaceAiAssessmentApprovalResponse.parse(
+      await concurrent.find((response) => response.status === 200)!.json(),
+    );
+    assert.equal(
+      approvedResponse.execution,
+      "synthetic_action_simulated_once",
+    );
+    assert.equal(
+      approvedResponse.approval.simulationResultCode,
+      finance.expectedResult,
+    );
+    assert.match(
+      approvedResponse.approval.simulationResultSha256 ?? "",
+      /^[a-f0-9]{64}$/,
+    );
+    assert.equal(
+      (
+        await request(workspaceAAdmin, financeDecisionPath, "POST", {
+          decision: "approve",
+          proposalBindingSha256: finance.binding,
+        })
+      ).status,
+      409,
+      "replay is rejected",
+    );
+
+    const support = approvals[1]!;
+    const supportDecisionPath = `${approvalPath}/${support.approvalId}/decision`;
+    const supportApproved = DecideWorkspaceAiAssessmentApprovalResponse.parse(
+      await (
+        await request(workspaceAAdmin, supportDecisionPath, "POST", {
+          decision: "approve",
+          proposalBindingSha256: support.binding,
+        })
+      ).json(),
+    );
+    assert.equal(
+      supportApproved.execution,
+      "synthetic_action_simulated_once",
+    );
+    assert.equal(
+      supportApproved.approval.simulationResultCode,
+      support.expectedResult,
+    );
+    assert.equal(
+      (
+        await request(workspaceAAdmin, supportDecisionPath, "POST", {
+          decision: "approve",
+          proposalBindingSha256: support.binding,
+        })
+      ).status,
+      409,
+      "support approval replay is rejected",
+    );
+
+    const supportDenied = await seedApproval(fixturePool, {
+      workspaceId: workspaceA,
+      requesterId: workspaceAOwner,
+      profileId: support.profileId,
+      caseId: support.caseId,
+      expiry: expireFuture(),
+      idempotencyKey: `synthetic-support-denied-${randomUUID()}`,
+    });
+    const denied = DecideWorkspaceAiAssessmentApprovalResponse.parse(
+      await (
+        await request(
+          workspaceAAdmin,
+          `${approvalPath}/${supportDenied.approvalId}/decision`,
+          "POST",
+          {
+          decision: "deny",
+            proposalBindingSha256: supportDenied.binding,
+          },
+        )
+      ).json(),
+    );
+    assert.equal(denied.approval.status, "denied");
+    assert.equal(denied.execution, "not_performed_denied");
+    assert.equal(denied.approval.simulatedAt, null);
+
+    const expired = await seedApproval(fixturePool, {
+      workspaceId: workspaceA,
+      requesterId: workspaceAOwner,
+      profileId: finance.profileId,
+      caseId: finance.caseId,
+      expiry: new Date(Date.now() - 60_000),
+      idempotencyKey: `synthetic-expired-${randomUUID()}`,
+    });
+    const expiredResponse = await request(
+      workspaceAAdmin,
+      `${approvalPath}/${expired.approvalId}/decision`,
+      "POST",
+      {
+        decision: "approve",
+        proposalBindingSha256: expired.binding,
+      },
+    );
+    assert.equal(expiredResponse.status, 409);
+    const expiredRows = await fixturePool.query<{
+      status: string;
+      simulated_at: Date | null;
+    }>(
+      `SELECT status, simulated_at
+         FROM public.ai_assessment_approval_requests
+        WHERE id = $1`,
+      [expired.approvalId],
+    );
+    assert.equal(expiredRows.rows[0]?.status, "expired");
+    assert.equal(expiredRows.rows[0]?.simulated_at, null);
+
+    for (const approval of [
+      ...approvals,
+      supportDenied,
+      expired,
+    ]) {
+      const audit = await fixturePool.query<{ count: string }>(
+        `SELECT count(*)::text AS count
+           FROM public.workspace_audit_events
+          WHERE workspace_id = $1
+            AND resource_id = $2
+            AND action LIKE 'ai_assessment.approval_%'`,
+        [workspaceA, approval.approvalId],
+      );
+      if (
+        approval.approvalId === finance.approvalId ||
+        approval.approvalId === support.approvalId
+      ) {
+        assert.ok(Number(audit.rows[0]?.count ?? 0) >= 1);
+      }
+    }
+
+    const summary = {
+      source: "deterministic_fixture_worker_harness",
+      evidenceVersion: 1,
+      generatedAt: new Date().toISOString(),
+      modelInference: false,
+      brokerUsed: false,
+      dockerCommandRequestedByHarness: false,
+      fixtureWorkerProcesses: fixtureWorkerProcessCount,
+      externalEffects: false,
+      profiles: cases.map((item) => item.profileId),
+      approvalRequests: approvals.length + 2,
+      approvalDecisions: {
+        approvedOnce: 2,
+        deniedWithoutSimulation: 1,
+        expiredWithoutSimulation: 1,
+        concurrentSingleWinner: 1,
+        replayRejected: true,
+        crossTenantRejected: true,
+        roleAndSelfApprovalRejected: true,
+        bindingMutationRejected: true,
+      },
+      evidenceSha256: cases.map(
+        (item) => runDeterministicFixtureWorker(item.profileId).evidenceSha256,
+      ),
+    };
+    assert.equal(summary.dockerCommandRequestedByHarness, false);
+    assert.equal(summary.fixtureWorkerProcesses, 2);
+    assert.equal(summary.externalEffects, false);
+    assert.equal(summary.modelInference, false);
+    assert.equal((await appPool.query("SELECT 1")).rowCount, 1);
+    const evidenceHash = sha256(summary);
+    const artifactPath = fileURLToPath(
+      new URL(
+        "../../../generated-artifacts/guardian-synthetic-approval-e2e.json",
+        import.meta.url,
+      ),
+    );
+    mkdirSync(dirname(artifactPath), { recursive: true });
+    writeFileSync(
+      artifactPath,
+      `${JSON.stringify({ ...summary, evidenceHash }, null, 2)}\n`,
+      { mode: 0o600 },
+    );
+    console.info(
+      `SYNTHETIC_APPROVAL_E2E_SHA256=${evidenceHash}; modelInference=false; dockerCommandRequestedByHarness=false`,
+    );
+  },
+);

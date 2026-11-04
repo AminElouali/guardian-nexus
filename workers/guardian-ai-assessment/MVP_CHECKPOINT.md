@@ -2293,3 +2293,55 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   `reports/offline-qwen-docker-privilege-preflight-2026-11-04.md`.
   Manifiesto SHA-256:
   `reports/offline-qwen-docker-privilege-preflight-2026-11-04.sha256`.
+
+## Aprobaciones sintéticas por API sin broker — 2026-11-04
+
+- Base antes del cambio: HEAD `2a9b21ead07d62a7e2dccc99dbc9cde48a7fbb7f`,
+  árbol limpio. El broker/worker de evaluación seguía deshabilitado sin
+  identidad aislada; no se modificaron permisos del socket ni el gate.
+- El Policy Lab determinista añade un escenario sintético benigno de reembolso
+  de soporte que requiere aprobación y no invoca el adaptador. La lista de
+  acciones aprobables vincula ese caso, su herramienta y los argumentos fijos
+  ficticios a `guardian.synthetic.support.refund.v1`. Los ocho perfiles y los
+  16 casos fixture previos quedan intactos; este caso se añade aparte, total 17.
+- Se añadió una prueba API E2E autónoma: ejecuta la función Python determinista
+  local para finanzas y soporte, y provisiona evidencia redacted de fixture en
+  PostgreSQL de desarrollo. Después usa el router de aprobaciones real con
+  transacciones de usuario y RLS. El seed se realiza con la conexión fixture
+  de test: esto NO prueba un consumidor real de la cola ni una identidad
+  separada del worker/broker; no habilita jobs de evaluación en la API.
+- Resultado E2E: 1/1. Cuatro solicitudes persistidas: dos aprobadas y
+  simuladas una sola vez en clones, una denegada sin simulación y una caducada
+  sin simulación. Dos aprobadores concurrentes sobre la misma propuesta
+  produjeron exactamente un `200` y un `409`. Se verificaron replay, hash
+  alterado, autoaprobación, viewer, cross-tenant y reutilización idempotente de
+  la clave fixture. La ruta normal de enqueue respondió `503` con el worker
+  deshabilitado y el conteo de jobs no cambió. No se guardaron prompts,
+  respuestas ni argumentos brutos.
+- Clasificación explícita: `deterministic_fixture`, `modelInference=false`,
+  cero Qwen nuevo y cero `message.tool_calls` nativas o marcadores adaptados.
+  El runner Qwen no se ejecutó: el preflight conocido sigue bloqueando por
+  socket Docker escribible en esta identidad. No se relajó el preflight.
+- Verificación serial reciente: Policy Lab enfocado **26/26**; suite worker
+  del host excluyendo únicamente `test_corpus_validation.py` (falla al importar
+  por Garak ausente) **144/144**. `unittest discover` completo contabilizó
+  144 correctas y 1 error de importación por `ModuleNotFoundError: garak`; no
+  se instalaron dependencias. API **74/74**, API synthetic approval E2E
+  **1/1**, SDK **13/13**, UI integración **8/8**. Typecheck raíz/API/web y
+  builds API, SDK y web correctos; el build web conserva los avisos existentes
+  de sourcemap y tamaño de chunk.
+- El API workflow reinició una vez y volvió a iniciar en puerto 8080. El web
+  workflow permaneció activo. La sesión real de navegador Clerk no fue probada.
+- Evidencia generada:
+  `generated-artifacts/guardian-synthetic-approval-e2e.json`; hash de resumen
+  `8ffcb9fbb11b9d38a014f73e8b8c4ad44da8eca9abd1a9f1edfc13ae4a664e2f`;
+  hash del archivo `6bb8d2a3f070b81edf7a2b98addd27d86940347310904a31e852bf85db73fc68`.
+  Informe:
+  `reports/synthetic-approval-api-e2e-2026-11-04.md`.
+  Manifiesto de fuentes e informe:
+  `reports/synthetic-approval-api-e2e-2026-11-04.sha256`.
+- Pendiente prioritario: ejecutar los jobs desde un worker/broker real con
+  identidad y acceso a Docker separados; el host actual no permite acreditar
+  esa frontera. Clerk browser autorizado y Garak import en el host también
+  siguen sin verificarse. IPv6, advisories y licencias mantienen sus estados
+  previos; este incremento no los aborda.

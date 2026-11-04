@@ -10,6 +10,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "tsx --test src/security.test.ts src/connector-utils.test.ts src/ai-security.test.ts src/lib/ai-assessment-qwen-evidence.test.ts src/lib/assessment-broker-grant.test.ts src/lib/assessment-worker-mode.test.ts src/lib/ai-assessment-sandbox.test.ts src/lib/guardian-agent-action-adapter.test.ts src/lib/assessment-container-control.test.ts src/lib/assessment-output-limit.test.ts src/middlewares/ai-assessment-json.test.ts",
     "test:assessment-container-integration": "NODE_ENV=development tsx --test src/lib/assessment-container-hardening.integration.test.ts",
+    "test:ai-assessment-synthetic-e2e": "NODE_ENV=development tsx --test src/ai-assessment-synthetic-approval-e2e.test.ts",
     "test:ai-assessment-e2e": "node ./scripts/run-ai-assessment-e2e.mjs"
   },
   "dependencies": {
