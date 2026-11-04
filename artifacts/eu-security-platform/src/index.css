@@ -761,6 +761,15 @@ select.text-input { appearance: auto; }
 .risk-intelligence-pending { margin: 13px 0 0; color: #7a8580; font-size: 10px; line-height: 1.6; }
 .risk-intelligence-footnote { margin-top: 20px; border-top: 1px solid #e2e0d8; padding-top: 13px; color: #7d8781; font-size: 9px; line-height: 1.6; }
 .risk-intelligence-footnote b { color: #536d5d; }
+.risk-associated-controls { margin-top: 12px; border: 1px solid #e5e5dd; border-radius: 8px; padding: 9px 10px; background: #fbfbf7; }
+.risk-associated-controls > summary { display: flex; cursor: pointer; justify-content: space-between; gap: 10px; color: #536963; font-size: 9px; font-weight: 700; }
+.risk-associated-controls > summary span { color: #87938a; font: 9px var(--font-mono); }
+.risk-associated-controls > ul { display: grid; gap: 8px; margin: 10px 0 0; padding: 0; list-style: none; }
+.risk-associated-controls > ul > li { display: grid; gap: 5px; border-top: 1px solid #ecece5; padding-top: 8px; }
+.risk-associated-control-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; }
+.risk-associated-control-head b { color: #4d5f5f; font-size: 9px; }
+.risk-associated-controls li > p, .risk-associated-controls li > small { margin: 0; color: #78827c; font-size: 8px; line-height: 1.55; overflow-wrap: anywhere; }
+.risk-associated-controls li > .risk-evidence-ref { font-family: var(--font-mono); }
 .risk-executive-strip { display: grid; grid-template-columns: repeat(3, minmax(100px, .55fr)) minmax(220px, 1.1fr); gap: 10px; align-items: stretch; margin: 0 0 28px; }
 .risk-executive-strip > div { display: flex; min-height: 72px; flex-direction: column; justify-content: center; gap: 5px; border: 1px solid #e1e2d9; border-radius: 9px; padding: 12px; background: #fffefa; }
 .risk-executive-strip > div b { color: #315a49; font: 700 23px var(--font-display); }
@@ -776,6 +785,7 @@ select.text-input { appearance: auto; }
 .risk-evidence-status-historical_artifact_not_currently_reproducible, .risk-evidence-status-blocked_by_current_host_preflight { color: #895944; background: #f7ece4; }
 .risk-evidence-status-historical_fixture_only { color: #6a7358; background: #eff1e7; }
 .risk-evidence-grid article > p { margin: 0; color: #65746e; font-size: 9px; line-height: 1.55; }
+.risk-evidence-grid article > .risk-evidence-technical { border-left: 2px solid #d2d7c6; padding-left: 8px; color: #7a7561; overflow-wrap: anywhere; }
 .risk-evidence-grid .risk-evidence-limitation { color: #8a6e5b; }
 .risk-evidence-ref { overflow-wrap: anywhere; color: #78827d; font: 8px var(--font-mono); }
 .risk-evidence-hash { overflow-wrap: anywhere; color: #5d7867; font: 8px var(--font-mono); }

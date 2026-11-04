@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { test } from "node:test";
+import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Router } from "wouter";
@@ -7,13 +9,25 @@ import RiskIntelligencePage from "./RiskIntelligencePage";
 import { RISK_INTELLIGENCE_CATALOG } from "@/risk-intelligence/catalog.v1";
 
 function renderPage(workspaceRole: "owner" | "admin" | "analyst" | "viewer") {
-  return renderToStaticMarkup(
-    createElement(
-      Router,
-      { base: "/" },
-      createElement(RiskIntelligencePage, { workspaceRole }),
-    ),
-  );
+  const previousLocation = Object.getOwnPropertyDescriptor(globalThis, "location");
+  Object.defineProperty(globalThis, "location", {
+    configurable: true,
+    value: { pathname: "/", search: "", hash: "" },
+  });
+  try {
+    return renderToStaticMarkup(
+      createElement(
+        Router,
+        {
+          base: "",
+          children: createElement(RiskIntelligencePage, { workspaceRole }),
+        },
+      ),
+    );
+  } finally {
+    if (previousLocation) Object.defineProperty(globalThis, "location", previousLocation);
+    else Reflect.deleteProperty(globalThis, "location");
+  }
 }
 
 test("catalog contains complete unexecuted STPA drafts for all eight profiles", () => {
@@ -22,9 +36,23 @@ test("catalog contains complete unexecuted STPA drafts for all eight profiles", 
   assert.equal(RISK_INTELLIGENCE_CATALOG.catalogVersion, "0.2.0");
   assert.equal(profiles.length, 8);
   assert.equal(new Set(profiles.map((profile) => profile.id)).size, 8);
+  const evidenceIds = new Set(
+    RISK_INTELLIGENCE_CATALOG.controlEvidenceSnapshot.records.map((record) => record.id),
+  );
   assert.deepEqual(profiles.slice(0, 2).map((profile) => profile.id), ["email", "database"]);
+  const itemIds = profiles.flatMap((profile) => [
+    ...profile.losses,
+    ...profile.hazards,
+    ...profile.unsafeControlActions,
+    ...profile.causalScenarios,
+    ...profile.constraints,
+    ...profile.syntheticTestSpecs,
+  ]).map((entry) => entry.id);
+  assert.equal(new Set(itemIds).size, itemIds.length);
   for (const profile of profiles) {
     assert.equal(profile.state, "prepared_not_executed");
+    assert.ok(profile.controlEvidenceRefs.length > 0);
+    assert.ok(profile.controlEvidenceRefs.every((id) => evidenceIds.has(id)));
     assert.ok(profile.executiveSummary.length > 30);
     assert.ok(profile.losses.length >= 3);
     assert.ok(profile.hazards.length >= 3);
@@ -59,6 +87,17 @@ test("all references resolve and external identifiers remain source-scoped", () 
   assert.equal(RISK_INTELLIGENCE_CATALOG.decisionAuthority, "existing_guardian_policy_engine_only");
 });
 
+test("published evidence snapshot hashes match the referenced local files", () => {
+  const records = RISK_INTELLIGENCE_CATALOG.controlEvidenceSnapshot.records
+    .filter((record) => record.evidenceSha256);
+  assert.ok(records.length > 0);
+  for (const record of records) {
+    const evidence = readFileSync(new URL(`../../../../${record.evidenceRef}`, import.meta.url));
+    const actual = createHash("sha256").update(evidence).digest("hex");
+    assert.equal(actual, record.evidenceSha256, record.id);
+  }
+});
+
 test("HF license conflict and detector candidate are disclosed without reuse", () => {
   const dataset = RISK_INTELLIGENCE_CATALOG.sources.find((source) => source.id === "hf-deepset-prompt-injections");
   const detector = RISK_INTELLIGENCE_CATALOG.sources.find((source) => source.id === "hf-horizon-injection-detector");
@@ -78,22 +117,25 @@ test("viewer sees executive summary and snapshot, not admin source or STPA inter
   assert.match(html, /data-testid="risk-intelligence-page"/);
   assert.match(html, /Catálogo consultivo; no es un control de ejecución/);
   assert.match(html, /Guardian Policy Engine existente sigue siendo el único decisor determinista/);
+  assert.match(html, /Controles asociados y estado de evidencia/);
+  assert.match(html, /Prueba fixture · no inferencia Qwen/);
   assert.match(html, /No verificado en esta fase/);
   assert.match(html, /Ver evaluaciones y aprobaciones/);
   assert.equal((html.match(/data-testid="risk-profile-/g) ?? []).length, 8);
   assert.match(html, /risk-capability-form/);
   assert.doesNotMatch(html, /risk-source-hf-deepset/);
-  assert.doesNotMatch(html, /GNRI-E-L-01/);
+  assert.doesNotMatch(html, /GNRI-L-01/);
 });
 
 test("workspace admins see detailed STPA items and artifact provenance", () => {
   const html = renderPage("admin");
   assert.match(html, /risk-source-hf-deepset-prompt-injections/);
   assert.match(html, /risk-source-hf-horizon-injection-detector/);
-  assert.match(html, /GNRI-E-L-01/);
+  assert.match(html, /GNRI-L-01/);
   assert.match(html, /GNRI-M-T-04/);
   assert.match(html, /6a1e54658f745074a7a5a937204181c219ec28d184a866845dd09513497ee1d9/);
-  assert.match(html, /no es una consulta en vivo/i);
+  assert.match(html, /no consulta el estado del sistema en vivo/i);
+  assert.match(html, /assessment_broker_identity_unverified/);
 });
 
 test("page exposes only an advisory capability analyzer, not policy or execution controls", () => {

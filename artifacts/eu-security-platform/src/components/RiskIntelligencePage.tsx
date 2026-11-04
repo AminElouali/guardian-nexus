@@ -78,6 +78,9 @@ function ProfileCard({
   showTechnicalDetails: boolean;
 }) {
   const Icon = iconByProfile[profile.id] ?? Mail;
+  const relatedControls = profile.controlEvidenceRefs
+    .map((id) => RISK_INTELLIGENCE_CATALOG.controlEvidenceSnapshot.records.find((record) => record.id === id))
+    .filter((record) => record !== undefined);
   const itemGroups = [
     ["Pérdidas consideradas", profile.losses],
     ["Peligros", profile.hazards],
@@ -103,6 +106,34 @@ function ProfileCard({
         <AlertTriangle size={14} aria-hidden="true" />
         <span><b>Riesgo principal:</b> {profile.hazards[0]?.title ?? "Pendiente de modelado"}</span>
       </p>
+      <details className="risk-associated-controls">
+        <summary>Controles asociados y estado de evidencia<span>{relatedControls.length}</span></summary>
+        {relatedControls.length === 0 ? (
+          <p className="risk-intelligence-pending">No hay controles asociados documentados.</p>
+        ) : (
+          <ul>
+            {relatedControls.map((record) => (
+              <li key={record.id}>
+                <div className="risk-associated-control-head">
+                  <b>{record.title}</b>
+                  <span className={`risk-evidence-status risk-evidence-status-${record.status}`}>
+                    {evidenceStatusText[record.status]}
+                  </span>
+                </div>
+                <p>{record.result}</p>
+                <small>{record.limitation}</small>
+                {showTechnicalDetails && (
+                  <>
+                    {record.technicalDetails && <small>{record.technicalDetails}</small>}
+                    <small className="risk-evidence-ref">{record.evidenceRef}</small>
+                    {record.evidenceSha256 && <code className="risk-evidence-hash">SHA-256 {record.evidenceSha256}</code>}
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </details>
       {showTechnicalDetails && (
         <div className="risk-intelligence-groups">
           {itemGroups.map(([label, entries]) => (
@@ -157,7 +188,7 @@ function ControlEvidencePanel({ detailed }: { detailed: boolean }) {
         <span>Snapshot local · {RISK_INTELLIGENCE_CATALOG.controlEvidenceSnapshot.observedAt}</span>
       </div>
       <p className="risk-evidence-freshness">
-        {RISK_INTELLIGENCE_CATALOG.controlEvidenceSnapshot.freshness}; no es una consulta en vivo.
+        {RISK_INTELLIGENCE_CATALOG.controlEvidenceSnapshot.freshness}
       </p>
       <div className="risk-evidence-grid">
         {RISK_INTELLIGENCE_CATALOG.controlEvidenceSnapshot.records.map((record) => (
@@ -169,6 +200,9 @@ function ControlEvidencePanel({ detailed }: { detailed: boolean }) {
               </span>
             </div>
             <p>{record.result}</p>
+            {detailed && record.technicalDetails && (
+              <p className="risk-evidence-technical">{record.technicalDetails}</p>
+            )}
             {detailed && <small className="risk-evidence-ref">{record.evidenceRef}</small>}
             {detailed && record.evidenceSha256 && (
               <code className="risk-evidence-hash">SHA-256 {record.evidenceSha256}</code>

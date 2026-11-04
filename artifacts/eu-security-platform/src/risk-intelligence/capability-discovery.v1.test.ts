@@ -33,6 +33,10 @@ test("declared capability analysis is advisory, non-authorizing and does not ech
   assert.ok(result.findings.some((finding) => finding.classification === "inferred_from_declared_capability"));
   assert.ok(result.findings.every((finding) => finding.validationState === "pending_validation"));
   assert.ok(result.findings.every((finding) => finding.riskItemRefs.length > 0));
+  const sourceIds = new Set(RISK_INTELLIGENCE_CATALOG.sources.map((source) => source.id));
+  assert.ok(result.findings.flatMap((finding) => finding.sourceRefs).every((id) => sourceIds.has(id)));
+  assert.equal(Object.hasOwn(result, "tenantId"), false);
+  assert.equal(Object.hasOwn(result, "actorId"), false);
   assert.doesNotMatch(encoded, /mail_read_fixture|read:synthetic-mailbox|fixture-mail-store/);
   assert.doesNotMatch(encoded, /allow|deny|require_approval/i);
 });
@@ -93,6 +97,10 @@ test("invalid profiles, booleans and overlong lists fail closed", () => {
     () => analyzeDeclaredCapabilities({ ...baseDeclaration, dataSensitivity: "top-secret" }),
     /risk_capability_sensitivity_invalid/,
   );
+  assert.throws(
+    () => analyzeDeclaredCapabilities(Object.create(baseDeclaration)),
+    /risk_capability_declaration_invalid/,
+  );
 });
 
 test("no signals yields no findings, not a safe or allow decision", () => {
@@ -113,5 +121,5 @@ test("no signals yields no findings, not a safe or allow decision", () => {
   assert.deepEqual(result.findings, []);
   assert.equal(result.policyDecision, null);
   assert.equal(result.actionDispatched, false);
-  assert.match(result.evidenceNote, /no están confirmadas por una prueba de runtime/i);
+  assert.match(result.evidenceNote, /ningún hallazgo está confirmado por una prueba de runtime/i);
 });
