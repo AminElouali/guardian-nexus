@@ -2700,3 +2700,32 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
 - Reporte y SHA-256 de fuentes/evidencias:
   `reports/laboratory-safety-assurance-2026-11-04.md` y
   `reports/laboratory-safety-assurance-2026-11-04.sha256`.
+
+## Incremento 2026-11-04 — sincronización estática del contrato Qwen
+
+- Inicio: HEAD limpio `27dc90e3602b4279e89ce5bf7d7e650ac44a7640`.
+- Se añadió `tests/test_cross_layer_qwen_contract.py`. La prueba compara los
+  ocho IDs de perfil en la API, worker TypeScript, worker Python, runner offline
+  y SDKs TypeScript/Python; compara además los ocho IDs fixture API/Python y
+  las claves/casos seleccionados del runner offline. Solo parsea código
+  fuente; no importa pesos, no crea jobs, no ejecuta Qwen ni trata un fixture
+  como inferencia.
+- Resultados de esta iteración: contrato transversal **2/2**; suites worker
+  focalizadas política/Qwen **31/31**, delegación **8/8**, revisión de nueve
+  ALLOW históricos **4/4**, assurance **3/3**, contrato **2/2** (total
+  **48/48**); preflight offline **11/11**; API **75/75**. La primera llamada
+  worker sin `PYTHONPATH` falló por configuración de import; repetida con
+  `PYTHONPATH=workers/guardian-ai-assessment`, pasó. El extractor AST de la
+  prueba nueva también falló inicialmente y fue corregido; resultado final
+  **2/2**.
+- No se ejecutó SDK/UI/E2E en esta iteración porque no se cambió su runtime;
+  sus últimos resultados verificados permanecen en el checkpoint anterior.
+  No se ejecutó inferencia Qwen ni se generó evidencia nueva. Los ocho IDs
+  coincidentes son contratos, no ocho ejecuciones reales.
+- Bloqueo sin cambios: el último preflight registrado mantiene socket Docker
+  accesible, variables sensibles presentes y broker/sesión DB sin separación
+  verificada. El API y runner permanecen fail-closed; no hubo acceso a
+  credenciales, socket, Docker, servicios externos ni producción.
+- Reporte y hashes:
+  `reports/cross-layer-qwen-contract-2026-11-04.md` y
+  `reports/cross-layer-qwen-contract-2026-11-04.sha256`.
