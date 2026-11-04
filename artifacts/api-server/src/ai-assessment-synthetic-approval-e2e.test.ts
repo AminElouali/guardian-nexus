@@ -12,6 +12,7 @@ import pg from "pg";
 import {
   DecideWorkspaceAiAssessmentApprovalResponse,
   ListWorkspaceAiAssessmentApprovalsResponse,
+  PreviewWorkspaceAiAssessmentPolicyLabResponse,
 } from "@workspace/api-zod";
 import {
   assertRlsRuntimeReady,
@@ -407,6 +408,57 @@ test(
     const approvalPath = `/api/workspaces/${workspaceA}/ai-security-assessments/approvals`;
     const expireFuture = () => new Date(Date.now() + 60 * 60 * 1000);
     const queuePath = `/api/workspaces/${workspaceA}/ai-security-assessments/lab/jobs`;
+    const previewPath = `/api/workspaces/${workspaceA}/ai-security-assessments/lab/policy-preview`;
+    assert.equal((await request(null, previewPath, "POST", {
+      profileId: "guardian-agent-lab-email-v1",
+    })).status, 401, "preview requires authentication");
+    assert.equal((await request(workspaceBOwner, previewPath, "POST", {
+      profileId: "guardian-agent-lab-email-v1",
+    })).status, 403, "preview is workspace-scoped");
+    assert.equal((await request(workspaceAViewer, previewPath, "POST", {
+      profileId: "guardian-agent-lab-email-v1",
+    })).status, 403, "viewer cannot run previews");
+    assert.equal((await request(workspaceAOwner, previewPath, "POST", {
+      profileId: "guardian-agent-lab-email-v1",
+      engineVersion: "attacker-selected",
+    })).status, 400, "unknown preview inputs are rejected");
+
+    const jobsBeforePreview = await fixturePool.query<{ count: string }>(
+      `SELECT count(*)::text AS count
+         FROM public.ai_assessment_jobs
+        WHERE workspace_id = $1`,
+      [workspaceA],
+    );
+    const previewResponse = await request(workspaceAAdmin, previewPath, "POST", {
+      profileId: "guardian-agent-lab-email-v1",
+    });
+    assert.equal(previewResponse.status, 200);
+    assert.equal(previewResponse.headers.get("cache-control"), "no-store");
+    const preview = PreviewWorkspaceAiAssessmentPolicyLabResponse.parse(
+      await previewResponse.json(),
+    );
+    assert.equal(preview.source, "fresh_deterministic_policy_preview");
+    assert.equal(preview.evidence.engineVersion, "guardian-agent-policy-lab-v3");
+    assert.equal(preview.evidence.executionContext, "api_policy_preview");
+    assert.equal(preview.evidence.modelInference, false);
+    assert.equal(preview.evidence.limits.network, "host_network_unisolated");
+    assert.equal(preview.evidence.limits.processIsolation, "shared_api_identity");
+    assert.equal(preview.evidence.limits.dockerSocketAccess, "not_assessed");
+    assert.equal(preview.evidence.summary.externalCalls, 0);
+    assert.equal(preview.evidence.summary.actualOperations, 0);
+    assert.ok(preview.evidence.cases.every((item) => !item.policyOff.executed));
+    const jobsAfterPreview = await fixturePool.query<{ count: string }>(
+      `SELECT count(*)::text AS count
+         FROM public.ai_assessment_jobs
+        WHERE workspace_id = $1`,
+      [workspaceA],
+    );
+    assert.equal(
+      jobsAfterPreview.rows[0]?.count,
+      jobsBeforePreview.rows[0]?.count,
+      "preview is ephemeral and must not create a job or history record",
+    );
+
     const beforeBlockedEnqueue = await fixturePool.query<{ count: string }>(
       `SELECT count(*)::text AS count
          FROM public.ai_assessment_jobs

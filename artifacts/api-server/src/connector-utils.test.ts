@@ -46,7 +46,12 @@ test("OAuth refresh tokens are authenticated-encrypted at rest", () => {
     const stored = encryptConnectorSecret("test-refresh-token");
     assert.notEqual(stored, "test-refresh-token");
     assert.equal(decryptConnectorSecret(stored), "test-refresh-token");
-    assert.throws(() => decryptConnectorSecret(`${stored.slice(0, -1)}x`));
+    const [version, iv, tag, ciphertext] = stored.split(".");
+    assert.ok(version && iv && tag && ciphertext);
+    const changedTag = `${tag[0] === "A" ? "B" : "A"}${tag.slice(1)}`;
+    assert.throws(() =>
+      decryptConnectorSecret([version, iv, changedTag, ciphertext].join(".")),
+    );
   } finally {
     if (previousKey === undefined) delete process.env.CONNECTOR_ENCRYPTION_KEY;
     else process.env.CONNECTOR_ENCRYPTION_KEY = previousKey;

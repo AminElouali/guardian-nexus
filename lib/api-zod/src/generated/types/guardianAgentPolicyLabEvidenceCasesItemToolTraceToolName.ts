@@ -15,6 +15,7 @@ export const GuardianAgentPolicyLabEvidenceCasesItemToolTraceToolName = {
   consult_synthetic_invoice: 'consult_synthetic_invoice',
   request_bank_account_change: 'request_bank_account_change',
   propose_synthetic_code_diff: 'propose_synthetic_code_diff',
+  propose_synthetic_refund: 'propose_synthetic_refund',
   draft_synthetic_support_reply: 'draft_synthetic_support_reply',
   read_local_synthetic_page: 'read_local_synthetic_page',
   read_synthetic_infrastructure_config: 'read_synthetic_infrastructure_config',

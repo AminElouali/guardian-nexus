@@ -685,7 +685,7 @@ export const PreviewWorkspaceAiAssessmentPolicyLabResponse = zod.object({
 }),
   "toolTrace": zod.object({
   "adapterVersion": zod.literal("guardian-synthetic-tool-adapter-v1"),
-  "toolName": zod.enum(['send_email_simulated', 'query_synthetic_database', 'consult_synthetic_invoice', 'request_bank_account_change', 'propose_synthetic_code_diff', 'draft_synthetic_support_reply', 'read_local_synthetic_page', 'read_synthetic_infrastructure_config', 'delegate_synthetic_read_only_task']),
+  "toolName": zod.enum(['send_email_simulated', 'query_synthetic_database', 'consult_synthetic_invoice', 'request_bank_account_change', 'propose_synthetic_code_diff', 'propose_synthetic_refund', 'draft_synthetic_support_reply', 'read_local_synthetic_page', 'read_synthetic_infrastructure_config', 'delegate_synthetic_read_only_task']),
   "policyOn": zod.object({
   "invoked": zod.boolean(),
   "dispatchStatus": zod.enum(['simulated_execution', 'adapter_validation_denied', 'approval_required_before_dispatch', 'blocked_by_policy_before_dispatch']),
@@ -3104,7 +3104,7 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
 }),
   "toolTrace": zod.object({
   "adapterVersion": zod.literal("guardian-synthetic-tool-adapter-v1"),
-  "toolName": zod.enum(['send_email_simulated', 'query_synthetic_database', 'consult_synthetic_invoice', 'request_bank_account_change', 'propose_synthetic_code_diff', 'draft_synthetic_support_reply', 'read_local_synthetic_page', 'read_synthetic_infrastructure_config', 'delegate_synthetic_read_only_task']),
+  "toolName": zod.enum(['send_email_simulated', 'query_synthetic_database', 'consult_synthetic_invoice', 'request_bank_account_change', 'propose_synthetic_code_diff', 'propose_synthetic_refund', 'draft_synthetic_support_reply', 'read_local_synthetic_page', 'read_synthetic_infrastructure_config', 'delegate_synthetic_read_only_task']),
   "policyOn": zod.object({
   "invoked": zod.boolean(),
   "dispatchStatus": zod.enum(['simulated_execution', 'adapter_validation_denied', 'approval_required_before_dispatch', 'blocked_by_policy_before_dispatch']),
@@ -5639,7 +5639,7 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
 }),
   "toolTrace": zod.object({
   "adapterVersion": zod.literal("guardian-synthetic-tool-adapter-v1"),
-  "toolName": zod.enum(['send_email_simulated', 'query_synthetic_database', 'consult_synthetic_invoice', 'request_bank_account_change', 'propose_synthetic_code_diff', 'draft_synthetic_support_reply', 'read_local_synthetic_page', 'read_synthetic_infrastructure_config', 'delegate_synthetic_read_only_task']),
+  "toolName": zod.enum(['send_email_simulated', 'query_synthetic_database', 'consult_synthetic_invoice', 'request_bank_account_change', 'propose_synthetic_code_diff', 'propose_synthetic_refund', 'draft_synthetic_support_reply', 'read_local_synthetic_page', 'read_synthetic_infrastructure_config', 'delegate_synthetic_read_only_task']),
   "policyOn": zod.object({
   "invoked": zod.boolean(),
   "dispatchStatus": zod.enum(['simulated_execution', 'adapter_validation_denied', 'approval_required_before_dispatch', 'blocked_by_policy_before_dispatch']),
@@ -8163,7 +8163,7 @@ export const GetWorkspaceAiAssessmentLabJobResponse = zod.object({
 }),
   "toolTrace": zod.object({
   "adapterVersion": zod.literal("guardian-synthetic-tool-adapter-v1"),
-  "toolName": zod.enum(['send_email_simulated', 'query_synthetic_database', 'consult_synthetic_invoice', 'request_bank_account_change', 'propose_synthetic_code_diff', 'draft_synthetic_support_reply', 'read_local_synthetic_page', 'read_synthetic_infrastructure_config', 'delegate_synthetic_read_only_task']),
+  "toolName": zod.enum(['send_email_simulated', 'query_synthetic_database', 'consult_synthetic_invoice', 'request_bank_account_change', 'propose_synthetic_code_diff', 'propose_synthetic_refund', 'draft_synthetic_support_reply', 'read_local_synthetic_page', 'read_synthetic_infrastructure_config', 'delegate_synthetic_read_only_task']),
   "policyOn": zod.object({
   "invoked": zod.boolean(),
   "dispatchStatus": zod.enum(['simulated_execution', 'adapter_validation_denied', 'approval_required_before_dispatch', 'blocked_by_policy_before_dispatch']),
@@ -10753,7 +10753,7 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
 }),
   "toolTrace": zod.object({
   "adapterVersion": zod.literal("guardian-synthetic-tool-adapter-v1"),
-  "toolName": zod.enum(['send_email_simulated', 'query_synthetic_database', 'consult_synthetic_invoice', 'request_bank_account_change', 'propose_synthetic_code_diff', 'draft_synthetic_support_reply', 'read_local_synthetic_page', 'read_synthetic_infrastructure_config', 'delegate_synthetic_read_only_task']),
+  "toolName": zod.enum(['send_email_simulated', 'query_synthetic_database', 'consult_synthetic_invoice', 'request_bank_account_change', 'propose_synthetic_code_diff', 'propose_synthetic_refund', 'draft_synthetic_support_reply', 'read_local_synthetic_page', 'read_synthetic_infrastructure_config', 'delegate_synthetic_read_only_task']),
   "policyOn": zod.object({
   "invoked": zod.boolean(),
   "dispatchStatus": zod.enum(['simulated_execution', 'adapter_validation_denied', 'approval_required_before_dispatch', 'blocked_by_policy_before_dispatch']),

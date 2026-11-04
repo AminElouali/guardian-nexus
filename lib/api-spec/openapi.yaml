@@ -1644,7 +1644,7 @@ components:
                   adapterVersion: { type: string, const: guardian-synthetic-tool-adapter-v1 }
                   toolName:
                     type: string
-                    enum: [send_email_simulated, query_synthetic_database, consult_synthetic_invoice, request_bank_account_change, propose_synthetic_code_diff, draft_synthetic_support_reply, read_local_synthetic_page, read_synthetic_infrastructure_config, delegate_synthetic_read_only_task]
+                    enum: [send_email_simulated, query_synthetic_database, consult_synthetic_invoice, request_bank_account_change, propose_synthetic_code_diff, propose_synthetic_refund, draft_synthetic_support_reply, read_local_synthetic_page, read_synthetic_infrastructure_config, delegate_synthetic_read_only_task]
                   policyOn:
                     type: object
                     additionalProperties: false

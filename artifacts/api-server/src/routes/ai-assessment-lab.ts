@@ -71,6 +71,15 @@ import { requireAuth } from "../middlewares/requireAuth";
 const routes: IRouter = Router();
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function hasOnlyPolicyPreviewProfile(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const keys = Object.keys(value);
+  return keys.length === 1 && keys[0] === "profileId";
+}
+
 const MAX_HISTORY = 20;
 const MAX_PENDING_PER_WORKSPACE = 3;
 const MAX_APPROVAL_HISTORY = 50;
@@ -673,6 +682,7 @@ routes.post(
     if (
       !params.success ||
       !UUID_PATTERN.test(params.data.workspaceId) ||
+      !hasOnlyPolicyPreviewProfile(req.body) ||
       !body.success
     ) {
       res.status(400).json({ error: "Invalid policy preview request" });
@@ -697,6 +707,7 @@ routes.post(
 
     try {
       const evidence = await runPolicyLabPreview(body.data.profileId);
+      res.setHeader("Cache-Control", "no-store");
       res.status(200).json(
         PreviewWorkspaceAiAssessmentPolicyLabResponse.parse({
           source: "fresh_deterministic_policy_preview",
@@ -708,7 +719,7 @@ routes.post(
         error instanceof PolicyLabPreviewError
           ? error.code
           : "policy_preview_runner_failed";
-      req.log.warn(
+      logger.warn(
         { code, profileId: body.data.profileId },
         "Deterministic policy preview did not complete",
       );

@@ -11,11 +11,13 @@ import {
   useListWorkspaceAiAssessmentApprovals,
   useListWorkspaceAiAssessmentLabJobs,
   useListWorkspaceAiEvaluations,
+  usePreviewWorkspaceAiAssessmentPolicyLab,
   useRetryWorkspaceAiAssessmentLabJob,
   useRunWorkspaceMockAiEvaluation,
   type AiAssessmentLabJob,
   type AiAssessmentLabJobRequestProfileId,
   type AiEvaluationRun,
+  type GuardianPolicyLabPreviewResponse,
   type Workspace,
 } from '@workspace/api-client-react';
 import { Button } from '@/components/ui/button';
@@ -814,6 +816,7 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
     query: { refetchInterval: 10_000 },
   });
   const createLabJob = useCreateWorkspaceAiAssessmentLabJob();
+  const previewPolicyLab = usePreviewWorkspaceAiAssessmentPolicyLab();
   const retryLabJob = useRetryWorkspaceAiAssessmentLabJob();
   const decideApproval = useDecideWorkspaceAiAssessmentApproval();
   const [message, setMessage] = useState('');
@@ -823,6 +826,11 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
   const [guidedDemo, setGuidedDemo] = useState<{
     jobId: string;
     caseId: string;
+  } | null>(null);
+  const [freshPolicyPreview, setFreshPolicyPreview] = useState<{
+    profileId: Extract<AiAssessmentLabJobRequestProfileId, `guardian-agent-lab-${string}-v1`>;
+    caseId: string;
+    evidence: GuardianPolicyLabPreviewResponse['evidence'];
   } | null>(null);
   const [approvalMessage, setApprovalMessage] = useState('');
   const [approvalError, setApprovalError] = useState('');
@@ -846,6 +854,7 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
   ) {
     setLabMessage('');
     setLabError('');
+    setFreshPolicyPreview(null);
     if (guidedCaseId) setGuidedDemo(null);
     try {
       const createdJob = await createLabJob.mutateAsync({
@@ -856,13 +865,37 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
         setGuidedDemo({ jobId: createdJob.id, caseId: guidedCaseId });
       }
       setLabMessage(guidedCaseId
-        ? 'Solicitud registrada. Se ejecutan solo los dos fixtures fijos del perfil; el caso elegido quedará resaltado.'
+        ? 'Solicitud registrada. Se ejecutan solo los fixtures fijos del perfil; el caso elegido quedará resaltado.'
         : 'Solicitud registrada. Se ejecutará únicamente el perfil local seleccionado.');
       await cache.invalidateQueries({
         queryKey: getListWorkspaceAiAssessmentLabJobsQueryKey(workspace.id),
       });
     } catch {
       setLabError('No se pudo iniciar el laboratorio. No se ha creado un resultado simulado.');
+    }
+  }
+
+  async function runPolicyPreview(
+    profileId: Extract<AiAssessmentLabJobRequestProfileId, `guardian-agent-lab-${string}-v1`>,
+    focusedCaseId: string,
+  ) {
+    setLabMessage('');
+    setLabError('');
+    setGuidedDemo(null);
+    setFreshPolicyPreview(null);
+    try {
+      const result = await previewPolicyLab.mutateAsync({
+        workspaceId: workspace.id,
+        data: { profileId },
+      });
+      setFreshPolicyPreview({ profileId, caseId: focusedCaseId, evidence: result.evidence });
+      setLabMessage(
+        'Previsualización determinista completada. Es evidencia efímera de fixtures, no inferencia Qwen ni job persistido; el proceso API no está aislado de red ni de la capacidad Docker del host.',
+      );
+    } catch {
+      setLabError(
+        'No se pudo calcular la previsualización determinista. No se creó un trabajo ni se inició Qwen, Docker o una acción externa.',
+      );
     }
   }
 
@@ -920,7 +953,7 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
       <div>
         <div className="eyebrow">GUARDIAN AI SECURITY ASSESSMENT · LABORATORIO</div>
         <h1>Evaluación de Seguridad de IA</h1>
-        <p>Los ocho perfiles de verticales conservan su baseline de fixtures deterministas. Correo y bases de datos tienen además perfiles separados con inferencia local real de Qwen y Policy Engine; ninguno está conectado a sistemas empresariales ni habilitado como servicio para clientes.</p>
+        <p>Los ocho perfiles de verticales conservan su baseline de fixtures deterministas. Los resultados históricos de Qwen se muestran por separado, con su procedencia; ninguno está conectado a sistemas empresariales ni habilitado como servicio para clientes.</p>
       </div>
       <span className="ai-evaluation-badge"><FlaskConical size={14} /> LABORATORIO INTERNO</span>
     </div>
@@ -937,16 +970,20 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
         <div><span className="panel-kicker">EJECUCIONES LOCALES · DESARROLLO</span><h2>Laboratorio aislado</h2></div>
         <span className={`ai-evaluation-state ${availability.data?.status === 'ready' ? '' : 'ai-state-pending'}`}><i />{availability.isLoading ? 'Comprobando' : availability.data?.status === 'ready' ? 'Disponible en desarrollo' : 'No disponible'}</span>
       </div>
-       <p>Garak/GVE y los ocho Policy Labs deterministas se mantienen como líneas de evidencia separadas. Los dos perfiles Qwen siguientes ejecutan inferencia local sobre dos casos sintéticos, uno benigno y uno adversarial, con selección automática de herramienta; no usan selección forzada. Cualquier llamada pasa por política antes del simulador. Los trabajos usan 1 CPU, 1.536 MiB, concurrencia global 1 y red deshabilitada. Ningún perfil está habilitado para clientes.</p>
+       <p>Garak/GVE, los ocho Policy Labs deterministas y la inferencia Qwen son líneas de evidencia separadas. Cuando el preflight lo permite, Qwen usa selección automática con casos sintéticos; la previsualización de Policy Lab de esta página no inicia Qwen ni usa Docker. Los trabajos aislados están limitados a 1 CPU, 1.536 MiB, concurrencia global 1 y red deshabilitada. Ningún perfil está habilitado para clientes.</p>
        <AgentPolicyLabCatalog
          profiles={availability.data?.profiles ?? []}
          canRun={canRun}
          pending={createLabJob.isPending}
+          previewPending={previewPolicyLab.isPending}
           onRequest={(profileId, caseId) => void requestLabAssessment(profileId, caseId)}
+          onPreview={(profileId, caseId) => void runPolicyPreview(profileId, caseId)}
+          freshPreview={freshPolicyPreview}
           recordedEvidence={recordedPolicyEvidence}
           recordedArtifactSha256={recordedPolicyArtifactSha256}
           onReset={() => {
             setGuidedDemo(null);
+            setFreshPolicyPreview(null);
             setLabMessage('Recorrido reiniciado en esta vista. El historial y las auditorías del espacio no se han borrado.');
             setLabError('');
           }}
@@ -957,7 +994,7 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
          pending={createLabJob.isPending}
          onRequest={(profileId) => void requestLabAssessment(profileId)}
        />
-      {availability.data?.status !== 'ready' && <div className="ai-lab-unavailable"><LockKeyhole size={15} />{availability.data?.reasonCode === 'development_only' ? 'Deshabilitado fuera del entorno de desarrollo.' : 'El worker local no está preparado. No se iniciará ni simulará una evaluación.'}</div>}
+       {availability.data?.status !== 'ready' && <div className="ai-lab-unavailable"><LockKeyhole size={15} />{availability.data?.reasonCode === 'development_only' ? 'Deshabilitado fuera del entorno de desarrollo.' : 'El worker local sigue bloqueado por preflight. La previsualización determinista no inicia Qwen/Garak ni afirma aislamiento.'}</div>}
       <div className="ai-evaluation-actions">
         <Button onClick={() => void requestLabAssessment('guardian-local-agent-v1')} disabled={!canRun || !garakAvailable || createLabJob.isPending} data-testid="button-run-ai-lab">
           {createLabJob.isPending ? <Activity className="spin" size={15} /> : <ShieldCheck size={15} />}

@@ -3,6 +3,7 @@ import { Activity, ArrowRight, FlaskConical, RotateCcw } from 'lucide-react';
 import {
   type AiAssessmentLabJob,
   type AiAssessmentLabJobRequestProfileId,
+  type GuardianPolicyLabPreviewResponse,
 } from '@workspace/api-client-react';
 import { Button } from '@/components/ui/button';
 
@@ -15,6 +16,11 @@ type PolicyLabProfile = Extract<
   AiAssessmentLabJobRequestProfileId,
   `guardian-agent-lab-${string}-v1`
 >;
+type FreshPolicyPreview = {
+  profileId: PolicyLabProfile;
+  caseId: string;
+  evidence: GuardianPolicyLabPreviewResponse['evidence'];
+};
 
 export const AGENT_POLICY_LABS: Array<{
   profileId: PolicyLabProfile;
@@ -149,22 +155,29 @@ export function AgentPolicyLabCatalog({
   profiles,
   canRun,
   pending,
+  previewPending,
   onRequest,
+  onPreview,
   onReset,
   recordedEvidence,
   recordedArtifactSha256,
+  freshPreview,
 }: {
   profiles: Array<{ profileId: string; status: string; reasonCode: string | null }>;
   canRun: boolean;
   pending: boolean;
+  previewPending: boolean;
   onRequest: (profileId: AiAssessmentLabJobRequestProfileId, focusCaseId: string) => void;
+  onPreview: (profileId: PolicyLabProfile, focusCaseId: string) => void;
   onReset: () => void;
   recordedEvidence: PolicyLabEvidence[];
   recordedArtifactSha256: string;
+  freshPreview: FreshPolicyPreview | null;
 }) {
   const [selectedProfileId, setSelectedProfileId] = useState<PolicyLabProfile | null>(null);
   const [selectedCaseKind, setSelectedCaseKind] = useState<'benign' | 'adversarial' | null>(null);
   const [showRecordedEvidence, setShowRecordedEvidence] = useState(false);
+  const busy = pending || previewPending;
   const selectedLab = AGENT_POLICY_LABS.find((lab) => lab.profileId === selectedProfileId);
   const selectedCaseId = selectedLab
     ? selectedCaseKind === 'benign'
@@ -178,6 +191,11 @@ export function AgentPolicyLabCatalog({
   const selectedRecordedEvidence = recordedEvidence.find(
     (evidence) => evidence.profileId === selectedProfileId,
   );
+  const selectedFreshPreview =
+    freshPreview?.profileId === selectedProfileId &&
+    freshPreview.caseId === selectedCaseId
+      ? freshPreview
+      : null;
 
   function resetGuide() {
     setSelectedProfileId(null);
@@ -196,7 +214,7 @@ export function AgentPolicyLabCatalog({
         <span className="ai-evaluation-state"><i />Prototipos locales</span>
       </div>
       <p>
-        Cada ejecución usa dos propuestas controladas y un Policy Engine determinista externo a la propuesta.
+        Cada previsualización evalúa dos o tres propuestas fixture fijas con el Policy Engine determinista.
         No es inferencia de Qwen, no conecta proveedores y no ejecuta acciones empresariales.
         El modo OFF solo calcula un contrafactual sobre un clon efímero.
       </p>
@@ -211,7 +229,7 @@ export function AgentPolicyLabCatalog({
             variant="outline"
             size="sm"
             onClick={resetGuide}
-            disabled={pending}
+            disabled={busy}
             data-testid="button-reset-agent-demo"
           >
             <RotateCcw size={14} /> Reiniciar recorrido
@@ -227,7 +245,7 @@ export function AgentPolicyLabCatalog({
             type="button"
             variant={selectedCaseKind === 'benign' ? 'default' : 'outline'}
             aria-pressed={selectedCaseKind === 'benign'}
-            disabled={!selectedLab || pending}
+            disabled={!selectedLab || busy}
             onClick={() => {
               setSelectedCaseKind('benign');
               setShowRecordedEvidence(false);
@@ -240,7 +258,7 @@ export function AgentPolicyLabCatalog({
             type="button"
             variant={selectedCaseKind === 'adversarial' ? 'default' : 'outline'}
             aria-pressed={selectedCaseKind === 'adversarial'}
-            disabled={!selectedLab || pending}
+            disabled={!selectedLab || busy}
             onClick={() => {
               setSelectedCaseKind('adversarial');
               setShowRecordedEvidence(false);
@@ -252,24 +270,33 @@ export function AgentPolicyLabCatalog({
         </div>
         <div className="agent-policy-guide-submit">
           <p>
-            La API conserva su contrato: al iniciar se ejecutan los dos casos fixture fijos del perfil.
-            La selección solo enfoca el caso elegido en el informe; no modifica las reglas ni el corpus.
+            La previsualización calcula evidencia nueva y efímera en el servidor; no crea un job ni modifica historial.
+            La selección solo enfoca el caso elegido; no modifica reglas, corpus ni permisos.
           </p>
           <Button
             type="button"
+            onClick={() => selectedLab && selectedCaseId && onPreview(selectedLab.profileId, selectedCaseId)}
+            disabled={!canRun || !selectedLab || !selectedCaseId || busy}
+            data-testid="button-preview-policy-lab"
+          >
+            {previewPending ? <Activity className="spin" size={15} /> : <FlaskConical size={15} />}
+            {previewPending ? 'Calculando decisión…' : 'Previsualizar decisión determinista'}
+          </Button>
+          <Button
+            type="button"
             onClick={() => selectedLab && selectedCaseId && onRequest(selectedLab.profileId, selectedCaseId)}
-            disabled={!canRun || !selectedLab || !selectedCaseId || !selectedReady || pending}
+            disabled={!canRun || !selectedLab || !selectedCaseId || !selectedReady || busy}
             data-testid="button-run-guided-agent-demo"
           >
             {pending ? <Activity className="spin" size={15} /> : <FlaskConical size={15} />}
-            {pending ? 'Encolando recorrido…' : 'Ejecutar perfil y revisar caso'}
+            {pending ? 'Encolando recorrido…' : 'Solicitar worker aislado'}
             {!pending && <ArrowRight size={14} />}
           </Button>
           {!canRun && <small>Solo owner/admin puede iniciar la evaluación.</small>}
           {selectedLab && !selectedReady && (
             <small role="status">
-              Perfil no disponible: {selectedAvailability?.reasonCode ?? 'worker_unavailable'}.
-              No se iniciará ni simulará una evaluación.
+              El worker de Qwen/Garak no está disponible ({selectedAvailability?.reasonCode ?? 'worker_unavailable'}).
+              La previsualización anterior no inicia ese worker.
             </small>
           )}
           {selectedLab && selectedCaseId && selectedRecordedEvidence && (
@@ -277,7 +304,7 @@ export function AgentPolicyLabCatalog({
               type="button"
               variant="outline"
               onClick={() => setShowRecordedEvidence(true)}
-              disabled={pending}
+              disabled={busy}
               data-testid="button-view-recorded-policy-evidence"
             >
               Ver evidencia histórica guardada
@@ -308,7 +335,7 @@ export function AgentPolicyLabCatalog({
                   setSelectedCaseKind(null);
                   setShowRecordedEvidence(false);
                 }}
-                disabled={pending}
+                disabled={busy}
                 aria-pressed={selectedProfileId === lab.profileId}
                 data-testid={`button-select-agent-lab-${lab.verticalId}`}
               >
@@ -340,6 +367,18 @@ export function AgentPolicyLabCatalog({
           />
         </div>
       )}
+      {!showRecordedEvidence && selectedFreshPreview && selectedCaseId && (
+        <div className="agent-policy-recorded-sample" data-testid="agent-policy-fresh-preview">
+          <p role="status">
+            Decisión determinista recién calculada. No es inferencia Qwen, no se persiste como job ni en el historial.
+            El proceso comparte identidad con la API; aislamiento de red y acceso al socket Docker no están verificados.
+          </p>
+          <AgentPolicyLabResult
+            evidence={selectedFreshPreview.evidence}
+            focusedCaseId={selectedCaseId}
+          />
+        </div>
+      )}
     </section>
   );
 }
@@ -366,6 +405,12 @@ export function AgentPolicyLabResult({
         <div className="agent-policy-recorded-notice" role="note">
           Evidencia histórica guardada; no se ejecutó nada al abrir esta vista.
           {recordedArtifactSha256 && <span> SHA-256 del artefacto fuente: <code>{recordedArtifactSha256}</code></span>}
+        </div>
+      )}
+      {evidence.executionContext === 'api_policy_preview' && (
+        <div className="agent-policy-recorded-notice" role="note" data-testid="policy-preview-runtime-limit">
+          Previsualización fresca del Policy Engine; no se creó un job. No es una frontera de aislamiento:
+          el proceso comparte identidad con la API y no se restringió ni verificó la red o el acceso al socket Docker.
         </div>
       )}
       <p>{evidence.interpretation}</p>
@@ -443,12 +488,15 @@ export function AgentPolicyLabResult({
           <dt>Corpus y oráculo</dt><dd>{evidence.versions.corpus} · {evidence.versions.oracle} · semilla {evidence.seed}</dd>
           <dt>Adaptador de herramientas</dt><dd>{evidence.versions.toolAdapter ?? 'No registrado en evidencia anterior'}</dd>
           <dt>Propuestas</dt><dd>Fixture controlado; no Qwen, no tool calls nativas.</dd>
-          <dt>Aislamiento</dt><dd>network=none · sin secretos, pesos del modelo ni socket Docker.</dd>
+          <dt>Red declarada</dt><dd>{evidence.limits.network}</dd>
+          <dt>Entorno</dt><dd>{evidence.executionContext === 'api_policy_preview'
+            ? 'Proceso API compartido; red y acceso al socket Docker no aislados ni verificados.'
+            : 'Worker Docker network=none; sin secretos, pesos del modelo ni socket montado.'}</dd>
           <dt>Datos</dt><dd>No se guardan prompts, instrucciones ni argumentos en bruto; solo metadatos y hashes.</dd>
           <dt>Hash de suite</dt><dd>{evidence.suiteEvidenceSha256}</dd>
           <dt>Hash de evidencia</dt><dd>{evidence.evidenceSha256}</dd>
         </dl>
-        <small>Dos casos por vertical son una demostración acotada, no una medición de eficacia general.</small>
+        <small>Dos o tres casos por vertical son una demostración acotada, no una medición de eficacia general.</small>
       </details>
     </section>
   );

@@ -1,12 +1,15 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type {
   AiAssessmentApproval,
   AiAssessmentLabJob,
+  GuardianPolicyLabPreviewResponse,
 } from "@workspace/api-client-react";
 import { LabJobCard } from "./AiEvaluationPage";
 import { GuardianApprovalInbox } from "./GuardianApprovalInbox";
@@ -317,7 +320,9 @@ test("renders all eight synthetic agent verticals and an API-persisted policy la
       })),
       canRun: true,
       pending: false,
+      previewPending: false,
       onRequest: () => undefined,
+      onPreview: () => undefined,
       onReset: () => undefined,
       recordedEvidence: jobs.flatMap((job) =>
         job.status === "succeeded" && job.result?.engine === "guardian_policy_lab"
@@ -326,6 +331,7 @@ test("renders all eight synthetic agent verticals and an API-persisted policy la
       ),
       recordedArtifactSha256:
         "9bbc87ca9ee5c7eac040a0d2f33defb6eeb41f95d5d9940979b5564b435960be",
+      freshPreview: null,
     }),
   );
   assert.equal(AGENT_POLICY_LABS.length, 8);
@@ -342,8 +348,10 @@ test("renders all eight synthetic agent verticals and an API-persisted policy la
   assert.match(catalogMarkup, /data-testid="button-select-agent-case-benign"/);
   assert.match(catalogMarkup, /data-testid="button-select-agent-case-adversarial"/);
   assert.match(catalogMarkup, /data-testid="button-run-guided-agent-demo"/);
+  assert.match(catalogMarkup, /data-testid="button-preview-policy-lab"/);
   assert.match(catalogMarkup, /data-testid="button-reset-agent-demo"/);
-  assert.match(catalogMarkup, /no modifica las reglas ni el corpus/i);
+  assert.match(catalogMarkup, /no modifica reglas, corpus ni permisos/i);
+  assert.match(catalogMarkup, /no es inferencia de Qwen/i);
   assert.match(catalogMarkup, /multiagente/i);
   assert.match(catalogMarkup, /No es inferencia de Qwen/);
 });
@@ -399,6 +407,53 @@ test("guided fixture result exposes provenance, Policy ON, non-execution and app
     /SHA-256 del artefacto fuente: <code>([a-f0-9]{64})<\/code>/,
   )?.[1];
   assert.equal(renderedArtifactHash, createHash("sha256").update(readFileSync(artifactPath)).digest("hex"));
+});
+
+test("fresh API-preview evidence renders its unisolated runtime boundary honestly", () => {
+  const workerRoot = fileURLToPath(
+    new URL("../../../../workers/guardian-ai-assessment", import.meta.url),
+  );
+  const generated = spawnSync(
+    "python3",
+    [
+      "-S",
+      "-B",
+      "-m",
+      "guardian_ai_assessment.policy_lab",
+      "--profile-id",
+      "guardian-agent-lab-email-v1",
+      "--execution-context",
+      "api_policy_preview",
+    ],
+    {
+      cwd: workerRoot,
+      encoding: "utf8",
+      timeout: 5_000,
+      maxBuffer: 64 * 1024,
+      env: {
+        PATH: process.env.PATH ?? "/usr/bin:/bin",
+        PYTHONPATH: workerRoot,
+        PYTHONHASHSEED: "0",
+        PYTHONNOUSERSITE: "1",
+        PYTHONDONTWRITEBYTECODE: "1",
+      },
+    },
+  );
+  assert.equal(generated.error, undefined);
+  assert.equal(generated.status, 0, generated.stderr);
+  const evidence = JSON.parse(
+    generated.stdout,
+  ) as GuardianPolicyLabPreviewResponse["evidence"];
+  const markup = renderToStaticMarkup(
+    createElement(AgentPolicyLabResult, { evidence }),
+  );
+  assert.match(markup, /Previsualización fresca del Policy Engine/);
+  assert.match(markup, /proceso comparte identidad con la API/i);
+  assert.match(markup, /red y acceso al socket Docker no aislados ni verificados/i);
+  assert.match(markup, /host_network_unisolated/);
+  assert.match(markup, /0 ejecución real/);
+  assert.doesNotMatch(markup, /Worker Docker network=none/);
+  assert.doesNotMatch(markup, /prompt text/i);
 });
 
 test("downloads the allow-listed Qwen JSON report without raw case data", async () => {

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import { resolve } from "node:path";
 import { POLICY_LAB_PROFILE_IDS, type PolicyLabProfileId } from "./ai-assessment-sandbox";
@@ -10,6 +11,25 @@ const POLICY_LAB_WORKER_ROOT = resolve(
 const POLICY_LAB_RUN_TIMEOUT_MS = 5_000;
 const POLICY_LAB_MAX_OUTPUT_BYTES = 64 * 1024;
 let previewRunning = false;
+
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(canonicalJson).join(",")}]`;
+  }
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>).sort(
+      ([left], [right]) => (left < right ? -1 : left > right ? 1 : 0),
+    );
+    return `{${entries
+      .map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
+
+function sha256Canonical(value: unknown): string {
+  return createHash("sha256").update(canonicalJson(value), "utf8").digest("hex");
+}
 
 export type PolicyLabPreviewErrorCode =
   | "unsupported_policy_lab_profile"
@@ -89,7 +109,7 @@ function runBoundedCommand(command: RunnerCommand): Promise<string> {
   });
 }
 
-function validatePreviewEvidence(
+export function validatePolicyLabPreviewEvidence(
   value: unknown,
   expectedProfileId: PolicyLabProfileId,
 ) {
@@ -103,6 +123,9 @@ function validatePreviewEvidence(
 
   const evidence = parsed.data;
   const casesRespectDispatchOrder = evidence.cases.every((item) => {
+    if (!item.toolTrace) {
+      return false;
+    }
     const dispatch = item.toolTrace.policyOn;
     if (dispatch.dispatchStatus === "simulated_execution") {
       return (
@@ -141,9 +164,19 @@ function validatePreviewEvidence(
   const policyOffIsCounterfactual = evidence.cases.every(
     (item) =>
       item.policyOff.executed === false &&
-      item.toolTrace.policyOff.invoked === false &&
+      item.toolTrace?.policyOff.invoked === false &&
       item.toolTrace.policyOff.events.length === 0,
   );
+  const { evidenceSha256, ...evidencePayload } = evidence;
+  const expectedEvidenceSha256 = sha256Canonical(evidencePayload);
+  const expectedSuiteEvidenceSha256 = sha256Canonical({
+    engineVersion: evidence.engineVersion,
+    policyVersion: evidence.versions.policy,
+    toolAdapterVersion: evidence.versions.toolAdapter,
+    profileId: evidence.profileId,
+    seed: evidence.seed,
+    cases: evidence.cases.map((item) => item.caseEvidenceSha256),
+  });
 
   if (
     evidence.profileId !== expectedProfileId ||
@@ -162,6 +195,8 @@ function validatePreviewEvidence(
     evidence.summary.persistentStateChanges !== 0 ||
     evidence.summary.externalCalls !== 0 ||
     evidence.summary.unauthorizedExecutions !== 0 ||
+    evidenceSha256 !== expectedEvidenceSha256 ||
+    evidence.suiteEvidenceSha256 !== expectedSuiteEvidenceSha256 ||
     !casesRespectDispatchOrder ||
     !policyOffIsCounterfactual
   ) {
@@ -186,7 +221,10 @@ export async function runPolicyLabPreview(profileId: string) {
     } catch {
       throw new PolicyLabPreviewError("policy_preview_evidence_invalid");
     }
-    return validatePreviewEvidence(result, profileId as PolicyLabProfileId);
+    return validatePolicyLabPreviewEvidence(
+      result,
+      profileId as PolicyLabProfileId,
+    );
   } catch (error) {
     if (error instanceof PolicyLabPreviewError) {
       throw error;

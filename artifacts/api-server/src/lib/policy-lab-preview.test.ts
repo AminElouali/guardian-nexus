@@ -4,6 +4,7 @@ import { POLICY_LAB_PROFILE_IDS } from "./ai-assessment-sandbox";
 import {
   buildPolicyLabPreviewCommand,
   PolicyLabPreviewError,
+  validatePolicyLabPreviewEvidence,
   runPolicyLabPreview,
 } from "./policy-lab-preview";
 
@@ -24,9 +25,9 @@ test("policy preview command is fixed, bounded, and receives only an allow-liste
   assert.equal(command.maxBuffer, 64 * 1024);
   assert.deepEqual(Object.keys(command.env).sort(), [
     "PATH",
+    "PYTHONDONTWRITEBYTECODE",
     "PYTHONHASHSEED",
     "PYTHONNOUSERSITE",
-    "PYTHONDONTWRITEBYTECODE",
     "PYTHONPATH",
   ]);
   assert.throws(
@@ -60,8 +61,25 @@ test("fresh deterministic previews validate all eight fixture profiles and never
       evidence.cases.every(
         (item) =>
           item.policyOff.mode === "counterfactual_clone_only" &&
-          item.toolTrace.policyOff.invoked === false,
+          item.toolTrace?.policyOff.invoked === false &&
+          item.toolTrace.policyOff.events.length === 0,
       ),
     );
   }
+});
+
+test("preview evidence hash binds the decision and fails closed on mutation", async () => {
+  const evidence = await runPolicyLabPreview(POLICY_LAB_PROFILE_IDS[0]);
+  const tampered = structuredClone(evidence);
+  tampered.summary.allowed += 1;
+  assert.throws(
+    () =>
+      validatePolicyLabPreviewEvidence(
+        tampered,
+        POLICY_LAB_PROFILE_IDS[0],
+      ),
+    (error: unknown) =>
+      error instanceof PolicyLabPreviewError &&
+      error.code === "policy_preview_evidence_invalid",
+  );
 });

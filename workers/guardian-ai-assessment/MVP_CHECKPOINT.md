@@ -1,5 +1,46 @@
 # Guardian Nexus MVP checkpoint
 
+## Previsualización guiada de Policy Lab — 2026-11-05
+
+- Inicio verificado en HEAD `ab5f8a7c4fed8cb1517c515297c9d6cd0c74eb41`.
+  Se añadió `POST /workspaces/{workspaceId}/ai-security-assessments/lab/policy-preview`
+  y una acción efímera en el dashboard para recorrer los ocho perfiles
+  deterministas existentes. No se creó una ruta Qwen ni se alteró el gate del
+  worker.
+- Todos los cambios de esta fase siguen sin commit: el intento de `git add`
+  fue rechazado por el guard del entorno al intentar crear `.git/index.lock`.
+  No se usó el modo de bypass; el árbol permanece modificado.
+- La ruta es solo de desarrollo, Clerk/workspace-auth, owner/admin, cuerpo
+  exacto `{profileId}`, límite 8 KiB, `no-store`, sin job ni historial. Ejecuta
+  un comando Python fijo sin shell, con entorno reducido, timeout 5 s, stdout
+  máximo 64 KiB y concurrencia 1 por proceso API. Verifica hash de evidencia y
+  hash de suite; discrepancias fallan en cerrado.
+- E2E API con PostgreSQL de desarrollo: 1/1; prueba falta de auth, tenant/rol,
+  campos/perfiles desconocidos, owner/admin, `no-store` y ausencia de nuevos
+  jobs. Digest impreso:
+  `201cc673614c61bc6eefabc6dc933a93409d1c42afeade1646368f89fbcb1faa`.
+- API unit 79/79; UI integración 10/10; SDK TypeScript 13/13; SDK Python 8/8.
+  Worker: 200/200 tests en los 30 módulos independientes de Garak,
+  incluido `test_policy_lab.py` 33/33. Discovery completo: 201 casos con un
+  error de importación `ModuleNotFoundError: garak` en
+  `test_corpus_validation.py`; no se instaló Garak.
+- `pnpm typecheck` pasó; build API pasó; build web pasó con advertencias de
+  sourcemap `tooltip.tsx` y chunk >500 KiB. `git diff --check` pasó.
+- La UI deja claro que esto son fixtures, no inferencia Qwen. Policy OFF es
+  contrafactual. La previsualización **no es aislamiento**: el proceso Python
+  comparte identidad API; red y acceso al socket Docker del host no están
+  aislados ni verificados. No invoca Docker ni servicios externos. La salida
+  es efímera y no registra una auditoría durable.
+- La captura de `/ai-evaluations` sin sesión mostró Clerk sign-in; no se probó
+  una sesión Clerk real ni la UI autenticada en navegador.
+- Reporte detallado:
+  `workers/guardian-ai-assessment/reports/development-policy-preview-2026-11-04.md`.
+  Manifiesto de 16 archivos verificado con `sha256sum -c`:
+  `workers/guardian-ai-assessment/reports/development-policy-preview-2026-11-04.sha256`,
+  SHA-256 `8e97afe1d1d9855c0d718cfcbb3fadae7ddb670e21a241e4ab3c8bbc3b8f8bee`.
+  Reporte SHA-256
+  `9004d356f29be8ac0eb45add48091d3022c2fd6a6d0a455c7d4be9e875f5db6d`.
+
 ## Risk Intelligence STPA — fase 1 (2026-11-04)
 
 - Inicio en HEAD `037e59dc8a06fbbbe52a2ade7af3902a71b61b2a`, árbol limpio.

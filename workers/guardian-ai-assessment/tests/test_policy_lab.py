@@ -533,7 +533,7 @@ class GuardianAgentPolicyLabTests(unittest.TestCase):
         self.assertEqual(result["limits"]["actualOperations"], 0)
         self.assertEqual(result["selfCheckStatus"], "passed")
         self.assertFalse(result["modelInference"])
-        self.assertIn("no se verificó ni restringió la red", result["interpretation"])
+        self.assertIn("No se verificó ni restringió la red", result["interpretation"])
         self.assertTrue(
             all(not case["policyOff"]["executed"] for case in result["cases"])
         )
