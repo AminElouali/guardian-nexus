@@ -215,7 +215,7 @@ def _install_filter(architecture_id: int, syscall_numbers: dict[str, int]) -> No
 
 def install_offline_process_guard() -> object:
     """Deny socket and process-exec syscalls, returning a process-local proof."""
-    global _ACTIVE_GUARD
+    global _ACTIVE_GUARD, _ACTIVE_GUARD_LIMITS, _ACTIVE_GUARD_INHERITED_SOCKETS
     if _ACTIVE_GUARD is not None:
         raise RuntimeError("offline_guard_already_installed")
     if platform.system() != "Linux":
