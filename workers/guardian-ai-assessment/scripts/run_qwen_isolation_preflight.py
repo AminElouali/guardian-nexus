@@ -14,6 +14,7 @@ from guardian_ai_assessment.offline_isolation_preflight import (  # noqa: E402
     collect_offline_isolation_preflight,
 )
 from guardian_ai_assessment.offline_qwen_runner import (  # noqa: E402
+    inspect_historical_offline_evidence,
     offline_profile_readiness_matrix,
 )
 
@@ -21,6 +22,10 @@ from guardian_ai_assessment.offline_qwen_runner import (  # noqa: E402
 def main() -> int:
     report = collect_offline_isolation_preflight()
     report["profileReadinessMatrix"] = offline_profile_readiness_matrix(report)
+    workspace_root = WORKER_ROOT.parent.parent
+    report["historicalOfflineEvidence"] = inspect_historical_offline_evidence(
+        workspace_root
+    )
     print(json.dumps(report, sort_keys=True, separators=(",", ":")))
     return 0 if report["integratedAssessmentReady"] else 1
 

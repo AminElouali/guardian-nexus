@@ -696,7 +696,7 @@ function RoadmapRoute() { return <AuthGuard><WorkspaceFrame page={() => <Roadmap
 function IntegrationsRoute() { return <AuthGuard><WorkspaceFrame page={IntegrationsPage} /></AuthGuard>; }
 function IntegrationReadinessRoute() { return <AuthGuard><WorkspaceFrame page={({ workspace }) => <IntegrationReadinessPage workspace={workspace} />} /></AuthGuard>; }
 function AiEvaluationRoute() { return <AuthGuard><WorkspaceFrame page={({ workspace }) => <AiEvaluationPage workspace={workspace} />} /></AuthGuard>; }
-function RiskIntelligenceRoute() { return <AuthGuard><WorkspaceFrame page={() => <RiskIntelligencePage />} /></AuthGuard>; }
+function RiskIntelligenceRoute() { return <AuthGuard><WorkspaceFrame page={({ workspace }) => <RiskIntelligencePage workspaceRole={workspace.role} />} /></AuthGuard>; }
 
 function Router() {
   return <RoutedErrorBoundary><Switch>

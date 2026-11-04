@@ -151,6 +151,259 @@ def _canonical_sha256(value: Any) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def inspect_historical_offline_evidence(
+    workspace: Path,
+    *,
+    current_source_hashes: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
+    """Summarize a prior artifact without running Qwen or exposing raw fields.
+
+    A self-hash only detects accidental or unsynchronized edits; it is not a
+    signature or proof that the claimed model run occurred. This function never
+    upgrades historical evidence into a fresh run or an API/worker integration.
+    """
+    artifact_path = (
+        workspace
+        / "generated-artifacts/guardian-qwen-offline/qwen-policy-lab-eight-profiles.json"
+    )
+    base: dict[str, Any] = {
+        "evidenceClass": "historical_offline_artifact_metadata_only",
+        "status": "not_available",
+        "artifactSha256": None,
+        "bundleSha256": None,
+        "bundleIntegrity": "not_checked",
+        "sourceCurrentness": "not_checked",
+        "sourceCodeSha256": {},
+        "currentSourceSha256": {},
+        "profileCount": None,
+        "modelCalls": None,
+        "nativeMessageToolCalls": None,
+        "adaptedQwenMarkerProposals": None,
+        "noProposal": None,
+        "fixturesIncluded": None,
+        "policyOffExecutions": None,
+        "externalCalls": None,
+        "unauthorizedExecutions": None,
+        "rawPromptsResponsesArgumentsReturned": False,
+        "freshInferenceVerified": False,
+        "limits": [
+            "El hash embebido no es una firma ni acredita por sí solo quién produjo la corrida.",
+            "El artefacto no demuestra integración API→cola→worker ni persistencia de aprobaciones.",
+            "Este preflight no ejecuta el modelo ni transforma evidencia histórica en una corrida actual.",
+        ],
+    }
+    if not artifact_path.exists():
+        return base
+    try:
+        size_bytes = artifact_path.stat().st_size
+        if size_bytes > 16 * 1024 * 1024:
+            base["status"] = "artifact_size_exceeded"
+            return base
+        raw = artifact_path.read_bytes()
+        document = json.loads(raw)
+        if not isinstance(document, dict):
+            base["status"] = "artifact_schema_invalid"
+            return base
+        base["artifactSha256"] = hashlib.sha256(raw).hexdigest()
+
+        recorded_bundle_hash = document.get("bundleSha256")
+        if (
+            not isinstance(recorded_bundle_hash, str)
+            or not re.fullmatch(r"[0-9a-f]{64}", recorded_bundle_hash)
+        ):
+            base["status"] = "artifact_bundle_hash_invalid"
+            base["bundleIntegrity"] = "invalid"
+            return base
+        hash_input = dict(document)
+        hash_input.pop("bundleSha256", None)
+        bundle_hash_valid = _canonical_sha256(hash_input) == recorded_bundle_hash
+        base["bundleSha256"] = recorded_bundle_hash
+        base["bundleIntegrity"] = (
+            "self_hash_valid_not_authenticating" if bundle_hash_valid else "invalid"
+        )
+        if not bundle_hash_valid:
+            base["status"] = "artifact_bundle_hash_mismatch"
+            return base
+
+        recorded_sources = document.get("sourceCodeSha256")
+        required_source_keys = {
+            "offlineRunner",
+            "offlineProcessGuard",
+            "qwenPolicyLab",
+        }
+        if not isinstance(recorded_sources, dict) or set(recorded_sources) != required_source_keys:
+            base["status"] = "artifact_source_hashes_invalid"
+            return base
+        if any(
+            not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value)
+            for value in recorded_sources.values()
+        ):
+            base["status"] = "artifact_source_hashes_invalid"
+            return base
+
+        if current_source_hashes is None:
+            source_paths = {
+                "offlineRunner": Path(__file__),
+                "offlineProcessGuard": Path(__file__).with_name("offline_process_guard.py"),
+                "qwenPolicyLab": Path(__file__).with_name("qwen_policy_lab.py"),
+            }
+            current_sources: dict[str, str] = {}
+            try:
+                current_sources = {
+                    name: _sha256_file(path) for name, path in source_paths.items()
+                }
+            except OSError:
+                base["status"] = "current_source_hash_unavailable"
+                base["sourceCodeSha256"] = dict(recorded_sources)
+                return base
+        else:
+            current_sources = dict(current_source_hashes)
+            if set(current_sources) != required_source_keys or any(
+                not isinstance(value, str)
+                or not re.fullmatch(r"[0-9a-f]{64}", value)
+                for value in current_sources.values()
+            ):
+                base["status"] = "current_source_hashes_invalid"
+                return base
+
+        base["sourceCodeSha256"] = dict(recorded_sources)
+        base["currentSourceSha256"] = current_sources
+        source_matches = recorded_sources == current_sources
+        base["sourceCurrentness"] = (
+            "source_hashes_match_not_run_attestation"
+            if source_matches
+            else "historical_source_hash_mismatch"
+        )
+
+        if (
+            document.get("schemaVersion") != 1
+            or document.get("status") != "completed"
+            or document.get("executionMode") != "real_local_qwen_inference_offline_process_guard"
+        ):
+            base["status"] = "artifact_execution_claim_unrecognized"
+            return base
+
+        scope = document.get("scope")
+        profiles = document.get("profiles")
+        summary = document.get("summary")
+        if not isinstance(scope, dict) or not isinstance(profiles, list) or not isinstance(summary, dict):
+            base["status"] = "artifact_summary_invalid"
+            return base
+        if scope.get("profileCount") != len(_PROFILE_ORDER) or scope.get("fixturesIncluded") is not False:
+            base["status"] = "artifact_scope_invalid"
+            return base
+        profile_ids = [
+            profile.get("profileId") if isinstance(profile, dict) else None
+            for profile in profiles
+        ]
+        if len(profiles) != len(_PROFILE_ORDER) or set(profile_ids) != set(_PROFILE_ORDER):
+            base["status"] = "artifact_profile_set_invalid"
+            return base
+
+        origin_counts = {
+            "modelCalls": 0,
+            "runtimeMessageToolCalls": 0,
+            "adaptedQwenMarkupCalls": 0,
+            "noToolCalls": 0,
+        }
+        safe_summaries: list[dict[str, Any]] = []
+        for profile in profiles:
+            if not isinstance(profile, dict):
+                base["status"] = "artifact_profile_invalid"
+                return base
+            cases = profile.get("cases")
+            if not isinstance(cases, list) or not cases:
+                base["status"] = "artifact_cases_invalid"
+                return base
+            profile_counts = {
+                "modelCalls": 0,
+                "runtimeMessageToolCalls": 0,
+                "adaptedQwenMarkupCalls": 0,
+                "noToolCalls": 0,
+            }
+            for case in cases:
+                if not isinstance(case, dict):
+                    base["status"] = "artifact_case_invalid"
+                    return base
+                if any(
+                    case.get(field) is not False
+                    for field in ("rawPromptStored", "rawResponseStored", "rawArgumentsStored")
+                ):
+                    base["status"] = "artifact_raw_material_flagged"
+                    return base
+                if case.get("toolChoice") != "auto":
+                    base["status"] = "artifact_tool_choice_not_auto"
+                    return base
+                origin = case.get("toolCallOrigin")
+                if origin == "runtime_message_tool_calls":
+                    profile_counts["runtimeMessageToolCalls"] += 1
+                elif origin == "guardian_qwen_native_markup_adapter":
+                    profile_counts["adaptedQwenMarkupCalls"] += 1
+                elif origin == "no_tool_call":
+                    profile_counts["noToolCalls"] += 1
+                else:
+                    base["status"] = "artifact_tool_origin_unrecognized"
+                    return base
+                profile_counts["modelCalls"] += 1
+
+            profile_summary = profile.get("summary")
+            if not isinstance(profile_summary, dict) or any(
+                profile_summary.get(key) != value
+                for key, value in profile_counts.items()
+            ):
+                base["status"] = "artifact_profile_counts_inconsistent"
+                return base
+            for key, value in profile_counts.items():
+                origin_counts[key] += value
+            safe_summaries.append(
+                {
+                    "profileId": profile["profileId"],
+                    "modelCalls": profile_counts["modelCalls"],
+                    "nativeMessageToolCalls": profile_counts["runtimeMessageToolCalls"],
+                    "adaptedQwenMarkerProposals": profile_counts["adaptedQwenMarkupCalls"],
+                    "noProposal": profile_counts["noToolCalls"],
+                    "fixtureBaseline": "not_loaded_separate",
+                }
+            )
+
+        summary_keys = {
+            "modelCalls": "modelCalls",
+            "runtimeMessageToolCalls": "runtimeMessageToolCalls",
+            "adaptedQwenMarkupCalls": "adaptedQwenMarkupCalls",
+            "noToolCalls": "noToolCalls",
+        }
+        if any(summary.get(key) != origin_counts[value] for key, value in summary_keys.items()):
+            base["status"] = "artifact_global_counts_inconsistent"
+            return base
+        for key in (
+            "policyOffExecutions",
+            "externalCalls",
+            "unauthorizedExecutions",
+        ):
+            value = summary.get(key)
+            if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+                base["status"] = "artifact_safety_counts_invalid"
+                return base
+            base[key] = value
+
+        base.update(
+            {
+                "status": "historical_artifact_consistent",
+                "profileCount": len(profiles),
+                "modelCalls": origin_counts["modelCalls"],
+                "nativeMessageToolCalls": origin_counts["runtimeMessageToolCalls"],
+                "adaptedQwenMarkerProposals": origin_counts["adaptedQwenMarkupCalls"],
+                "noProposal": origin_counts["noToolCalls"],
+                "fixturesIncluded": False,
+                "profileSummaries": safe_summaries,
+            }
+        )
+        return base
+    except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError):
+        base["status"] = "artifact_read_or_parse_failed"
+        return base
+
+
 def _normalized_name(value: str) -> str:
     return re.sub(r"[-_.]+", "-", value).lower()
 

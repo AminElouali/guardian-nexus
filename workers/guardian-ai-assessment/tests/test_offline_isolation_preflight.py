@@ -44,6 +44,79 @@ class KeyOnlyEnvironment(Mapping[str, str]):
 class OfflineIsolationPreflightTests(unittest.TestCase):
     identity = {"uid": 1000, "gid": 1000, "groups": [1000]}
 
+    @staticmethod
+    def _write_historical_artifact(root: Path) -> Path:
+        adapted_ids = set(offline_qwen_runner._PROFILE_ORDER[:-1])
+        profiles = []
+        for profile_id in offline_qwen_runner._PROFILE_ORDER:
+            origin = (
+                "guardian_qwen_native_markup_adapter"
+                if profile_id in adapted_ids
+                else "no_tool_call"
+            )
+            native = 0
+            adapted = int(origin == "guardian_qwen_native_markup_adapter")
+            no_proposal = int(origin == "no_tool_call")
+            case = {
+                "toolChoice": "auto",
+                "toolCallOrigin": origin,
+                "rawPromptStored": False,
+                "rawResponseStored": False,
+                "rawArgumentsStored": False,
+                # Must never be copied into the read-only summary.
+                "promptText": "synthetic-secret-sentinel",
+            }
+            profiles.append(
+                {
+                    "profileId": profile_id,
+                    "cases": [case],
+                    "summary": {
+                        "modelCalls": 1,
+                        "runtimeMessageToolCalls": native,
+                        "adaptedQwenMarkupCalls": adapted,
+                        "noToolCalls": no_proposal,
+                    },
+                }
+            )
+        artifact = {
+            "schemaVersion": 1,
+            "status": "completed",
+            "executionMode": "real_local_qwen_inference_offline_process_guard",
+            "sourceCodeSha256": {
+                name: "b" * 64
+                for name in (
+                    "offlineRunner",
+                    "offlineProcessGuard",
+                    "qwenPolicyLab",
+                )
+            },
+            "scope": {
+                "profileCount": len(offline_qwen_runner._PROFILE_ORDER),
+                "fixturesIncluded": False,
+            },
+            "profiles": profiles,
+            "summary": {
+                "modelCalls": 8,
+                "runtimeMessageToolCalls": 0,
+                "adaptedQwenMarkupCalls": 7,
+                "noToolCalls": 1,
+                "policyOffExecutions": 0,
+                "externalCalls": 0,
+                "unauthorizedExecutions": 0,
+            },
+        }
+        artifact["bundleSha256"] = offline_qwen_runner._canonical_sha256(artifact)
+        artifact_path = (
+            root
+            / "generated-artifacts/guardian-qwen-offline/qwen-policy-lab-eight-profiles.json"
+        )
+        artifact_path.parent.mkdir(parents=True)
+        artifact_path.write_text(
+            json.dumps(artifact, sort_keys=True, separators=(",", ":")),
+            encoding="utf-8",
+        )
+        return artifact_path
+
     def test_absent_socket_and_no_sensitive_environment_allow_process_only_mode(self):
         report = collect_offline_isolation_preflight(
             environment=KeyOnlyEnvironment(set()),
@@ -244,6 +317,98 @@ class OfflineIsolationPreflightTests(unittest.TestCase):
                 for item in matrix
             )
         )
+
+    def test_historical_evidence_summary_keeps_adapted_native_and_no_proposal_separate(self):
+        with tempfile.TemporaryDirectory(prefix="guardian-historical-evidence-") as root:
+            self._write_historical_artifact(Path(root))
+            report = offline_qwen_runner.inspect_historical_offline_evidence(
+                Path(root),
+                current_source_hashes={
+                    name: "a" * 64
+                    for name in (
+                        "offlineRunner",
+                        "offlineProcessGuard",
+                        "qwenPolicyLab",
+                    )
+                },
+            )
+        encoded = json.dumps(report)
+        self.assertEqual(report["status"], "historical_artifact_consistent")
+        self.assertEqual(
+            report["bundleIntegrity"], "self_hash_valid_not_authenticating"
+        )
+        self.assertEqual(report["sourceCurrentness"], "historical_source_hash_mismatch")
+        self.assertEqual(report["profileCount"], 8)
+        self.assertEqual(report["modelCalls"], 8)
+        self.assertEqual(report["nativeMessageToolCalls"], 0)
+        self.assertEqual(report["adaptedQwenMarkerProposals"], 7)
+        self.assertEqual(report["noProposal"], 1)
+        self.assertFalse(report["fixturesIncluded"])
+        self.assertFalse(report["freshInferenceVerified"])
+        self.assertFalse(report["rawPromptsResponsesArgumentsReturned"])
+        self.assertNotIn("synthetic-secret-sentinel", encoded)
+        self.assertNotIn("promptText", encoded)
+        self.assertEqual(
+            set(report["profileSummaries"][0]),
+            {
+                "profileId",
+                "modelCalls",
+                "nativeMessageToolCalls",
+                "adaptedQwenMarkerProposals",
+                "noProposal",
+                "fixtureBaseline",
+            },
+        )
+
+    def test_historical_evidence_missing_or_tampered_fails_closed_without_counts(self):
+        with tempfile.TemporaryDirectory(prefix="guardian-historical-evidence-") as root:
+            missing = offline_qwen_runner.inspect_historical_offline_evidence(Path(root))
+            artifact_path = self._write_historical_artifact(Path(root))
+            artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+            artifact["profiles"][0]["cases"][0]["toolCallOrigin"] = "unknown_origin"
+            artifact_path.write_text(json.dumps(artifact), encoding="utf-8")
+            tampered = offline_qwen_runner.inspect_historical_offline_evidence(
+                Path(root),
+                current_source_hashes={
+                    name: "a" * 64
+                    for name in (
+                        "offlineRunner",
+                        "offlineProcessGuard",
+                        "qwenPolicyLab",
+                    )
+                },
+            )
+        self.assertEqual(missing["status"], "not_available")
+        self.assertIsNone(missing["modelCalls"])
+        self.assertEqual(tampered["status"], "artifact_bundle_hash_mismatch")
+        self.assertIsNone(tampered["modelCalls"])
+        self.assertFalse(tampered["freshInferenceVerified"])
+
+    def test_historical_evidence_rejects_unknown_origin_when_hash_is_recomputed(self):
+        with tempfile.TemporaryDirectory(prefix="guardian-historical-origin-") as root:
+            artifact_path = self._write_historical_artifact(Path(root))
+            artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+            artifact["profiles"][0]["cases"][0]["toolCallOrigin"] = "unknown_origin"
+            artifact.pop("bundleSha256")
+            artifact["bundleSha256"] = offline_qwen_runner._canonical_sha256(artifact)
+            artifact_path.write_text(
+                json.dumps(artifact, sort_keys=True, separators=(",", ":")),
+                encoding="utf-8",
+            )
+            report = offline_qwen_runner.inspect_historical_offline_evidence(
+                Path(root),
+                current_source_hashes={
+                    name: "a" * 64
+                    for name in (
+                        "offlineRunner",
+                        "offlineProcessGuard",
+                        "qwenPolicyLab",
+                    )
+                },
+            )
+        self.assertEqual(report["status"], "artifact_tool_origin_unrecognized")
+        self.assertIsNone(report["nativeMessageToolCalls"])
+        self.assertFalse(report["freshInferenceVerified"])
 
     def test_qwen_runner_stops_at_preflight_before_artifact_or_model_loading(self):
         with tempfile.TemporaryDirectory(prefix="guardian-qwen-preflight-order-") as root:
