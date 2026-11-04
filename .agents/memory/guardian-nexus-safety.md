@@ -116,3 +116,9 @@ description: Product boundaries for security integrations, claims, and productio
 **Why:** Deterministic policy-lab cases omit the digest field when hashing, while Qwen evidence hashes an empty-field sentinel. Zod date coercion also rewrites timestamp precision/offsets, which changes signed bytes without changing the represented instant.
 
 **How to apply:** Keep engine-specific digest conventions explicit, preserve raw timestamp strings through verification, and test both valid evidence and altered-digest rejection.
+
+**Rule:** Risk Intelligence/STPA findings and capability declarations are advisory only; the existing Guardian Policy Engine remains the sole action-authorizing decision maker.
+
+**Why:** The Risk Intelligence catalog includes synthetic and partially unverified hazards; converting a risk score or model-derived recommendation into permission would create an untested authorization path.
+
+**How to apply:** Keep recommendations and control-evidence status separate from allow/deny/approval and dispatch. Show each profile's evidence state and provenance, and never let the discovery analyzer mutate policy or execute tools.
