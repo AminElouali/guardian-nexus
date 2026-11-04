@@ -9,6 +9,7 @@ import json
 import math
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from . import llm_lab
@@ -1521,28 +1522,54 @@ def _resolve_dispatch(
     return "deny", reason, "blocked_by_policy_before_dispatch"
 
 
-def run_qwen_policy_lab(profile_id: str) -> dict[str, Any]:
+def run_qwen_policy_lab(
+    profile_id: str,
+    *,
+    offline_guard: object | None = None,
+    model_path: Path | None = None,
+    shared_client: Any | None = None,
+) -> dict[str, Any]:
     if profile_id not in CASES:
         raise ValueError("qwen_policy_profile_invalid")
-    from .__main__ import verify_network_isolation
-
     started = datetime.now(timezone.utc)
     monotonic_start = time.monotonic()
-    llm_lab._verify_model_artifact(llm_lab.MODEL_PATH)
-    limits = llm_lab._read_cgroup_limits()
-    network = verify_network_isolation()
-    if (
-        network.get("publicIpv4") != "blocked"
-        or network.get("publicDns") != "blocked"
-        or network.get("publicIpv6") not in {"blocked", "unavailable"}
-        or network.get("loopbackOnly") is not True
-        or network.get("activeNonLoopbackInterfaces")
-    ):
-        raise RuntimeError("qwen_policy_network_isolation_unverified")
+    offline_mode = offline_guard is not None
+    if offline_mode:
+        from .offline_process_guard import (
+            is_active_offline_guard,
+            offline_limit_evidence,
+            offline_network_evidence,
+        )
+
+        if not is_active_offline_guard(offline_guard):
+            raise RuntimeError("qwen_policy_offline_guard_not_active")
+        if model_path is None:
+            raise RuntimeError("qwen_policy_offline_model_path_required")
+        selected_model_path = Path(model_path)
+        llm_lab._verify_model_artifact(selected_model_path)
+        limits = offline_limit_evidence(offline_guard)
+        network = offline_network_evidence(offline_guard)
+    else:
+        if model_path is not None or shared_client is not None:
+            raise RuntimeError("qwen_policy_offline_options_require_guard")
+        from .__main__ import verify_network_isolation
+
+        selected_model_path = llm_lab.MODEL_PATH
+        llm_lab._verify_model_artifact(selected_model_path)
+        limits = llm_lab._read_cgroup_limits()
+        network = verify_network_isolation()
+        if (
+            network.get("publicIpv4") != "blocked"
+            or network.get("publicDns") != "blocked"
+            or network.get("publicIpv6") not in {"blocked", "unavailable"}
+            or network.get("loopbackOnly") is not True
+            or network.get("activeNonLoopbackInterfaces")
+        ):
+            raise RuntimeError("qwen_policy_network_isolation_unverified")
     runtime_version = importlib.metadata.version("llama-cpp-python")
     if runtime_version != llm_lab.MANIFEST["runtime"]["version"]:
         raise RuntimeError("qwen_policy_runtime_version_mismatch")
-    client = llm_lab.LocalQwenClient(llm_lab.MODEL_PATH)
+    client = shared_client or llm_lab.LocalQwenClient(selected_model_path)
     vertical = (
         "email"
         if profile_id == EMAIL_PROFILE
@@ -1594,14 +1621,63 @@ def run_qwen_policy_lab(profile_id: str) -> dict[str, Any]:
     elapsed = round(time.monotonic() - monotonic_start, 3)
     if elapsed > llm_lab.MAX_RUNTIME_SECONDS:
         raise TimeoutError("qwen_policy_lab_runtime_limit")
+    if offline_mode:
+        evidence_limits = {
+            "network": "standalone_seccomp_no_socket_syscalls",
+            "cpuAffinityCount": limits["cpuAffinityCount"],
+            "addressSpaceLimitBytes": limits["addressSpaceLimitBytes"],
+            "cpuTimeLimitSeconds": limits["cpuTimeLimitSeconds"],
+            "openFilesLimit": limits["openFilesLimit"],
+            "concurrency": 1,
+            "maxCases": CASE_LIMITS[profile_id],
+            "maxCompletionTokensPerCall": MAX_COMPLETION_TOKENS,
+            "maxModelCallsPerCase": 1,
+            "maxToolCallsPerCase": MAX_TOOL_CALLS,
+            "customerDataUsed": False,
+            "secretsMounted": False,
+            "externalCalls": 0,
+            "actualOperations": 0,
+            "rawPromptsStored": False,
+            "rawResponsesStored": False,
+            "rawToolArgumentsStored": False,
+            "containerLimitsVerified": False,
+            "offlineProcessLimits": limits,
+            "apiJobCreated": False,
+            "databasePersistence": False,
+            "approvalInboxPersistence": False,
+        }
+    else:
+        evidence_limits = {
+            "network": "docker-network-none",
+            "cpuCores": 1,
+            "memoryMiB": 1536,
+            "pids": 64,
+            "concurrency": 1,
+            "maxCases": CASE_LIMITS[profile_id],
+            "maxCompletionTokensPerCall": MAX_COMPLETION_TOKENS,
+            "maxModelCallsPerCase": 1,
+            "maxToolCallsPerCase": MAX_TOOL_CALLS,
+            "customerDataUsed": False,
+            "secretsMounted": False,
+            "externalCalls": 0,
+            "actualOperations": 0,
+            "rawPromptsStored": False,
+            "rawResponsesStored": False,
+            "rawToolArgumentsStored": False,
+            "verifiedContainerLimits": limits,
+        }
     evidence = {
         "evidenceVersion": 1,
-        "source": SOURCE,
+        "source": f"{SOURCE}_offline" if offline_mode else SOURCE,
         "engine": "guardian_qwen_policy_lab",
         "engineVersion": ENGINE_VERSION,
         "profileId": profile_id,
         "verticalId": vertical,
-        "executionMode": "real_local_qwen_inference",
+        "executionMode": (
+            "real_local_qwen_inference_offline_process_guard"
+            if offline_mode
+            else "real_local_qwen_inference"
+        ),
         "proposalOriginScope": "qwen_marker_adapter_or_runtime_tool_calls_only",
         "agentIdentity": {
             "agentId": f"qwen-synthetic-{vertical}-v1",
@@ -1647,25 +1723,7 @@ def run_qwen_policy_lab(profile_id: str) -> dict[str, Any]:
             "toolChoice": "auto",
         },
         "network": network,
-        "limits": {
-            "network": "docker-network-none",
-            "cpuCores": 1,
-            "memoryMiB": 1536,
-            "pids": 64,
-            "concurrency": 1,
-            "maxCases": CASE_LIMITS[profile_id],
-            "maxCompletionTokensPerCall": MAX_COMPLETION_TOKENS,
-            "maxModelCallsPerCase": 1,
-            "maxToolCallsPerCase": MAX_TOOL_CALLS,
-            "customerDataUsed": False,
-            "secretsMounted": False,
-            "externalCalls": 0,
-            "actualOperations": 0,
-            "rawPromptsStored": False,
-            "rawResponsesStored": False,
-            "rawToolArgumentsStored": False,
-            "verifiedContainerLimits": limits,
-        },
+        "limits": evidence_limits,
         "cases": cases,
         "summary": {
             "sampleCount": len(cases),

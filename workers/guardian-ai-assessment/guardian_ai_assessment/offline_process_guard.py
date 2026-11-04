@@ -120,8 +120,10 @@ def _assert_no_inherited_sockets() -> int:
 
 def _lower_limit(limit_id: int, desired: int) -> tuple[int, int]:
     soft, hard = resource.getrlimit(limit_id)
-    target_hard = min(hard, desired)
-    target_soft = min(soft, target_hard)
+    infinity = resource.RLIM_INFINITY
+    target_hard = desired if hard == infinity else min(hard, desired)
+    target_soft = desired if soft == infinity else min(soft, desired)
+    target_soft = min(target_soft, target_hard)
     resource.setrlimit(limit_id, (target_soft, target_hard))
     actual = resource.getrlimit(limit_id)
     return int(actual[0]), int(actual[1])
@@ -137,7 +139,11 @@ def _set_process_limits() -> dict[str, Any]:
     if len(os.sched_getaffinity(0)) != 1:
         raise RuntimeError("offline_single_cpu_affinity_unverified")
 
-    cpu_soft, cpu_hard = _lower_limit(resource.RLIMIT_CPU, 900)
+    _lower_limit(resource.RLIMIT_CPU, 900)
+    cpu_soft, cpu_hard = resource.getrlimit(resource.RLIMIT_CPU)
+    cpu_soft = min(cpu_soft, 840)
+    resource.setrlimit(resource.RLIMIT_CPU, (cpu_soft, cpu_hard))
+    cpu_soft, cpu_hard = resource.getrlimit(resource.RLIMIT_CPU)
     as_soft, as_hard = _lower_limit(resource.RLIMIT_AS, 1536 * 1024 * 1024)
     file_soft, file_hard = _lower_limit(resource.RLIMIT_FSIZE, 4 * 1024 * 1024)
     open_soft, open_hard = _lower_limit(resource.RLIMIT_NOFILE, 64)
