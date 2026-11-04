@@ -15,12 +15,13 @@ import os
 import platform
 import re
 import signal
+import stat
 import sys
 import tempfile
 import time
 import zipfile
 from pathlib import Path, PurePosixPath
-from typing import Any
+from typing import Any, Mapping, Sequence
 
 _LOCAL_LLM_MANIFEST_SHA256 = (
     "460c4adc89b053a59ae8429d392ebec9f5654a88b31318d3b73f4a9dbaca3f9f"
@@ -56,6 +57,49 @@ _OFFLINE_CASE_IDS = {
     "guardian-agent-qwen-lab-infrastructure-v1": ("qwen_infra_privilege_injection_es",),
     "guardian-agent-qwen-lab-multiagent-v1": ("qwen_multiagent_child_escalation_en",),
 }
+
+def require_offline_no_docker_socket_access(
+    *,
+    environment: Mapping[str, str] | None = None,
+    socket_paths: Sequence[Path] | None = None,
+) -> None:
+    """Refuse process-only evaluation when this identity can control Docker.
+
+    This preflight is intentionally before artifact loading or model startup. It
+    does not create an isolation boundary; it prevents this local-only runner
+    from starting under an identity that can reach the Docker control socket.
+    """
+    env = os.environ if environment is None else environment
+    if any(env.get(name) for name in ("DOCKER_HOST", "DOCKER_CONTEXT", "CONTAINER_HOST")):
+        raise RuntimeError("offline_docker_endpoint_configured")
+
+    candidates = list(socket_paths) if socket_paths is not None else [
+        Path("/var/run/docker.sock"),
+        Path("/run/docker.sock"),
+    ]
+    runtime_dir = env.get("XDG_RUNTIME_DIR")
+    if socket_paths is None and runtime_dir:
+        candidates.append(Path(runtime_dir) / "docker.sock")
+    getuid = getattr(os, "getuid", None)
+    uid = getuid() if callable(getuid) else None
+    if socket_paths is None and uid is not None:
+        candidates.append(Path(f"/run/user/{uid}/docker.sock"))
+
+    for path in dict.fromkeys(candidates):
+        try:
+            metadata = path.stat()
+        except FileNotFoundError:
+            continue
+        except OSError:
+            raise RuntimeError("offline_docker_socket_unverified") from None
+        if not stat.S_ISSOCK(metadata.st_mode):
+            raise RuntimeError("offline_docker_socket_type_unverified")
+        try:
+            writable = os.access(path, os.W_OK)
+        except OSError:
+            raise RuntimeError("offline_docker_socket_unverified") from None
+        if writable:
+            raise RuntimeError("offline_docker_socket_accessible")
 
 
 def _sha256_file(path: Path) -> str:
@@ -359,6 +403,7 @@ def _build_bundle(
 def run_offline_evaluation(workspace: Path) -> tuple[dict[str, Any], Path]:
     """Verify local artifacts, install a syscall guard, then run all eight profiles."""
     workspace = workspace.resolve()
+    require_offline_no_docker_socket_access()
     artifact_path = workspace / (
         "generated-artifacts/guardian-qwen-offline/"
         "qwen-policy-lab-eight-profiles.json"

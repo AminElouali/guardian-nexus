@@ -3,8 +3,11 @@
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
+
+_SAFE_ERROR_CODE = re.compile(r"^offline_[a-z0-9_]{1,64}$")
 
 
 def main() -> int:
@@ -19,7 +22,9 @@ def main() -> int:
     try:
         bundle, evidence_path = run_offline_evaluation(workspace)
     except Exception as exc:
-        print(f"offline_qwen_suite_failed:{type(exc).__name__}", file=sys.stderr)
+        message = str(exc)
+        error_code = message if _SAFE_ERROR_CODE.fullmatch(message) else type(exc).__name__
+        print(f"offline_qwen_suite_failed:{error_code}", file=sys.stderr)
         return 1
     summary = bundle["summary"]
     print(

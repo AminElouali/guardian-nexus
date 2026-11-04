@@ -2254,3 +2254,42 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
 - Informe y manifiesto SHA-256:
   `reports/offline-qwen-seccomp-validation-2026-11-04.md` y
   `reports/offline-qwen-seccomp-validation-2026-11-04.sha256`.
+
+## Preflight de privilegio Docker para Qwen offline — 2026-11-04
+
+- Base: HEAD `8d81f357dbf2aa510026b96bb57683779849f85c`, árbol limpio.
+- El runner standalone ahora se niega antes de cargar el modelo si hay un
+  endpoint Docker configurado o un socket Docker conocido escribible, si la
+  inspección del socket falla o si la ruta no es un socket. La CLI emite solo
+  un código de razón `offline_*`; no imprime valores de endpoint. Esto es un
+  preflight, no una frontera de aislamiento ni revocación de permisos.
+- Host comprobado: UID/GID `1000:1000`, grupo `1000`; `/var/run/docker.sock`
+  `root:1000`, modo `0660`, legible y escribible. El CLI falló cerrado con
+  `offline_qwen_suite_failed:offline_docker_socket_accessible`, exit 1, antes
+  de cargar modelo. No se ejecutó Docker ni se intentó cambiar UID/permisos.
+- No se hizo una inferencia Qwen nueva. El artefacto de ocho perfiles existente
+  sigue teniendo SHA-256
+  `6a1e54658f745074a7a5a937204181c219ec28d184a866845dd09513497ee1d9`, pero
+  declara runner `818e7cd792d470c18732e75894679f0ad8d20157ecdf331ecdf127cc5b4445b0`;
+  el runner actual tiene SHA-256
+  `e682cc964a0e6e695ad48c555b040ed3f1590a28e36a3a64c9afaef5641d4213`.
+  El artefacto anterior es histórico y no verifica el preflight actual.
+- Verificación serial: guard **10/10**; suite worker Python en host excluyendo
+  solo `test_corpus_validation.py` **143/143**. La suite completa en host tuvo
+  140 pruebas correctas y un error de importación por `garak` ausente (141
+  contabilizadas); no se instaló nada ni se ejecutó la suite en Docker.
+  API **74/74**; SDK **13/13** + build; UI integración **8/8**; typecheck raíz
+  y typecheck/build API y UI pasaron. UI build conserva warnings de sourcemap y
+  chunk >500 kB.
+- API/worker E2E: **0/9**; `before` hook abortó en la disponibilidad `disabled`
+  vs `ready` (`ai-assessment-e2e.test.ts:103`), antes de los cuerpos de prueba y
+  de crear jobs. La preparación RLS fue anterior. La integración UI del mismo
+  runner sí pasó **8/8** con identidad sintética; no es sesión Clerk real.
+- No se volvió a ejecutar Qwen/Garak ni se persistieron aprobaciones nuevas.
+  Requisito para desbloquear: identidad de worker separada, socket inaccesible
+  para API y credencial DB de broker independiente en un host compatible. No
+  sortear mediante subproceso del mismo UID ni relajar el gate.
+- Informe:
+  `reports/offline-qwen-docker-privilege-preflight-2026-11-04.md`.
+  Manifiesto SHA-256:
+  `reports/offline-qwen-docker-privilege-preflight-2026-11-04.sha256`.

@@ -1,6 +1,8 @@
 import json
+import socket
 import subprocess
 import sys
+import tempfile
 import textwrap
 import unittest
 from pathlib import Path
@@ -9,7 +11,7 @@ from unittest.mock import patch
 WORKER_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(WORKER_ROOT))
 
-from guardian_ai_assessment import offline_process_guard
+from guardian_ai_assessment import offline_process_guard, offline_qwen_runner
 
 
 class OfflineProcessGuardTests(unittest.TestCase):
@@ -159,6 +161,99 @@ class OfflineProcessGuardTests(unittest.TestCase):
         self.assertEqual(evidence["limits"]["cpuAffinityCount"], 1)
         self.assertEqual(evidence["limits"]["concurrency"], 1)
         self.assertTrue(evidence["limits"]["limitsVerified"])
+
+
+class OfflineRunnerDockerPrivilegeTests(unittest.TestCase):
+    def test_no_configured_endpoint_or_socket_is_acceptable(self):
+        offline_qwen_runner.require_offline_no_docker_socket_access(
+            environment={},
+            socket_paths=[],
+        )
+
+    def test_configured_docker_endpoint_fails_closed_without_logging_value(self):
+        for name in ("DOCKER_HOST", "DOCKER_CONTEXT", "CONTAINER_HOST"):
+            with self.subTest(name=name), self.assertRaisesRegex(
+                RuntimeError, "offline_docker_endpoint_configured"
+            ):
+                offline_qwen_runner.require_offline_no_docker_socket_access(
+                    environment={name: "untrusted-endpoint-value"},
+                    socket_paths=[],
+                )
+
+    def test_offline_cli_reports_safe_reason_without_endpoint_value(self):
+        endpoint = "tcp://sensitive-host.invalid:2375"
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(WORKER_ROOT / "scripts/run_qwen_policy_lab_offline.py"),
+            ],
+            cwd=WORKER_ROOT.parents[1],
+            env={"DOCKER_HOST": endpoint, "PYTHONPATH": str(WORKER_ROOT)},
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(
+            result.stderr.strip(),
+            "offline_qwen_suite_failed:offline_docker_endpoint_configured",
+        )
+        self.assertNotIn(endpoint, result.stdout + result.stderr)
+
+    @unittest.skipUnless(hasattr(socket, "AF_UNIX"), "Unix sockets are unavailable")
+    def test_writable_docker_socket_fails_closed(self):
+        with tempfile.TemporaryDirectory(prefix="guardian-docker-socket-test-") as root:
+            path = Path(root) / "docker.sock"
+            endpoint = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            try:
+                endpoint.bind(str(path))
+            finally:
+                endpoint.close()
+            with self.assertRaisesRegex(
+                RuntimeError, "offline_docker_socket_accessible"
+            ):
+                offline_qwen_runner.require_offline_no_docker_socket_access(
+                    environment={},
+                    socket_paths=[path],
+                )
+
+    def test_existing_non_socket_endpoint_fails_closed(self):
+        with tempfile.TemporaryDirectory(prefix="guardian-docker-path-test-") as root:
+            path = Path(root) / "docker.sock"
+            path.write_text("not a socket", encoding="utf-8")
+            with self.assertRaisesRegex(
+                RuntimeError, "offline_docker_socket_type_unverified"
+            ):
+                offline_qwen_runner.require_offline_no_docker_socket_access(
+                    environment={},
+                    socket_paths=[path],
+                )
+
+    def test_socket_metadata_error_fails_closed(self):
+        path = Path("/unreadable/docker.sock")
+        with patch.object(Path, "stat", side_effect=PermissionError):
+            with self.assertRaisesRegex(
+                RuntimeError, "offline_docker_socket_unverified"
+            ):
+                offline_qwen_runner.require_offline_no_docker_socket_access(
+                    environment={},
+                    socket_paths=[path],
+                )
+
+    @unittest.skipUnless(hasattr(socket, "AF_UNIX"), "Unix sockets are unavailable")
+    def test_nonwritable_socket_does_not_block_process_only_evaluation(self):
+        with tempfile.TemporaryDirectory(prefix="guardian-readonly-socket-test-") as root:
+            path = Path(root) / "docker.sock"
+            endpoint = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            try:
+                endpoint.bind(str(path))
+            finally:
+                endpoint.close()
+            path.chmod(0o400)
+            offline_qwen_runner.require_offline_no_docker_socket_access(
+                environment={},
+                socket_paths=[path],
+            )
 
 
 if __name__ == "__main__":
