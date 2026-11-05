@@ -1,0 +1,5 @@
+0d4b5cc7e5072031ea2069a7d01a2663f484812071f19b94d82b4c8d1c594014  reports/guardian-eight-profile-api-preview-and-queue-gate-2026-11-05.md
+0a514440ed82d1bfb63fd27eb202bd8042fe1c99a32b833fb70e7f8e206f8256  artifacts/api-server/src/ai-assessment-synthetic-approval-e2e.test.ts
+63783bc0e1941fc8c6c189b3cb2e93257a75bdbd676e4073f27eb067cb9d7f15  generated-artifacts/guardian-synthetic-approval-e2e.json
+6a1e54658f745074a7a5a937204181c219ec28d184a866845dd09513497ee1d9  generated-artifacts/guardian-qwen-offline/qwen-policy-lab-eight-profiles.json
+0b6246f76877a2874dc7834cacba1c76979a61e7871b1371515268dee8e85f52  generated-artifacts/guardian-qwen-offline/preflight-status-2026-11-04.json

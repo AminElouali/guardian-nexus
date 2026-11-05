@@ -23,6 +23,10 @@ import {
   computeApprovalProposalBindingV3,
   getAllowlistedSyntheticApprovalAction,
 } from "./lib/ai-assessment-approval-actions";
+import {
+  POLICY_LAB_PROFILE_IDS,
+  QWEN_POLICY_LAB_PROFILE_IDS,
+} from "./lib/ai-assessment-sandbox";
 import { createAiAssessmentLabRouter } from "./routes/ai-assessment-lab";
 
 /*
@@ -409,6 +413,13 @@ test(
     const expireFuture = () => new Date(Date.now() + 60 * 60 * 1000);
     const queuePath = `/api/workspaces/${workspaceA}/ai-security-assessments/lab/jobs`;
     const previewPath = `/api/workspaces/${workspaceA}/ai-security-assessments/lab/policy-preview`;
+    const previewEvidence: Array<{
+      profileId: string;
+      engineVersion: string;
+      caseCount: number;
+      decisionCounts: Record<string, number>;
+      evidenceSha256: string;
+    }> = [];
     assert.equal((await request(null, previewPath, "POST", {
       profileId: "guardian-agent-lab-email-v1",
     })).status, 401, "preview requires authentication");
@@ -429,24 +440,83 @@ test(
         WHERE workspace_id = $1`,
       [workspaceA],
     );
-    const previewResponse = await request(workspaceAAdmin, previewPath, "POST", {
-      profileId: "guardian-agent-lab-email-v1",
-    });
-    assert.equal(previewResponse.status, 200);
-    assert.equal(previewResponse.headers.get("cache-control"), "no-store");
-    const preview = PreviewWorkspaceAiAssessmentPolicyLabResponse.parse(
-      await previewResponse.json(),
-    );
-    assert.equal(preview.source, "fresh_deterministic_policy_preview");
-    assert.equal(preview.evidence.engineVersion, "guardian-agent-policy-lab-v3");
-    assert.equal(preview.evidence.executionContext, "api_policy_preview");
-    assert.equal(preview.evidence.modelInference, false);
-    assert.equal(preview.evidence.limits.network, "host_network_unisolated");
-    assert.equal(preview.evidence.limits.processIsolation, "shared_api_identity");
-    assert.equal(preview.evidence.limits.dockerSocketAccess, "not_assessed");
-    assert.equal(preview.evidence.summary.externalCalls, 0);
-    assert.equal(preview.evidence.summary.actualOperations, 0);
-    assert.ok(preview.evidence.cases.every((item) => !item.policyOff.executed));
+    for (const profileId of POLICY_LAB_PROFILE_IDS) {
+      const previewResponse = await request(
+        workspaceAAdmin,
+        previewPath,
+        "POST",
+        { profileId },
+      );
+      assert.equal(previewResponse.status, 200, `${profileId} preview`);
+      assert.equal(previewResponse.headers.get("cache-control"), "no-store");
+      const preview = PreviewWorkspaceAiAssessmentPolicyLabResponse.parse(
+        await previewResponse.json(),
+      );
+      const evidence = preview.evidence;
+      assert.equal(preview.source, "fresh_deterministic_policy_preview");
+      assert.equal(evidence.profileId, profileId);
+      assert.equal(evidence.engineVersion, "guardian-agent-policy-lab-v3");
+      assert.equal(evidence.executionContext, "api_policy_preview");
+      assert.equal(evidence.executionMode, "deterministic_fixture");
+      assert.equal(evidence.modelInference, false);
+      assert.equal(evidence.proposalOrigin, "controlled_fixture_not_llm");
+      assert.equal(evidence.limits.network, "host_network_unisolated");
+      assert.equal(evidence.limits.processIsolation, "shared_api_identity");
+      assert.equal(evidence.limits.dockerSocketAccess, "not_assessed");
+      assert.equal(evidence.summary.externalCalls, 0);
+      assert.equal(evidence.summary.actualOperations, 0);
+      assert.equal(evidence.summary.persistentStateChanges, 0);
+      assert.equal(evidence.summary.unauthorizedExecutions, 0);
+
+      const decisionCounts: Record<string, number> = {};
+      for (const scenario of evidence.cases) {
+        const decision = scenario.policyOn.decision;
+        decisionCounts[decision] = (decisionCounts[decision] ?? 0) + 1;
+        const toolTrace = scenario.toolTrace;
+        assert.ok(toolTrace, `${profileId} case must include tool trace`);
+        const policyOn = toolTrace.policyOn;
+        if (decision === "allow") {
+          assert.equal(policyOn.dispatchStatus, "simulated_execution");
+          assert.equal(policyOn.invoked, true);
+          assert.equal(scenario.policyOn.executed, true);
+          assert.ok(
+            policyOn.events.some(
+              (event) => event.phase === "executed" && event.executed,
+            ),
+          );
+        } else if (decision === "require_approval") {
+          assert.equal(
+            policyOn.dispatchStatus,
+            "approval_required_before_dispatch",
+          );
+          assert.equal(policyOn.invoked, false);
+          assert.equal(policyOn.events.length, 0);
+          assert.equal(scenario.policyOn.executed, false);
+        } else {
+          assert.equal(decision, "deny");
+          assert.ok(
+            policyOn.dispatchStatus === "blocked_by_policy_before_dispatch" ||
+              policyOn.dispatchStatus === "adapter_validation_denied",
+          );
+          assert.equal(scenario.policyOn.executed, false);
+          assert.ok(policyOn.events.every((event) => !event.executed));
+        }
+        assert.equal(
+          scenario.policyOff.mode,
+          "counterfactual_clone_only",
+        );
+        assert.equal(scenario.policyOff.executed, false);
+        assert.equal(toolTrace.policyOff.invoked, false);
+        assert.equal(toolTrace.policyOff.events.length, 0);
+      }
+      previewEvidence.push({
+        profileId,
+        engineVersion: evidence.engineVersion,
+        caseCount: evidence.cases.length,
+        decisionCounts,
+        evidenceSha256: evidence.evidenceSha256,
+      });
+    }
     const jobsAfterPreview = await fixturePool.query<{ count: string }>(
       `SELECT count(*)::text AS count
          FROM public.ai_assessment_jobs
@@ -465,15 +535,21 @@ test(
         WHERE workspace_id = $1`,
       [workspaceA],
     );
-    const blockedEnqueue = await request(workspaceAOwner, queuePath, "POST", {
-      idempotencyKey: `broker-disabled-${randomUUID()}`,
-      profileId: "guardian-agent-lab-finance-v1",
-    });
-    assert.equal(
-      blockedEnqueue.status,
-      503,
-      "API enqueue remains unavailable without the isolated assessment worker",
-    );
+    const queueProfiles = [
+      ...POLICY_LAB_PROFILE_IDS,
+      ...QWEN_POLICY_LAB_PROFILE_IDS,
+    ];
+    for (const profileId of queueProfiles) {
+      const blockedEnqueue = await request(workspaceAOwner, queuePath, "POST", {
+        idempotencyKey: `broker-disabled-${profileId}-${randomUUID()}`,
+        profileId,
+      });
+      assert.equal(
+        blockedEnqueue.status,
+        503,
+        `${profileId} queue request must remain blocked without isolated broker`,
+      );
+    }
     const afterBlockedEnqueue = await fixturePool.query<{ count: string }>(
       `SELECT count(*)::text AS count
          FROM public.ai_assessment_jobs
@@ -483,7 +559,7 @@ test(
     assert.equal(
       afterBlockedEnqueue.rows[0]?.count,
       beforeBlockedEnqueue.rows[0]?.count,
-      "disabled worker must reject before creating a job",
+      "disabled worker must reject every profile before creating a job",
     );
 
     const cases = [
@@ -934,6 +1010,18 @@ test(
       fixtureWorkerProcesses: fixtureWorkerProcessCount,
       externalEffects: false,
       profiles: cases.map((item) => item.profileId),
+      policyPreview: {
+        status: "deterministic_fixture_only",
+        executionMode: "deterministic_fixture",
+        proposalOrigin: "controlled_fixture_not_llm",
+        modelInference: false,
+        profiles: previewEvidence,
+        queueGate: {
+          status: "disabled_without_isolated_broker",
+          profileCount: queueProfiles.length,
+          rejectedBeforeJobInsert: queueProfiles.length,
+        },
+      },
       approvalRequests: approvals.length + 3,
       approvalDecisions: {
         approvedOnce: 2,

@@ -3061,3 +3061,49 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   todas las entradas verificaron con `sha256sum -c`.
 - Siguiente desbloqueo Qwen: host de laboratorio que demuestre identidades
   API/broker/DB separadas, API sin acceso al socket Docker y preflight aprobado.
+
+## Incremento 2026-11-05 — previews API de ocho perfiles y gate de cola
+
+- Inicio: HEAD `0433f4fb70e403e3cf48c4d8ebcb9c1c321e1d00`, árbol limpio.
+- Se amplió el E2E sintético existente, sin cambiar disponibilidad ni habilitar
+  el worker/broker. El endpoint autenticado de preview ejecutó el evaluador
+  determinista para los ocho perfiles. Cada respuesta validó contrato v3,
+  `deterministic_fixture`, `modelInference=false` y
+  `controlled_fixture_not_llm`; comprobó Policy ON antes del simulador,
+  `ALLOW` únicamente hacia simulación, `DENY` no ejecutado,
+  `REQUIRE_APPROVAL` no despachado y Policy OFF solo como clon.
+- Se enviaron solicitudes de cola para los ocho perfiles fixture y los ocho
+  perfiles Qwen. Los 16 retornaron 503 antes de insertar jobs; el conteo de
+  filas de la organización no cambió. Esto demuestra el gate cerrado, NO una
+  ruta API→cola→worker completada.
+- E2E de aprobación persistente finance/support sigue siendo fixture-only.
+  Usó PostgreSQL de desarrollo con identidades sintéticas, no Qwen ni Docker.
+  El preview de política informa `host_network_unisolated`,
+  `shared_api_identity` y `dockerSocketAccess=not_assessed`; no se presenta
+  como entorno aislado. No se observaron llamadas externas ni operaciones
+  reales, pero este resultado no sustituye una prueba de aislamiento de host.
+- Pruebas en serie:
+  - `pnpm --filter @workspace/api-server run test:ai-assessment-synthetic-e2e`:
+    1/1.
+  - `pnpm --filter @workspace/api-server test`: 79/79.
+  - `test_policy_lab.py`: 35/35; `test_llm_tool_adapter.py`: 5/5;
+    `test_cross_layer_qwen_contract.py`: 2/2.
+  - UI integration: 12/12.
+  - `pnpm run typecheck`: correcto.
+- Artefacto E2E:
+  `generated-artifacts/guardian-synthetic-approval-e2e.json`, SHA-256
+  `63783bc0e1941fc8c6c189b3cb2e93257a75bdbd676e4073f27eb067cb9d7f15`;
+  hash interno `197e33aba3967b7fa943642918b3184f9474c05dce8fd4f4fe57282280d867e1`.
+  El resumen registra ocho previews fixture y 16 rechazos previos a inserción.
+- Informe:
+  `reports/guardian-eight-profile-api-preview-and-queue-gate-2026-11-05.md`,
+  SHA-256 `0d4b5cc7e5072031ea2069a7d01a2663f484812071f19b94d82b4c8d1c594014`.
+  Manifiesto SHA-256
+  `reports/guardian-eight-profile-api-preview-and-queue-gate-2026-11-05.sha256`,
+  SHA-256 `59ee439a84417c12b900a20631b46229dedf735875b57a9aad009d6bfbd6e7c7`;
+  todas las entradas verificaron con `sha256sum -c`.
+- Sin inferencia Qwen nueva. El artefacto histórico sigue siendo 8 inferencias,
+  7 marcadores adaptados, 0 `message.tool_calls` nativas y 1 `NO_PROPOSAL`.
+  El preflight del 2026-11-04 sigue bloqueando; no se repitió ni se intentó
+  sortear. Se requiere host autorizado con separación API/broker/DB probada
+  antes de habilitar la cola o afirmar integración Qwen API→worker.
