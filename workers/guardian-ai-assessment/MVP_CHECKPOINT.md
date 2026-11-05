@@ -3009,6 +3009,9 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
 ## Incremento 2026-11-05 — procedencia Qwen y orden Policy ON
 
 - Inicio: HEAD `52f801d5e1b281ef4f2a1b13a434a3d76c25b4e6`, árbol limpio.
+- Se conserva el trabajo UI inmediatamente anterior: `52f801d` refactorizó la
+  página de evaluación y sus pruebas; `c0b7cbe` mejoró navegación/UX del
+  laboratorio. La base de aprobaciones sintéticas viene de `a911d0f`.
 - La UI ya distingue marcador Qwen adaptado, llamada nativa
   `message.tool_calls`, `NO_PROPOSAL` (sin llamada) y marcador rechazado por el
   parser. Este último ya no se agrupa como ausencia de propuesta. Las fixtures
