@@ -3148,3 +3148,49 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
 - Workflow local API reiniciado tras el cambio; logs confirman servidor
   escuchando en puerto 8080. No se inició el worker; el workflow web sigue
   detenido.
+
+## Incremento 2026-11-05 — matriz de ataques y gate determinista completo
+
+- Inicio: HEAD `1262db7a49777523042149d51cd77b94147c096a`, árbol limpio.
+- Se reforzó el E2E sintético existente, sin modificar el gate ni iniciar Qwen o
+  Docker. El preview HTTP autenticado recorrió los 8 perfiles deterministas y
+  registró por perfil los `caseIds`, modo, procedencia, bandera de inferencia,
+  decisiones y digest. Todos declaran `deterministic_fixture`,
+  `controlled_fixture_not_llm` y `modelInference=false`.
+- Correo: `email_adversarial_external_exfiltration` se marca
+  `untrusted_email`, DENY `permission_not_granted`, sin invocación ni eventos.
+  BBDD: `database_adversarial_bulk_export` se marca `untrusted_document`, apunta
+  a `SYNTHETIC-OTHER-WORKSPACE`, DENY `resource_outside_workspace`, sin despacho.
+- La matriz del endpoint de cola cubre 16 perfiles registrados (8 fixtures y 8
+  Qwen): 16 anónimos → 401, 16 tenants ajenos → 403, 16 viewers → 403, 16
+  primeras solicitudes owner → 503 y 16 reintentos owner con el mismo
+  idempotency key → 503. No se insertaron jobs. El reintento comprueba el gate
+  cerrado antes de alcanzar idempotencia; no simula idempotencia de una cola
+  habilitada. El consumidor real de la cola no se invocó.
+- Se verificó API → subprocess Python determinista de preview → Policy Engine →
+  simulador ficticio. Esto no es API → cola persistente → worker aislado; ese
+  recorrido permanece bloqueado por el preflight del host.
+- Aprobaciones fixture-only sin cambios de diseño: 5 solicitudes; 2 aprobadas
+  y simuladas una sola vez; denegación/caducidad sin simulación; una carrera con
+  ganador único; replay, mutación, tenant cruzado, autoaprobación y rol revocado
+  rechazados.
+- Pruebas en serie: E2E sintético 1/1; API 79/79; worker Policy Lab 35/35,
+  adaptador 5/5, contrato transversal 2/2; UI integration 12/12; typecheck
+  monorepo correcto; build API correcto. No se ejecutó inferencia Qwen ni Docker.
+- Artefacto sintético: SHA-256
+  `9b3c9baca9fff317ec677eccbab15e5b1672df128842698df2e579a919e56f94`;
+  digest interno `9077aff1e0d8389ecd84175755ad5993177747ac569b52e19d890f9f34648e6a`.
+- Test E2E SHA-256:
+  `d47813f5587f90002a385b37b0c2d46f19c1dd3f9743994ab1e82cc29886f1bb`.
+  Informe SHA-256 `c6b4b49d1dce9ac6d655f286a26de14a77ce25518f99cf90459c43cf5f0774d0`;
+  manifiesto SHA-256 `07eece97af3c89cc3a496c1735d7f3e02cd2a4d8a8a2dd16e01f93b02d225091`.
+  Las entradas del manifiesto se verificaron después de generar el artefacto.
+- Historial Qwen sin cambios: 8 inferencias históricas, 7 marcadores adaptados,
+  0 `message.tool_calls` nativas, 1 `NO_PROPOSAL`. No son inferencias de esta
+  iteración ni recorridos Qwen por cola/API.
+- El último preflight disponible (2026-11-04; no repetido) bloquea por
+  `offline_docker_socket_accessible` y
+  `offline_sensitive_environment_present`. Ningún valor sensible fue leído.
+- El cambio fue solo al E2E y a documentación/manifiesto/checkpoint; no cambió
+  código de servicio, por lo que no se reiniciaron workflows. Ningún servicio
+  ni producción fue modificado.

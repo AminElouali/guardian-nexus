@@ -416,6 +416,10 @@ test(
     const previewEvidence: Array<{
       profileId: string;
       engineVersion: string;
+      executionMode: "deterministic_fixture";
+      proposalOrigin: "controlled_fixture_not_llm";
+      modelInference: false;
+      caseIds: string[];
       caseCount: number;
       decisionCounts: Record<string, number>;
       evidenceSha256: string;
@@ -468,6 +472,56 @@ test(
       assert.equal(evidence.summary.persistentStateChanges, 0);
       assert.equal(evidence.summary.unauthorizedExecutions, 0);
 
+      if (
+        profileId === "guardian-agent-lab-email-v1" ||
+        profileId === "guardian-agent-lab-database-v1"
+      ) {
+        const expectedAttack =
+          profileId === "guardian-agent-lab-email-v1"
+            ? {
+                caseId: "email_adversarial_external_exfiltration",
+                provenance: "untrusted_email",
+                reasonCode: "permission_not_granted",
+              }
+            : {
+                caseId: "database_adversarial_bulk_export",
+                provenance: "untrusted_document",
+                reasonCode: "resource_outside_workspace",
+              };
+        assert.equal(evidence.cases.length, 2);
+        const benign = evidence.cases.find((item) => item.label === "benign");
+        const adversarial = evidence.cases.find(
+          (item) => item.caseId === expectedAttack.caseId,
+        );
+        assert.ok(benign, `${profileId} includes a benign fixture`);
+        assert.ok(adversarial, `${profileId} includes the expected attack fixture`);
+        assert.equal(benign.instructionProvenance, "trusted_user_request");
+        assert.equal(adversarial.label, "adversarial");
+        assert.equal(
+          adversarial.instructionProvenance,
+          expectedAttack.provenance,
+        );
+        assert.equal(
+          adversarial.policyOn.reasonCode,
+          expectedAttack.reasonCode,
+        );
+        assert.equal(adversarial.policyOn.decision, "deny");
+        assert.equal(adversarial.policyOn.authorized, false);
+        assert.equal(adversarial.policyOn.executed, false);
+        assert.equal(
+          adversarial.toolTrace?.policyOn.dispatchStatus,
+          "blocked_by_policy_before_dispatch",
+        );
+        assert.equal(adversarial.toolTrace?.policyOn.invoked, false);
+        assert.deepEqual(adversarial.toolTrace?.policyOn.events, []);
+        if (profileId === "guardian-agent-lab-database-v1") {
+          assert.equal(
+            adversarial.resourceWorkspaceId,
+            "SYNTHETIC-OTHER-WORKSPACE",
+          );
+        }
+      }
+
       const decisionCounts: Record<string, number> = {};
       for (const scenario of evidence.cases) {
         const decision = scenario.policyOn.decision;
@@ -512,6 +566,10 @@ test(
       previewEvidence.push({
         profileId,
         engineVersion: evidence.engineVersion,
+        executionMode: evidence.executionMode,
+        proposalOrigin: evidence.proposalOrigin,
+        modelInference: evidence.modelInference,
+        caseIds: evidence.cases.map((item) => item.caseId),
         caseCount: evidence.cases.length,
         decisionCounts,
         evidenceSha256: evidence.evidenceSha256,
@@ -544,12 +602,15 @@ test(
       crossTenantRejected: 0,
       viewerRejected: 0,
     };
-    for (const profileId of [
-      POLICY_LAB_PROFILE_IDS[0]!,
-      QWEN_POLICY_LAB_PROFILE_IDS[0]!,
-    ]) {
+    const queueIdempotencyKeys = new Map(
+      queueProfiles.map((profileId) => [
+        profileId,
+        `broker-disabled-${profileId}-${randomUUID()}`,
+      ]),
+    );
+    for (const profileId of queueProfiles) {
       const body = {
-        idempotencyKey: `broker-disabled-auth-${profileId}-${randomUUID()}`,
+        idempotencyKey: queueIdempotencyKeys.get(profileId)!,
         profileId,
       };
       assert.equal(
@@ -594,13 +655,26 @@ test(
     }
     for (const profileId of queueProfiles) {
       const blockedEnqueue = await request(workspaceAOwner, queuePath, "POST", {
-        idempotencyKey: `broker-disabled-${profileId}-${randomUUID()}`,
+        idempotencyKey: queueIdempotencyKeys.get(profileId)!,
         profileId,
       });
       assert.equal(
         blockedEnqueue.status,
         503,
         `${profileId} queue request must remain blocked without isolated broker`,
+      );
+    }
+    for (const profileId of queueProfiles) {
+      const body = {
+        idempotencyKey: queueIdempotencyKeys.get(profileId)!,
+        profileId,
+      };
+      assert.equal(
+        (
+          await request(workspaceAOwner, queuePath, "POST", body)
+        ).status,
+        503,
+        `${profileId} owner retry remains blocked while the broker is unverified`,
       );
     }
     const afterBlockedEnqueue = await fixturePool.query<{ count: string }>(
@@ -1068,11 +1142,15 @@ test(
         executionMode: "deterministic_fixture",
         proposalOrigin: "controlled_fixture_not_llm",
         modelInference: false,
+        invocationPath: "authenticated_api_to_deterministic_python_preview",
         profiles: previewEvidence,
         queueGate: {
           status: "disabled_without_isolated_broker",
           profileCount: queueProfiles.length,
-          rejectedBeforeJobInsert: queueProfiles.length,
+          ownerRequestsRejectedBeforeJobInsert: queueProfiles.length * 2,
+          firstOwnerRequestRejectedPerProfile: queueProfiles.length,
+          sameKeyOwnerRetriesRejected: queueProfiles.length,
+          queueConsumerInvoked: false,
           authorizationChecks: queueAuthorizationChecks,
         },
       },
@@ -1098,6 +1176,34 @@ test(
     assert.equal(summary.fixtureWorkerProcesses, 2);
     assert.equal(summary.externalEffects, false);
     assert.equal(summary.modelInference, false);
+    assert.equal(previewEvidence.length, POLICY_LAB_PROFILE_IDS.length);
+    assert.ok(
+      previewEvidence.every(
+        (item) =>
+          item.executionMode === "deterministic_fixture" &&
+          item.proposalOrigin === "controlled_fixture_not_llm" &&
+          item.modelInference === false,
+      ),
+    );
+    assert.deepEqual(
+      queueAuthorizationChecks,
+      {
+        unauthenticatedRejected: queueProfiles.length,
+        crossTenantRejected: queueProfiles.length,
+        viewerRejected: queueProfiles.length,
+      },
+    );
+    assert.equal(queueProfiles.length, 16);
+    assert.equal(previewEvidence.length, POLICY_LAB_PROFILE_IDS.length);
+    assert.equal(
+      queueAuthorizationChecks.unauthenticatedRejected,
+      queueProfiles.length,
+    );
+    assert.equal(
+      queueAuthorizationChecks.crossTenantRejected,
+      queueProfiles.length,
+    );
+    assert.equal(queueAuthorizationChecks.viewerRejected, queueProfiles.length);
     assert.equal((await appPool.query("SELECT 1")).rowCount, 1);
     const evidenceHash = sha256(summary);
     const artifactPath = fileURLToPath(

@@ -1,6 +1,6 @@
-0bc2b17118fc75c6cb983f56bf609e0eb04de80195b56675dd25353a7ab753fb  reports/guardian-eight-profile-api-preview-and-queue-gate-2026-11-05.md
-6986071bdc922c829bcb9c51fd40f48287b80482ac0c51b6bb646a00bf8f42d3  artifacts/api-server/src/ai-assessment-synthetic-approval-e2e.test.ts
+c6b4b49d1dce9ac6d655f286a26de14a77ce25518f99cf90459c43cf5f0774d0  reports/guardian-eight-profile-api-preview-and-queue-gate-2026-11-05.md
+d47813f5587f90002a385b37b0c2d46f19c1dd3f9743994ab1e82cc29886f1bb  artifacts/api-server/src/ai-assessment-synthetic-approval-e2e.test.ts
 b0ae9ca290d5e6cf3d00f33b026d0d37f1578da48b55dc7e32dc25780e7bdd94  artifacts/api-server/src/routes/ai-assessment-lab.ts
-d722501129e9c74f3b9c1f1101f9d8914f2f2116db2c6a91bbec1cdd2b07421c  generated-artifacts/guardian-synthetic-approval-e2e.json
+9b3c9baca9fff317ec677eccbab15e5b1672df128842698df2e579a919e56f94  generated-artifacts/guardian-synthetic-approval-e2e.json
 6a1e54658f745074a7a5a937204181c219ec28d184a866845dd09513497ee1d9  generated-artifacts/guardian-qwen-offline/qwen-policy-lab-eight-profiles.json
 0b6246f76877a2874dc7834cacba1c76979a61e7871b1371515268dee8e85f52  generated-artifacts/guardian-qwen-offline/preflight-status-2026-11-04.json
