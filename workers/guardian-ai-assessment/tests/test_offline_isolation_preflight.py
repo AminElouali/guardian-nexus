@@ -190,6 +190,41 @@ class OfflineIsolationPreflightTests(unittest.TestCase):
         )
         self.assertIn("offline_sensitive_environment_present", report["reasonCodes"])
 
+    def test_all_sensitive_environment_presence_is_redacted_without_value_reads(self):
+        sensitive_names = {
+            "DOCKER_HOST",
+            "DOCKER_CONTEXT",
+            "CONTAINER_HOST",
+            "DATABASE_URL",
+            "API_DATABASE_URL",
+            "WORKER_DATABASE_URL",
+            "BROKER_DATABASE_URL",
+            "ASSESSMENT_BROKER_DATABASE_URL",
+            "APP_RUNTIME_DB_PASSWORD",
+            "SESSION_SECRET",
+            "CLERK_SECRET_KEY",
+        }
+        report = collect_offline_isolation_preflight(
+            environment=KeyOnlyEnvironment(sensitive_names),
+            socket_paths=[Path("/missing/docker.sock")],
+            identity=self.identity,
+            inherited_socket_fds={"status": "clear", "count": 0},
+        )
+
+        rendered = json.dumps(report, sort_keys=True)
+        self.assertFalse(report["offlineQwenProcessReady"])
+        self.assertIn("offline_docker_endpoint_configured", report["reasonCodes"])
+        self.assertIn("offline_sensitive_environment_present", report["reasonCodes"])
+        self.assertEqual(report["databaseCredentialVariableCount"], 8)
+        self.assertTrue(report["databaseCredentialEnvironmentPresent"])
+        self.assertFalse(report["credentialValuesRead"])
+        self.assertFalse(
+            report["apiWorkerDatabaseIdentity"]["credentialValuesRead"]
+        )
+        for name in sensitive_names:
+            self.assertNotIn(name, rendered)
+        self.assertNotIn("synthetic-secret-sentinel", rendered)
+
     def test_unverified_socket_metadata_fails_closed(self):
         with tempfile.TemporaryDirectory(prefix="guardian-preflight-file-") as root:
             path = Path(root) / "docker.sock"

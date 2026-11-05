@@ -8,6 +8,38 @@ import {
   runPolicyLabPreview,
 } from "./policy-lab-preview";
 
+function assertEvidenceContainsNoRawPayloadKeys(value: unknown): void {
+  const forbiddenKeys = new Set([
+    "arguments",
+    "prompt",
+    "promptText",
+    "rawArguments",
+    "rawInstruction",
+    "rawPrompt",
+    "rawResponse",
+    "response",
+    "responseText",
+  ]);
+  const visit = (item: unknown): void => {
+    if (Array.isArray(item)) {
+      item.forEach(visit);
+      return;
+    }
+    if (!item || typeof item !== "object") {
+      return;
+    }
+    for (const [key, nested] of Object.entries(item)) {
+      assert.equal(
+        forbiddenKeys.has(key),
+        false,
+        `evidence must not contain raw payload field: ${key}`,
+      );
+      visit(nested);
+    }
+  };
+  visit(value);
+}
+
 test("policy preview command is fixed, bounded, and receives only an allow-listed profile", () => {
   const command = buildPolicyLabPreviewCommand(POLICY_LAB_PROFILE_IDS[0]);
   assert.equal(command.executable, "python3");
@@ -56,6 +88,31 @@ test("fresh deterministic previews validate all eight fixture profiles and never
     assert.equal(evidence.summary.actualOperations, 0);
     assert.equal(evidence.summary.persistentStateChanges, 0);
     assert.equal(evidence.summary.unauthorizedExecutions, 0);
+    assertEvidenceContainsNoRawPayloadKeys(evidence);
+    for (const item of evidence.cases) {
+      assert.equal(item.rawArgumentsStored, false);
+      assert.equal(item.rawInstructionStored, false);
+      assert.equal(item.policyOff.executed, false);
+      assert.equal(item.toolTrace?.policyOff.invoked, false);
+      assert.deepEqual(item.toolTrace?.policyOff.events, []);
+      if (item.policyOn.decision === "deny") {
+        assert.equal(item.policyOn.executed, false);
+        assert.ok(
+          item.toolTrace?.policyOn.events.every((event) => !event.executed),
+        );
+        if (
+          item.toolTrace?.policyOn.dispatchStatus ===
+          "blocked_by_policy_before_dispatch"
+        ) {
+          assert.equal(item.toolTrace.policyOn.invoked, false);
+          assert.deepEqual(item.toolTrace.policyOn.events, []);
+        }
+      } else if (item.policyOn.decision === "require_approval") {
+        assert.equal(item.policyOn.executed, false);
+        assert.equal(item.toolTrace?.policyOn.invoked, false);
+        assert.deepEqual(item.toolTrace?.policyOn.events, []);
+      }
+    }
     assert.ok(evidence.cases.every((item) => item.policyOff.executed === false));
     assert.ok(
       evidence.cases.every(

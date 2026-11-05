@@ -3194,3 +3194,53 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
 - El cambio fue solo al E2E y a documentación/manifiesto/checkpoint; no cambió
   código de servicio, por lo que no se reiniciaron workflows. Ningún servicio
   ni producción fue modificado.
+
+## Incremento 2026-11-05 — redacción fail-closed y matriz sintética API/UI
+
+- Base: HEAD `da58a16ba2be75a3feea41e1a58b8afbe46b5eff`, árbol limpio.
+- Se amplió el test del preflight para cubrir simultáneamente todos los nombres
+  de variables sensibles y endpoints Docker: el entorno de prueba rechaza
+  cualquier lectura de valor, el reporte solo devuelve indicadores/cantidad y
+  no contiene nombres ni el sentinel sintético. No se cambió el preflight ni
+  sus decisiones.
+- Se amplió el test de validación de previews para exigir en los ocho perfiles
+  que la evidencia no incluya campos de prompt/respuesta/argumentos brutos,
+  declare explícitamente no almacenarlos, no ejecute DENY ni
+  REQUIRE_APPROVAL y mantenga Policy OFF como clon no ejecutado. No se cambió
+  el Policy Engine, la ruta de cola, la UI servida ni el comportamiento de
+  aprobaciones.
+- Pruebas ejecutadas en serie, solo fixtures y metadatos:
+  - `test_offline_isolation_preflight.py`: 15/15.
+  - Tres pruebas focalizadas `test_policy_lab.py` (ocho perfiles, inyección no
+    confiable sin despacho, orden Policy ON antes de simulación): 3/3.
+  - `policy-lab-preview.test.ts` (comando acotado, ocho previews y hash): 3/3.
+  - Suite unitaria API `pnpm --filter @workspace/api-server run test`: 79/79.
+  - `AiEvaluationPage.integration.test.tsx`: 14/14.
+  - `pnpm run typecheck` del monorepo: correcto (libs, API, UI, scripts y
+    mockup).
+  - build API: correcto.
+  - build UI: correcto; persisten aviso de sourcemap en `tooltip.tsx` y aviso
+    de chunk mayor de 500 kB.
+- SHA-256 de los tests ampliados:
+  - `workers/guardian-ai-assessment/tests/test_offline_isolation_preflight.py`:
+    `7d525ebc10cc1a524cb7d51630d09230da1d0dd660847b7c7a67fbffa95d653a`.
+  - `artifacts/api-server/src/lib/policy-lab-preview.test.ts`:
+    `9923e45387b9c1e75c5cce1f04be050fad2a8060da845e5bb87ef1af740e24b7`.
+- El primer comando UI desde la raíz no encontró `tsx`; una invocación desde el
+  paquete API no resolvió el alias frontend `@/`. La invocación final desde el
+  directorio UI con el ejecutable local `tsx` resolvió los aliases y pasó 14/14.
+- No se ejecutaron Qwen, Docker, el E2E con PostgreSQL, el preflight vivo ni
+  una sesión Clerk. No se leyeron valores/nombres de secretos. El único
+  recorrido API nuevo es `policy-preview` efímero → subprocess Python
+  determinista → Policy Engine → simulador sintético; no equivale a cola
+  persistente → worker segregado.
+- Gate y límites sin cambios: la última evidencia de host del 2026-11-04 sigue
+  bloqueando por socket Docker accesible, variables sensibles presentes,
+  identidades/roles de DB no acreditados y frontera API/broker no verificada.
+  La evidencia Qwen de ocho perfiles sigue siendo histórica:
+  7 marcadores adaptados, 0 llamadas nativas `message.tool_calls`, 1
+  `NO_PROPOSAL`; no hay inferencia nueva ni aprobación persistente nacida de
+  Qwen. E2E de aprobaciones continúa fixture-only.
+- Siguiente paso seguro: repetir las verificaciones de identidad/socket y
+  sesiones DB únicamente en un host Ubuntu autorizado; hasta entonces
+  mantener cerrada la cola real y limitar las pruebas a fixtures deterministas.
