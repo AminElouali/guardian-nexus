@@ -90,6 +90,8 @@ const profiles: Array<{
 ];
 
 const originLabels: Record<string, string> = {
+  controlled_fixture_not_llm:
+    'Fixture determinista; no es una inferencia Qwen.',
   guardian_qwen_native_markup_adapter:
     'Marcador Qwen completo adaptado por Guardian; no fue message.tool_calls directo.',
   runtime_message_tool_calls:
@@ -231,10 +233,11 @@ export function QwenPolicyLabResult({ evidence }: { evidence: QwenPolicyEvidence
   const direct = evidence.cases.filter(
     (item) => item.toolCallOrigin === 'runtime_message_tool_calls',
   ).length;
-  const noProposal = evidence.cases.filter(
-    (item) =>
-      item.toolCallOrigin === 'no_tool_call' ||
-      item.toolCallOrigin === 'unparsed_qwen_native_markup',
+  const noToolCall = evidence.cases.filter(
+    (item) => item.toolCallOrigin === 'no_tool_call',
+  ).length;
+  const parserRejected = evidence.cases.filter(
+    (item) => item.toolCallOrigin === 'unparsed_qwen_native_markup',
   ).length;
   const countLabel = (value: unknown) =>
     typeof value === 'number' && Number.isSafeInteger(value)
@@ -269,8 +272,21 @@ export function QwenPolicyLabResult({ evidence }: { evidence: QwenPolicyEvidence
       <dl>
         <dt>Origen de propuestas</dt>
         <dd>
-          {adapted} marcador(es) adaptados · {direct} llamadas directas del runtime ·{' '}
-          {noProposal} sin propuesta aceptada.
+          {adapted} marcador{adapted === 1 ? '' : 'es'} Qwen adaptado{adapted === 1 ? '' : 's'} ·{' '}
+          {direct} llamada{direct === 1 ? '' : 's'} nativa{direct === 1 ? '' : 's'} message.tool_calls ·{' '}
+          {noToolCall} salida{noToolCall === 1 ? '' : 's'} sin tool call (NO_PROPOSAL) ·{' '}
+          {parserRejected} marcador{parserRejected === 1 ? '' : 'es'} rechazado{parserRejected === 1 ? '' : 's'} por parser.
+          <small>
+            {' '}
+            Las fixtures deterministas no se incluyen en estos conteos; se muestran en el Policy Lab separado.
+          </small>
+        </dd>
+        <dt>Orden de autorización</dt>
+        <dd data-testid="qwen-policy-order">
+          {evidence.selfChecks.policyBeforeDispatch
+            ? 'La propuesta aceptada se valida y pasa por Policy ON antes del simulador sintético; solo ALLOW puede llegar a él. DENY, REQUIRE_APPROVAL, NO_PROPOSAL y los marcadores rechazados no se despachan.'
+            : 'La evidencia no acredita Policy ON antes del simulador; no se presenta como una ejecución protegida.'}{' '}
+          Policy OFF permanece como contrafactual en un clon y no ejecuta acciones.
         </dd>
         <dt>Policy Engine</dt>
         <dd>

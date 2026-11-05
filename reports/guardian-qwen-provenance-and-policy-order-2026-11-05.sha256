@@ -1,0 +1,8 @@
+6228d14a7eeb72accb3e0670d0d26ab5909f5cbc17f37bfd6b8000d3a63b60ba  reports/guardian-qwen-provenance-and-policy-order-2026-11-05.md
+c3f790e52868c72f4e44c1bd473d03601436ca91422fa5f20b0da92d62d50d23  artifacts/eu-security-platform/src/components/GuardianQwenPolicyLab.tsx
+35b1fe4333621071f298aef6958ebe26787a4bc0c2586f029c7d9386379e3c35  artifacts/eu-security-platform/src/components/AiEvaluationPage.integration.test.tsx
+e96f14af41fdf014e8c7effd5260f6695d9f6c36f6df523026f48749bd604be9  artifacts/api-server/src/lib/ai-assessment-qwen-evidence.test.ts
+d246f2ed5a152048d1f9e8c4c290114a05f654f58abaf9bb3fc943dedaa17fcf  workers/guardian-ai-assessment/tests/test_policy_lab.py
+6a1e54658f745074a7a5a937204181c219ec28d184a866845dd09513497ee1d9  generated-artifacts/guardian-qwen-offline/qwen-policy-lab-eight-profiles.json
+0b6246f76877a2874dc7834cacba1c76979a61e7871b1371515268dee8e85f52  generated-artifacts/guardian-qwen-offline/preflight-status-2026-11-04.json
+2caea13b20738202470beec99111e4ae7f47700ec76e14e1f52a2c2fa0237362  generated-artifacts/guardian-synthetic-approval-e2e.json

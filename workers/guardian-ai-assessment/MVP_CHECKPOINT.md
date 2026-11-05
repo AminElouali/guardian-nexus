@@ -3005,3 +3005,56 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   distintos, socket inaccesible para API, identidades/sesiones DB separadas y
   preflight aprobado. Para UI autenticada se requiere una sesión Clerk de
   desarrollo previamente autorizada; no hay bypass.
+
+## Incremento 2026-11-05 — procedencia Qwen y orden Policy ON
+
+- Inicio: HEAD `52f801d5e1b281ef4f2a1b13a434a3d76c25b4e6`, árbol limpio.
+- La UI ya distingue marcador Qwen adaptado, llamada nativa
+  `message.tool_calls`, `NO_PROPOSAL` (sin llamada) y marcador rechazado por el
+  parser. Este último ya no se agrupa como ausencia de propuesta. Las fixtures
+  deterministas quedan explícitamente separadas. La evidencia presenta el orden
+  Policy ON → simulador únicamente para `ALLOW`; `DENY`, `REQUIRE_APPROVAL`,
+  `NO_PROPOSAL` y parser rejection no se despachan; Policy OFF es contrafactual.
+- Añadido test de contrato para rechazar procedencia de aprobación desde un
+  marcador no parseado. El worker ahora tiene una prueba de orden instrumentada
+  que cubre los ocho perfiles deterministas y vincula el despacho sintético al
+  mismo `caseId` cuya evaluación Policy ON devolvió `ALLOW`.
+- Resultados finales, ejecutados secuencialmente: worker Policy Lab 35/35;
+  API 79/79; E2E de aprobación sintética persistente 1/1; SDK TypeScript
+  13/13 y build correcto; SDK Python 8/8; UI 12/12; `pnpm run typecheck`
+  correcto; build web y build API correctos. El build web conserva avisos de
+  sourcemap en `tooltip.tsx` y chunk de 835.83 kB (227.69 kB gzip); bundle API
+  `dist/index.mjs` de 4.0 MB.
+- Errores de invocación corregidos y registrados: typecheck detectó una
+  nulabilidad en el test UI y pasó tras estrechar el tipo; build web inicial
+  carecía de `PORT` y pasó con `PORT=3000 BASE_PATH=/`; intentos iniciales del
+  test UI no cargaron `tsx`/alias `@/` y pasaron al fijar el `tsconfig` web;
+  SDK Python requirió `PYTHONPATH=src`. No se omitieron suites finales.
+- El E2E sintético no usó inferencia Qwen ni broker: artefacto actual
+  `generated-artifacts/guardian-synthetic-approval-e2e.json`, SHA-256
+  `2caea13b20738202470beec99111e4ae7f47700ec76e14e1f52a2c2fa0237362`;
+  `modelInference=false`, `brokerUsed=false`,
+  `dockerCommandRequestedByHarness=false`, `externalEffects=false`. La salida
+  reportó el hash `abd3f2f78d3a5436d410ebc05788fcb403b8334e5571c3cb75234477d7de3f0b`.
+- No se ejecutó Qwen nuevo ni Docker. El artefacto Qwen histórico sigue en
+  8 inferencias: 7 marcadores adaptados, 0 `message.tool_calls` nativas y
+  1 `NO_PROPOSAL`; 2 ALLOW, 3 DENY, 2 REQUIRE_APPROVAL y 1 NO_PROPOSAL. Hash
+  `6a1e54658f745074a7a5a937204181c219ec28d184a866845dd09513497ee1d9`.
+- No se repitió preflight: el último resultado persistido es del 2026-11-04,
+  SHA-256 `0b6246f76877a2874dc7834cacba1c76979a61e7871b1371515268dee8e85f52`.
+  Bloquea por `offline_docker_socket_accessible`,
+  `offline_sensitive_environment_present`,
+  `assessment_broker_identity_unverified` y
+  `assessment_database_session_identity_unverified`; el modelo no se cargó.
+- Captura de `/dashboard` mostró inicio de sesión Clerk; no se usó bypass y no
+  se verificó navegador autenticado. Las pruebas UI verifican los componentes y
+  descarga redactada, no una sesión real.
+- Informe:
+  `reports/guardian-qwen-provenance-and-policy-order-2026-11-05.md`, SHA-256
+  `6228d14a7eeb72accb3e0670d0d26ab5909f5cbc17f37bfd6b8000d3a63b60ba`.
+  Manifiesto:
+  `reports/guardian-qwen-provenance-and-policy-order-2026-11-05.sha256`, SHA-256
+  `66dd57f0682eb6942d5c6b72af521b3cfc9cd7ccaf7f982ee936289b2467cd30`;
+  todas las entradas verificaron con `sha256sum -c`.
+- Siguiente desbloqueo Qwen: host de laboratorio que demuestre identidades
+  API/broker/DB separadas, API sin acceso al socket Docker y preflight aprobado.

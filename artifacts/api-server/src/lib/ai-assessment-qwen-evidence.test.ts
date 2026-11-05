@@ -74,6 +74,16 @@ test("approval binding v3 is provenance-bound and rejects unverified origins", (
   );
   assert.equal(
     resolveApprovalEvidenceProvenance({
+      engine: "guardian_qwen_policy_lab",
+      executionMode: "real_local_qwen_inference",
+      modelInference: true,
+      toolCallOrigin: "unparsed_qwen_native_markup",
+    }),
+    null,
+    "a parser-rejected marker is not an approval-eligible proposal",
+  );
+  assert.equal(
+    resolveApprovalEvidenceProvenance({
       engine: "guardian_policy_lab",
       executionMode: "real_local_qwen_inference",
       modelInference: true,

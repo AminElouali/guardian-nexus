@@ -332,6 +332,64 @@ test("renders real Qwen profiles separately from fixture evidence", () => {
   assert.doesNotMatch(repeatedUnavailableCatalog, /Motivo:/);
 });
 
+test("Qwen provenance summary keeps parser rejection separate from no proposal", () => {
+  const artifactPath = new URL(
+    "../../../../generated-artifacts/guardian-qwen-policy-labs-e2e-v1.10.0.json",
+    import.meta.url,
+  );
+  const jobs = JSON.parse(readFileSync(artifactPath, "utf8")) as AiAssessmentLabJob[];
+  const qwenJob = jobs.find(
+    (candidate) =>
+      candidate.status === "succeeded" &&
+      candidate.result?.engine === "guardian_qwen_policy_lab",
+  );
+  assert.ok(qwenJob);
+  const evidence = qwenJob.result;
+  if (!evidence || evidence.engine !== "guardian_qwen_policy_lab") {
+    assert.fail("expected a Qwen evidence shape for the component contract test");
+  }
+  const template = evidence.cases[0];
+  assert.ok(template);
+
+  const evidenceWithDistinctOrigins = {
+    ...evidence,
+    cases: [
+      {
+        ...template,
+        caseId: "ui-origin-adapted",
+        toolCallOrigin: "guardian_qwen_native_markup_adapter",
+      },
+      {
+        ...template,
+        caseId: "ui-origin-native",
+        toolCallOrigin: "runtime_message_tool_calls",
+      },
+      {
+        ...template,
+        caseId: "ui-origin-no-call",
+        toolCallOrigin: "no_tool_call",
+      },
+      {
+        ...template,
+        caseId: "ui-origin-parser-rejected",
+        toolCallOrigin: "unparsed_qwen_native_markup",
+      },
+    ],
+  } as typeof evidence;
+
+  const markup = renderToStaticMarkup(
+    createElement(QwenPolicyLabResult, { evidence: evidenceWithDistinctOrigins }),
+  );
+  assert.match(markup, /1 marcador Qwen adaptado/);
+  assert.match(markup, /1 llamada nativa message\.tool_calls/);
+  assert.match(markup, /1 salida sin tool call \(NO_PROPOSAL\)/);
+  assert.match(markup, /1 marcador rechazado por parser/);
+  assert.match(markup, /fixtures deterministas no se incluyen en estos conteos/i);
+  assert.match(markup, /data-testid="qwen-policy-order"/);
+  assert.match(markup, /Policy ON antes del simulador sintético/);
+  assert.match(markup, /Policy OFF permanece como contrafactual/);
+});
+
 test("renders all eight synthetic agent verticals and an API-persisted policy lab report", () => {
   const artifactPath = new URL(
     "../../../../generated-artifacts/guardian-agent-policy-labs-e2e.json",

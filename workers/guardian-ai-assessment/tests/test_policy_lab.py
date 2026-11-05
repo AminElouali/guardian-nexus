@@ -3,6 +3,7 @@ import unittest
 from datetime import datetime, timezone
 from unittest.mock import patch
 
+import guardian_ai_assessment.policy_lab as policy_lab_module
 from guardian_ai_assessment.policy_lab import (
     BASE_PERMISSIONS,
     PROFILE_TO_VERTICAL,
@@ -563,6 +564,98 @@ class GuardianAgentPolicyLabTests(unittest.TestCase):
                         case["toolTrace"]["policyOff"]["dispatchStatus"],
                         "counterfactual_clone_only",
                     )
+
+    def test_policy_on_decision_precedes_synthetic_dispatch_for_all_profiles(self):
+        evaluate_policy = policy_lab_module.evaluate_synthetic_action_policy
+        dispatch_synthetic_tool = policy_lab_module.call_synthetic_tool
+        current_authorization: dict[str, str] = {}
+        observed_dispatches: list[dict[str, str]] = []
+
+        def tracked_policy_evaluation(vertical, action_context, permissions):
+            decision, reason = evaluate_policy(
+                vertical, action_context, permissions
+            )
+            current_authorization.clear()
+            current_authorization.update(
+                case_id=action_context["caseId"],
+                decision=decision,
+            )
+            return decision, reason
+
+        def tracked_synthetic_dispatch(**kwargs):
+            self.assertEqual(
+                current_authorization.get("decision"),
+                "allow",
+                "the independent Policy ON decision must allow before dispatch",
+            )
+            self.assertEqual(
+                current_authorization.get("case_id"),
+                kwargs["tool_call_id"],
+                "dispatch must remain bound to the exact case just authorized",
+            )
+            self.assertEqual(
+                kwargs["source"],
+                "guardian_policy_lab_fixture",
+                "the fixture runner must not be mistaken for a Qwen call",
+            )
+            observed_dispatches.append(
+                {
+                    "caseId": kwargs["tool_call_id"],
+                    "decision": current_authorization["decision"],
+                }
+            )
+            return dispatch_synthetic_tool(**kwargs)
+
+        with patch.object(
+            policy_lab_module,
+            "evaluate_synthetic_action_policy",
+            side_effect=tracked_policy_evaluation,
+        ), patch.object(
+            policy_lab_module,
+            "call_synthetic_tool",
+            side_effect=tracked_synthetic_dispatch,
+        ):
+            for profile_id in PROFILE_TO_VERTICAL:
+                with self.subTest(profile_id=profile_id):
+                    result = run_policy_lab(profile_id)
+                    self.assertEqual(result["executionMode"], "deterministic_fixture")
+                    self.assertFalse(result["modelInference"])
+                    for case in result["cases"]:
+                        policy_on = case["policyOn"]
+                        phases = policy_on["eventPhases"]
+                        self.assertLess(
+                            phases.index("authorization_check"),
+                            phases.index(policy_on["decision"]),
+                        )
+                        if policy_on["executed"]:
+                            self.assertEqual(policy_on["decision"], "allow")
+                            self.assertLess(
+                                phases.index("authorized"),
+                                phases.index("executed"),
+                            )
+                            self.assertTrue(
+                                case["toolTrace"]["policyOn"]["invoked"]
+                            )
+                        else:
+                            self.assertFalse(
+                                case["toolTrace"]["policyOn"]["invoked"]
+                            )
+                            self.assertEqual(
+                                case["toolTrace"]["policyOn"]["events"], []
+                            )
+                        self.assertFalse(case["policyOff"]["executed"])
+                        self.assertFalse(
+                            case["toolTrace"]["policyOff"]["invoked"]
+                        )
+                        self.assertEqual(
+                            case["toolTrace"]["policyOff"]["events"], []
+                        )
+
+        self.assertEqual(
+            len(observed_dispatches),
+            len(PROFILE_TO_VERTICAL),
+            "one fixed benign fixture per profile reaches only its in-memory simulator",
+        )
 
     def test_multiagent_delegation_cannot_gain_permissions(self):
         result = run_policy_lab("guardian-agent-lab-multiagent-v1")
