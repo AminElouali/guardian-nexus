@@ -27,6 +27,11 @@ import {
   deriveQwenBankChangeFinding,
   downloadQwenExecutiveReport,
 } from "./qwenExecutiveReport";
+import {
+  getPolicyOutcomePresentation,
+  getPublicDecisionLabel,
+  getPublicReasonLabel,
+} from "./security-ui-copy";
 
 test("approval inbox shows tenant-safe decisions without claiming tool execution", () => {
   const pending: AiAssessmentApproval = {
@@ -409,15 +414,24 @@ test("renders all eight synthetic agent verticals and an API-persisted policy la
   const resultMarkup = renderToStaticMarkup(
     createElement(AgentPolicyLabResult, { evidence: policyJob.result }),
   );
-  assert.match(resultMarkup, /PROPUESTA DE FIXTURE DETERMINISTA/i);
-  assert.match(resultMarkup, /no es inferencia de LLM/i);
-  assert.match(resultMarkup, /Adaptador ficticio ejecutado solo en memoria/);
-  assert.match(resultMarkup, /Bloqueada antes de invocar el adaptador/);
-  assert.match(resultMarkup, /Policy OFF: no invocado/);
-  assert.match(resultMarkup, /Contrafactual OFF/);
-  assert.match(resultMarkup, /0 ejecución real/);
+  assert.match(resultMarkup, /SEGURIDAD · CONTROL DE ACCESO/);
+  assert.match(resultMarkup, /Simulación/);
+  assert.match(resultMarkup, /datos sintéticos/);
+  assert.match(resultMarkup, /Ver detalles de la prueba/);
   assert.match(resultMarkup, /Hash de suite/);
-  assert.match(resultMarkup, /Inyección dentro de un correo sintético|Intento de envío externo no autorizado/);
+  for (const item of policyJob.result.cases) {
+    for (const internalValue of [
+      item.caseId,
+      item.tool,
+      item.operation,
+      item.resourceWorkspaceId,
+      item.policyOn.reasonCode,
+      item.agentId,
+      item.actorId,
+    ]) {
+      assert.equal(resultMarkup.includes(internalValue), false, `public report leaked ${internalValue}`);
+    }
+  }
   assert.equal(resultMarkup.includes("prompt text"), false);
 
   const catalogMarkup = renderToStaticMarkup(
@@ -472,10 +486,10 @@ test("renders all eight synthetic agent verticals and an API-persisted policy la
   assert.match(catalogMarkup, /data-testid="agent-policy-empty-result"/);
   assert.match(catalogMarkup, /Ejecutar demostración/);
   assert.doesNotMatch(catalogMarkup, /data-testid="button-reset-agent-demo"/);
-  assert.match(catalogMarkup, /no modifica reglas, corpus ni permisos/i);
-  assert.match(catalogMarkup, /no es inferencia de Qwen/i);
+  assert.match(catalogMarkup, /no modifica\s+las decisiones ni los permisos/i);
+  assert.match(catalogMarkup, /no una respuesta nueva de un agente/i);
   assert.match(catalogMarkup, /multiagente/i);
-  assert.match(catalogMarkup, /No es inferencia de Qwen/);
+  assert.doesNotMatch(catalogMarkup, /Policy Engine|fixture|Qwen|NO_PROPOSAL/i);
 
   const emailJob = jobs.find(
     (candidate) =>
@@ -514,7 +528,7 @@ test("renders all eight synthetic agent verticals and an API-persisted policy la
   assert.match(resultCatalogMarkup, /data-testid="button-reset-agent-demo"/);
 });
 
-test("guided fixture result exposes provenance, Policy ON, non-execution and approval boundary", () => {
+test("guided synthetic result explains approval and avoids exposing internal identifiers", () => {
   const artifactPath = new URL(
     "../../../../generated-artifacts/guardian-agent-policy-labs-e2e.json",
     import.meta.url,
@@ -539,13 +553,24 @@ test("guided fixture result exposes provenance, Policy ON, non-execution and app
       focusedCaseId: approvalCase.caseId,
     }),
   );
-  assert.match(markup, /CASO SELECCIONADO/);
-  assert.match(markup, /Fixture determinista controlado, no es inferencia de LLM, Qwen ni llamada nativa/);
-  assert.match(markup, /REQUIRE_APPROVAL|Requiere aprobación humana/);
-  assert.match(markup, /no crea una aprobación persistente/);
-  assert.match(markup, /Policy OFF permanece contrafactual/);
+  assert.match(markup, /SEGURIDAD · CONTROL DE ACCESO/);
+  assert.match(markup, /¿Se ha realizado la operación\?/);
+  assert.match(markup, /Requiere aprobación/);
+  assert.match(markup, /ni creó una solicitud persistente de aprobación/);
   assert.match(markup, /data-testid="link-guided-approval-inbox"/);
-  assert.match(markup, /<details open="" data-testid="agent-policy-case-finance_trusted_bank_change_requires_approval"/);
+  assert.match(markup, /<details open="" data-testid="agent-policy-case-\d+"/);
+  assert.match(markup, /Prueba de seguridad/);
+  for (const internalValue of [
+    approvalCase.caseId,
+    approvalCase.policyOn.reasonCode,
+    approvalCase.agentId,
+    approvalCase.actorId,
+    approvalCase.resourceWorkspaceId,
+    approvalCase.tool,
+    approvalCase.operation,
+  ]) {
+    assert.equal(markup.includes(internalValue), false, `public result leaked ${internalValue}`);
+  }
   assert.equal(markup.includes("Synthetic Vendor"), false);
   assert.equal(markup.includes("prompt text"), false);
 
@@ -558,13 +583,68 @@ test("guided fixture result exposes provenance, Policy ON, non-execution and app
         "9bbc87ca9ee5c7eac040a0d2f33defb6eeb41f95d5d9940979b5564b435960be",
     }),
   );
-  assert.match(recordedMarkup, /Evidencia histórica guardada/);
-  assert.match(recordedMarkup, /no se ejecutó nada al abrir esta vista/);
-  assert.match(recordedMarkup, /SHA-256 del artefacto fuente/);
-  const renderedArtifactHash = recordedMarkup.match(
-    /SHA-256 del artefacto fuente: <code>([a-f0-9]{64})<\/code>/,
-  )?.[1];
-  assert.equal(renderedArtifactHash, createHash("sha256").update(readFileSync(artifactPath)).digest("hex"));
+  assert.match(recordedMarkup, /Evidencia histórica de solo lectura/);
+  assert.match(recordedMarkup, /Abrir esta vista no realizó ninguna operación/);
+  assert.match(recordedMarkup, /Referencia de evidencia histórica/);
+  assert.match(recordedMarkup, new RegExp(createHash("sha256").update(readFileSync(artifactPath)).digest("hex")));
+});
+
+test("public security copy uses safe fallbacks and keeps no proposal distinct from denial", () => {
+  const noProposal = getPolicyOutcomePresentation(
+    "no_proposal",
+    "unknown_internal_reason",
+    false,
+  );
+  assert.equal(getPublicDecisionLabel("no_proposal"), "Sin propuesta");
+  assert.equal(noProposal.operationStatus, "No propuesta");
+  assert.match(noProposal.summary, /no es una denegación/);
+  assert.doesNotMatch(JSON.stringify(noProposal), /unknown_internal_reason|NO_PROPOSAL|DENY/);
+  assert.equal(
+    getPublicReasonLabel("unknown_internal_reason").includes("unknown_internal_reason"),
+    false,
+  );
+  assert.equal(getPublicDecisionLabel("unexpected_internal_decision"), "Resultado no verificado");
+});
+
+test("cross-workspace denial is explained in plain Spanish and never claims data was accessed", () => {
+  const artifactPath = new URL(
+    "../../../../generated-artifacts/guardian-agent-policy-labs-e2e.json",
+    import.meta.url,
+  );
+  const jobs = JSON.parse(readFileSync(artifactPath, "utf8")) as AiAssessmentLabJob[];
+  const databaseJob = jobs.find(
+    (candidate) => candidate.profileId === "guardian-agent-lab-database-v1",
+  );
+  assert.ok(databaseJob?.result?.engine === "guardian_policy_lab");
+  if (databaseJob?.result?.engine !== "guardian_policy_lab") {
+    assert.fail("synthetic database evidence is required for this UI test");
+  }
+  const deniedCase = databaseJob.result.cases.find(
+    (item) => item.policyOn.decision === "deny" && item.policyOn.reasonCode === "resource_outside_workspace",
+  );
+  assert.ok(deniedCase);
+  if (!deniedCase) assert.fail("database scenario must include a cross-workspace denial");
+
+  const markup = renderToStaticMarkup(createElement(AgentPolicyLabResult, {
+    evidence: databaseJob.result,
+    focusedCaseId: deniedCase.caseId,
+  }));
+  assert.match(markup, /Se ha impedido un acceso no autorizado/);
+  assert.match(markup, /Un agente intentó consultar información fuera de su espacio de trabajo autorizado/);
+  assert.match(markup, /El agente no tenía permiso para acceder a esos datos/);
+  assert.match(markup, /No. La solicitud se detuvo antes de realizar la operación/);
+  assert.match(markup, /No se requiere ninguna acción real; esta prueba es simulada/);
+  for (const internalValue of [
+    deniedCase.caseId,
+    deniedCase.policyOn.reasonCode,
+    deniedCase.agentId,
+    deniedCase.actorId,
+    deniedCase.resourceWorkspaceId,
+    deniedCase.tool,
+    deniedCase.operation,
+  ]) {
+    assert.equal(markup.includes(internalValue), false, `public denial leaked ${internalValue}`);
+  }
 });
 
 test("fresh API-preview evidence renders its unisolated runtime boundary honestly", () => {
@@ -605,12 +685,9 @@ test("fresh API-preview evidence renders its unisolated runtime boundary honestl
   const markup = renderToStaticMarkup(
     createElement(AgentPolicyLabResult, { evidence }),
   );
-  assert.match(markup, /Previsualización fresca del Policy Engine/);
-  assert.match(markup, /proceso comparte identidad con la API/i);
-  assert.match(markup, /red y acceso al socket Docker no aislados ni verificados/i);
-  assert.match(markup, /host_network_unisolated/);
-  assert.match(markup, /0 ejecución real/);
-  assert.doesNotMatch(markup, /Worker Docker network=none/);
+  assert.match(markup, /no demuestra el aislamiento del entorno/i);
+  assert.match(markup, /ninguna; esta prueba utiliza únicamente datos sintéticos/i);
+  assert.doesNotMatch(markup, /host_network_unisolated|assessment_broker_identity_unverified|Docker|socket|Policy Engine/i);
   assert.doesNotMatch(markup, /prompt text/i);
 });
 

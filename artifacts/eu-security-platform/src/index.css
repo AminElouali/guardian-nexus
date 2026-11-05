@@ -2047,6 +2047,135 @@ a:focus-visible, button:focus-visible { outline: 3px solid #a78343; outline-offs
   padding: clamp(14px, 2vw, 21px);
   background: #f7faf6;
 }
+.agent-policy-incident-card {
+  border-color: #d8e0dc;
+  background: #fffefa;
+}
+.agent-policy-incident-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+.agent-policy-incident-heading > div:first-child { min-width: 0; }
+.agent-policy-incident-heading h4 {
+  max-width: 760px;
+  color: #183b32;
+  font-size: clamp(19px, 2.2vw, 24px);
+  letter-spacing: -.025em;
+}
+.agent-policy-incident-badges {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+}
+.agent-policy-incident-card .agent-policy-result-decision {
+  min-height: 32px;
+  padding: 6px 10px;
+}
+.agent-policy-result-approval {
+  border-color: #e2cf9e;
+  color: #73591e;
+  background: #fff9e9;
+}
+.agent-policy-result-neutral {
+  border-color: #c9cdd1;
+  color: #545e66;
+  background: #f3f5f5;
+}
+.agent-policy-simulation-badge {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  border: 1px solid #dce4df;
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: #f5f7f5;
+  color: #596a61;
+  font-size: 11px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.agent-policy-incident-body {
+  margin-top: 15px;
+  border-top: 1px solid #e3e9e5;
+  padding-top: 15px;
+}
+.agent-policy-incident-status {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  border-bottom: 1px solid #e7ece8;
+  padding: 0 0 14px;
+}
+.agent-policy-incident-status > div {
+  display: grid;
+  gap: 4px;
+}
+.agent-policy-incident-status span {
+  color: #65766e;
+  font-size: 11px;
+  font-weight: 600;
+}
+.agent-policy-incident-status strong {
+  color: #284b3f;
+  font-size: 14px;
+}
+.agent-policy-incident-card[data-outcome="deny"] .agent-policy-incident-status > div:first-child strong {
+  color: #a13f37;
+}
+.agent-policy-incident-explanation {
+  display: grid;
+  gap: 13px;
+  padding: 14px 0;
+}
+.agent-policy-incident-explanation section { min-width: 0; }
+.agent-policy-incident-explanation h5 {
+  margin: 0;
+  color: #27463c;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.agent-policy-incident-explanation p {
+  margin: 5px 0 0;
+  color: #52635c;
+  font-size: 13px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.agent-policy-simulation-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid #dce6df;
+  border-radius: 9px;
+  padding: 12px;
+  background: #f5f8f5;
+  color: #53645c;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.agent-policy-simulation-note > svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: #3b7558;
+}
+.agent-policy-simulation-note strong { color: #315142; }
+.agent-policy-simulation-note p { margin: 3px 0 0; }
+.agent-policy-incident-card .agent-policy-result-details > summary {
+  margin-top: 12px;
+  border: 1px solid #d7dfda;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fffefa;
+  text-align: center;
+}
+.agent-policy-incident-card .agent-policy-result-details > summary:hover {
+  background: #f5f8f5;
+}
 .agent-policy-result-head { align-items: flex-start; }
 .agent-policy-result-head > div { min-width: 0; }
 .agent-policy-result-head h4 {
@@ -2245,6 +2374,9 @@ a:focus-visible, button:focus-visible { outline: 3px solid #a78343; outline-offs
   .agent-policy-workbench-heading { align-items: flex-start; }
   .agent-policy-demo-badge { padding: 5px 8px; font-size: 10px; }
   .agent-policy-result-head { flex-direction: column; }
+  .agent-policy-incident-heading { flex-direction: column; }
+  .agent-policy-incident-badges { justify-content: flex-start; }
+  .agent-policy-incident-status { gap: 9px; }
   .agent-policy-result-summary { flex-direction: column; gap: 6px; }
   .agent-policy-result-summary > span { text-align: left; }
   .agent-policy-lab-result dl,

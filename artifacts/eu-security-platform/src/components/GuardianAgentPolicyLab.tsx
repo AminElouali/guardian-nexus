@@ -25,6 +25,15 @@ import {
   type GuardianPolicyLabPreviewResponse,
 } from '@workspace/api-client-react';
 import { Button } from '@/components/ui/button';
+import {
+  getPolicyOutcomePresentation,
+  getPublicCaseLabel,
+  getPublicDecisionLabel,
+  getPublicDispatchStatusLabel,
+  getPublicInstructionSourceLabel,
+  getPublicReasonLabel,
+  getPublicVerticalLabel,
+} from './security-ui-copy';
 
 type PolicyLabEvidence = Extract<
   NonNullable<AiAssessmentLabJob['result']>,
@@ -142,52 +151,6 @@ export const AGENT_POLICY_LABS: Array<{
   },
 ];
 
-const decisionLabel: Record<string, string> = {
-  allow: 'Permitida en la simulación',
-  deny: 'Denegada por política',
-  require_approval: 'Requiere aprobación humana',
-  bypassed_counterfactual: 'Contrafactual sin enforcement',
-};
-
-const adapterStatusLabel: Record<string, string> = {
-  simulated_execution: 'Adaptador ficticio ejecutado solo en memoria.',
-  adapter_validation_denied: 'El adaptador rechazó la propuesta; no se ejecutó.',
-  approval_required_before_dispatch: 'Pendiente de aprobación; el adaptador no se invocó.',
-  blocked_by_policy_before_dispatch: 'Bloqueada antes de invocar el adaptador.',
-  counterfactual_clone_only: 'Contrafactual; no se invocó el adaptador.',
-};
-
-const reasonLabel: Record<string, string> = {
-  synthetic_policy_allowlist: 'Operación de laboratorio dentro del permiso mínimo.',
-  permission_not_granted: 'El actor no tiene el permiso solicitado.',
-  resource_outside_workspace: 'El recurso pertenece a otro espacio y queda denegado.',
-  delegated_permissions_exceed_parent: 'La delegación solicita más permisos que el agente original.',
-  external_destination_not_allowed: 'El destino externo no está permitido en este laboratorio.',
-  human_approval_required: 'La operación sensible no se ejecuta sin aprobación humana.',
-  operation_outside_policy: 'La operación no pertenece a la lista permitida.',
-  untrusted_content_cannot_authorize_action: 'El contenido no confiable no puede autorizar una acción.',
-  synthetic_tool_adapter_validation_failed: 'El adaptador sintético rechazó la propuesta.',
-};
-
-const caseTitle: Record<string, string> = {
-  email_benign_read_and_draft: 'Borrador de correo ficticio',
-  email_adversarial_external_exfiltration: 'Intento de envío externo no autorizado',
-  database_benign_scoped_read: 'Lectura de registro sintético',
-  database_adversarial_bulk_export: 'Intento de exportación masiva',
-  finance_benign_invoice_read: 'Consulta de factura ficticia',
-  finance_adversarial_transfer_request: 'Solicitud de transferencia no ejecutada',
-  programming_benign_diff_proposal: 'Propuesta local de cambio',
-  programming_adversarial_host_command: 'Intento de comando del host denegado',
-  support_benign_ticket_reply_draft: 'Borrador de respuesta a ticket',
-  support_adversarial_refund_request: 'Solicitud de reembolso pendiente de aprobación',
-  browser_benign_local_page_read: 'Lectura de página local sintética',
-  browser_adversarial_external_form_submit: 'Intento de formulario externo bloqueado',
-  infrastructure_benign_config_read: 'Consulta de configuración ficticia',
-  infrastructure_adversarial_admin_grant: 'Intento de elevar privilegios denegado',
-  multiagent_benign_read_only_delegation: 'Delegación de lectura acotada',
-  multiagent_adversarial_permission_escalation: 'Escalada de permisos por delegación bloqueada',
-};
-
 export function AgentPolicyLabCatalog({
   profiles,
   canRun,
@@ -264,7 +227,7 @@ export function AgentPolicyLabCatalog({
         <span className="agent-policy-demo-badge"><i />Demo ficticia</span>
       </div>
       <p className="agent-policy-workbench-intro">
-        Selecciona un agente y un escenario para ver cómo el Policy Engine evalúa una propuesta sintética.
+        Selecciona un perfil y un escenario para comprobar si una solicitud respeta los permisos definidos.
       </p>
 
       <section className="agent-policy-workbench-stage" aria-labelledby="agent-policy-profile-heading">
@@ -359,11 +322,11 @@ export function AgentPolicyLabCatalog({
           {!previewPending && <ArrowRight size={17} />}
         </Button>
         <p>
-          El backend calcula la evidencia del perfil y destaca el caso elegido. No crea un job ni
-          despacha herramientas externas. La selección solo enfoca una fixture: no modifica reglas,
-          corpus ni permisos.
+          El servicio prepara el resultado del perfil y destaca el caso elegido. No inicia una
+          evaluación en segundo plano ni una operación externa. La selección solo muestra un caso predefinido: no modifica
+          las decisiones ni los permisos.
         </p>
-        {!canRun && <small role="status">Solo owner/admin puede iniciar la previsualización.</small>}
+        {!canRun && <small role="status">Solo las personas administradoras del espacio pueden iniciar esta prueba.</small>}
       </div>
 
       {selectedFreshPreview && selectedCaseId ? (
@@ -396,18 +359,17 @@ export function AgentPolicyLabCatalog({
       ) : (
         <div className="agent-policy-result-placeholder" role="status" data-testid="agent-policy-empty-result">
           <ShieldCheck size={20} aria-hidden="true" />
-          <div><b>El resultado aparecerá aquí</b><span>Ejecuta la demostración para consultar la decisión del Policy Engine.</span></div>
+          <div><b>El resultado aparecerá aquí</b><span>Ejecuta la demostración para ver el resultado y su explicación.</span></div>
         </div>
       )}
 
       <details className="agent-policy-evidence-details">
-        <summary>Detalles técnicos, evidencia histórica y estado del worker</summary>
+        <summary>Límites de la demostración y evidencia</summary>
         <div className="agent-policy-evidence-content">
           <p>
-            Los perfiles de esta pantalla son fixtures deterministas. No es inferencia de Qwen ni
-            una llamada nativa.
-            <code> NO_PROPOSAL</code> solo aparece en la evidencia Qwen y no equivale a
-            <code> DENY</code>. La previsualización se calcula en la API y no es una frontera de aislamiento.
+            Esta pantalla usa escenarios sintéticos predefinidos, no una respuesta nueva de un agente.
+            Si no hay una propuesta, se indica por separado y no se presenta como una denegación.
+            Esta demostración no inicia un trabajo real ni confirma el aislamiento del entorno.
           </p>
           {selectedLab && selectedCaseId && selectedRecordedEvidence && !showRecordedEvidence && (
             <Button
@@ -422,8 +384,8 @@ export function AgentPolicyLabCatalog({
           )}
           <div className="agent-policy-worker-request">
             <div>
-              <b>Trabajo aislado del perfil</b>
-              <span>{selectedReady ? 'Disponible según el preflight actual.' : 'No disponible tras el preflight actual.'}</span>
+              <b>Prueba con el agente</b>
+              <span>{selectedReady ? 'Disponible en este entorno.' : 'No disponible en este entorno. Los escenarios sintéticos siguen disponibles.'}</span>
             </div>
             <Button
               type="button"
@@ -433,7 +395,7 @@ export function AgentPolicyLabCatalog({
               data-testid="button-run-guided-agent-demo"
             >
               {pending ? <Activity className="spin" size={15} /> : <FlaskConical size={15} />}
-              {pending ? 'Encolando recorrido…' : 'Solicitar trabajo aislado'}
+              {pending ? 'Iniciando evaluación…' : 'Iniciar evaluación'}
             </Button>
           </div>
           {showRecordedEvidence && selectedRecordedEvidence && selectedCaseId && (
@@ -469,104 +431,113 @@ export function AgentPolicyLabResult({
 }) {
   const focusedCase = evidence.cases.find((item) => item.caseId === focusedCaseId);
   const decision = focusedCase?.policyOn.decision;
-  const focusedReason = focusedCase
-    ? reasonLabel[focusedCase.policyOn.reasonCode] ?? focusedCase.policyOn.reasonCode
-    : '';
-  const focusedReasonSentence = focusedReason.endsWith('.')
-    ? focusedReason
-    : `${focusedReason}.`;
-  const decisionHeading = decision === 'allow'
-    ? 'Acción permitida en la simulación'
-    : decision === 'deny'
-      ? 'Acción bloqueada'
-      : decision === 'require_approval'
-        ? 'Requiere aprobación humana'
-        : decision === 'bypassed_counterfactual'
-          ? 'Solo contrafactual'
-          : 'Resultado del laboratorio';
+  const presentation = focusedCase
+    ? getPolicyOutcomePresentation(decision, focusedCase.policyOn.reasonCode, focusedCase.policyOn.executed)
+    : null;
   const DecisionIcon = decision === 'allow'
     ? ShieldCheck
     : decision === 'require_approval'
       ? Clock3
       : ShieldAlert;
-  const actionOutcome = !focusedCase
-    ? 'Revisa el detalle de cada caso para consultar el resultado.'
-    : focusedCase.policyOn.executed
-      ? 'La acción solo cambió el estado sintético efímero del simulador; no hubo efectos externos.'
-      : decision === 'require_approval'
-        ? 'No se ejecutó. Esta previsualización no crea una solicitud persistente de aprobación.'
-        : decision === 'deny'
-          ? 'Se detuvo antes de invocar el adaptador; no se ejecutó.'
-          : 'No se ejecutó ninguna acción externa.';
+  const publicDecisionLabel = getPublicDecisionLabel(decision);
   return (
-    <section className="agent-policy-lab-result" data-testid="agent-policy-lab-result">
-      <div className="agent-policy-result-head">
+    <section
+      className="agent-policy-lab-result agent-policy-incident-card"
+      data-testid="agent-policy-lab-result"
+      data-outcome={presentation?.tone ?? 'neutral'}
+      aria-labelledby="agent-policy-result-title"
+    >
+      <div className="agent-policy-result-head agent-policy-incident-heading">
         <div>
-          <span className="panel-kicker">DECISIÓN DEL POLICY ENGINE · PROPUESTA DE FIXTURE DETERMINISTA</span>
-          <h4>{focusedCase ? caseTitle[focusedCase.caseId] ?? focusedCase.caseId : `Laboratorio ${evidence.verticalLabel}`}</h4>
+          <span className="panel-kicker">SEGURIDAD · CONTROL DE ACCESO</span>
+          <h4 id="agent-policy-result-title">
+            {presentation?.title ?? `Resultado de la prueba · ${getPublicVerticalLabel(evidence.verticalLabel)}`}
+          </h4>
         </div>
-        <span className={`agent-policy-result-decision agent-policy-result-${decision ?? 'unknown'}`}>
-          <DecisionIcon size={18} aria-hidden="true" />
-          {decisionLabel[decision ?? ''] ?? 'Resultado disponible'}
-        </span>
+        <div className="agent-policy-incident-badges">
+          <span className={`agent-policy-result-decision agent-policy-result-${presentation?.tone ?? 'neutral'}`}>
+            <DecisionIcon size={18} aria-hidden="true" />
+            {publicDecisionLabel}
+          </span>
+          <span className="agent-policy-simulation-badge">Simulación</span>
+        </div>
       </div>
       <div className="agent-policy-result-summary">
         <div>
-          <b>{decisionHeading}</b>
-          <p>{evidence.interpretation}</p>
+          <b>{focusedCase ? 'Resultado de la prueba' : 'Resultados del escenario'}</b>
+          <p>
+            {presentation?.summary ??
+              'Selecciona un caso para consultar una explicación clara de la decisión y su alcance.'}
+          </p>
         </div>
-        <span>{evidence.summary.sampleCount} casos en el perfil · simulación ficticia</span>
+        <span>{evidence.summary.sampleCount} casos · datos sintéticos</span>
       </div>
       {focusedCase && (
-        <div className="agent-policy-result-story">
-          <article>
-            <b>Qué intentó hacer</b>
-            <span>{focusedCase.tool} · {focusedCase.operation} sobre un recurso sintético.</span>
-          </article>
-          <article>
-            <b>Qué decidió Guardian Nexus</b>
-            <span>{decisionLabel[focusedCase.policyOn.decision] ?? focusedCase.policyOn.decision}.</span>
-          </article>
-          <article>
-            <b>Por qué</b>
-            <span>{focusedReasonSentence}</span>
-          </article>
-          <article>
-            <b>Qué ocurrió</b>
-            <span>{actionOutcome}</span>
-          </article>
+        <div className="agent-policy-incident-body">
+          <div className="agent-policy-incident-status" aria-label="Estado de la operación y de su ejecución">
+            <div>
+              <span>Operación</span>
+              <strong>{presentation?.operationStatus}</strong>
+            </div>
+            <div>
+              <span>Ejecución</span>
+              <strong>{presentation?.executionStatus}</strong>
+            </div>
+          </div>
+          <div className="agent-policy-incident-explanation">
+            <section>
+              <h5>¿Qué ha ocurrido?</h5>
+              <p>{presentation?.whatHappened}</p>
+            </section>
+            <section>
+              <h5>{decision === 'deny' ? '¿Por qué se ha bloqueado?' : decision === 'require_approval' ? '¿Por qué necesita aprobación?' : decision === 'allow' ? '¿Por qué se ha permitido?' : '¿Qué significa este resultado?'}</h5>
+              <p>{presentation?.why}</p>
+            </section>
+            <section>
+              <h5>¿Se ha realizado la operación?</h5>
+              <p>{presentation?.execution}</p>
+            </section>
+            <section>
+              <h5>¿Necesito hacer algo?</h5>
+              <p>{presentation?.actionNeeded}</p>
+            </section>
+          </div>
+          <div className="agent-policy-simulation-note" role="note">
+            <FlaskConical size={17} aria-hidden="true" />
+            <div>
+              <strong>Prueba de seguridad</strong>
+              <p>{presentation?.simulationNotice}</p>
+            </div>
+          </div>
         </div>
       )}
       {recordedSnapshot && (
         <div className="agent-policy-recorded-notice" role="note">
-          Evidencia histórica guardada; no se ejecutó nada al abrir esta vista.
-          {recordedArtifactSha256 && <span> SHA-256 del artefacto fuente: <code>{recordedArtifactSha256}</code></span>}
+          Evidencia histórica de solo lectura. Abrir esta vista no realizó ninguna operación.
         </div>
       )}
       <details className="agent-policy-result-details">
-        <summary>Detalles técnicos y evidencia</summary>
+        <summary>Ver detalles de la prueba</summary>
         <p>
-          La evidencia de este Policy Lab procede de fixtures deterministas; no es inferencia de LLM
-          ni una llamada nativa a herramientas.
+          La información técnica de la evaluación se conserva en los registros del espacio. Esta vista
+          muestra un resumen redactado y no incluye instrucciones ni datos originales.
         </p>
         {evidence.executionContext === 'api_policy_preview' && (
           <div className="agent-policy-recorded-notice" role="note" data-testid="policy-preview-runtime-limit">
-            Previsualización fresca del Policy Engine; no se creó un job. El proceso comparte identidad con la API:
-            red y acceso al socket Docker no aislados ni verificados.
+            Esta previsualización no demuestra el aislamiento del entorno ni acredita la seguridad de un sistema real.
           </div>
         )}
         {focusedCase && (
           <section className="agent-policy-guided-result" aria-labelledby="agent-policy-guided-result-title" data-testid="agent-policy-guided-result">
-            <span className="panel-kicker">CASO SELECCIONADO · {focusedCase.caseId}</span>
-            <h4 id="agent-policy-guided-result-title">{caseTitle[focusedCase.caseId] ?? focusedCase.caseId}</h4>
+            <span className="panel-kicker">INFORMACIÓN DE LA PRUEBA</span>
+            <h4 id="agent-policy-guided-result-title">{getPublicCaseLabel(focusedCase.caseId)}</h4>
             <ol>
-              <li><b>Propuesta y procedencia</b><span>Fixture determinista controlado, no es inferencia de LLM, Qwen ni llamada nativa: {focusedCase.tool} · {focusedCase.operation}.</span></li>
-              <li><b>Policy ON</b><span>{decisionLabel[focusedCase.policyOn.decision] ?? focusedCase.policyOn.decision} · {focusedReasonSentence}</span></li>
-              <li><b>Acción simulada</b><span>{focusedCase.policyOn.executed ? 'Solo en estado sintético efímero.' : 'No ejecutada.'} Policy OFF permanece contrafactual y no despacha herramientas.</span></li>
-              <li><b>Aprobación ficticia</b><span>{focusedCase.policyOn.decision === 'require_approval'
-                ? 'Esta previsualización registra el requisito, pero no crea una aprobación persistente.'
-                : 'No aplica a este caso.'} La bandeja muestra solo solicitudes existentes.</span></li>
-              <li><b>Evidencia redactada</b><span>Hash de caso: <code>{focusedCase.caseEvidenceSha256}</code></span></li>
+              <li><b>Agente responsable</b><span>No identificado en esta prueba.</span></li>
+              <li><b>Tipo de prueba</b><span>{getPublicVerticalLabel(evidence.verticalLabel)} · datos sintéticos.</span></li>
+              <li><b>Motivo</b><span>{getPublicReasonLabel(focusedCase.policyOn.reasonCode)}</span></li>
+              <li><b>Ejecución</b><span>{presentation?.execution}</span></li>
+              <li><b>Acción necesaria</b><span>{presentation?.actionNeeded}</span></li>
+              <li><b>Referencia verificable</b><span>SHA-256: <code>{focusedCase.caseEvidenceSha256}</code></span></li>
             </ol>
             {focusedCase.policyOn.decision === 'require_approval' && (
               <button
@@ -581,56 +552,46 @@ export function AgentPolicyLabResult({
           </section>
         )}
         <dl>
-          <dt>Policy ON</dt>
-          <dd>{evidence.summary.allowed} permitido · {evidence.summary.denied} denegado · {evidence.summary.requiresApproval} requiere aprobación · {evidence.summary.simulatedExecutions} ejecución simulada</dd>
-          <dt>Policy OFF</dt>
-          <dd>{evidence.summary.policyOffCounterfactualWouldExecute} hipotéticos en clones · {evidence.summary.policyOffCloneStateChanges} cambios solo en clones · 0 ejecución real</dd>
-          <dt>Efectos reales</dt>
-          <dd>0 operaciones externas · 0 llamadas externas · 0 cambios persistentes</dd>
-          <dt>Identidad sintética</dt>
-          <dd>{evidence.agentIdentity.agentId} · {evidence.agentIdentity.actorId}</dd>
+          <dt>Resultado de los controles</dt>
+          <dd>{evidence.summary.allowed} permitidas · {evidence.summary.denied} bloqueadas · {evidence.summary.requiresApproval} requieren revisión</dd>
+          <dt>Comparación hipotética</dt>
+          <dd>{evidence.summary.policyOffCounterfactualWouldExecute} posibilidades calculadas en copias de prueba; no se ejecutaron.</dd>
+          <dt>Operaciones externas</dt>
+          <dd>Ninguna; esta prueba utiliza únicamente datos sintéticos.</dd>
         </dl>
         <div className="agent-policy-lab-cases">
-          {evidence.cases.map((item) => (
-            <details key={item.caseId} open={item.caseId === focusedCaseId} data-testid={`agent-policy-case-${item.caseId}`}>
-              <summary>{caseTitle[item.caseId] ?? item.caseId} — {decisionLabel[item.policyOn.decision] ?? item.policyOn.decision}</summary>
+          {evidence.cases.map((item, index) => (
+            <details
+              key={`${index}-${getPublicCaseLabel(item.caseId)}`}
+              open={item.caseId === focusedCaseId}
+              data-testid={`agent-policy-case-${index + 1}`}
+            >
+              <summary>{getPublicCaseLabel(item.caseId)} — {getPublicDecisionLabel(item.policyOn.decision)}</summary>
               <dl>
-                <dt>Propuesta</dt><dd>{item.tool} · {item.operation} · {item.resourceType} sintético</dd>
-                <dt>Origen de instrucción</dt><dd>{item.instructionProvenance}</dd>
-                <dt>Agente y actor</dt><dd>{item.agentId} · {item.actorId} ({item.actorType})</dd>
-                <dt>Espacio del recurso</dt><dd>{item.resourceWorkspaceId}</dd>
-                <dt>Permisos concedidos</dt><dd>{item.grantedPermissions.join(', ') || 'ninguno'}</dd>
-                <dt>Permisos solicitados</dt><dd>{item.requestedPermissions.join(', ')}</dd>
-                <dt>Motivo de política</dt><dd>{reasonLabel[item.policyOn.reasonCode] ?? item.policyOn.reasonCode}</dd>
-                <dt>Intento</dt><dd>{item.policyOn.attempted ? 'Registrado' : 'No observado'}</dd>
-                <dt>Autorización</dt><dd>{item.policyOn.authorized ? 'Sí, solo en el simulador' : 'No'}</dd>
-                <dt>Acción</dt><dd>{item.policyOn.executed ? 'Ejecutada en estado sintético efímero' : 'No ejecutada'}</dd>
-                <dt>Adaptador ficticio</dt><dd>{item.toolTrace ? `${adapterStatusLabel[item.toolTrace.policyOn.dispatchStatus] ?? item.toolTrace.policyOn.dispatchStatus} Eventos: ${item.toolTrace.policyOn.events.map((event) => event.phase).join(', ') || 'ninguno'}. Policy OFF: no invocado.` : 'No hay traza del adaptador en esta evidencia anterior.'}</dd>
-                <dt>Contrafactual OFF</dt><dd>Habría sido propuesta en un clon; jamás ejecutada ni persistida.</dd>
-                <dt>Delegación</dt><dd>{item.delegation.isDelegatedAction ? 'Agente delegado; identidad original preservada.' : 'No aplica.'} Elevación permitida: no.</dd>
-                <dt>Hash de propuesta</dt><dd>{item.proposalSha256}</dd>
-                <dt>Hash de evidencia</dt><dd>{item.caseEvidenceSha256}</dd>
+                <dt>Solicitud</dt><dd>{getPublicCaseLabel(item.caseId)}</dd>
+                <dt>Origen</dt><dd>{getPublicInstructionSourceLabel(item.instructionProvenance)}</dd>
+                <dt>Resultado</dt><dd>{getPublicDecisionLabel(item.policyOn.decision)}</dd>
+                <dt>Motivo</dt><dd>{getPublicReasonLabel(item.policyOn.reasonCode)}</dd>
+                <dt>Operación realizada</dt><dd>{item.policyOn.executed ? 'Solo dentro de la simulación.' : 'No realizada.'}</dd>
+                <dt>Estado de la prueba</dt><dd>{getPublicDispatchStatusLabel(item.toolTrace?.policyOn.dispatchStatus)}</dd>
+                <dt>Delegación</dt><dd>{item.delegation.isDelegatedAction ? 'Se conservaron los permisos del agente original.' : 'No aplica.'}</dd>
+                <dt>Referencia verificable</dt><dd>SHA-256: {item.caseEvidenceSha256}</dd>
               </dl>
             </details>
           ))}
         </div>
         <details>
-          <summary>Procedencia, límites y hashes</summary>
+          <summary>Referencias y límites</summary>
           <dl>
-            <dt>Motor</dt><dd>{evidence.engineVersion} · política {evidence.versions.policy}</dd>
-            <dt>Corpus y oráculo</dt><dd>{evidence.versions.corpus} · {evidence.versions.oracle} · semilla {evidence.seed}</dd>
-            <dt>Adaptador de herramientas</dt><dd>{evidence.versions.toolAdapter ?? 'No registrado en evidencia anterior'}</dd>
-            <dt>Propuestas</dt><dd>Fixture controlado; no Qwen, no tool calls nativas.</dd>
-            <dt>Red declarada</dt><dd>{evidence.limits.network}</dd>
-            <dt>Entorno</dt><dd>{evidence.executionContext === 'api_policy_preview'
-              ? 'Proceso API compartido; red y acceso al socket Docker no aislados ni verificados.'
-              : 'Worker Docker network=none; sin secretos, pesos del modelo ni socket montado.'}</dd>
-            <dt>Datos</dt><dd>No se guardan prompts, instrucciones ni argumentos en bruto; solo metadatos y hashes.</dd>
+            <dt>Tipo de resultado</dt><dd>Escenario sintético predefinido; no es una acción real.</dd>
+            <dt>Alcance</dt><dd>Esta prueba no acredita la seguridad de un entorno de producción.</dd>
+            <dt>Conexiones externas</dt><dd>Esta previsualización no inicia conexiones a servicios empresariales.</dd>
+            <dt>Datos mostrados</dt><dd>Resumen redactado; no se incluyen instrucciones ni argumentos originales.</dd>
             <dt>Hash de suite</dt><dd>{evidence.suiteEvidenceSha256}</dd>
             <dt>Hash de evidencia</dt><dd>{evidence.evidenceSha256}</dd>
-            {recordedSnapshot && recordedArtifactSha256 && <><dt>SHA-256 del artefacto fuente</dt><dd><code>{recordedArtifactSha256}</code></dd></>}
+            {recordedSnapshot && recordedArtifactSha256 && <><dt>Referencia de evidencia histórica</dt><dd><code>{recordedArtifactSha256}</code></dd></>}
           </dl>
-          <small>Dos o tres casos por vertical son una demostración acotada, no una medición de eficacia general.</small>
+          <small>Los resultados corresponden a los escenarios incluidos; no son una medición de eficacia general.</small>
         </details>
       </details>
     </section>
