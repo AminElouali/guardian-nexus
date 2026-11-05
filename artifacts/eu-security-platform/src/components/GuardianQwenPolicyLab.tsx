@@ -151,11 +151,16 @@ export function QwenPolicyLabCatalog({
     return worker?.status !== 'ready';
   }).length;
   return (
-    <section className="agent-policy-lab" data-testid="qwen-policy-lab-catalog">
+    <section
+      id="qwen-policy-lab"
+      className="agent-policy-lab"
+      aria-labelledby="qwen-policy-lab-title"
+      data-testid="qwen-policy-lab-catalog"
+    >
       <div className="panel-heading">
         <div>
           <span className="panel-kicker">INFERENCIA LOCAL REAL · QWEN3</span>
-          <h3>Correo y bases de datos</h3>
+          <h3 id="qwen-policy-lab-title">Correo y bases de datos</h3>
         </div>
         <span className="ai-evaluation-run-label">LABORATORIO · NO CONECTADO A CLIENTES</span>
       </div>

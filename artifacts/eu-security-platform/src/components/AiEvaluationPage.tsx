@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, type KeyboardEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Activity, AlertTriangle, Check, Clock3, FlaskConical, LockKeyhole, ShieldAlert, ShieldCheck } from 'lucide-react';
 import {
@@ -802,6 +802,65 @@ export function LabJobCard({
   </article>;
 }
 
+export type AiEvaluationSection = 'lab' | 'approvals' | 'audit';
+
+const AI_EVALUATION_SECTIONS: Array<{
+  id: AiEvaluationSection;
+  label: string;
+}> = [
+  { id: 'lab', label: 'Laboratorio' },
+  { id: 'approvals', label: 'Aprobaciones' },
+  { id: 'audit', label: 'Auditoría' },
+];
+
+export function AiEvaluationSectionNav({
+  activeSection,
+  onSelect,
+}: {
+  activeSection: AiEvaluationSection;
+  onSelect: (section: AiEvaluationSection) => void;
+}) {
+  function handleKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+    const currentIndex = AI_EVALUATION_SECTIONS.findIndex(
+      (section) => section.id === activeSection,
+    );
+    let nextIndex: number | null = null;
+    if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % AI_EVALUATION_SECTIONS.length;
+    if (event.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + AI_EVALUATION_SECTIONS.length) % AI_EVALUATION_SECTIONS.length;
+    if (event.key === 'Home') nextIndex = 0;
+    if (event.key === 'End') nextIndex = AI_EVALUATION_SECTIONS.length - 1;
+    if (nextIndex === null) return;
+
+    event.preventDefault();
+    const nextSection = AI_EVALUATION_SECTIONS[nextIndex];
+    onSelect(nextSection.id);
+    event.currentTarget.parentElement
+      ?.querySelector<HTMLButtonElement>(`#ai-evaluation-tab-${nextSection.id}`)
+      ?.focus();
+  }
+
+  return (
+    <div className="ai-evaluation-section-nav" role="tablist" aria-label="Secciones de Seguridad IA" data-testid="ai-evaluation-section-nav">
+      {AI_EVALUATION_SECTIONS.map((section) => (
+        <button
+          key={section.id}
+          id={`ai-evaluation-tab-${section.id}`}
+          type="button"
+          role="tab"
+          aria-selected={activeSection === section.id}
+          aria-controls={`ai-evaluation-panel-${section.id}`}
+          tabIndex={activeSection === section.id ? 0 : -1}
+          data-testid={`ai-evaluation-tab-${section.id}`}
+          onClick={() => onSelect(section.id)}
+          onKeyDown={handleKeyDown}
+        >
+          {section.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function AiEvaluationPage({ workspace }: { workspace: Workspace }) {
   const cache = useQueryClient();
   const history = useListWorkspaceAiEvaluations(workspace.id);
@@ -834,6 +893,7 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
   } | null>(null);
   const [approvalMessage, setApprovalMessage] = useState('');
   const [approvalError, setApprovalError] = useState('');
+  const [activeSection, setActiveSection] = useState<AiEvaluationSection>('lab');
   const canRun = workspace.role === 'owner' || workspace.role === 'admin';
   const garakAvailable = availability.data?.profiles.some(
     (profile) => profile.profileId === 'guardian-local-agent-v1' && profile.status === 'ready',
@@ -864,6 +924,7 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
       if (guidedCaseId) {
         setGuidedDemo({ jobId: createdJob.id, caseId: guidedCaseId });
       }
+      setActiveSection('audit');
       setLabMessage(guidedCaseId
         ? 'Solicitud registrada. Se ejecutan solo los fixtures fijos del perfil; el caso elegido quedará resaltado.'
         : 'Solicitud registrada. Se ejecutará únicamente el perfil local seleccionado.');
@@ -939,6 +1000,7 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
     setError('');
     try {
       await runEvaluation.mutateAsync({ workspaceId: workspace.id });
+      setActiveSection('audit');
       setMessage('Simulación registrada en la auditoría de este espacio. No se contactó ningún agente ni proveedor.');
       await cache.invalidateQueries({
         queryKey: getListWorkspaceAiEvaluationsQueryKey(workspace.id),
@@ -963,8 +1025,20 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
       <div><b>Solo se ejecutan perfiles locales fijos.</b><p>Los contenedores usan red deshabilitada y límites de recursos. No aceptan objetivos arbitrarios, cuentas de clientes, credenciales ni modelos de pago. IPv6 puede figurar como no verificado si el kernel no ofrece ese protocolo. La disponibilidad en desarrollo no habilita el servicio para clientes.</p></div>
     </div>
 
+    <AiEvaluationSectionNav activeSection={activeSection} onSelect={setActiveSection} />
     {labMessage && <div className="notice notice-success ai-evaluation-feedback" role="status">{labMessage}</div>}
     {labError && <div className="notice notice-error ai-evaluation-feedback" role="alert">{labError}</div>}
+    {message && <div className="notice notice-success ai-evaluation-feedback" role="status">{message}</div>}
+    {error && <div className="notice notice-error ai-evaluation-feedback" role="alert">{error}</div>}
+
+    <section
+      id="ai-evaluation-panel-lab"
+      className="ai-evaluation-section-panel"
+      role="tabpanel"
+      aria-labelledby="ai-evaluation-tab-lab"
+      tabIndex={0}
+      hidden={activeSection !== 'lab'}
+    >
     <section className="panel ai-evaluation-card ai-lab-card">
       <div className="panel-heading">
         <div><span className="panel-kicker">EJECUCIONES LOCALES · DESARROLLO</span><h2>Laboratorio aislado</h2></div>
@@ -1017,17 +1091,11 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
         {canRun && !nativeToolsAvailable && <small>Suite de tool calls nativas no disponible: {availability.data?.profiles.find((profile) => profile.profileId === 'guardian-local-llm-native-tools-v1')?.reasonCode ?? 'worker_unavailable'}.</small>}
         {canRun && !autonomousToolsAvailable && <small>Selección autónoma no disponible: {availability.data?.profiles.find((profile) => profile.profileId === 'guardian-local-llm-autonomous-tools-v1')?.reasonCode ?? 'worker_unavailable'}.</small>}
       </div>
-      {labJobs.isLoading && <div className="ai-history-empty" role="status">Cargando trabajos del laboratorio…</div>}
-      {labJobs.isError && <div className="notice notice-error" role="alert">No se pudo cargar el estado del laboratorio. <Button variant="outline" onClick={() => void labJobs.refetch()}>Reintentar</Button></div>}
-      {!!labJobs.data?.length && <div className="ai-history-list">{labJobs.data.map((job) => <LabJobCard key={job.id} job={job} canRun={canRun} onRetry={(id) => void retryLabAssessment(id)} retryPending={retryLabJob.isPending} focusedCaseId={guidedDemo?.jobId === job.id ? guidedDemo.caseId : undefined} />)}</div>}
       <details className="ai-lab-provenance">
         <summary>Origen técnico y licencia</summary>
         <p>Garak v0.17.1 conserva su atribución de terceros y licencia Apache-2.0. La inferencia local utiliza Qwen3-0.6B-GGUF Q8_0 (Apache-2.0) mediante llama-cpp-python 0.3.36 (MIT). Sus versiones, hashes y procedencia se registran por separado en la evidencia.</p>
       </details>
     </section>
-
-    {message && <div className="notice notice-success ai-evaluation-feedback" role="status">{message}</div>}
-    {error && <div className="notice notice-error ai-evaluation-feedback" role="alert">{error}</div>}
 
     <div className="ai-evaluation-grid">
       <section className="panel ai-evaluation-card">
@@ -1062,7 +1130,16 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
         <a href="https://docs.cloud.google.com/model-armor/data-residency" target="_blank" rel="noreferrer">Residencia y regiones oficiales ↗</a>
       </section>
     </div>
+    </section>
 
+    <section
+      id="ai-evaluation-panel-approvals"
+      className="ai-evaluation-section-panel"
+      role="tabpanel"
+      aria-labelledby="ai-evaluation-tab-approvals"
+      tabIndex={0}
+      hidden={activeSection !== 'approvals'}
+    >
     <GuardianApprovalInbox
       approvals={approvalList.data?.approvals ?? []}
       canDecide={approvalList.data?.canDecide ?? false}
@@ -1076,13 +1153,34 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
         void recordApprovalDecision(approvalId, binding, decision)
       }
     />
+    </section>
 
-    <section className="panel ai-evaluation-history">
+    <section
+      id="ai-evaluation-panel-audit"
+      className="ai-evaluation-section-panel"
+      role="tabpanel"
+      aria-labelledby="ai-evaluation-tab-audit"
+      tabIndex={0}
+      hidden={activeSection !== 'audit'}
+    >
+      <section className="panel ai-evaluation-card ai-lab-history-card">
+        <div className="panel-heading">
+          <div><span className="panel-kicker">TRABAJOS LOCALES · EVIDENCIA</span><h2>Resultados del laboratorio</h2></div>
+          <span className="ai-evaluation-state ai-state-pending"><i />Procedencia explícita</span>
+        </div>
+        <p>Los resultados se mantienen separados por origen: fixtures deterministas, inferencia Qwen histórica o nueva cuando esté disponible. La ausencia de propuesta no equivale a una denegación.</p>
+        {labJobs.isLoading && <div className="ai-history-empty" role="status">Cargando trabajos del laboratorio…</div>}
+        {labJobs.isError && <div className="notice notice-error" role="alert">No se pudo cargar el estado del laboratorio. <Button variant="outline" onClick={() => void labJobs.refetch()}>Reintentar</Button></div>}
+        {!!labJobs.data?.length && <div className="ai-history-list">{labJobs.data.map((job) => <LabJobCard key={job.id} job={job} canRun={canRun} onRetry={(id) => void retryLabAssessment(id)} retryPending={retryLabJob.isPending} focusedCaseId={guidedDemo?.jobId === job.id ? guidedDemo.caseId : undefined} />)}</div>}
+        {!labJobs.isLoading && !labJobs.isError && !labJobs.data?.length && <div className="ai-history-empty">Aún no hay trabajos del laboratorio en este espacio.</div>}
+      </section>
+      <section id="ai-evaluation-audit" className="panel ai-evaluation-history">
         <div className="panel-heading"><div><span className="panel-kicker">DATOS SINTÉTICOS</span><h2>Simulaciones recientes</h2></div><span className="ai-evaluation-state ai-state-pending"><i /> Separadas de evaluaciones reales</span></div>
       {history.isLoading && <div className="ai-history-empty" role="status">Cargando historial de este espacio…</div>}
       {history.isError && <div className="notice notice-error" role="alert">No se pudo cargar el historial. <Button variant="outline" onClick={() => void history.refetch()}>Reintentar</Button></div>}
       {!history.isLoading && !history.isError && history.data?.length === 0 && <div className="ai-history-empty">Aún no hay simulaciones. Los resultados reales no se inventan ni se muestran aquí.</div>}
       {!!history.data?.length && <div className="ai-history-list">{history.data.map((run) => <EvaluationCard key={run.id} run={run} />)}</div>}
+      </section>
     </section>
   </div>;
 }

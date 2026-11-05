@@ -197,17 +197,33 @@ function PublicHome() {
 
 function CloudGlyph() { return <Database size={16} />; }
 
-const navItems = [
-  { href: '/dashboard', label: 'Resumen', icon: Activity },
-  { href: '/assets', label: 'Activos', icon: Box },
-  { href: '/team', label: 'Equipo', icon: Users },
-  { href: '/integrations', label: 'Conexiones', icon: Globe2 },
-  { href: '/ai-evaluations', label: 'Seguridad IA', icon: FlaskConical },
-  { href: '/risk-intelligence', label: 'Risk Intelligence', icon: ShieldEllipsis },
-  { href: '/integration-readiness', label: 'Preparación', icon: Cloud },
-  { href: '/plans', label: 'Planes y uso', icon: Gauge },
-  { href: '/roadmap', label: 'Hoja de ruta empresarial', icon: Layers3 },
+const navGroups = [
+  {
+    label: 'ESPACIO DE TRABAJO',
+    items: [
+      { href: '/dashboard', label: 'Resumen', icon: Activity },
+      { href: '/assets', label: 'Activos', icon: Box },
+      { href: '/team', label: 'Equipo', icon: Users },
+    ],
+  },
+  {
+    label: 'SEGURIDAD Y GOBERNANZA',
+    items: [
+      { href: '/ai-evaluations', label: 'Seguridad IA', icon: FlaskConical },
+      { href: '/risk-intelligence', label: 'Risk Intelligence', icon: ShieldEllipsis },
+      { href: '/integration-readiness', label: 'Preparación', icon: Cloud },
+    ],
+  },
+  {
+    label: 'CONEXIONES Y GESTIÓN',
+    items: [
+      { href: '/integrations', label: 'Conexiones', icon: Globe2 },
+      { href: '/plans', label: 'Planes y uso', icon: Gauge },
+      { href: '/roadmap', label: 'Hoja de ruta empresarial', icon: Layers3 },
+    ],
+  },
 ];
+const navItems = navGroups.flatMap((group) => group.items);
 
 function AppShell({ children, workspace }: { children: ReactNode; workspace?: Workspace }) {
   const [location] = useLocation();
@@ -217,8 +233,29 @@ function AppShell({ children, workspace }: { children: ReactNode; workspace?: Wo
     <aside className={`sidebar ${mobileOpen ? 'sidebar-open' : ''}`}>
       <div className="sidebar-top"><Brand inverse /><button className="sidebar-close" onClick={() => setMobileOpen(false)} aria-label="Cerrar menú"><X size={18} /></button></div>
       {workspace && <div className="workspace-chip"><div className="workspace-avatar">{workspace.name.slice(0, 1).toUpperCase()}</div><div className="workspace-chip-copy"><b>{workspace.name}</b><span>Plan {planLabel({ id: workspace.planId, name: workspace.planId })} · {roleLabel(workspace.role)}</span></div></div>}
-      <div className="nav-caption">ESPACIO DE TRABAJO</div>
-      <nav className="side-nav">{navItems.map(({ href, label, icon: Icon }) => <Link key={href} href={href} onClick={() => setMobileOpen(false)} className={`side-link ${location === href ? 'side-link-active' : ''}`} data-testid={`link-nav-${label.toLowerCase().replaceAll(' ', '-')}`}><Icon size={17} strokeWidth={1.8} /><span>{label}</span>{location === href && <span className="active-indicator" />}</Link>)}</nav>
+      <div className="sidebar-navigation">
+        {navGroups.map((group) => (
+          <section className="nav-group" key={group.label}>
+            <div className="nav-caption">{group.label}</div>
+            <nav className="side-nav" aria-label={group.label.toLocaleLowerCase('es-ES')}>
+              {group.items.map(({ href, label, icon: Icon }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  onClick={() => setMobileOpen(false)}
+                  className={`side-link ${location === href ? 'side-link-active' : ''}`}
+                  aria-current={location === href ? 'page' : undefined}
+                  data-testid={`link-nav-${label.toLowerCase().replaceAll(' ', '-')}`}
+                >
+                  <Icon size={17} strokeWidth={1.8} />
+                  <span>{label}</span>
+                  {location === href && <span className="active-indicator" />}
+                </Link>
+              ))}
+            </nav>
+          </section>
+        ))}
+      </div>
       <div className="sidebar-bottom">
         <div className="sidebar-scope"><div className="scope-icon"><LockKeyhole size={14} /></div><div><b>Ámbito del espacio</b><span>Tus datos permanecen aquí</span></div></div>
         <div className="user-row"><div className="user-identity"><div className="user-avatar">{(user?.firstName?.[0] ?? user?.primaryEmailAddress?.emailAddress?.[0] ?? 'U').toUpperCase()}</div><div><b>{user?.fullName ?? 'Sesión iniciada'}</b><span>{user?.primaryEmailAddress?.emailAddress ?? 'Cuenta'}</span></div></div><SignOutButton /></div>

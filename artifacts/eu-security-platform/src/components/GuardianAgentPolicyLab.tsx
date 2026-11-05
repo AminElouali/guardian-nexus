@@ -1,5 +1,19 @@
 import React, { useState } from 'react';
-import { Activity, ArrowRight, FlaskConical, RotateCcw } from 'lucide-react';
+import {
+  Activity,
+  ArrowRight,
+  CircleHelp,
+  Cloud,
+  Code2,
+  Database,
+  FlaskConical,
+  Globe2,
+  Mail,
+  Network,
+  RotateCcw,
+  WalletCards,
+  type LucideIcon,
+} from 'lucide-react';
 import {
   type AiAssessmentLabJob,
   type AiAssessmentLabJobRequestProfileId,
@@ -26,6 +40,7 @@ export const AGENT_POLICY_LABS: Array<{
   profileId: PolicyLabProfile;
   verticalId: string;
   title: string;
+  icon: LucideIcon;
   summary: string;
   testFocus: string;
   benignCaseId: string;
@@ -35,6 +50,7 @@ export const AGENT_POLICY_LABS: Array<{
     profileId: 'guardian-agent-lab-email-v1',
     verticalId: 'email',
     title: 'Correo',
+    icon: Mail,
     summary: 'Lectura y borradores locales; bloquea envíos externos y exfiltración.',
     testFocus: 'Inyección dentro de un correo sintético',
     benignCaseId: 'email_benign_read_and_draft',
@@ -44,6 +60,7 @@ export const AGENT_POLICY_LABS: Array<{
     profileId: 'guardian-agent-lab-database-v1',
     verticalId: 'database',
     title: 'Bases de datos',
+    icon: Database,
     summary: 'Consulta una fila sintética; rechaza exportaciones entre espacios y borrados.',
     testFocus: 'Instrucción de exportación masiva en un documento',
     benignCaseId: 'database_benign_scoped_read',
@@ -53,6 +70,7 @@ export const AGENT_POLICY_LABS: Array<{
     profileId: 'guardian-agent-lab-finance-v1',
     verticalId: 'finance',
     title: 'Finanzas',
+    icon: WalletCards,
     summary: 'Lectura de factura ficticia; transferencias requieren aprobación humana.',
     testFocus: 'Solicitud de transferencia desde contenido no confiable',
     benignCaseId: 'finance_benign_invoice_read',
@@ -62,6 +80,7 @@ export const AGENT_POLICY_LABS: Array<{
     profileId: 'guardian-agent-lab-programming-v1',
     verticalId: 'programming',
     title: 'Programación',
+    icon: Code2,
     summary: 'Propone un cambio de ejemplo; no ejecuta comandos del host.',
     testFocus: 'Intento de comando y lectura de secretos',
     benignCaseId: 'programming_benign_diff_proposal',
@@ -71,6 +90,7 @@ export const AGENT_POLICY_LABS: Array<{
     profileId: 'guardian-agent-lab-customer-service-v1',
     verticalId: 'customer_service',
     title: 'Atención al cliente',
+    icon: CircleHelp,
     summary: 'Prepara una respuesta ficticia; reembolsos quedan pendientes de aprobación.',
     testFocus: 'Petición de reembolso incrustada en un ticket',
     benignCaseId: 'support_benign_ticket_reply_draft',
@@ -80,6 +100,7 @@ export const AGENT_POLICY_LABS: Array<{
     profileId: 'guardian-agent-lab-browser-v1',
     verticalId: 'browser',
     title: 'Navegador',
+    icon: Globe2,
     summary: 'Lee páginas de laboratorio; no visita ni envía formularios a terceros.',
     testFocus: 'Formulario externo solicitado por una página sintética',
     benignCaseId: 'browser_benign_local_page_read',
@@ -89,6 +110,7 @@ export const AGENT_POLICY_LABS: Array<{
     profileId: 'guardian-agent-lab-infrastructure-v1',
     verticalId: 'infrastructure',
     title: 'Infraestructura',
+    icon: Cloud,
     summary: 'Consulta configuración ficticia; deniega escaladas y borrados.',
     testFocus: 'Concesión de rol administrador no autorizada',
     benignCaseId: 'infrastructure_benign_config_read',
@@ -98,6 +120,7 @@ export const AGENT_POLICY_LABS: Array<{
     profileId: 'guardian-agent-lab-multiagent-v1',
     verticalId: 'multiagent',
     title: 'Multiagente',
+    icon: Network,
     summary: 'Conserva actor y permisos originales al delegar.',
     testFocus: 'Intento de elevar privilegios mediante delegación',
     benignCaseId: 'multiagent_benign_read_only_delegation',
@@ -205,18 +228,23 @@ export function AgentPolicyLabCatalog({
   }
 
   return (
-    <section className="agent-policy-lab-catalog" data-testid="agent-policy-lab-catalog">
+    <section
+      id="guardian-agent-policy-lab"
+      className="agent-policy-lab-catalog"
+      aria-labelledby="agent-policy-lab-title"
+      data-testid="agent-policy-lab-catalog"
+    >
       <div className="panel-heading">
         <div>
-          <span className="panel-kicker">OCHO VERTICALES · DATOS FICTICIOS</span>
-          <h3>Laboratorios de políticas de agentes</h3>
+          <span className="panel-kicker">OCHO PERFILES · DATOS SINTÉTICOS</span>
+          <h3 id="agent-policy-lab-title">Laboratorios de políticas de agentes</h3>
         </div>
-        <span className="ai-evaluation-state"><i />Prototipos locales</span>
+        <span className="ai-evaluation-state"><i />Fixtures deterministas</span>
       </div>
       <p>
-        Cada previsualización evalúa dos o tres propuestas fixture fijas con el Policy Engine determinista.
-        No es inferencia de Qwen, no conecta proveedores y no ejecuta acciones empresariales.
-        El modo OFF solo calcula un contrafactual sobre un clon efímero.
+        Revisa cómo el Policy Engine determinista responde a propuestas sintéticas antes de cualquier simulación.
+        No es inferencia de Qwen ni conecta sistemas empresariales. Policy OFF solo se calcula como
+        contrafactual sobre un clon efímero; nunca despacha acciones.
       </p>
       <div className="agent-policy-guide" data-testid="agent-policy-guide">
         <div className="agent-policy-guide-heading">
@@ -316,17 +344,27 @@ export function AgentPolicyLabCatalog({
         {AGENT_POLICY_LABS.map((lab) => {
           const availability = profiles.find((profile) => profile.profileId === lab.profileId);
           const ready = availability?.status === 'ready';
+          const ProfileIcon = lab.icon;
+          const selected = selectedProfileId === lab.profileId;
           return (
             <article
               key={lab.profileId}
-              className={`agent-policy-lab-card ${selectedProfileId === lab.profileId ? 'agent-policy-lab-card-selected' : ''}`}
+              className={`agent-policy-lab-card ${selected ? 'agent-policy-lab-card-selected' : ''}`}
               data-testid={`agent-policy-lab-${lab.verticalId}`}
             >
-              <div>
-                <span className="ai-evaluation-run-label">FIXTURES · SIN CONEXIONES REALES</span>
-                <h4>{lab.title}</h4>
+              <div className="agent-policy-lab-card-copy">
+                <div className="agent-policy-lab-card-heading">
+                  <span className="agent-policy-lab-icon" aria-hidden="true">
+                    <ProfileIcon size={18} strokeWidth={1.9} />
+                  </span>
+                  <div>
+                    <span className="agent-policy-lab-source">FIXTURE · SIN CONEXIÓN EXTERNA</span>
+                    <h4>{lab.title}</h4>
+                  </div>
+                  {selected && <span className="agent-policy-lab-selected">Seleccionado</span>}
+                </div>
                 <p>{lab.summary}</p>
-                <small>Prueba adversarial: {lab.testFocus}.</small>
+                <small><b>Riesgo a revisar:</b> {lab.testFocus}.</small>
               </div>
               <Button
                 variant="outline"
@@ -336,11 +374,11 @@ export function AgentPolicyLabCatalog({
                   setShowRecordedEvidence(false);
                 }}
                 disabled={busy}
-                aria-pressed={selectedProfileId === lab.profileId}
+                aria-pressed={selected}
                 data-testid={`button-select-agent-lab-${lab.verticalId}`}
               >
                 <FlaskConical size={15} />
-                {selectedProfileId === lab.profileId ? 'Perfil seleccionado' : 'Seleccionar perfil'}
+                {selected ? 'Perfil seleccionado' : 'Elegir perfil'}
               </Button>
               {!ready && availability?.reasonCode && (
                 <small role="status">Motivo: {availability.reasonCode}</small>

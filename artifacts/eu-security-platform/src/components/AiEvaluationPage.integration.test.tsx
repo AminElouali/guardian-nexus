@@ -11,7 +11,7 @@ import type {
   AiAssessmentLabJob,
   GuardianPolicyLabPreviewResponse,
 } from "@workspace/api-client-react";
-import { LabJobCard } from "./AiEvaluationPage";
+import { AiEvaluationSectionNav, LabJobCard } from "./AiEvaluationPage";
 import { GuardianApprovalInbox } from "./GuardianApprovalInbox";
 import {
   AGENT_POLICY_LABS,
@@ -129,6 +129,20 @@ test("approval inbox shows tenant-safe decisions without claiming tool execution
   );
   assert.equal(requesterMarkup.includes('data-testid="button-approve-'), false);
   assert.match(requesterMarkup, /El solicitante no puede aprobarla/);
+});
+
+test("AI security navigation separates the laboratory, approvals and audit with accessible tabs", () => {
+  const markup = renderToStaticMarkup(
+    createElement(AiEvaluationSectionNav, {
+      activeSection: "approvals",
+      onSelect: () => undefined,
+    }),
+  );
+  assert.match(markup, /role="tablist"/);
+  assert.match(markup, /data-testid="ai-evaluation-tab-lab"/);
+  assert.match(markup, /aria-selected="true"[^>]*>Aprobaciones/);
+  assert.match(markup, /data-testid="ai-evaluation-tab-audit"/);
+  assert.match(markup, /aria-controls="ai-evaluation-panel-audit"/);
 });
 
 test("renders the real API lab response in the authenticated dashboard card", () => {
@@ -359,6 +373,9 @@ test("renders all eight synthetic agent verticals and an API-persisted policy la
   );
   assert.match(catalogMarkup, /data-testid="button-select-agent-lab-email"/);
   assert.match(catalogMarkup, /data-testid="button-select-agent-lab-database"/);
+  assert.match(catalogMarkup, /aria-pressed="false"/);
+  assert.match(catalogMarkup, /Riesgo a revisar:/);
+  assert.match(catalogMarkup, /Fixtures deterministas/);
   assert.match(catalogMarkup, /data-testid="button-select-agent-case-benign"/);
   assert.match(catalogMarkup, /data-testid="button-select-agent-case-adversarial"/);
   assert.match(catalogMarkup, /data-testid="button-run-guided-agent-demo"/);
