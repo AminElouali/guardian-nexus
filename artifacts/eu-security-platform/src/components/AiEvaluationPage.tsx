@@ -950,9 +950,7 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
         data: { profileId },
       });
       setFreshPolicyPreview({ profileId, caseId: focusedCaseId, evidence: result.evidence });
-      setLabMessage(
-        'Previsualización determinista completada. Es evidencia efímera de fixtures, no inferencia Qwen ni job persistido; el proceso API no está aislado de red ni de la capacidad Docker del host.',
-      );
+      setLabMessage('Decisión recibida del Policy Engine. No se creó un job ni se inició Qwen o Docker.');
     } catch {
       setLabError(
         'No se pudo calcular la previsualización determinista. No se creó un trabajo ni se inició Qwen, Docker o una acción externa.',
@@ -1022,7 +1020,7 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
 
     <div className="ai-evaluation-disclaimer" role="note" data-testid="ai-evaluation-disclaimer">
       <ShieldAlert size={18} />
-      <div><b>Solo se ejecutan perfiles locales fijos.</b><p>Los contenedores usan red deshabilitada y límites de recursos. No aceptan objetivos arbitrarios, cuentas de clientes, credenciales ni modelos de pago. IPv6 puede figurar como no verificado si el kernel no ofrece ese protocolo. La disponibilidad en desarrollo no habilita el servicio para clientes.</p></div>
+      <div><b>Solo se usan datos y herramientas sintéticos.</b><p>La demostración consulta el Policy Engine desde la API y no inicia Qwen, Docker ni conexiones externas. Esta previsualización no constituye una frontera de aislamiento. El worker queda sujeto al preflight y la disponibilidad en desarrollo no habilita el servicio para clientes.</p></div>
     </div>
 
     <AiEvaluationSectionNav activeSection={activeSection} onSelect={setActiveSection} />
@@ -1041,10 +1039,10 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
     >
     <section className="panel ai-evaluation-card ai-lab-card">
       <div className="panel-heading">
-        <div><span className="panel-kicker">EJECUCIONES LOCALES · DESARROLLO</span><h2>Laboratorio aislado</h2></div>
-        <span className={`ai-evaluation-state ${availability.data?.status === 'ready' ? '' : 'ai-state-pending'}`}><i />{availability.isLoading ? 'Comprobando' : availability.data?.status === 'ready' ? 'Disponible en desarrollo' : 'No disponible'}</span>
+        <div><span className="panel-kicker">PREVISUALIZACIÓN · POLICY ON</span><h2>Laboratorio de políticas</h2></div>
+        <span className="ai-evaluation-state ai-state-pending"><i />Fixtures deterministas</span>
       </div>
-       <p>Garak/GVE, los ocho Policy Labs deterministas y la inferencia Qwen son líneas de evidencia separadas. Cuando el preflight lo permite, Qwen usa selección automática con casos sintéticos; la previsualización de Policy Lab de esta página no inicia Qwen ni usa Docker. Los trabajos aislados están limitados a 1 CPU, 1.536 MiB, concurrencia global 1 y red deshabilitada. Ningún perfil está habilitado para clientes.</p>
+      <p>Elige un perfil y un escenario para recibir una decisión determinista calculada por el backend. El resultado destaca el caso elegido y conserva los detalles técnicos en un panel secundario.</p>
        <AgentPolicyLabCatalog
          profiles={availability.data?.profiles ?? []}
          canRun={canRun}
@@ -1052,84 +1050,93 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
           previewPending={previewPolicyLab.isPending}
           onRequest={(profileId, caseId) => void requestLabAssessment(profileId, caseId)}
           onPreview={(profileId, caseId) => void runPolicyPreview(profileId, caseId)}
+           onSelectionChange={() => {
+             setGuidedDemo(null);
+             setFreshPolicyPreview(null);
+             setLabMessage('');
+             setLabError('');
+           }}
+           onViewApprovals={() => setActiveSection('approvals')}
           freshPreview={freshPolicyPreview}
           recordedEvidence={recordedPolicyEvidence}
           recordedArtifactSha256={recordedPolicyArtifactSha256}
           onReset={() => {
             setGuidedDemo(null);
             setFreshPolicyPreview(null);
-            setLabMessage('Recorrido reiniciado en esta vista. El historial y las auditorías del espacio no se han borrado.');
+             setLabMessage('Vista reiniciada. El historial y las auditorías del espacio no se han borrado.');
             setLabError('');
           }}
        />
-       <QwenPolicyLabCatalog
-         availability={availability.data?.profiles ?? []}
-         canRun={canRun}
-         pending={createLabJob.isPending}
-         onRequest={(profileId) => void requestLabAssessment(profileId)}
-       />
-       {availability.data?.status !== 'ready' && <div className="ai-lab-unavailable"><LockKeyhole size={15} />{availability.data?.reasonCode === 'development_only' ? 'Deshabilitado fuera del entorno de desarrollo.' : 'El worker local sigue bloqueado por preflight. La previsualización determinista no inicia Qwen/Garak ni afirma aislamiento.'}</div>}
-      <div className="ai-evaluation-actions">
-        <Button onClick={() => void requestLabAssessment('guardian-local-agent-v1')} disabled={!canRun || !garakAvailable || createLabJob.isPending} data-testid="button-run-ai-lab">
-          {createLabJob.isPending ? <Activity className="spin" size={15} /> : <ShieldCheck size={15} />}
-          {createLabJob.isPending ? 'Encolando…' : 'Solicitar evaluación local'}
-        </Button>
-        <Button variant="outline" onClick={() => void requestLabAssessment('guardian-local-llm-qwen3-0.6b-v1')} disabled={!canRun || !qwenAvailable || createLabJob.isPending} data-testid="button-run-local-llm">
-          {createLabJob.isPending ? <Activity className="spin" size={15} /> : <FlaskConical size={15} />}
-          {createLabJob.isPending ? 'Encolando…' : 'Solicitar tarea con LLM local'}
-        </Button>
-        <Button variant="outline" onClick={() => void requestLabAssessment('guardian-local-llm-native-tools-v1')} disabled={!canRun || !nativeToolsAvailable || createLabJob.isPending} data-testid="button-run-native-tool-suite">
-          {createLabJob.isPending ? <Activity className="spin" size={15} /> : <ShieldCheck size={15} />}
-          {createLabJob.isPending ? 'Encolando…' : 'Solicitar suite de llamadas nativas'}
-        </Button>
-        <Button variant="outline" onClick={() => void requestLabAssessment('guardian-local-llm-autonomous-tools-v1')} disabled={!canRun || !autonomousToolsAvailable || createLabJob.isPending} data-testid="button-run-autonomous-tool-selection">
-          {createLabJob.isPending ? <Activity className="spin" size={15} /> : <ShieldCheck size={15} />}
-          {createLabJob.isPending ? 'Encolando…' : 'Evaluar selección autónoma'}
-        </Button>
-        {!canRun && <small>Solo owner/admin puede iniciar o reintentar.</small>}
-        {canRun && !qwenAvailable && <small>Qwen local no disponible: {availability.data?.profiles.find((profile) => profile.profileId === 'guardian-local-llm-qwen3-0.6b-v1')?.reasonCode ?? 'worker_unavailable'}.</small>}
-        {canRun && !nativeToolsAvailable && <small>Suite de tool calls nativas no disponible: {availability.data?.profiles.find((profile) => profile.profileId === 'guardian-local-llm-native-tools-v1')?.reasonCode ?? 'worker_unavailable'}.</small>}
-        {canRun && !autonomousToolsAvailable && <small>Selección autónoma no disponible: {availability.data?.profiles.find((profile) => profile.profileId === 'guardian-local-llm-autonomous-tools-v1')?.reasonCode ?? 'worker_unavailable'}.</small>}
-      </div>
-      <details className="ai-lab-provenance">
-        <summary>Origen técnico y licencia</summary>
-        <p>Garak v0.17.1 conserva su atribución de terceros y licencia Apache-2.0. La inferencia local utiliza Qwen3-0.6B-GGUF Q8_0 (Apache-2.0) mediante llama-cpp-python 0.3.36 (MIT). Sus versiones, hashes y procedencia se registran por separado en la evidencia.</p>
-      </details>
+        <details className="ai-lab-advanced-details" data-testid="ai-lab-advanced-details">
+          <summary>Evaluaciones técnicas y estado del worker</summary>
+          <div className="ai-lab-advanced-content">
+            <p>Qwen y Garak permanecen separados de los fixtures. El worker solo se inicia si el preflight está aprobado; los motivos de bloqueo se muestran una vez, no en cada perfil.</p>
+            <QwenPolicyLabCatalog
+              availability={availability.data?.profiles ?? []}
+              canRun={canRun}
+              pending={createLabJob.isPending}
+              onRequest={(profileId) => void requestLabAssessment(profileId)}
+            />
+            <div className="ai-evaluation-actions">
+              <Button onClick={() => void requestLabAssessment('guardian-local-agent-v1')} disabled={!canRun || !garakAvailable || createLabJob.isPending} data-testid="button-run-ai-lab">
+                {createLabJob.isPending ? <Activity className="spin" size={15} /> : <ShieldCheck size={15} />}
+                {createLabJob.isPending ? 'Encolando…' : 'Solicitar evaluación local'}
+              </Button>
+              <Button variant="outline" onClick={() => void requestLabAssessment('guardian-local-llm-qwen3-0.6b-v1')} disabled={!canRun || !qwenAvailable || createLabJob.isPending} data-testid="button-run-local-llm">
+                {createLabJob.isPending ? <Activity className="spin" size={15} /> : <FlaskConical size={15} />}
+                {createLabJob.isPending ? 'Encolando…' : 'Solicitar tarea con LLM local'}
+              </Button>
+              <Button variant="outline" onClick={() => void requestLabAssessment('guardian-local-llm-native-tools-v1')} disabled={!canRun || !nativeToolsAvailable || createLabJob.isPending} data-testid="button-run-native-tool-suite">
+                {createLabJob.isPending ? <Activity className="spin" size={15} /> : <ShieldCheck size={15} />}
+                {createLabJob.isPending ? 'Encolando…' : 'Solicitar suite de llamadas nativas'}
+              </Button>
+              <Button variant="outline" onClick={() => void requestLabAssessment('guardian-local-llm-autonomous-tools-v1')} disabled={!canRun || !autonomousToolsAvailable || createLabJob.isPending} data-testid="button-run-autonomous-tool-selection">
+                {createLabJob.isPending ? <Activity className="spin" size={15} /> : <ShieldCheck size={15} />}
+                {createLabJob.isPending ? 'Encolando…' : 'Evaluar selección autónoma'}
+              </Button>
+              {!canRun && <small>Solo owner/admin puede iniciar o reintentar.</small>}
+            </div>
+
+            <div className="ai-evaluation-grid">
+              <section className="panel ai-evaluation-card">
+                <div className="panel-heading">
+                  <div><span className="panel-kicker">SIMULACIÓN · DATOS SINTÉTICOS</span><h2>Fixtures de ejemplo</h2></div>
+                  <span className="ai-evaluation-state ai-state-pending"><i /> No es evaluación real</span>
+                </div>
+                <p>Los casos fijos describen rechazo de instrucciones no confiables, no exposición de un canario sintético y no ejecución de herramientas sin autorización.</p>
+                <div className="ai-evaluation-limits">
+                  <span><b>3</b> fixtures por ejecución</span>
+                  <span><b>1</b> ejecución concurrente por proceso</span>
+                  <span><b>0</b> llamadas a APIs/modelos externos</span>
+                </div>
+                <div className="ai-evaluation-actions">
+                  <Button onClick={() => void runMock()} disabled={!canRun || runEvaluation.isPending || history.isLoading} data-testid="button-run-mock-ai-evaluation">
+                    {runEvaluation.isPending ? <Activity className="spin" size={15} /> : <ShieldCheck size={15} />}
+                    {runEvaluation.isPending ? 'Ejecutando…' : 'Ejecutar simulación local'}
+                  </Button>
+                  {!canRun && <small>Solo owner/admin puede iniciar la prueba.</small>}
+                </div>
+                <small className="ai-evaluation-footnote">Se guardan solo el resultado resumido y los códigos de motivo en la auditoría del espacio. No se guardan prompts, respuestas ni secretos.</small>
+              </section>
+
+              <section className="panel ai-evaluation-card ai-provider-card">
+                <div className="panel-heading"><div><span className="panel-kicker">PROTECCIÓN OPCIONAL</span><h2>Google Cloud Model Armor</h2></div><span className="ai-evaluation-state ai-state-pending"><i /> Desactivado</span></div>
+                <p>Existe un contrato de adaptador preparado para sanitizar entradas y salidas con consentimiento independiente por tenant y ubicación UE configurada.</p>
+                <ul>
+                  <li>Feature flag apagada; no hay llamadas ni credenciales de Google configuradas.</li>
+                  <li>La conexión requiere autorización, IAM mínimo, plantilla y revisión de costes/condiciones.</li>
+                  <li>Una protección de entrada/salida no reemplaza RLS ni otros controles.</li>
+                </ul>
+                <a href="https://docs.cloud.google.com/model-armor/data-residency" target="_blank" rel="noreferrer">Residencia y regiones oficiales ↗</a>
+              </section>
+            </div>
+            <details className="ai-lab-provenance">
+              <summary>Origen técnico y licencias</summary>
+              <p>Garak v0.17.1 conserva su atribución de terceros y licencia Apache-2.0. La inferencia local utiliza Qwen3-0.6B-GGUF Q8_0 (Apache-2.0) mediante llama-cpp-python 0.3.36 (MIT). Sus versiones, hashes y procedencia se registran por separado en la evidencia.</p>
+            </details>
+          </div>
+        </details>
     </section>
-
-    <div className="ai-evaluation-grid">
-      <section className="panel ai-evaluation-card">
-        <div className="panel-heading">
-          <div><span className="panel-kicker">SIMULACIÓN · DATOS SINTÉTICOS</span><h2>Fixtures de ejemplo</h2></div>
-          <span className="ai-evaluation-state ai-state-pending"><i /> No es evaluación real</span>
-        </div>
-        <p>Los casos fijos describen rechazo de instrucciones no confiables, no exposición de un canario sintético y no ejecución de herramientas sin autorización.</p>
-        <div className="ai-evaluation-limits">
-          <span><b>3</b> fixtures por ejecución</span>
-          <span><b>1</b> ejecución concurrente por proceso</span>
-          <span><b>0</b> llamadas a APIs/modelos externos</span>
-        </div>
-        <div className="ai-evaluation-actions">
-          <Button onClick={() => void runMock()} disabled={!canRun || runEvaluation.isPending || history.isLoading} data-testid="button-run-mock-ai-evaluation">
-            {runEvaluation.isPending ? <Activity className="spin" size={15} /> : <ShieldCheck size={15} />}
-            {runEvaluation.isPending ? 'Ejecutando…' : 'Ejecutar simulación local'}
-          </Button>
-          {!canRun && <small>Solo owner/admin puede iniciar la prueba.</small>}
-        </div>
-        <small className="ai-evaluation-footnote">Se guardan solo el resultado resumido y los códigos de motivo en la auditoría del espacio. No se guardan prompts, respuestas ni secretos.</small>
-      </section>
-
-      <section className="panel ai-evaluation-card ai-provider-card">
-        <div className="panel-heading"><div><span className="panel-kicker">PROTECCIÓN OPCIONAL</span><h2>Google Cloud Model Armor</h2></div><span className="ai-evaluation-state ai-state-pending"><i /> Desactivado</span></div>
-        <p>Existe un contrato de adaptador preparado para sanitizar entradas y salidas con consentimiento independiente por tenant y ubicación UE configurada.</p>
-        <ul>
-          <li>Feature flag apagada; no hay llamadas ni credenciales de Google configuradas.</li>
-          <li>La conexión requiere autorización, IAM mínimo, plantilla y revisión de costes/condiciones.</li>
-          <li>Una protección de entrada/salida no reemplaza RLS ni otros controles.</li>
-        </ul>
-        <a href="https://docs.cloud.google.com/model-armor/data-residency" target="_blank" rel="noreferrer">Residencia y regiones oficiales ↗</a>
-      </section>
-    </div>
     </section>
 
     <section

@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
 import {
+  CircleAlert,
+  CircleCheck,
   Activity,
   ArrowRight,
+  Clock3,
   CircleHelp,
   Cloud,
   Code2,
@@ -11,6 +14,8 @@ import {
   Mail,
   Network,
   RotateCcw,
+  ShieldAlert,
+  ShieldCheck,
   WalletCards,
   type LucideIcon,
 } from 'lucide-react';
@@ -40,6 +45,7 @@ export const AGENT_POLICY_LABS: Array<{
   profileId: PolicyLabProfile;
   verticalId: string;
   title: string;
+  selectorLabel: string;
   icon: LucideIcon;
   summary: string;
   testFocus: string;
@@ -50,6 +56,7 @@ export const AGENT_POLICY_LABS: Array<{
     profileId: 'guardian-agent-lab-email-v1',
     verticalId: 'email',
     title: 'Correo',
+    selectorLabel: 'Correo',
     icon: Mail,
     summary: 'Lectura y borradores locales; bloquea envíos externos y exfiltración.',
     testFocus: 'Inyección dentro de un correo sintético',
@@ -60,6 +67,7 @@ export const AGENT_POLICY_LABS: Array<{
     profileId: 'guardian-agent-lab-database-v1',
     verticalId: 'database',
     title: 'Bases de datos',
+    selectorLabel: 'Datos',
     icon: Database,
     summary: 'Consulta una fila sintética; rechaza exportaciones entre espacios y borrados.',
     testFocus: 'Instrucción de exportación masiva en un documento',
@@ -70,6 +78,7 @@ export const AGENT_POLICY_LABS: Array<{
     profileId: 'guardian-agent-lab-finance-v1',
     verticalId: 'finance',
     title: 'Finanzas',
+    selectorLabel: 'Finanzas',
     icon: WalletCards,
     summary: 'Lectura de factura ficticia; transferencias requieren aprobación humana.',
     testFocus: 'Solicitud de transferencia desde contenido no confiable',
@@ -80,6 +89,7 @@ export const AGENT_POLICY_LABS: Array<{
     profileId: 'guardian-agent-lab-programming-v1',
     verticalId: 'programming',
     title: 'Programación',
+    selectorLabel: 'Código',
     icon: Code2,
     summary: 'Propone un cambio de ejemplo; no ejecuta comandos del host.',
     testFocus: 'Intento de comando y lectura de secretos',
@@ -90,6 +100,7 @@ export const AGENT_POLICY_LABS: Array<{
     profileId: 'guardian-agent-lab-customer-service-v1',
     verticalId: 'customer_service',
     title: 'Atención al cliente',
+    selectorLabel: 'Soporte',
     icon: CircleHelp,
     summary: 'Prepara una respuesta ficticia; reembolsos quedan pendientes de aprobación.',
     testFocus: 'Petición de reembolso incrustada en un ticket',
@@ -100,6 +111,7 @@ export const AGENT_POLICY_LABS: Array<{
     profileId: 'guardian-agent-lab-browser-v1',
     verticalId: 'browser',
     title: 'Navegador',
+    selectorLabel: 'Web',
     icon: Globe2,
     summary: 'Lee páginas de laboratorio; no visita ni envía formularios a terceros.',
     testFocus: 'Formulario externo solicitado por una página sintética',
@@ -110,6 +122,7 @@ export const AGENT_POLICY_LABS: Array<{
     profileId: 'guardian-agent-lab-infrastructure-v1',
     verticalId: 'infrastructure',
     title: 'Infraestructura',
+    selectorLabel: 'Cloud',
     icon: Cloud,
     summary: 'Consulta configuración ficticia; deniega escaladas y borrados.',
     testFocus: 'Concesión de rol administrador no autorizada',
@@ -120,6 +133,7 @@ export const AGENT_POLICY_LABS: Array<{
     profileId: 'guardian-agent-lab-multiagent-v1',
     verticalId: 'multiagent',
     title: 'Multiagente',
+    selectorLabel: 'Multiagente',
     icon: Network,
     summary: 'Conserva actor y permisos originales al delegar.',
     testFocus: 'Intento de elevar privilegios mediante delegación',
@@ -182,6 +196,8 @@ export function AgentPolicyLabCatalog({
   onRequest,
   onPreview,
   onReset,
+  onSelectionChange,
+  onViewApprovals,
   recordedEvidence,
   recordedArtifactSha256,
   freshPreview,
@@ -193,12 +209,18 @@ export function AgentPolicyLabCatalog({
   onRequest: (profileId: AiAssessmentLabJobRequestProfileId, focusCaseId: string) => void;
   onPreview: (profileId: PolicyLabProfile, focusCaseId: string) => void;
   onReset: () => void;
+  onSelectionChange: () => void;
+  onViewApprovals: () => void;
   recordedEvidence: PolicyLabEvidence[];
   recordedArtifactSha256: string;
   freshPreview: FreshPolicyPreview | null;
 }) {
-  const [selectedProfileId, setSelectedProfileId] = useState<PolicyLabProfile | null>(null);
-  const [selectedCaseKind, setSelectedCaseKind] = useState<'benign' | 'adversarial' | null>(null);
+  const [selectedProfileId, setSelectedProfileId] = useState<PolicyLabProfile | null>(
+    'guardian-agent-lab-email-v1',
+  );
+  const [selectedCaseKind, setSelectedCaseKind] = useState<'benign' | 'adversarial' | null>(
+    'adversarial',
+  );
   const [showRecordedEvidence, setShowRecordedEvidence] = useState(false);
   const busy = pending || previewPending;
   const selectedLab = AGENT_POLICY_LABS.find((lab) => lab.profileId === selectedProfileId);
@@ -209,8 +231,7 @@ export function AgentPolicyLabCatalog({
         ? selectedLab.adversarialCaseId
         : null
     : null;
-  const selectedAvailability = profiles.find((profile) => profile.profileId === selectedProfileId);
-  const selectedReady = selectedAvailability?.status === 'ready';
+  const selectedReady = profiles.find((profile) => profile.profileId === selectedProfileId)?.status === 'ready';
   const selectedRecordedEvidence = recordedEvidence.find(
     (evidence) => evidence.profileId === selectedProfileId,
   );
@@ -221,113 +242,174 @@ export function AgentPolicyLabCatalog({
       : null;
 
   function resetGuide() {
-    setSelectedProfileId(null);
-    setSelectedCaseKind(null);
+    setSelectedProfileId('guardian-agent-lab-email-v1');
+    setSelectedCaseKind('adversarial');
     setShowRecordedEvidence(false);
+    onSelectionChange();
     onReset();
   }
 
   return (
     <section
       id="guardian-agent-policy-lab"
-      className="agent-policy-lab-catalog"
+      className="agent-policy-lab-catalog agent-policy-workbench"
       aria-labelledby="agent-policy-lab-title"
       data-testid="agent-policy-lab-catalog"
     >
-      <div className="panel-heading">
+      <div className="agent-policy-workbench-heading">
         <div>
-          <span className="panel-kicker">OCHO PERFILES · DATOS SINTÉTICOS</span>
-          <h3 id="agent-policy-lab-title">Laboratorios de políticas de agentes</h3>
+          <span className="panel-kicker">GUARDIAN NEXUS / LABORATORIO</span>
+          <h3 id="agent-policy-lab-title">Comprueba la seguridad de tus agentes</h3>
         </div>
-        <span className="ai-evaluation-state"><i />Fixtures deterministas</span>
+        <span className="agent-policy-demo-badge"><i />Demo ficticia</span>
       </div>
-      <p>
-        Revisa cómo el Policy Engine determinista responde a propuestas sintéticas antes de cualquier simulación.
-        No es inferencia de Qwen ni conecta sistemas empresariales. Policy OFF solo se calcula como
-        contrafactual sobre un clon efímero; nunca despacha acciones.
+      <p className="agent-policy-workbench-intro">
+        Selecciona un agente y un escenario para ver cómo el Policy Engine evalúa una propuesta sintética.
       </p>
-      <div className="agent-policy-guide" data-testid="agent-policy-guide">
-        <div className="agent-policy-guide-heading">
-          <div>
-            <span className="panel-kicker">RECORRIDO GUIADO · FIXTURES DETERMINISTAS</span>
-            <h4>De la propuesta a la evidencia</h4>
-          </div>
+
+      <section className="agent-policy-workbench-stage" aria-labelledby="agent-policy-profile-heading">
+        <div className="agent-policy-stage-heading">
+          <span>1</span>
+          <h4 id="agent-policy-profile-heading">Selecciona un agente</h4>
+        </div>
+        <div className="agent-policy-profile-grid" role="group" aria-label="Perfiles de agente">
+        {AGENT_POLICY_LABS.map((lab) => {
+          const ProfileIcon = lab.icon;
+          const selected = selectedProfileId === lab.profileId;
+          return (
+            <div
+              key={lab.profileId}
+              className="agent-policy-profile-option"
+              data-testid={`agent-policy-lab-${lab.verticalId}`}
+            >
+              <Button
+                type="button"
+                variant="outline"
+                className={`agent-policy-profile-button ${selected ? 'is-selected' : ''}`}
+                onClick={() => {
+                  setSelectedProfileId(lab.profileId);
+                  setSelectedCaseKind('adversarial');
+                  setShowRecordedEvidence(false);
+                  onSelectionChange();
+                }}
+                disabled={busy}
+                aria-pressed={selected}
+                aria-label={lab.title}
+                data-testid={`button-select-agent-lab-${lab.verticalId}`}
+              >
+                <ProfileIcon size={18} strokeWidth={1.9} aria-hidden="true" />
+                <span>{lab.selectorLabel}</span>
+              </Button>
+            </div>
+          );
+        })}
+        </div>
+      </section>
+
+      <fieldset className="agent-policy-scenario-fieldset" disabled={!selectedLab || busy}>
+        <legend className="agent-policy-stage-heading">
+          <span>2</span>
+          <b>Elige qué comprobar</b>
+        </legend>
+        <div className="agent-policy-scenario-options" role="radiogroup" aria-label="Tipo de escenario">
+          <label className={`agent-policy-scenario-option ${selectedCaseKind === 'benign' ? 'is-selected' : ''}`}>
+            <input
+              type="radio"
+              name="agent-policy-scenario"
+              value="benign"
+              checked={selectedCaseKind === 'benign'}
+              onChange={() => {
+                setSelectedCaseKind('benign');
+                setShowRecordedEvidence(false);
+                onSelectionChange();
+              }}
+              data-testid="button-select-agent-case-benign"
+            />
+            <CircleCheck size={20} aria-hidden="true" />
+            <span><b>Acción legítima</b><small>Comprobar una tarea autorizada.</small></span>
+          </label>
+          <label className={`agent-policy-scenario-option ${selectedCaseKind === 'adversarial' ? 'is-selected' : ''}`}>
+            <input
+              type="radio"
+              name="agent-policy-scenario"
+              value="adversarial"
+              checked={selectedCaseKind === 'adversarial'}
+              onChange={() => {
+                setSelectedCaseKind('adversarial');
+                setShowRecordedEvidence(false);
+                onSelectionChange();
+              }}
+              data-testid="button-select-agent-case-adversarial"
+            />
+            <CircleAlert size={20} aria-hidden="true" />
+            <span><b>Intento de ataque</b><small>Comprobar si se bloquea una acción peligrosa.</small></span>
+          </label>
+        </div>
+      </fieldset>
+
+      <div className="agent-policy-primary-action">
+        <Button
+          type="button"
+          onClick={() => selectedLab && selectedCaseId && onPreview(selectedLab.profileId, selectedCaseId)}
+          disabled={!canRun || !selectedLab || !selectedCaseId || busy}
+          data-testid="button-preview-policy-lab"
+        >
+          {previewPending ? <Activity className="spin" size={17} /> : <FlaskConical size={17} />}
+          {previewPending ? 'Preparando previsualización…' : 'Ejecutar demostración'}
+          {!previewPending && <ArrowRight size={17} />}
+        </Button>
+        <p>
+          El backend calcula la evidencia del perfil y destaca el caso elegido. No crea un job ni
+          despacha herramientas externas. La selección solo enfoca una fixture: no modifica reglas,
+          corpus ni permisos.
+        </p>
+        {!canRun && <small role="status">Solo owner/admin puede iniciar la previsualización.</small>}
+      </div>
+
+      {selectedFreshPreview && selectedCaseId ? (
+        <div className="agent-policy-result-wrap" data-testid="agent-policy-fresh-preview">
+          <AgentPolicyLabResult
+            evidence={selectedFreshPreview.evidence}
+            focusedCaseId={selectedCaseId}
+            onViewApprovals={onViewApprovals}
+          />
           <Button
             type="button"
             variant="outline"
-            size="sm"
             onClick={resetGuide}
             disabled={busy}
             data-testid="button-reset-agent-demo"
           >
-            <RotateCcw size={14} /> Reiniciar recorrido
+            <RotateCcw size={15} /> Probar otro escenario
           </Button>
         </div>
-        <ol className="agent-policy-guide-steps" aria-label="Pasos de la demostración">
-          <li aria-current={selectedLab ? undefined : 'step'}><span>1</span><div><b>Escoge un perfil</b><small>{selectedLab?.title ?? 'Selecciona una de las ocho verticales.'}</small></div></li>
-          <li aria-current={selectedLab && selectedCaseKind ? undefined : selectedLab ? 'step' : undefined}><span>2</span><div><b>Elige un caso</b><small>{selectedCaseKind === 'benign' ? 'Control benigno' : selectedCaseKind === 'adversarial' ? 'Intento adversario sintético' : selectedLab ? 'Selecciona benigno o adversario.' : 'Aún no seleccionado'}</small></div></li>
-          <li aria-current={selectedCaseId ? 'step' : undefined}><span>3</span><div><b>Revisa decisión y evidencia</b><small>Propuesta, Policy ON, simulación y hashes redactados.</small></div></li>
-        </ol>
-        <div className="agent-policy-guide-cases" role="group" aria-label="Tipo de caso para la demostración">
-          <Button
-            type="button"
-            variant={selectedCaseKind === 'benign' ? 'default' : 'outline'}
-            aria-pressed={selectedCaseKind === 'benign'}
-            disabled={!selectedLab || busy}
-            onClick={() => {
-              setSelectedCaseKind('benign');
-              setShowRecordedEvidence(false);
-            }}
-            data-testid="button-select-agent-case-benign"
-          >
-            Caso benigno
-          </Button>
-          <Button
-            type="button"
-            variant={selectedCaseKind === 'adversarial' ? 'default' : 'outline'}
-            aria-pressed={selectedCaseKind === 'adversarial'}
-            disabled={!selectedLab || busy}
-            onClick={() => {
-              setSelectedCaseKind('adversarial');
-              setShowRecordedEvidence(false);
-            }}
-            data-testid="button-select-agent-case-adversarial"
-          >
-            Caso adversario
-          </Button>
+      ) : showRecordedEvidence && selectedRecordedEvidence && selectedCaseId ? (
+        <div className="agent-policy-result-wrap" data-testid="agent-policy-recorded-sample">
+          <AgentPolicyLabResult
+            evidence={selectedRecordedEvidence}
+            focusedCaseId={selectedCaseId}
+            recordedSnapshot
+            recordedArtifactSha256={recordedArtifactSha256}
+            onViewApprovals={onViewApprovals}
+          />
         </div>
-        <div className="agent-policy-guide-submit">
+      ) : (
+        <div className="agent-policy-result-placeholder" role="status" data-testid="agent-policy-empty-result">
+          <ShieldCheck size={20} aria-hidden="true" />
+          <div><b>El resultado aparecerá aquí</b><span>Ejecuta la demostración para consultar la decisión del Policy Engine.</span></div>
+        </div>
+      )}
+
+      <details className="agent-policy-evidence-details">
+        <summary>Detalles técnicos, evidencia histórica y estado del worker</summary>
+        <div className="agent-policy-evidence-content">
           <p>
-            La previsualización calcula evidencia nueva y efímera en el servidor; no crea un job ni modifica historial.
-            La selección solo enfoca el caso elegido; no modifica reglas, corpus ni permisos.
+            Los perfiles de esta pantalla son fixtures deterministas. No es inferencia de Qwen ni
+            una llamada nativa.
+            <code> NO_PROPOSAL</code> solo aparece en la evidencia Qwen y no equivale a
+            <code> DENY</code>. La previsualización se calcula en la API y no es una frontera de aislamiento.
           </p>
-          <Button
-            type="button"
-            onClick={() => selectedLab && selectedCaseId && onPreview(selectedLab.profileId, selectedCaseId)}
-            disabled={!canRun || !selectedLab || !selectedCaseId || busy}
-            data-testid="button-preview-policy-lab"
-          >
-            {previewPending ? <Activity className="spin" size={15} /> : <FlaskConical size={15} />}
-            {previewPending ? 'Calculando decisión…' : 'Previsualizar decisión determinista'}
-          </Button>
-          <Button
-            type="button"
-            onClick={() => selectedLab && selectedCaseId && onRequest(selectedLab.profileId, selectedCaseId)}
-            disabled={!canRun || !selectedLab || !selectedCaseId || !selectedReady || busy}
-            data-testid="button-run-guided-agent-demo"
-          >
-            {pending ? <Activity className="spin" size={15} /> : <FlaskConical size={15} />}
-            {pending ? 'Encolando recorrido…' : 'Solicitar worker aislado'}
-            {!pending && <ArrowRight size={14} />}
-          </Button>
-          {!canRun && <small>Solo owner/admin puede iniciar la evaluación.</small>}
-          {selectedLab && !selectedReady && (
-            <small role="status">
-              El worker de Qwen/Garak no está disponible ({selectedAvailability?.reasonCode ?? 'worker_unavailable'}).
-              La previsualización anterior no inicia ese worker.
-            </small>
-          )}
-          {selectedLab && selectedCaseId && selectedRecordedEvidence && (
+          {selectedLab && selectedCaseId && selectedRecordedEvidence && !showRecordedEvidence && (
             <Button
               type="button"
               variant="outline"
@@ -338,85 +420,36 @@ export function AgentPolicyLabCatalog({
               Ver evidencia histórica guardada
             </Button>
           )}
-        </div>
-      </div>
-      <div className="agent-policy-lab-grid">
-        {AGENT_POLICY_LABS.map((lab) => {
-          const availability = profiles.find((profile) => profile.profileId === lab.profileId);
-          const ready = availability?.status === 'ready';
-          const ProfileIcon = lab.icon;
-          const selected = selectedProfileId === lab.profileId;
-          return (
-            <article
-              key={lab.profileId}
-              className={`agent-policy-lab-card ${selected ? 'agent-policy-lab-card-selected' : ''}`}
-              data-testid={`agent-policy-lab-${lab.verticalId}`}
+          <div className="agent-policy-worker-request">
+            <div>
+              <b>Trabajo aislado del perfil</b>
+              <span>{selectedReady ? 'Disponible según el preflight actual.' : 'No disponible tras el preflight actual.'}</span>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => selectedLab && selectedCaseId && onRequest(selectedLab.profileId, selectedCaseId)}
+              disabled={!canRun || !selectedLab || !selectedCaseId || !selectedReady || busy}
+              data-testid="button-run-guided-agent-demo"
             >
-              <div className="agent-policy-lab-card-copy">
-                <div className="agent-policy-lab-card-heading">
-                  <span className="agent-policy-lab-icon" aria-hidden="true">
-                    <ProfileIcon size={18} strokeWidth={1.9} />
-                  </span>
-                  <div>
-                    <span className="agent-policy-lab-source">FIXTURE · SIN CONEXIÓN EXTERNA</span>
-                    <h4>{lab.title}</h4>
-                  </div>
-                  {selected && <span className="agent-policy-lab-selected">Seleccionado</span>}
-                </div>
-                <p>{lab.summary}</p>
-                <small><b>Riesgo a revisar:</b> {lab.testFocus}.</small>
-              </div>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setSelectedProfileId(lab.profileId);
-                  setSelectedCaseKind(null);
-                  setShowRecordedEvidence(false);
-                }}
-                disabled={busy}
-                aria-pressed={selected}
-                data-testid={`button-select-agent-lab-${lab.verticalId}`}
-              >
-                <FlaskConical size={15} />
-                {selected ? 'Perfil seleccionado' : 'Elegir perfil'}
-              </Button>
-              {!ready && availability?.reasonCode && (
-                <small role="status">Motivo: {availability.reasonCode}</small>
-              )}
-            </article>
-          );
-        })}
-      </div>
-      {selectedLab && <p className="agent-policy-guide-scope">
-        El informe distinguirá el fixture controlado de una propuesta de modelo. En este laboratorio,
-        <code>NO_PROPOSAL</code> no se mide; es un resultado distinto de <code>DENY</code> en la vista Qwen separada.
-      </p>}
-      {showRecordedEvidence && selectedRecordedEvidence && selectedCaseId && (
-        <div className="agent-policy-recorded-sample" data-testid="agent-policy-recorded-sample">
-          <p role="status">
-            Muestra histórica de un resultado del Policy Engine. Esta vista es de solo lectura:
-            no crea jobs, no modifica el historial de este espacio y no representa una ejecución nueva.
-          </p>
-          <AgentPolicyLabResult
-            evidence={selectedRecordedEvidence}
-            focusedCaseId={selectedCaseId}
-            recordedSnapshot
-            recordedArtifactSha256={recordedArtifactSha256}
-          />
+              {pending ? <Activity className="spin" size={15} /> : <FlaskConical size={15} />}
+              {pending ? 'Encolando recorrido…' : 'Solicitar trabajo aislado'}
+            </Button>
+          </div>
+          {showRecordedEvidence && selectedRecordedEvidence && selectedCaseId && (
+            <div className="agent-policy-recorded-sample" data-testid="agent-policy-recorded-detail">
+              <p role="status">Evidencia histórica de solo lectura: no representa una ejecución nueva ni modifica la auditoría.</p>
+              <AgentPolicyLabResult
+                evidence={selectedRecordedEvidence}
+                focusedCaseId={selectedCaseId}
+                recordedSnapshot
+                recordedArtifactSha256={recordedArtifactSha256}
+                onViewApprovals={onViewApprovals}
+              />
+            </div>
+          )}
         </div>
-      )}
-      {!showRecordedEvidence && selectedFreshPreview && selectedCaseId && (
-        <div className="agent-policy-recorded-sample" data-testid="agent-policy-fresh-preview">
-          <p role="status">
-            Decisión determinista recién calculada. No es inferencia Qwen, no se persiste como job ni en el historial.
-            El proceso comparte identidad con la API; aislamiento de red y acceso al socket Docker no están verificados.
-          </p>
-          <AgentPolicyLabResult
-            evidence={selectedFreshPreview.evidence}
-            focusedCaseId={selectedCaseId}
-          />
-        </div>
-      )}
+      </details>
     </section>
   );
 }
@@ -426,115 +459,179 @@ export function AgentPolicyLabResult({
   focusedCaseId,
   recordedSnapshot = false,
   recordedArtifactSha256,
+  onViewApprovals,
 }: {
   evidence: PolicyLabEvidence;
   focusedCaseId?: string;
   recordedSnapshot?: boolean;
   recordedArtifactSha256?: string;
+  onViewApprovals?: () => void;
 }) {
   const focusedCase = evidence.cases.find((item) => item.caseId === focusedCaseId);
+  const decision = focusedCase?.policyOn.decision;
+  const focusedReason = focusedCase
+    ? reasonLabel[focusedCase.policyOn.reasonCode] ?? focusedCase.policyOn.reasonCode
+    : '';
+  const focusedReasonSentence = focusedReason.endsWith('.')
+    ? focusedReason
+    : `${focusedReason}.`;
+  const decisionHeading = decision === 'allow'
+    ? 'Acción permitida en la simulación'
+    : decision === 'deny'
+      ? 'Acción bloqueada'
+      : decision === 'require_approval'
+        ? 'Requiere aprobación humana'
+        : decision === 'bypassed_counterfactual'
+          ? 'Solo contrafactual'
+          : 'Resultado del laboratorio';
+  const DecisionIcon = decision === 'allow'
+    ? ShieldCheck
+    : decision === 'require_approval'
+      ? Clock3
+      : ShieldAlert;
+  const actionOutcome = !focusedCase
+    ? 'Revisa el detalle de cada caso para consultar el resultado.'
+    : focusedCase.policyOn.executed
+      ? 'La acción solo cambió el estado sintético efímero del simulador; no hubo efectos externos.'
+      : decision === 'require_approval'
+        ? 'No se ejecutó. Esta previsualización no crea una solicitud persistente de aprobación.'
+        : decision === 'deny'
+          ? 'Se detuvo antes de invocar el adaptador; no se ejecutó.'
+          : 'No se ejecutó ninguna acción externa.';
   return (
     <section className="agent-policy-lab-result" data-testid="agent-policy-lab-result">
-      <div className="ai-lab-result-summary">
-        <b>Laboratorio {evidence.verticalLabel} · propuestas fixture deterministas</b>
-        <span>{evidence.summary.sampleCount} casos · no es inferencia de LLM</span>
+      <div className="agent-policy-result-head">
+        <div>
+          <span className="panel-kicker">DECISIÓN DEL POLICY ENGINE · PROPUESTA DE FIXTURE DETERMINISTA</span>
+          <h4>{focusedCase ? caseTitle[focusedCase.caseId] ?? focusedCase.caseId : `Laboratorio ${evidence.verticalLabel}`}</h4>
+        </div>
+        <span className={`agent-policy-result-decision agent-policy-result-${decision ?? 'unknown'}`}>
+          <DecisionIcon size={18} aria-hidden="true" />
+          {decisionLabel[decision ?? ''] ?? 'Resultado disponible'}
+        </span>
       </div>
+      <div className="agent-policy-result-summary">
+        <div>
+          <b>{decisionHeading}</b>
+          <p>{evidence.interpretation}</p>
+        </div>
+        <span>{evidence.summary.sampleCount} casos en el perfil · simulación ficticia</span>
+      </div>
+      {focusedCase && (
+        <div className="agent-policy-result-story">
+          <article>
+            <b>Qué intentó hacer</b>
+            <span>{focusedCase.tool} · {focusedCase.operation} sobre un recurso sintético.</span>
+          </article>
+          <article>
+            <b>Qué decidió Guardian Nexus</b>
+            <span>{decisionLabel[focusedCase.policyOn.decision] ?? focusedCase.policyOn.decision}.</span>
+          </article>
+          <article>
+            <b>Por qué</b>
+            <span>{focusedReasonSentence}</span>
+          </article>
+          <article>
+            <b>Qué ocurrió</b>
+            <span>{actionOutcome}</span>
+          </article>
+        </div>
+      )}
       {recordedSnapshot && (
         <div className="agent-policy-recorded-notice" role="note">
           Evidencia histórica guardada; no se ejecutó nada al abrir esta vista.
           {recordedArtifactSha256 && <span> SHA-256 del artefacto fuente: <code>{recordedArtifactSha256}</code></span>}
         </div>
       )}
-      {evidence.executionContext === 'api_policy_preview' && (
-        <div className="agent-policy-recorded-notice" role="note" data-testid="policy-preview-runtime-limit">
-          Previsualización fresca del Policy Engine; no se creó un job. No es una frontera de aislamiento:
-          el proceso comparte identidad con la API y no se restringió ni verificó la red o el acceso al socket Docker.
-        </div>
-      )}
-      <p>{evidence.interpretation}</p>
-      <p>
-        «Requiere aprobación» es una decisión registrada por este laboratorio: no hay aquí un flujo de aprobación ni una operación financiera real.
-      </p>
-      {focusedCase && (
-        <section className="agent-policy-guided-result" aria-labelledby="agent-policy-guided-result-title" data-testid="agent-policy-guided-result">
-          <span className="panel-kicker">CASO SELECCIONADO · {focusedCase.caseId}</span>
-          <h4 id="agent-policy-guided-result-title">{caseTitle[focusedCase.caseId] ?? focusedCase.caseId}</h4>
-          <ol>
-            <li><b>Propuesta y procedencia</b><span>Fixture controlado, no inferencia Qwen ni llamada nativa: {focusedCase.tool} · {focusedCase.operation}.</span></li>
-            <li><b>Policy ON</b><span>{decisionLabel[focusedCase.policyOn.decision] ?? focusedCase.policyOn.decision} · {reasonLabel[focusedCase.policyOn.reasonCode] ?? focusedCase.policyOn.reasonCode}.</span></li>
-            <li><b>Acción simulada</b><span>{focusedCase.policyOn.executed ? 'Solo en estado sintético efímero.' : 'No ejecutada.'} Policy OFF permanece contrafactual y no despacha herramientas.</span></li>
-            <li><b>Aprobación ficticia</b><span>{focusedCase.policyOn.decision === 'require_approval'
-              ? 'Esta ejecución registra el requisito, pero no crea una aprobación persistente.'
-              : 'No aplica a este caso.'} La bandeja muestra solo solicitudes existentes.</span></li>
-            <li><b>Evidencia redactada</b><span>Hash de caso: <code>{focusedCase.caseEvidenceSha256}</code></span></li>
-          </ol>
-          {focusedCase.policyOn.decision === 'require_approval' && (
-            <a href="#guardian-approval-inbox" data-testid="link-guided-approval-inbox">
-              Ir a la bandeja de aprobaciones <ArrowRight size={14} />
-            </a>
-          )}
-        </section>
-      )}
-      <dl>
-        <dt>Policy ON</dt>
-        <dd>
-          {evidence.summary.allowed} permitido · {evidence.summary.denied} denegado ·{' '}
-          {evidence.summary.requiresApproval} requiere aprobación ·{' '}
-          {evidence.summary.simulatedExecutions} ejecución simulada
-        </dd>
-        <dt>Policy OFF</dt>
-        <dd>
-          {evidence.summary.policyOffCounterfactualWouldExecute} hipotéticos en clones ·{' '}
-          {evidence.summary.policyOffCloneStateChanges} cambios solo en clones · 0 ejecución real
-        </dd>
-        <dt>Efectos reales</dt>
-        <dd>0 operaciones externas · 0 llamadas externas · 0 cambios persistentes</dd>
-        <dt>Identidad sintética</dt>
-        <dd>{evidence.agentIdentity.agentId} · {evidence.agentIdentity.actorId}</dd>
-      </dl>
-      <div className="agent-policy-lab-cases">
-        {evidence.cases.map((item) => (
-          <details key={item.caseId} open={item.caseId === focusedCaseId} data-testid={`agent-policy-case-${item.caseId}`}>
-            <summary>
-              {caseTitle[item.caseId] ?? item.caseId} —{' '}
-              {decisionLabel[item.policyOn.decision] ?? item.policyOn.decision}
-            </summary>
-            <dl>
-              <dt>Propuesta</dt><dd>{item.tool} · {item.operation} · {item.resourceType} sintético</dd>
-              <dt>Origen de instrucción</dt><dd>{item.instructionProvenance}</dd>
-              <dt>Agente y actor</dt><dd>{item.agentId} · {item.actorId} ({item.actorType})</dd>
-              <dt>Espacio del recurso</dt><dd>{item.resourceWorkspaceId}</dd>
-              <dt>Permisos concedidos</dt><dd>{item.grantedPermissions.join(', ') || 'ninguno'}</dd>
-              <dt>Permisos solicitados</dt><dd>{item.requestedPermissions.join(', ')}</dd>
-              <dt>Motivo de política</dt><dd>{reasonLabel[item.policyOn.reasonCode] ?? item.policyOn.reasonCode}</dd>
-              <dt>Intento</dt><dd>{item.policyOn.attempted ? 'Registrado' : 'No observado'}</dd>
-              <dt>Autorización</dt><dd>{item.policyOn.authorized ? 'Sí, solo en el simulador' : 'No'}</dd>
-              <dt>Acción</dt><dd>{item.policyOn.executed ? 'Ejecutada en estado sintético efímero' : 'No ejecutada'}</dd>
-              <dt>Adaptador ficticio</dt><dd>{item.toolTrace ? `${adapterStatusLabel[item.toolTrace.policyOn.dispatchStatus] ?? item.toolTrace.policyOn.dispatchStatus} Eventos: ${item.toolTrace.policyOn.events.map((event) => event.phase).join(', ') || 'ninguno'}. Policy OFF: no invocado.` : 'No hay traza del adaptador en esta evidencia anterior.'}</dd>
-              <dt>Contrafactual OFF</dt><dd>Habría sido propuesta en un clon; jamás ejecutada ni persistida.</dd>
-              <dt>Delegación</dt><dd>{item.delegation.isDelegatedAction ? 'Agente delegado; identidad original preservada.' : 'No aplica.'} Elevación permitida: no.</dd>
-              <dt>Hash de propuesta</dt><dd>{item.proposalSha256}</dd>
-              <dt>Hash de evidencia</dt><dd>{item.caseEvidenceSha256}</dd>
-            </dl>
-          </details>
-        ))}
-      </div>
-      <details>
-        <summary>Procedencia, límites y evidencia</summary>
+      <details className="agent-policy-result-details">
+        <summary>Detalles técnicos y evidencia</summary>
+        <p>
+          La evidencia de este Policy Lab procede de fixtures deterministas; no es inferencia de LLM
+          ni una llamada nativa a herramientas.
+        </p>
+        {evidence.executionContext === 'api_policy_preview' && (
+          <div className="agent-policy-recorded-notice" role="note" data-testid="policy-preview-runtime-limit">
+            Previsualización fresca del Policy Engine; no se creó un job. El proceso comparte identidad con la API:
+            red y acceso al socket Docker no aislados ni verificados.
+          </div>
+        )}
+        {focusedCase && (
+          <section className="agent-policy-guided-result" aria-labelledby="agent-policy-guided-result-title" data-testid="agent-policy-guided-result">
+            <span className="panel-kicker">CASO SELECCIONADO · {focusedCase.caseId}</span>
+            <h4 id="agent-policy-guided-result-title">{caseTitle[focusedCase.caseId] ?? focusedCase.caseId}</h4>
+            <ol>
+              <li><b>Propuesta y procedencia</b><span>Fixture determinista controlado, no es inferencia de LLM, Qwen ni llamada nativa: {focusedCase.tool} · {focusedCase.operation}.</span></li>
+              <li><b>Policy ON</b><span>{decisionLabel[focusedCase.policyOn.decision] ?? focusedCase.policyOn.decision} · {focusedReasonSentence}</span></li>
+              <li><b>Acción simulada</b><span>{focusedCase.policyOn.executed ? 'Solo en estado sintético efímero.' : 'No ejecutada.'} Policy OFF permanece contrafactual y no despacha herramientas.</span></li>
+              <li><b>Aprobación ficticia</b><span>{focusedCase.policyOn.decision === 'require_approval'
+                ? 'Esta previsualización registra el requisito, pero no crea una aprobación persistente.'
+                : 'No aplica a este caso.'} La bandeja muestra solo solicitudes existentes.</span></li>
+              <li><b>Evidencia redactada</b><span>Hash de caso: <code>{focusedCase.caseEvidenceSha256}</code></span></li>
+            </ol>
+            {focusedCase.policyOn.decision === 'require_approval' && (
+              <button
+                type="button"
+                className="agent-policy-approval-link"
+                onClick={onViewApprovals}
+                data-testid="link-guided-approval-inbox"
+              >
+                Ir a la bandeja de aprobaciones <ArrowRight size={14} />
+              </button>
+            )}
+          </section>
+        )}
         <dl>
-          <dt>Motor</dt><dd>{evidence.engineVersion} · política {evidence.versions.policy}</dd>
-          <dt>Corpus y oráculo</dt><dd>{evidence.versions.corpus} · {evidence.versions.oracle} · semilla {evidence.seed}</dd>
-          <dt>Adaptador de herramientas</dt><dd>{evidence.versions.toolAdapter ?? 'No registrado en evidencia anterior'}</dd>
-          <dt>Propuestas</dt><dd>Fixture controlado; no Qwen, no tool calls nativas.</dd>
-          <dt>Red declarada</dt><dd>{evidence.limits.network}</dd>
-          <dt>Entorno</dt><dd>{evidence.executionContext === 'api_policy_preview'
-            ? 'Proceso API compartido; red y acceso al socket Docker no aislados ni verificados.'
-            : 'Worker Docker network=none; sin secretos, pesos del modelo ni socket montado.'}</dd>
-          <dt>Datos</dt><dd>No se guardan prompts, instrucciones ni argumentos en bruto; solo metadatos y hashes.</dd>
-          <dt>Hash de suite</dt><dd>{evidence.suiteEvidenceSha256}</dd>
-          <dt>Hash de evidencia</dt><dd>{evidence.evidenceSha256}</dd>
+          <dt>Policy ON</dt>
+          <dd>{evidence.summary.allowed} permitido · {evidence.summary.denied} denegado · {evidence.summary.requiresApproval} requiere aprobación · {evidence.summary.simulatedExecutions} ejecución simulada</dd>
+          <dt>Policy OFF</dt>
+          <dd>{evidence.summary.policyOffCounterfactualWouldExecute} hipotéticos en clones · {evidence.summary.policyOffCloneStateChanges} cambios solo en clones · 0 ejecución real</dd>
+          <dt>Efectos reales</dt>
+          <dd>0 operaciones externas · 0 llamadas externas · 0 cambios persistentes</dd>
+          <dt>Identidad sintética</dt>
+          <dd>{evidence.agentIdentity.agentId} · {evidence.agentIdentity.actorId}</dd>
         </dl>
-        <small>Dos o tres casos por vertical son una demostración acotada, no una medición de eficacia general.</small>
+        <div className="agent-policy-lab-cases">
+          {evidence.cases.map((item) => (
+            <details key={item.caseId} open={item.caseId === focusedCaseId} data-testid={`agent-policy-case-${item.caseId}`}>
+              <summary>{caseTitle[item.caseId] ?? item.caseId} — {decisionLabel[item.policyOn.decision] ?? item.policyOn.decision}</summary>
+              <dl>
+                <dt>Propuesta</dt><dd>{item.tool} · {item.operation} · {item.resourceType} sintético</dd>
+                <dt>Origen de instrucción</dt><dd>{item.instructionProvenance}</dd>
+                <dt>Agente y actor</dt><dd>{item.agentId} · {item.actorId} ({item.actorType})</dd>
+                <dt>Espacio del recurso</dt><dd>{item.resourceWorkspaceId}</dd>
+                <dt>Permisos concedidos</dt><dd>{item.grantedPermissions.join(', ') || 'ninguno'}</dd>
+                <dt>Permisos solicitados</dt><dd>{item.requestedPermissions.join(', ')}</dd>
+                <dt>Motivo de política</dt><dd>{reasonLabel[item.policyOn.reasonCode] ?? item.policyOn.reasonCode}</dd>
+                <dt>Intento</dt><dd>{item.policyOn.attempted ? 'Registrado' : 'No observado'}</dd>
+                <dt>Autorización</dt><dd>{item.policyOn.authorized ? 'Sí, solo en el simulador' : 'No'}</dd>
+                <dt>Acción</dt><dd>{item.policyOn.executed ? 'Ejecutada en estado sintético efímero' : 'No ejecutada'}</dd>
+                <dt>Adaptador ficticio</dt><dd>{item.toolTrace ? `${adapterStatusLabel[item.toolTrace.policyOn.dispatchStatus] ?? item.toolTrace.policyOn.dispatchStatus} Eventos: ${item.toolTrace.policyOn.events.map((event) => event.phase).join(', ') || 'ninguno'}. Policy OFF: no invocado.` : 'No hay traza del adaptador en esta evidencia anterior.'}</dd>
+                <dt>Contrafactual OFF</dt><dd>Habría sido propuesta en un clon; jamás ejecutada ni persistida.</dd>
+                <dt>Delegación</dt><dd>{item.delegation.isDelegatedAction ? 'Agente delegado; identidad original preservada.' : 'No aplica.'} Elevación permitida: no.</dd>
+                <dt>Hash de propuesta</dt><dd>{item.proposalSha256}</dd>
+                <dt>Hash de evidencia</dt><dd>{item.caseEvidenceSha256}</dd>
+              </dl>
+            </details>
+          ))}
+        </div>
+        <details>
+          <summary>Procedencia, límites y hashes</summary>
+          <dl>
+            <dt>Motor</dt><dd>{evidence.engineVersion} · política {evidence.versions.policy}</dd>
+            <dt>Corpus y oráculo</dt><dd>{evidence.versions.corpus} · {evidence.versions.oracle} · semilla {evidence.seed}</dd>
+            <dt>Adaptador de herramientas</dt><dd>{evidence.versions.toolAdapter ?? 'No registrado en evidencia anterior'}</dd>
+            <dt>Propuestas</dt><dd>Fixture controlado; no Qwen, no tool calls nativas.</dd>
+            <dt>Red declarada</dt><dd>{evidence.limits.network}</dd>
+            <dt>Entorno</dt><dd>{evidence.executionContext === 'api_policy_preview'
+              ? 'Proceso API compartido; red y acceso al socket Docker no aislados ni verificados.'
+              : 'Worker Docker network=none; sin secretos, pesos del modelo ni socket montado.'}</dd>
+            <dt>Datos</dt><dd>No se guardan prompts, instrucciones ni argumentos en bruto; solo metadatos y hashes.</dd>
+            <dt>Hash de suite</dt><dd>{evidence.suiteEvidenceSha256}</dd>
+            <dt>Hash de evidencia</dt><dd>{evidence.evidenceSha256}</dd>
+            {recordedSnapshot && recordedArtifactSha256 && <><dt>SHA-256 del artefacto fuente</dt><dd><code>{recordedArtifactSha256}</code></dd></>}
+          </dl>
+          <small>Dos o tres casos por vertical son una demostración acotada, no una medición de eficacia general.</small>
+        </details>
       </details>
     </section>
   );

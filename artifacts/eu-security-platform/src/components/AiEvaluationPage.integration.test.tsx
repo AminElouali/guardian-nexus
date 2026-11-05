@@ -307,6 +307,29 @@ test("renders real Qwen profiles separately from fixture evidence", () => {
   assert.match(blockedCatalog, /evidencia Qwen registrada es histórica/);
   assert.match(blockedCatalog, /NO_PROPOSAL<\/code> no equivale a <code>DENY/);
   assert.match(blockedCatalog, /disabled/);
+
+  const repeatedUnavailableCatalog = renderToStaticMarkup(
+    createElement(QwenPolicyLabCatalog, {
+      availability: [
+        "guardian-agent-qwen-lab-email-v1",
+        "guardian-agent-qwen-lab-database-v1",
+        "guardian-agent-qwen-lab-finance-v1",
+      ].map((profileId) => ({
+        profileId,
+        status: "blocked",
+        reasonCode: "assessment_broker_identity_unverified",
+      })),
+      canRun: true,
+      pending: false,
+      onRequest: () => undefined,
+    }),
+  );
+  assert.equal(
+    (repeatedUnavailableCatalog.match(/assessment_broker_identity_unverified/g) ?? []).length,
+    1,
+    "the same worker preflight reason should be shown once, not repeated on every profile",
+  );
+  assert.doesNotMatch(repeatedUnavailableCatalog, /Motivo:/);
 });
 
 test("renders all eight synthetic agent verticals and an API-persisted policy lab report", () => {
@@ -328,7 +351,7 @@ test("renders all eight synthetic agent verticals and an API-persisted policy la
   const resultMarkup = renderToStaticMarkup(
     createElement(AgentPolicyLabResult, { evidence: policyJob.result }),
   );
-  assert.match(resultMarkup, /propuestas fixture deterministas/);
+  assert.match(resultMarkup, /PROPUESTA DE FIXTURE DETERMINISTA/i);
   assert.match(resultMarkup, /no es inferencia de LLM/i);
   assert.match(resultMarkup, /Adaptador ficticio ejecutado solo en memoria/);
   assert.match(resultMarkup, /Bloqueada antes de invocar el adaptador/);
@@ -352,6 +375,8 @@ test("renders all eight synthetic agent verticals and an API-persisted policy la
       onRequest: () => undefined,
       onPreview: () => undefined,
       onReset: () => undefined,
+      onSelectionChange: () => undefined,
+      onViewApprovals: () => undefined,
       recordedEvidence: jobs.flatMap((job) =>
         job.status === "succeeded" && job.result?.engine === "guardian_policy_lab"
           ? [job.result]
@@ -374,17 +399,61 @@ test("renders all eight synthetic agent verticals and an API-persisted policy la
   assert.match(catalogMarkup, /data-testid="button-select-agent-lab-email"/);
   assert.match(catalogMarkup, /data-testid="button-select-agent-lab-database"/);
   assert.match(catalogMarkup, /aria-pressed="false"/);
-  assert.match(catalogMarkup, /Riesgo a revisar:/);
-  assert.match(catalogMarkup, /Fixtures deterministas/);
+  assert.match(catalogMarkup, /Demo ficticia/);
+  for (const label of ["Correo", "Datos", "Finanzas", "Código", "Soporte", "Web", "Cloud", "Multiagente"]) {
+    assert.match(catalogMarkup, new RegExp(`<span>${label}</span>`));
+  }
+  assert.match(catalogMarkup, /aria-label="Atención al cliente"/);
   assert.match(catalogMarkup, /data-testid="button-select-agent-case-benign"/);
   assert.match(catalogMarkup, /data-testid="button-select-agent-case-adversarial"/);
   assert.match(catalogMarkup, /data-testid="button-run-guided-agent-demo"/);
   assert.match(catalogMarkup, /data-testid="button-preview-policy-lab"/);
-  assert.match(catalogMarkup, /data-testid="button-reset-agent-demo"/);
+  assert.equal((catalogMarkup.match(/Ejecutar demostración/g) ?? []).length, 1);
+  assert.match(catalogMarkup, /Acción legítima/);
+  assert.match(catalogMarkup, /Intento de ataque/);
+  assert.match(catalogMarkup, /data-testid="agent-policy-empty-result"/);
+  assert.match(catalogMarkup, /Ejecutar demostración/);
+  assert.doesNotMatch(catalogMarkup, /data-testid="button-reset-agent-demo"/);
   assert.match(catalogMarkup, /no modifica reglas, corpus ni permisos/i);
   assert.match(catalogMarkup, /no es inferencia de Qwen/i);
   assert.match(catalogMarkup, /multiagente/i);
   assert.match(catalogMarkup, /No es inferencia de Qwen/);
+
+  const emailJob = jobs.find(
+    (candidate) =>
+      candidate.profileId === "guardian-agent-lab-email-v1" &&
+      candidate.status === "succeeded" &&
+      candidate.result?.engine === "guardian_policy_lab",
+  );
+  assert.ok(emailJob?.result?.engine === "guardian_policy_lab");
+  if (emailJob?.result?.engine !== "guardian_policy_lab") {
+    assert.fail("email fixture evidence is required to verify the result reset action");
+  }
+  const resultCatalogMarkup = renderToStaticMarkup(
+    createElement(AgentPolicyLabCatalog, {
+      profiles: AGENT_POLICY_LABS.map((lab) => ({
+        profileId: lab.profileId,
+        status: "ready",
+        reasonCode: null,
+      })),
+      canRun: true,
+      pending: false,
+      previewPending: false,
+      onRequest: () => undefined,
+      onPreview: () => undefined,
+      onReset: () => undefined,
+      onSelectionChange: () => undefined,
+      onViewApprovals: () => undefined,
+      recordedEvidence: [],
+      recordedArtifactSha256: "",
+      freshPreview: {
+        profileId: "guardian-agent-lab-email-v1",
+        caseId: "email_adversarial_external_exfiltration",
+        evidence: emailJob.result as GuardianPolicyLabPreviewResponse["evidence"],
+      },
+    }),
+  );
+  assert.match(resultCatalogMarkup, /data-testid="button-reset-agent-demo"/);
 });
 
 test("guided fixture result exposes provenance, Policy ON, non-execution and approval boundary", () => {
@@ -413,7 +482,7 @@ test("guided fixture result exposes provenance, Policy ON, non-execution and app
     }),
   );
   assert.match(markup, /CASO SELECCIONADO/);
-  assert.match(markup, /Fixture controlado, no inferencia Qwen ni llamada nativa/);
+  assert.match(markup, /Fixture determinista controlado, no es inferencia de LLM, Qwen ni llamada nativa/);
   assert.match(markup, /REQUIRE_APPROVAL|Requiere aprobación humana/);
   assert.match(markup, /no crea una aprobación persistente/);
   assert.match(markup, /Policy OFF permanece contrafactual/);

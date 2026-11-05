@@ -146,10 +146,14 @@ export function QwenPolicyLabCatalog({
   pending: boolean;
   onRequest: (profileId: QwenPolicyProfile) => void;
 }) {
-  const unavailableCount = profiles.filter((profile) => {
+  const unavailableProfiles = profiles.filter((profile) => {
     const worker = availability.find((item) => item.profileId === profile.profileId);
     return worker?.status !== 'ready';
-  }).length;
+  });
+  const unavailableCount = unavailableProfiles.length;
+  const unavailableReasons = [...new Set(unavailableProfiles
+    .map((profile) => availability.find((item) => item.profileId === profile.profileId)?.reasonCode)
+    .filter((reason): reason is string => Boolean(reason)))];
   return (
     <section
       id="qwen-policy-lab"
@@ -179,19 +183,21 @@ export function QwenPolicyLabCatalog({
           data-testid="qwen-preflight-not-run"
         >
           <b>No se ejecutaron inferencias Qwen nuevas desde esta vista.</b>{' '}
-          El preflight no confirma disponibilidad para {unavailableCount} perfil(es).
+          El preflight bloquea {unavailableCount} perfil(es){unavailableReasons.length > 0
+            ? ` (${unavailableReasons.join(', ')})`
+            : ''}.
           Cualquier evidencia Qwen registrada es histórica; los fixtures siguen separados,
           y <code>NO_PROPOSAL</code> no equivale a <code>DENY</code>.
         </div>
       )}
-      <div className="agent-policy-lab-grid">
+      <div className="qwen-policy-profile-list">
         {profiles.map((profile) => {
           const worker = availability.find((item) => item.profileId === profile.profileId);
           const ready = worker?.status === 'ready';
           return (
             <article
               key={profile.profileId}
-              className="agent-policy-lab-card"
+              className="qwen-policy-profile-row"
               data-testid={`qwen-policy-lab-${profile.verticalId}`}
             >
               <div>
@@ -209,9 +215,6 @@ export function QwenPolicyLabCatalog({
                 {pending ? <Activity className="spin" size={15} /> : <FlaskConical size={15} />}
                 {ready ? 'Ejecutar con Qwen' : 'No disponible'}
               </Button>
-              {!ready && worker?.reasonCode && (
-                <small role="status">Motivo: {worker.reasonCode}</small>
-              )}
             </article>
           );
         })}
