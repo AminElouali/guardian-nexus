@@ -1087,12 +1087,6 @@ routes.post(
       return;
     }
     const profileId = body.data.profileId ?? GARAK_PROFILE_ID;
-    if (!isAssessmentProfileAvailable(profileId)) {
-      res.status(503).json({
-        error: "Requested isolated local assessment profile is unavailable",
-      });
-      return;
-    }
 
     const { workspaceId } = params.data;
     try {
@@ -1102,6 +1096,9 @@ routes.post(
         async (tx, membership) => {
           if (!canRunAiEvaluation(membership.role)) {
             return { kind: "forbidden" as const };
+          }
+          if (!isAssessmentProfileAvailable(profileId)) {
+            return { kind: "worker_unavailable" as const };
           }
           const [existing] = await tx
             .select()
@@ -1200,6 +1197,12 @@ routes.post(
       if (access.value.kind === "forbidden") {
         res.status(403).json({
           error: "Workspace owner or admin role required",
+        });
+        return;
+      }
+      if (access.value.kind === "worker_unavailable") {
+        res.status(503).json({
+          error: "Requested isolated local assessment profile is unavailable",
         });
         return;
       }

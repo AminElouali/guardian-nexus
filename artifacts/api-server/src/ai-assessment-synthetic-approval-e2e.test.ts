@@ -539,6 +539,59 @@ test(
       ...POLICY_LAB_PROFILE_IDS,
       ...QWEN_POLICY_LAB_PROFILE_IDS,
     ];
+    const queueAuthorizationChecks = {
+      unauthenticatedRejected: 0,
+      crossTenantRejected: 0,
+      viewerRejected: 0,
+    };
+    for (const profileId of [
+      POLICY_LAB_PROFILE_IDS[0]!,
+      QWEN_POLICY_LAB_PROFILE_IDS[0]!,
+    ]) {
+      const body = {
+        idempotencyKey: `broker-disabled-auth-${profileId}-${randomUUID()}`,
+        profileId,
+      };
+      assert.equal(
+        (
+          await request(
+            null,
+            queuePath,
+            "POST",
+            body,
+          )
+        ).status,
+        401,
+        `${profileId} unauthenticated queue request`,
+      );
+      queueAuthorizationChecks.unauthenticatedRejected += 1;
+      assert.equal(
+        (
+          await request(
+            workspaceBOwner,
+            queuePath,
+            "POST",
+            body,
+          )
+        ).status,
+        403,
+        `${profileId} cross-tenant queue request`,
+      );
+      queueAuthorizationChecks.crossTenantRejected += 1;
+      assert.equal(
+        (
+          await request(
+            workspaceAViewer,
+            queuePath,
+            "POST",
+            body,
+          )
+        ).status,
+        403,
+        `${profileId} viewer queue request`,
+      );
+      queueAuthorizationChecks.viewerRejected += 1;
+    }
     for (const profileId of queueProfiles) {
       const blockedEnqueue = await request(workspaceAOwner, queuePath, "POST", {
         idempotencyKey: `broker-disabled-${profileId}-${randomUUID()}`,
@@ -1020,6 +1073,7 @@ test(
           status: "disabled_without_isolated_broker",
           profileCount: queueProfiles.length,
           rejectedBeforeJobInsert: queueProfiles.length,
+          authorizationChecks: queueAuthorizationChecks,
         },
       },
       approvalRequests: approvals.length + 3,

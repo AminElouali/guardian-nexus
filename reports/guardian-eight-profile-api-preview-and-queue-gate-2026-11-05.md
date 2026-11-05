@@ -40,11 +40,15 @@ servicios de clientes.
 
 - Test E2E extendido:
   `artifacts/api-server/src/ai-assessment-synthetic-approval-e2e.test.ts`,
-  SHA-256 `0a514440ed82d1bfb63fd27eb202bd8042fe1c99a32b833fb70e7f8e206f8256`.
+  SHA-256 `6986071bdc922c829bcb9c51fd40f48287b80482ac0c51b6bb646a00bf8f42d3`.
+- Ruta API:
+  `artifacts/api-server/src/routes/ai-assessment-lab.ts`,
+  SHA-256 `b0ae9ca290d5e6cf3d00f33b026d0d37f1578da48b55dc7e32dc25780e7bdd94`.
 - Artefacto sintético:
   `generated-artifacts/guardian-synthetic-approval-e2e.json`,
-  SHA-256 `63783bc0e1941fc8c6c189b3cb2e93257a75bdbd676e4073f27eb067cb9d7f15`;
-  hash de evidencia incluido `197e33aba3967b7fa943642918b3184f9474c05dce8fd4f4fe57282280d867e1`.
+  SHA-256 `d722501129e9c74f3b9c1f1101f9d8914f2f2116db2c6a91bbec1cdd2b07421c`;
+  hash de evidencia incluido
+  `f9facb43cdcc72d7e3f5050b33e75f44874818ac05df01ddcc20b19d39069f34`.
 - Qwen histórico (no nuevo):
   `generated-artifacts/guardian-qwen-offline/qwen-policy-lab-eight-profiles.json`,
   SHA-256 `6a1e54658f745074a7a5a937204181c219ec28d184a866845dd09513497ee1d9`.
@@ -52,8 +56,8 @@ servicios de clientes.
   `generated-artifacts/guardian-qwen-offline/preflight-status-2026-11-04.json`,
   SHA-256 `0b6246f76877a2874dc7834cacba1c76979a61e7871b1371515268dee8e85f52`.
 
-El manifiesto `.sha256` de este informe fija hashes del informe, test y
-artefactos anteriores; verificar con `sha256sum -c`.
+El manifiesto `.sha256` de este informe fija hashes del informe, fuentes y
+artefactos; verificar con `sha256sum -c`.
 
 ## Límites y estado
 
@@ -69,3 +73,26 @@ histórica: 8 inferencias, 7 marcadores adaptados, 0 llamadas nativas
 aprobaciones nacidas de Qwen. El preflight no se repitió y la cola permanece
 deshabilitada hasta verificar host compatible con identidades API/broker/DB
 separadas.
+
+## Addendum — autorización antes de reportar disponibilidad de cola
+
+En la revisión posterior se encontró que la ruta POST de cola contestaba
+`503` por el gate del worker antes de comprobar membresía y rol. No insertaba
+jobs, pero revelaba disponibilidad del worker a solicitudes no autorizadas.
+La comprobación del gate ahora ocurre dentro de la transacción tenant-scoped,
+después de validar membresía y rol, y antes de consultar idempotencia o tocar
+la cola. No cambió el gate: owners/admins siguen recibiendo 503 cuando el
+broker no está verificado.
+
+El E2E comprueba el comportamiento para un perfil fixture y uno Qwen:
+solicitud anónima → 401, tenant ajeno → 403 y viewer → 403. Owners reciben 503
+para los 16 perfiles; el conteo de jobs no cambia. El artefacto actualizado
+registra dos rechazos en cada categoría de autorización y 16 rechazos previos
+a inserción.
+
+Validación del cambio: E2E 1/1, API 79/79, worker 35/35 + 5/5 + 2/2, UI
+integration 12/12, typecheck monorepo correcto y build API correcto. La UI se
+verificó con pruebas de integración, no mediante una sesión Clerk real en
+navegador. El workflow local de API se reinició y sus logs muestran el servidor
+escuchando en el puerto 8080; no se inició el worker. No hubo inferencia Qwen
+ni ejecución Docker.

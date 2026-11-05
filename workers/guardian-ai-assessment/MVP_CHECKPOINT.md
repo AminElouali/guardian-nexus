@@ -3107,3 +3107,44 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   El preflight del 2026-11-04 sigue bloqueando; no se repitió ni se intentó
   sortear. Se requiere host autorizado con separación API/broker/DB probada
   antes de habilitar la cola o afirmar integración Qwen API→worker.
+
+## Incremento 2026-11-05 — autorización antes del gate de cola
+
+- Inicio: HEAD `89f3303273888663df4bd87f7ac0892c05668ee1`, árbol limpio.
+- Hallazgo: la ruta POST de jobs revelaba `503` por worker no disponible antes
+  de comprobar membresía y rol. Corrección: ejecutar esa comprobación después
+  de autorización tenant-scoped y RBAC, dentro de la transacción, pero antes
+  de idempotency lookup, inserción, cuota o auditoría. El gate sigue fijo en
+  `assessment_broker_identity_unverified`; no se habilitó la cola.
+- E2E HTTP: para un perfil fixture y uno Qwen, anónimo → 401, tenant ajeno →
+  403, viewer → 403. Owners → 503 para los 16 perfiles. Conteo de jobs antes y
+  después idéntico; no se reclama ni ejecuta ningún job.
+- Pruebas secuenciales: E2E 1/1; API 79/79; worker Policy Lab 35/35,
+  adaptador Qwen 5/5 y contrato transversal 2/2; UI integration 12/12;
+  typecheck monorepo correcto; build API correcto.
+- Artefacto actualizado:
+  `generated-artifacts/guardian-synthetic-approval-e2e.json`, SHA-256
+  `d722501129e9c74f3b9c1f1101f9d8914f2f2116db2c6a91bbec1cdd2b07421c`;
+  hash interno `f9facb43cdcc72d7e3f5050b33e75f44874818ac05df01ddcc20b19d39069f34`.
+  Incluye 8 previews fixture, 16 rechazos previos a inserción y seis rechazos
+  de autorización (2 anónimos, 2 cross-tenant, 2 viewer).
+- No se ejecutó Qwen ni Docker. La última preflight evidencia sigue bloqueada
+  por `offline_docker_socket_accessible` y
+  `offline_sensitive_environment_present`; no se leyeron valores sensibles.
+- La UI se validó con integración automatizada, no con una sesión Clerk real
+  en navegador. El proceso de preview sigue reportando red no aislada e
+  identidad compartida; no debe confundirse con API→cola→worker segregado.
+- Hashes de este incremento:
+  - `artifacts/api-server/src/routes/ai-assessment-lab.ts`:
+    `b0ae9ca290d5e6cf3d00f33b026d0d37f1578da48b55dc7e32dc25780e7bdd94`.
+  - `artifacts/api-server/src/ai-assessment-synthetic-approval-e2e.test.ts`:
+    `6986071bdc922c829bcb9c51fd40f48287b80482ac0c51b6bb646a00bf8f42d3`.
+  - Informe: `reports/guardian-eight-profile-api-preview-and-queue-gate-2026-11-05.md`,
+    `0bc2b17118fc75c6cb983f56bf609e0eb04de80195b56675dd25353a7ab753fb`.
+  - Manifiesto SHA-256:
+    `reports/guardian-eight-profile-api-preview-and-queue-gate-2026-11-05.sha256`,
+    `e560275dc2da2e24e72797ff8189262c19bf32c88a1abdb07a65c7aa121d47a3`;
+    todas las entradas verificaron.
+- Workflow local API reiniciado tras el cambio; logs confirman servidor
+  escuchando en puerto 8080. No se inició el worker; el workflow web sigue
+  detenido.
