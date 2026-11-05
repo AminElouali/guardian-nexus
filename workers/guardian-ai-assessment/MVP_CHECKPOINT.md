@@ -3244,3 +3244,53 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
 - Siguiente paso seguro: repetir las verificaciones de identidad/socket y
   sesiones DB únicamente en un host Ubuntu autorizado; hasta entonces
   mantener cerrada la cola real y limitar las pruebas a fixtures deterministas.
+
+## UX del preflight Qwen y verificación sintética — 2026-11-05
+
+- Base: HEAD `0f8df0f9d36dd1546730441c57f678483c22e5a2`, árbol limpio.
+- La disponibilidad de Qwen en `GuardianQwenPolicyLab` ya no muestra códigos
+  internos de preflight. Los motivos conocidos se traducen a texto español
+  conciso; los códigos desconocidos usan una explicación genérica y no se
+  reflejan al usuario. El aviso conserva que no se ejecutaron inferencias
+  nuevas, que la evidencia Qwen es histórica y que `NO_PROPOSAL` no equivale a
+  DENY. No cambió el endpoint ni el estado del gate.
+- Pruebas ejecutadas en serie, solo con fixtures/local:
+  - Preflight sintético: **15/15**; incluye que el runner Qwen se detenga antes
+    de cargar el modelo o crear artefactos cuando no está verificada la frontera.
+  - Policy Lab determinista: **35/35**, ocho perfiles, ataques, tenant cruzado,
+    precedencia de Policy ON y Policy OFF sin despacho.
+  - API gate + preview: **7/7**; confirma perfiles deshabilitados, enqueue
+    falso sin broker verificado y previews de los ocho fixtures.
+  - UI integration: **14/14**; verifica motivos localizados, deduplicados y
+    sin reflejar códigos internos.
+  - Typecheck UI: correcto. Build UI: correcto; siguen avisos de sourcemap en
+    `tooltip.tsx` y chunk superior a 500 kB.
+  - Captura estática de `/ai-evaluations`: el navegador sin sesión mostró el
+    inicio de sesión de Clerk, por lo que la vista autenticada no se verificó
+    visualmente. La verificación del componente procede del test UI; no se
+    intentó iniciar sesión ni hacer bypass.
+- El preflight de host **no se volvió a ejecutar**: la última evidencia
+  registrada es `workers/guardian-ai-assessment/reports/lab-host-preflight-2026-11-04.json`.
+  SHA-256 del archivo: `3b85f5c1aab30012d27df96eec5aabeff7ac932198d45f1dd5536d55903d8445`;
+  campo interno `evidenceSha256`: `e1dbb18fed636bda22387b180714d28877e73998494d46dbd7a973811061eade`.
+  Registra socket Docker accesible por el proceso actual, identidades API,
+  broker y worker sin verificar, separación de roles/sesiones DB sin verificar
+  y cuatro nombres de variables sensibles presentes; no se leyeron valores.
+  `hostBoundaryReady=false`; Qwen continúa bloqueado.
+- No se ejecutaron Qwen, Docker, conexiones DB, E2E PostgreSQL ni Clerk real.
+  La cobertura API→subprocess Python→Policy Engine→simulador sigue siendo
+  efímera; no equivale a API→cola persistente→worker aislado. La cola permanece
+  cerrada, sin crear jobs ni llamar al consumidor.
+- Evidencia Qwen continúa histórica. El resumen anterior de este checkpoint
+  recoge una corrida de 8 inferencias (7 adaptadas, 0 nativas, 1 sin propuesta);
+  el informe detallado `qwen-policy-labs-eight-verticals-e2e-2026-11-03.md`
+  corresponde a otra corrida de 16 casos (11 adaptadas, 0 nativas, 5 sin
+  propuesta). Este incremento no reconcilia ni combina ambos denominadores.
+- La aprobación persistente sigue validada solo con fixtures. El informe
+  `synthetic-approval-api-e2e-2026-11-04.md` registra 4 solicitudes de prueba,
+  2 aprobadas y simuladas una vez, 1 denegada y 1 caducada; no son propuestas
+  Qwen. No hubo una corrida de aprobación en este incremento.
+- No se cambió arquitectura, policy, cola, permisos ni datos. Próximo paso
+  bloqueado: verificar UID/GID distintos, ACL del socket y roles/sesiones DB
+  desde un host de laboratorio autorizado; entonces repetir la ruta persistente
+  y las inferencias reales.

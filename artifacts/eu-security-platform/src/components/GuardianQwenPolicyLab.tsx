@@ -117,6 +117,13 @@ const dispatchLabels: Record<string, string> = {
   not_invoked: 'No se invocó ninguna herramienta',
 };
 
+const preflightReasonLabels: Record<string, string> = {
+  assessment_broker_identity_unverified:
+    'la identidad aislada del broker no está verificada',
+  lab_qwen_sandbox_contract_unverified:
+    'el contrato de aislamiento de Qwen no está verificado',
+};
+
 function observedCaseReason(reasonCode: string, finishReason: string): string {
   if (reasonCode === 'no_tool_call') {
     return `El runtime terminó con “${finishReason}” y no devolvió una llamada aceptada. No permite inferir la causa interna del modelo y no es una denegación de política.`;
@@ -153,9 +160,26 @@ export function QwenPolicyLabCatalog({
     return worker?.status !== 'ready';
   });
   const unavailableCount = unavailableProfiles.length;
-  const unavailableReasons = [...new Set(unavailableProfiles
-    .map((profile) => availability.find((item) => item.profileId === profile.profileId)?.reasonCode)
-    .filter((reason): reason is string => Boolean(reason)))];
+  const unavailableReasonCodes = [
+    ...new Set(
+      unavailableProfiles
+        .map(
+          (profile) =>
+            availability.find((item) => item.profileId === profile.profileId)
+              ?.reasonCode,
+        )
+        .filter((reason): reason is string => Boolean(reason)),
+    ),
+  ];
+  const unavailableReasons = [
+    ...new Set(
+      unavailableReasonCodes.map(
+        (reason) =>
+          preflightReasonLabels[reason] ??
+          'las comprobaciones de aislamiento siguen pendientes',
+      ),
+    ),
+  ];
   return (
     <section
       id="qwen-policy-lab"
@@ -185,9 +209,10 @@ export function QwenPolicyLabCatalog({
           data-testid="qwen-preflight-not-run"
         >
           <b>No se ejecutaron inferencias Qwen nuevas desde esta vista.</b>{' '}
-          El preflight bloquea {unavailableCount} perfil(es){unavailableReasons.length > 0
-            ? ` (${unavailableReasons.join(', ')})`
-            : ''}.
+          El control previo mantiene bloqueados {unavailableCount} perfil(es)
+          {unavailableReasons.length > 0
+            ? ` porque ${unavailableReasons.join('; ')}`
+            : ' mientras verifica el aislamiento del entorno'}.
           Cualquier evidencia Qwen registrada es histórica; los fixtures siguen separados,
           y <code>NO_PROPOSAL</code> no equivale a <code>DENY</code>.
         </div>

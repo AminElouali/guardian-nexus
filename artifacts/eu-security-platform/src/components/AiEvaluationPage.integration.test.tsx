@@ -316,23 +316,56 @@ test("renders real Qwen profiles separately from fixture evidence", () => {
   const repeatedUnavailableCatalog = renderToStaticMarkup(
     createElement(QwenPolicyLabCatalog, {
       availability: [
-        "guardian-agent-qwen-lab-email-v1",
-        "guardian-agent-qwen-lab-database-v1",
-        "guardian-agent-qwen-lab-finance-v1",
-      ].map((profileId) => ({
-        profileId,
-        status: "blocked",
-        reasonCode: "assessment_broker_identity_unverified",
-      })),
+        {
+          profileId: "guardian-agent-qwen-lab-email-v1",
+          status: "blocked",
+          reasonCode: "assessment_broker_identity_unverified",
+        },
+        {
+          profileId: "guardian-agent-qwen-lab-database-v1",
+          status: "blocked",
+          reasonCode: "assessment_broker_identity_unverified",
+        },
+        {
+          profileId: "guardian-agent-qwen-lab-finance-v1",
+          status: "blocked",
+          reasonCode: "private_internal_preflight_reason",
+        },
+        {
+          profileId: "guardian-agent-qwen-lab-customer-service-v1",
+          status: "blocked",
+          reasonCode: "another_private_preflight_reason",
+        },
+      ],
       canRun: true,
       pending: false,
       onRequest: () => undefined,
     }),
   );
   assert.equal(
-    (repeatedUnavailableCatalog.match(/assessment_broker_identity_unverified/g) ?? []).length,
+    (
+      repeatedUnavailableCatalog.match(
+        /la identidad aislada del broker no está verificada/g,
+      ) ?? []
+    ).length,
     1,
     "the same worker preflight reason should be shown once, not repeated on every profile",
+  );
+  assert.match(
+    repeatedUnavailableCatalog,
+    /las comprobaciones de aislamiento siguen pendientes/,
+  );
+  assert.equal(
+    (
+      repeatedUnavailableCatalog.match(
+        /las comprobaciones de aislamiento siguen pendientes/g,
+      ) ?? []
+    ).length,
+    1,
+  );
+  assert.doesNotMatch(
+    repeatedUnavailableCatalog,
+    /assessment_broker_identity_unverified|private_internal_preflight_reason|another_private_preflight_reason/,
   );
   assert.doesNotMatch(repeatedUnavailableCatalog, /Motivo:/);
 });

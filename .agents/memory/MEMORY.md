@@ -1,4 +1,4 @@
-- [Guardian Nexus safety](guardian-nexus-safety.md) — Separate execution from propagation; distinguish unavailable egress checks from proven blocks.
+- [Guardian Nexus safety](guardian-nexus-safety.md) — Keep execution, provenance, and availability distinct; localize preflight messages without exposing internal reason codes.
 - [PostgreSQL RLS workflow](postgres-rls-workflow.md) — Verify live predicates and ensure queue SELECT policies expose permitted terminal transitions without exposing results.
 - [Native worker runtime isolation](native-worker-runtime-isolation.md) — Keep `/tmp` noexec; mount a narrow ephemeral exec tmpfs for verified native shared libraries.
 - [Qwen native tool calls](qwen-native-tool-calling.md) — llama-cpp-python 0.3.36 returns Qwen auto `<tool_call>` markup as content; normalize only complete tagged JSON, never free JSON.

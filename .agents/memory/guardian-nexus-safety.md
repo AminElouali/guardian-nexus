@@ -122,3 +122,9 @@ description: Product boundaries for security integrations, claims, and productio
 **Why:** The Risk Intelligence catalog includes synthetic and partially unverified hazards; converting a risk score or model-derived recommendation into permission would create an untested authorization path.
 
 **How to apply:** Keep recommendations and control-evidence status separate from allow/deny/approval and dispatch. Show each profile's evidence state and provenance, and never let the discovery analyzer mutate policy or execute tools.
+
+**Rule:** User-facing availability messages must translate known preflight reason codes to concise localized explanations and use a generic fallback for unknown codes; do not expose internal reason strings directly.
+
+**Why:** Raw preflight identifiers are operational details, can confuse users, and can expose internal checks without improving their understanding of whether an evaluation can run.
+
+**How to apply:** Keep machine-readable codes in API/audit evidence. In UI, map known codes to verified explanations, collapse duplicates, and ensure unknown values are never echoed.
