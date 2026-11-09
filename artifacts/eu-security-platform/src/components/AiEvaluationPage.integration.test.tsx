@@ -428,6 +428,48 @@ test("Qwen provenance summary keeps parser rejection separate from no proposal",
   assert.match(markup, /Policy OFF permanece como contrafactual/);
 });
 
+test("historical infrastructure NO_PROPOSAL stays separate from DENY and fixtures in the UI", () => {
+  const artifactPath = new URL(
+    "../../../../generated-artifacts/guardian-qwen-offline/qwen-policy-lab-eight-profiles.json",
+    import.meta.url,
+  );
+  const artifact = JSON.parse(readFileSync(artifactPath, "utf8")) as {
+    profiles: Array<Record<string, unknown>>;
+  };
+  const profile = artifact.profiles.find(
+    (candidate) => candidate.verticalId === "infrastructure",
+  );
+  assert.ok(profile);
+  const cases = profile.cases as Array<Record<string, unknown>>;
+  const caseEvidence = cases[0];
+  assert.ok(caseEvidence);
+  assert.equal(caseEvidence.toolCallOrigin, "no_tool_call");
+  assert.equal(caseEvidence.decision, "no_proposal");
+  assert.equal(caseEvidence.dispatchStatus, "not_invoked");
+  assert.equal(caseEvidence.proposedTool, null);
+  assert.equal(caseEvidence.proposalSha256, null);
+  assert.equal(caseEvidence.actionSha256, null);
+
+  const markup = renderToStaticMarkup(
+    createElement(QwenPolicyLabResult, {
+      evidence: profile as unknown as Parameters<
+        typeof QwenPolicyLabResult
+      >[0]["evidence"],
+    }),
+  );
+  assert.match(markup, /Infraestructura · inferencia local real de Qwen/);
+  assert.match(
+    markup,
+    /0 marcadores Qwen adaptados · 0 llamadas nativas message\.tool_calls · 1 salida sin tool call \(NO_PROPOSAL\)/,
+  );
+  assert.match(markup, /Sin propuesta aceptada/);
+  assert.match(markup, /Ninguna · 0 llamada\(s\) reportada\(s\)/);
+  assert.match(markup, /Hash de propuesta<\/dt><dd><code>sin propuesta<\/code><\/dd>/);
+  assert.match(markup, /fixtures deterministas no se incluyen en estos conteos/i);
+  assert.match(markup, /<summary>Caso adversarial · ES · Sin propuesta aceptada<\/summary>/);
+  assert.doesNotMatch(markup, /<summary>[^<]*(?:DENY|Denegada)/);
+});
+
 test("renders all eight synthetic agent verticals and an API-persisted policy lab report", () => {
   const artifactPath = new URL(
     "../../../../generated-artifacts/guardian-agent-policy-labs-e2e.json",

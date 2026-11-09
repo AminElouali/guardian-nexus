@@ -3348,3 +3348,46 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   socket exclusivo del broker y roles/sesiones DB independientes en un host
   autorizado; después repetir inferencias Qwen por perfil y aprobación persistente
   PostgreSQL derivada de una propuesta Qwen real.
+
+## Contratos offline de procedencia y aprobación — 2026-11-09
+
+- Base: HEAD `a0833c362eeb6f07c93703782196b2ef6a390d22`, árbol limpio y sin
+  procesos de pruebas/inferencia visibles al iniciar este incremento.
+- Se añadieron pruebas que fijan por SHA-256 el artefacto histórico de ocho
+  inferencias y comprueban por perfil origen, hash del caso, `tool_choice=auto`,
+  Policy ON antes de simulación y no despacho para DENY/REQUIRE_APPROVAL/
+  NO_PROPOSAL. Infraestructura sigue sin herramienta ni proposal/action hash.
+- La suite de corpus confirma casos benignos y adversarios sintéticos para los
+  ocho perfiles. API valida la igualdad de hashes entre las propuestas
+  adaptadas históricas de finanzas/soporte y la allowlist sintética, y que el
+  binding v3 cambia con tenant o propuesta. Esto es contrato offline, no una
+  aprobación persistida ni una inferencia nueva.
+- UI verifica que la evidencia histórica de infraestructura muestra
+  NO_PROPOSAL, cero adaptadas/nativas y no lo presenta como DENY ni como fixture.
+- Pruebas seriales: worker reconciliación **6/6**, corpus/policy lab **36/36**,
+  parser **11/11**, preflight con mocks **15/15**; API Qwen+policy preview
+  **14/14**; UI integration **15/15**. Typecheck API y UI correctos.
+- No se ejecutaron Qwen, Docker, worker real, preflight vivo, E2E PostgreSQL,
+  conectores o servicios externos. La persistencia de aprobaciones vinculadas
+  a propuestas Qwen continúa pendiente; el E2E fixture anterior no la demuestra.
+- Evidencia histórica 8 perfiles: 7 propuestas adaptadas, 0 tool_calls nativas,
+  1 NO_PROPOSAL (infraestructura); 2 simulaciones ficticias. Artifact SHA-256
+  `6a1e54658f745074a7a5a937204181c219ec28d184a866845dd09513497ee1d9`.
+- Último preflight guardado sigue `hostBoundaryReady=false`, con socket Docker
+  accesible y separación de identidades/DB sin verificar; no se leyó ningún
+  valor de secreto ni se repitió la comprobación viva.
+- Informe: `reports/offline-qwen-provenance-approval-contracts-2026-11-09.md`,
+  SHA-256 `dc4772f05c431c8f7dcd53431fead533509a5b5509e4ed5129a9fd837a29d3a4`.
+- Hashes de tests:
+  - `tests/test_qwen_evidence_reconciliation.py`:
+    `308e83a3c6abc69634ff2e1e962ecefe01a35fb78ef7c8c14f5f91625367ae8c`.
+  - `tests/test_policy_lab.py`:
+    `9a7db5aaaaffcff33b3ad1724925e156024325d9661ea02471fe1479d6e0d7c6`.
+  - `artifacts/api-server/src/lib/ai-assessment-qwen-evidence.test.ts`:
+    `00e3b861c911dc5729f5d6b53f72e74593af67d2820782f1f5196a7ef07508c7`.
+  - `artifacts/eu-security-platform/src/components/AiEvaluationPage.integration.test.tsx`:
+    `d3bc277a8d0d98fb04ce6361f3c88fcb9b3b1db410fe6a1f565b4a4fa30b925f`.
+- Próximo bloqueo: un host Ubuntu autorizado debe demostrar UID/GID separados,
+  socket Docker inaccesible para API/Qwen y exclusivo del broker, y roles/sesiones
+  PostgreSQL independientes. Solo tras preflight verificable se podrán repetir
+  inferencias y ejecutar E2E persistente con propuesta Qwen real.

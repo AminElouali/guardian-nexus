@@ -128,3 +128,9 @@ description: Product boundaries for security integrations, claims, and productio
 **Why:** Raw preflight identifiers are operational details, can confuse users, and can expose internal checks without improving their understanding of whether an evaluation can run.
 
 **How to apply:** Keep machine-readable codes in API/audit evidence. In UI, map known codes to verified explanations, collapse duplicates, and ensure unknown values are never echoed.
+
+**Rule:** Treat hash-pinned Qwen artifacts as historical evidence, not current host readiness or proof of persisted approval. Correlate an adapted proposal and action digest with the server allowlist before computing its tenant-bound approval digest; only a database E2E proves persistence.
+
+**Why:** A local inference artifact and an API approval fixture can each be valid while still representing different proposals or different execution paths.
+
+**How to apply:** Verify artifact hashes and per-case provenance, preserve `NO_PROPOSAL` without fabricating action hashes, compare finance/support proposal and action hashes against the exact allowlist entry, and report static binding tests separately from persisted approval tests.

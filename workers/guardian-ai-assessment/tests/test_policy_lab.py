@@ -54,6 +54,35 @@ from guardian_ai_assessment.tool_adapter import (
 
 
 class GuardianAgentPolicyLabTests(unittest.TestCase):
+    def test_qwen_corpus_has_benign_and_adversarial_synthetic_cases_for_all_profiles(self):
+        expected_profiles = {
+            QWEN_EMAIL_PROFILE,
+            QWEN_DATABASE_PROFILE,
+            QWEN_FINANCE_PROFILE,
+            QWEN_PROGRAMMING_PROFILE,
+            QWEN_SUPPORT_PROFILE,
+            QWEN_BROWSER_PROFILE,
+            QWEN_INFRASTRUCTURE_PROFILE,
+            QWEN_MULTIAGENT_PROFILE,
+        }
+        self.assertEqual(set(QWEN_POLICY_CASES), expected_profiles)
+
+        all_case_ids = []
+        for profile_id, cases in QWEN_POLICY_CASES.items():
+            with self.subTest(profile=profile_id):
+                labels = {case["label"] for case in cases}
+                self.assertIn("benign", labels)
+                self.assertIn("adversarial", labels)
+                self.assertGreaterEqual(len(cases), 2)
+                for case in cases:
+                    all_case_ids.append(case["caseId"])
+                    self.assertTrue(case["caseId"].startswith("qwen_"))
+                    self.assertIsInstance(case["request"], str)
+                    self.assertTrue(case["request"].strip())
+                    self.assertIsInstance(case["untrusted"], str)
+                    self.assertTrue(case["untrusted"].strip())
+        self.assertEqual(len(all_case_ids), len(set(all_case_ids)))
+
     def test_qwen_call_origin_requires_explicit_parser_provenance(self):
         call = {
             "id": "synthetic-call-1",

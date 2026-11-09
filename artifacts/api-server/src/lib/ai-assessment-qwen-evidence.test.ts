@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { CreateWorkspaceAiAssessmentLabJobResponse } from "@workspace/api-zod";
 import {
@@ -133,6 +134,110 @@ test("approval binding v3 is provenance-bound and rejects unverified origins", (
       }),
       adaptedBinding,
       "tenant, job, proposal, action, requester, role and expiry must be hash-bound",
+    );
+  }
+});
+
+test("historical adapted finance and support proposals correlate to tenant-bound approval digests", () => {
+  const artifactUrl = new URL(
+    "../../../../generated-artifacts/guardian-qwen-offline/qwen-policy-lab-eight-profiles.json",
+    import.meta.url,
+  );
+  const artifactBytes = readFileSync(artifactUrl);
+  assert.equal(
+    createHash("sha256").update(artifactBytes).digest("hex"),
+    "6a1e54658f745074a7a5a937204181c219ec28d184a866845dd09513497ee1d9",
+    "this contract test must remain pinned to historical evidence",
+  );
+  const artifact = JSON.parse(artifactBytes.toString("utf8")) as {
+    profiles: Array<{
+      profileId: string;
+      verticalId: string;
+      cases: Array<Record<string, unknown>>;
+    }>;
+  };
+
+  const expectedApprovals = [
+    {
+      verticalId: "finance",
+      profileId: "guardian-agent-qwen-lab-finance-v1",
+      actionRef: "guardian.synthetic.finance.bank-change.v1" as const,
+      role: "finance_reviewer",
+    },
+    {
+      verticalId: "customer_service",
+      profileId: "guardian-agent-qwen-lab-customer-service-v1",
+      actionRef: "guardian.synthetic.support.refund.v1" as const,
+      role: "support_reviewer",
+    },
+  ];
+
+  for (const expected of expectedApprovals) {
+    const profile = artifact.profiles.find(
+      (candidate) => candidate.verticalId === expected.verticalId,
+    );
+    assert.ok(profile);
+    assert.equal(profile.profileId, expected.profileId);
+    const proposal = profile.cases[0];
+    assert.ok(proposal);
+    assert.equal(proposal.toolCallOrigin, "guardian_qwen_native_markup_adapter");
+    assert.equal(proposal.decision, "require_approval");
+    assert.equal(proposal.dispatchStatus, "approval_required_before_dispatch");
+    assert.equal(proposal.syntheticActionRef, expected.actionRef);
+    assert.match(String(proposal.proposalSha256), /^[a-f0-9]{64}$/);
+    assert.match(String(proposal.actionSha256), /^[a-f0-9]{64}$/);
+
+    const evidenceProvenance = resolveApprovalEvidenceProvenance({
+      engine: "guardian_qwen_policy_lab",
+      executionMode: "real_local_qwen_inference",
+      modelInference: true,
+      toolCallOrigin: proposal.toolCallOrigin,
+    });
+    assert.ok(evidenceProvenance);
+
+    const allowlistedAction = getAllowlistedSyntheticApprovalAction(
+      expected.actionRef,
+      profile.profileId,
+      String(proposal.caseId),
+      String(proposal.proposedTool),
+    );
+    assert.ok(allowlistedAction);
+    assert.equal(
+      allowlistedAction.proposalSha256,
+      proposal.proposalSha256,
+      "approval allowlist must bind the exact adapted proposal digest",
+    );
+    assert.equal(allowlistedAction.actionSha256, proposal.actionSha256);
+
+    const bindingInput = {
+      workspaceId: `synthetic-${expected.verticalId}-tenant`,
+      jobId: "historical-qwen-evidence-only",
+      caseId: String(proposal.caseId),
+      proposalSha256: allowlistedAction.proposalSha256,
+      actionSha256: allowlistedAction.actionSha256,
+      syntheticActionRef: expected.actionRef,
+      requestedByUserId: "synthetic-requester",
+      requestedByRole: "member",
+      expiresAt: new Date("2026-11-10T12:00:00.000Z"),
+      ...evidenceProvenance,
+    };
+    const binding = computeApprovalProposalBindingV3(bindingInput);
+    assert.match(binding, /^[a-f0-9]{64}$/);
+    assert.notEqual(
+      binding,
+      computeApprovalProposalBindingV3({
+        ...bindingInput,
+        workspaceId: "synthetic-other-tenant",
+      }),
+      "the approval digest must remain tenant-bound",
+    );
+    assert.notEqual(
+      binding,
+      computeApprovalProposalBindingV3({
+        ...bindingInput,
+        proposalSha256: "0".repeat(64),
+      }),
+      "the approval digest must remain proposal-bound",
     );
   }
 });
