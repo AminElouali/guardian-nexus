@@ -1,4 +1,5 @@
 import hashlib
+import json
 import unittest
 from datetime import datetime, timezone
 from unittest.mock import patch
@@ -287,13 +288,43 @@ class GuardianAgentPolicyLabTests(unittest.TestCase):
         self.assertEqual(multi_evidence["toolEvents"], [])
         dispatch.assert_not_called()
 
-    def test_malformed_infrastructure_markup_is_rejected_before_policy_or_dispatch(self):
+    def test_malformed_email_database_and_infrastructure_markup_is_rejected_before_policy_or_dispatch(self):
+        cases = (
+            (
+                "email",
+                QWEN_EMAIL_PROFILE,
+                "qwen_email_indirect_injection_en",
+                "read_synthetic_email",
+                {"email_id": QWEN_SYNTHETIC_EMAIL_ID},
+            ),
+            (
+                "database",
+                QWEN_DATABASE_PROFILE,
+                "qwen_database_cross_tenant_delete_es",
+                "query_synthetic_database",
+                {"row_id": QWEN_SYNTHETIC_DB_ROW_ID},
+            ),
+            (
+                "infrastructure",
+                QWEN_INFRASTRUCTURE_PROFILE,
+                "qwen_infra_privilege_injection_es",
+                "read_synthetic_infrastructure_config",
+                {"config_id": "INFRA-SYNTH-001"},
+            ),
+        )
+
         class MalformedMarkupClient:
-            def __init__(self):
+            def __init__(self, tool_name, arguments):
                 self.tool_choice = None
+                self.tool_name = tool_name
+                self.arguments = arguments
 
             def complete_native(self, **kwargs):
                 self.tool_choice = kwargs.get("tool_choice")
+                payload = json.dumps(
+                    {"name": self.tool_name, "arguments": self.arguments},
+                    separators=(",", ":"),
+                )
                 return llm_lab.adapt_qwen_native_tool_markup(
                     {
                         "choices": [
@@ -301,9 +332,8 @@ class GuardianAgentPolicyLabTests(unittest.TestCase):
                                 "message": {
                                     "role": "assistant",
                                     "content": (
-                                        '<tool_call>{"name":"read_synthetic_infrastructure_config",'
-                                        '"arguments":{"config_id":"INFRA-SYNTH-001"}}'
-                                        "</tool_call> trailing injected text"
+                                        f"<tool_call>{payload}</tool_call>"
+                                        " trailing injected text"
                                     ),
                                 },
                                 "finish_reason": "stop",
@@ -313,33 +343,43 @@ class GuardianAgentPolicyLabTests(unittest.TestCase):
                     }
                 )
 
-        client = MalformedMarkupClient()
-        case = next(
-            item
-            for item in QWEN_POLICY_CASES[QWEN_INFRASTRUCTURE_PROFILE]
-            if item["caseId"] == "qwen_infra_privilege_injection_es"
-        )
-        with patch(
-            "guardian_ai_assessment.qwen_policy_lab.call_synthetic_tool"
-        ) as dispatch:
-            evidence, _usage = _one_case(
-                client=client,
-                vertical="infrastructure",
-                case=case,
-                tools=[],
-            )
+        for vertical, profile, case_id, tool_name, arguments in cases:
+            with self.subTest(vertical=vertical):
+                client = MalformedMarkupClient(tool_name, arguments)
+                case = next(
+                    item
+                    for item in QWEN_POLICY_CASES[profile]
+                    if item["caseId"] == case_id
+                )
+                self.assertEqual(case["label"], "adversarial")
+                with patch(
+                    "guardian_ai_assessment.qwen_policy_lab.call_synthetic_tool"
+                ) as dispatch, patch(
+                    "guardian_ai_assessment.qwen_policy_lab.evaluate_synthetic_action_policy"
+                ) as policy:
+                    evidence, _usage = _one_case(
+                        client=client,
+                        vertical=vertical,
+                        case=case,
+                        tools=[],
+                    )
 
-        self.assertEqual(client.tool_choice, "auto")
-        self.assertEqual(
-            evidence["toolCallOrigin"],
-            "unparsed_qwen_native_markup",
-        )
-        self.assertEqual(evidence["decision"], "deny")
-        self.assertEqual(evidence["reasonCode"], "malformed_tool_proposal")
-        self.assertEqual(evidence["dispatchStatus"], "blocked_by_parser")
-        self.assertEqual(evidence["toolEvents"], [])
-        self.assertFalse(evidence["unauthorizedActionExecuted"])
-        dispatch.assert_not_called()
+                self.assertEqual(client.tool_choice, "auto")
+                self.assertEqual(
+                    evidence["toolCallOrigin"],
+                    "unparsed_qwen_native_markup",
+                )
+                self.assertEqual(evidence["decision"], "deny")
+                self.assertEqual(
+                    evidence["reasonCode"], "malformed_tool_proposal"
+                )
+                self.assertEqual(
+                    evidence["dispatchStatus"], "blocked_by_parser"
+                )
+                self.assertEqual(evidence["toolEvents"], [])
+                self.assertFalse(evidence["unauthorizedActionExecuted"])
+                policy.assert_not_called()
+                dispatch.assert_not_called()
 
     def test_only_explicit_no_marker_is_reported_as_no_proposal_not_deny(self):
         class FixedResponseClient:

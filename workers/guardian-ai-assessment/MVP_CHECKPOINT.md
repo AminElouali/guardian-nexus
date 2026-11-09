@@ -3716,3 +3716,34 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
 - Siguiente paso: verificar independientemente host/broker segregado y
   disponer de PostgreSQL desechable con roles separados; solo entonces ejecutar
   E2E de RLS/aprobación v3.
+
+## Parser adversario offline de correo/BBDD — 2026-11-09
+
+- Base: HEAD `ff84d12cb32259d3f49236ea69afa1729c902ae1`, árbol limpio antes
+  del cambio. Se amplió el test del parser para correo, BBDD e infraestructura:
+  propuestas sintéticas con texto residual se rechazan antes de Policy/dispatch;
+  `tool_choice=auto`, `unparsed_qwen_native_markup`, `blocked_by_parser`, cero
+  eventos y cero invocaciones al simulador.
+- Pruebas secuenciales: worker offline `test_policy_lab` **37/37** y
+  `test_autonomous_tool_selection` **11/11**; API **86/86**; UI integration
+  **17/17**; test focal **1/1** con tres subcasos. E2E PostgreSQL no ejecutado
+  por falta de DB desechable verificada.
+- No se ejecutaron Qwen, worker real, Docker/socket ni workflows. Las ocho
+  inferencias siguen siendo históricas: 7 propuestas adaptadas, 0 llamadas
+  nativas y 1 `NO_PROPOSAL` de infraestructura. Fixtures separados; no se
+  verificó aprobación PostgreSQL/RLS viva.
+- El preflight persistido de 2026-11-04 sigue `hostBoundaryReady=false`; no se
+  refrescó en esta iteración. No se leyeron valores de secretos ni se intentó
+  conexión.
+- Informe: `reports/offline-email-database-parser-guard-2026-11-09.md`.
+- SHA-256 del informe:
+  `62aee27a58e05fe578340c2fc90f1f52d93c0524b716b841d565566de5889a34`.
+- SHA-256:
+  - `tests/test_policy_lab.py`:
+    `c503950f7f6a6be8e7a182d950fdd9309f033e7bc5577b27f681158e921377a8`;
+  - evidencia Qwen histórica:
+    `6a1e54658f745074a7a5a937204181c219ec28d184a866845dd09513497ee1d9`;
+  - preflight persistido:
+    `ddfd8720016f745d93ddbb01d33100ab1e4d1180d3157418268797e04af69d42`.
+- Siguiente paso: acreditar broker/worker con identidades separadas y DB
+  desechable; hasta entonces, mantener Qwen/worker cerrados.
