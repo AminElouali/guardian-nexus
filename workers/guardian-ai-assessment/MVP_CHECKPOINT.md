@@ -3818,3 +3818,52 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
 - Siguiente gate: acreditar de forma independiente host/broker/worker aislados
   y contar con PostgreSQL desechable con roles segregados. Hasta entonces,
   mantener inferencia/worker privilegiado bloqueados y avanzar solo offline.
+
+## Procedencia uniforme y UX de API no disponible — 2026-11-09
+
+- Base: HEAD `c92d42aeeb46748a9f6327aecb99d3ce1b3b05e1`, árbol limpio; no había
+  procesos relevantes activos.
+- Se añadió una regresión offline con respuestas de prueba para los ocho
+  perfiles. Distingue `runtime_message_tool_calls`, `guardian_qwen_native_markup_adapter`
+  y `no_tool_call`; verifica que ambos orígenes con propuesta requieren Policy
+  ON antes del simulador y que `NO_PROPOSAL` no invoca Policy ni despacho. No es
+  inferencia Qwen ni modifica fixtures.
+- La UX para HTTP 502/503/504 nombra explícitamente la API no disponible. La
+  prueba UI verifica reintento, ausencia de detalle interno y ausencia de
+  mensaje de éxito ficticio.
+- Pruebas secuenciales: worker `test_policy_lab` **38/38**,
+  `test_autonomous_tool_selection` **11/11**,
+  `test_qwen_evidence_reconciliation` **6/6**; API dirigida **17/17**; UI
+  integration **17/17** y error-copy **4/4**; typechecks API/web y builds
+  API/web aprobados; `git diff --check` aprobado. El primer build web sin
+  `PORT` falló al cargar Vite; se repitió correctamente con
+  `PORT=5173 BASE_PATH=/eu-security-platform`.
+- No se iniciaron workflows, Qwen, worker real, PostgreSQL, Docker/socket,
+  servicios externos ni despliegue. La preflight guardada del 2026-11-04 sigue
+  `hostBoundaryReady=false`; no se refrescó. No hay evidencia de persistencia
+  PostgreSQL/RLS viva ni aprobación durable.
+- Evidencia del modelo continúa histórica: 8 inferencias locales (1 por perfil),
+  7 propuestas adaptadas, 0 `message.tool_calls` nativas y una
+  infraestructura `NO_PROPOSAL`; ocho fixtures aparte. No hubo inferencia
+  nueva. La vista `/ai-evaluations` no se verificó en preview en este ciclo
+  porque sus workflows están parados; el código comunica API no disponible,
+  pero la disponibilidad actual queda sin confirmar.
+- Informe:
+  `reports/offline-origin-policy-api-outage-2026-11-09.md`.
+- SHA-256:
+  - `tests/test_policy_lab.py`:
+    `b258e6885a4557a746f727a8bead3fa024465cdc5c8bf54515651c67b7640b66`;
+  - `artifacts/eu-security-platform/src/lib/workspace-load-errors.ts`:
+    `46730a997832a6c4a8c87caed4ce0a737a58b522e58adb0a0678620815e45652`;
+  - `artifacts/eu-security-platform/src/components/AiEvaluationPage.integration.test.tsx`:
+    `23b4fce10f3fbc17e828692f8db12a3548b570c953c07cafab96aaa284fc460a`;
+  - informe:
+    `6996c01b61e3d2e96560a31e3d85f3b1f0a7d5ce13ccd9b1c317ef230a0fe016`;
+  - artefacto Qwen histórico:
+    `6a1e54658f745074a7a5a937204181c219ec28d184a866845dd09513497ee1d9`;
+  - preflight histórico:
+    `3b85f5c1aab30012d27df96eec5aabeff7ac932198d45f1dd5536d55903d8445`.
+- Próximo paso seguro: restaurar los workflows configurados y validar la vista
+  autenticada con un espacio sintético. No habilitar Qwen/worker hasta verificar
+  separadamente el aislamiento del host/broker; usar PostgreSQL desechable
+  separado antes de reclamar aprobación persistente o RLS E2E.

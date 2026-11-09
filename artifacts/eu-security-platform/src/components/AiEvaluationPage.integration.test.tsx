@@ -61,10 +61,15 @@ test("workspace fallback labels API unavailability and keeps a retry action", ()
     }),
   );
 
-  assert.match(markup, /El servicio del espacio no está disponible/);
+  assert.match(markup, /La API del espacio no está disponible/);
   assert.match(markup, /data-error-kind="unavailable"/);
   assert.match(markup, /data-testid="workspace-api-retry"/);
   assert.doesNotMatch(markup, /private upstream detail/);
+  assert.doesNotMatch(
+    markup,
+    /Solicitud registrada|Simulación registrada|operación completada/i,
+    "an API outage must remain an error, never a fabricated success state",
+  );
 });
 
 test("approval inbox shows tenant-safe decisions without claiming tool execution", () => {

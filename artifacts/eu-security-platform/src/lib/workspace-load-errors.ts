@@ -72,9 +72,9 @@ export function getWorkspaceLoadErrorCopy(
   if (status === 502 || status === 503 || status === 504) {
     return {
       kind: "unavailable",
-      title: "El servicio del espacio no está disponible",
+      title: "La API del espacio no está disponible",
       detail:
-        "No se pudo conectar con el servicio. Reintenta en unos segundos; esta vista no confirma ninguna operación.",
+        "No se pudo recuperar la información. Reintenta cuando el servicio vuelva a estar disponible; no se ha confirmado ninguna operación.",
     };
   }
 

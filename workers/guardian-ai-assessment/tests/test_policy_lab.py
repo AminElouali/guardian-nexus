@@ -201,6 +201,183 @@ class GuardianAgentPolicyLabTests(unittest.TestCase):
             ("unparsed_qwen_native_markup", []),
         )
 
+    def test_native_adapted_and_absent_origins_stay_distinct_for_all_profiles(self):
+        profile_inputs = {
+            QWEN_EMAIL_PROFILE: (
+                "email",
+                "read_synthetic_email",
+                {"email_id": QWEN_SYNTHETIC_EMAIL_ID},
+            ),
+            QWEN_DATABASE_PROFILE: (
+                "database",
+                "query_synthetic_database",
+                {"row_id": QWEN_SYNTHETIC_DB_ROW_ID},
+            ),
+            QWEN_FINANCE_PROFILE: (
+                "finance",
+                "consult_synthetic_invoice",
+                {"invoice_id": INVOICE_ID},
+            ),
+            QWEN_PROGRAMMING_PROFILE: (
+                "programming",
+                "propose_synthetic_code_diff",
+                {"change_id": QWEN_SYNTHETIC_CODE_DIFF_ID},
+            ),
+            QWEN_SUPPORT_PROFILE: (
+                "customer_service",
+                "propose_synthetic_refund",
+                {
+                    "ticket_id": SYNTHETIC_SUPPORT_TICKET_ID,
+                    "amount_cents": SYNTHETIC_REFUND_AMOUNT_CENTS,
+                },
+            ),
+            QWEN_BROWSER_PROFILE: (
+                "browser",
+                "read_local_synthetic_page",
+                {"page_id": QWEN_SYNTHETIC_LOCAL_PAGE_ID},
+            ),
+            QWEN_INFRASTRUCTURE_PROFILE: (
+                "infrastructure",
+                "read_synthetic_infrastructure_config",
+                {"config_id": QWEN_SYNTHETIC_INFRA_CONFIG_ID},
+            ),
+            QWEN_MULTIAGENT_PROFILE: (
+                "multiagent",
+                "delegate_synthetic_read_only_task",
+                {
+                    "task_id": QWEN_SYNTHETIC_DELEGATION_TASK_ID,
+                    "child_agent_id": "guardian-multiagent-specialist-v1",
+                    "permissions": ["database.read.scoped"],
+                },
+            ),
+        }
+
+        class FixedResponseClient:
+            def __init__(self, response):
+                self.response = response
+                self.tool_choice = None
+
+            def complete_native(self, **kwargs):
+                self.tool_choice = kwargs.get("tool_choice")
+                return self.response
+
+        self.assertEqual(set(profile_inputs), set(QWEN_POLICY_CASES))
+        for profile_id, (vertical, tool_name, arguments) in profile_inputs.items():
+            for origin in (
+                "runtime_message_tool_calls",
+                "guardian_qwen_native_markup_adapter",
+                "no_tool_call",
+            ):
+                with self.subTest(vertical=vertical, origin=origin):
+                    call = {
+                        "id": f"synthetic-{vertical}",
+                        "type": "function",
+                        "function": {
+                            "name": tool_name,
+                            "arguments": json.dumps(arguments, separators=(",", ":")),
+                        },
+                    }
+                    if origin == "runtime_message_tool_calls":
+                        response = {
+                            "choices": [
+                                {
+                                    "message": {
+                                        "role": "assistant",
+                                        "tool_calls": [call],
+                                    },
+                                    "finish_reason": "tool_calls",
+                                }
+                            ],
+                            "usage": {},
+                            "_guardianToolMarkupParse": {
+                                "status": "runtime_message_tool_calls"
+                            },
+                        }
+                    elif origin == "guardian_qwen_native_markup_adapter":
+                        marker = json.dumps(
+                            {"name": tool_name, "arguments": arguments},
+                            separators=(",", ":"),
+                        )
+                        response = llm_lab.adapt_qwen_native_tool_markup(
+                            {
+                                "choices": [
+                                    {
+                                        "message": {
+                                            "role": "assistant",
+                                            "content": f"<tool_call>{marker}</tool_call>",
+                                        },
+                                        "finish_reason": "stop",
+                                    }
+                                ],
+                                "usage": {},
+                            }
+                        )
+                    else:
+                        response = {
+                            "choices": [
+                                {
+                                    "message": {
+                                        "role": "assistant",
+                                        "content": "No proposal.",
+                                    },
+                                    "finish_reason": "stop",
+                                }
+                            ],
+                            "usage": {},
+                            "_guardianToolMarkupParse": {"status": "no_marker"},
+                        }
+
+                    client = FixedResponseClient(response)
+                    events = []
+
+                    def policy_allow(*_args):
+                        events.append("policy_on")
+                        return "allow", "offline_test_allow"
+
+                    def synthetic_dispatch(**_kwargs):
+                        self.assertEqual(
+                            events,
+                            ["policy_on"],
+                            "the independent Policy ON check must precede simulation",
+                        )
+                        events.append("simulator")
+                        return [], {"synthetic": True}
+
+                    with patch(
+                        "guardian_ai_assessment.qwen_policy_lab.evaluate_synthetic_action_policy",
+                        side_effect=policy_allow,
+                    ) as policy, patch(
+                        "guardian_ai_assessment.qwen_policy_lab.call_synthetic_tool",
+                        side_effect=synthetic_dispatch,
+                    ) as dispatch:
+                        evidence, _usage = _one_case(
+                            client=client,
+                            vertical=vertical,
+                            case=QWEN_POLICY_CASES[profile_id][0],
+                            tools=[],
+                        )
+
+                    self.assertEqual(client.tool_choice, "auto")
+                    self.assertEqual(evidence["toolCallOrigin"], origin)
+                    if origin == "no_tool_call":
+                        self.assertEqual(evidence["decision"], "no_proposal")
+                        self.assertEqual(evidence["dispatchStatus"], "not_invoked")
+                        self.assertEqual(evidence["toolCallCount"], 0)
+                        self.assertIsNone(evidence["proposalSha256"])
+                        self.assertEqual(events, [])
+                        policy.assert_not_called()
+                        dispatch.assert_not_called()
+                    else:
+                        self.assertEqual(evidence["decision"], "allow")
+                        self.assertEqual(
+                            evidence["dispatchStatus"], "simulated_execution"
+                        )
+                        self.assertEqual(evidence["toolCallCount"], 1)
+                        self.assertIsNotNone(evidence["proposalSha256"])
+                        self.assertEqual(events, ["policy_on", "simulator"])
+                        policy.assert_called_once()
+                        dispatch.assert_called_once()
+
     def test_malformed_qwen_tool_shape_is_denied_before_simulator_not_no_proposal(self):
         class FixedResponseClient:
             def __init__(self, response):
