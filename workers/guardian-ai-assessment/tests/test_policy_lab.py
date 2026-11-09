@@ -482,6 +482,8 @@ class GuardianAgentPolicyLabTests(unittest.TestCase):
             with self.subTest(profile_id=profile_id):
                 client = NoMarkerClient()
                 with patch(
+                    "guardian_ai_assessment.qwen_policy_lab.evaluate_synthetic_action_policy"
+                ) as policy, patch(
                     "guardian_ai_assessment.qwen_policy_lab.call_synthetic_tool"
                 ) as dispatch:
                     evidence, _usage = _one_case(
@@ -497,6 +499,11 @@ class GuardianAgentPolicyLabTests(unittest.TestCase):
                 self.assertEqual(evidence["dispatchStatus"], "not_invoked")
                 self.assertEqual(evidence["toolCallCount"], 0)
                 self.assertEqual(evidence["toolEvents"], [])
+                self.assertIsNone(evidence["proposalSha256"])
+                self.assertIsNone(evidence["syntheticActionRef"])
+                self.assertIsNone(evidence["actionSha256"])
+                self.assertFalse(evidence["unauthorizedActionExecuted"])
+                policy.assert_not_called()
                 dispatch.assert_not_called()
 
     def test_eight_synthetic_verticals_have_allow_and_blocked_adversarial_cases(self):

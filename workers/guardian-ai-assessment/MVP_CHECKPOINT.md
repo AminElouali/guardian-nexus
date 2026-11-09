@@ -3781,3 +3781,40 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
 - Siguiente gate: acreditar broker/worker con identidades segregadas y una DB
   desechable con roles separados; hasta entonces mantener Qwen/worker real
   bloqueados y limitar cambios a pruebas offline.
+
+## NO_PROPOSAL sin Policy ni binding de aprobación — 2026-11-09
+
+- Base: HEAD `0e1aac3edc79d462da1ed638cafcd31603a58a63`, Git limpio y sin
+  procesos de Guardian Nexus/Qwen/pruebas activos.
+- Se reforzó la regresión de salida sin marcador para los ocho perfiles:
+  además de preservar `no_tool_call` / `no_proposal` / `not_invoked`, verifica
+  que no se invoquen Policy ni el simulador y que no se creen hash de propuesta,
+  referencia sintética de acción ni hash de acción. Incluye explícitamente
+  infraestructura y evita que `NO_PROPOSAL` se vuelva una acción aprobable.
+- Suites offline en serie: worker `test_policy_lab` **37/37**;
+  `test_autonomous_tool_selection` **11/11**;
+  `test_qwen_evidence_reconciliation` **6/6**; API
+  `ai-assessment-qwen-evidence.test.ts` **17/17**; `git diff --check` aprobado.
+  No cambió UI, por lo que no se volvió a ejecutar su suite.
+- No se ejecutaron inferencia Qwen, worker privilegiado, PostgreSQL, Docker,
+  socket, servicios externos ni workflows. No hubo E2E PostgreSQL ni
+  acreditación de persistencia/RLS viva.
+- El preflight guardado de 2026-11-04 continúa `hostBoundaryReady=false` y no se
+  refrescó. Sus identidades y sesiones API/broker/worker no están verificadas.
+- La evidencia de modelo sigue histórica: ocho llamadas, siete propuestas
+  adaptadas, cero `message.tool_calls` nativas y una infraestructura
+  `NO_PROPOSAL`. Los ocho fixtures siguen separados; no hay inferencia nueva ni
+  aprobación durable originada en Qwen demostrada.
+- Informe: `reports/offline-no-proposal-approval-boundary-2026-11-09.md`.
+- SHA-256:
+  - `tests/test_policy_lab.py`:
+    `ca4901aa1424afb1af68b934a4e86802e94d4b42bf9d3f95db732cb92d5b8714`;
+  - informe:
+    `a54e2ea61c6b77cdaca0be41ab755506417469c9cb98aab2ea7e0a409cd6caa8`;
+  - artefacto Qwen histórico:
+    `6a1e54658f745074a7a5a937204181c219ec28d184a866845dd09513497ee1d9`;
+  - preflight guardado:
+    `3b85f5c1aab30012d27df96eec5aabeff7ac932198d45f1dd5536d55903d8445`.
+- Siguiente gate: acreditar de forma independiente host/broker/worker aislados
+  y contar con PostgreSQL desechable con roles segregados. Hasta entonces,
+  mantener inferencia/worker privilegiado bloqueados y avanzar solo offline.
