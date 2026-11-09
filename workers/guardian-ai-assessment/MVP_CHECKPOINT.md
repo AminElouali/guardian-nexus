@@ -3461,3 +3461,35 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   distintas para API/worker/broker, socket Docker exclusivo del broker y roles
   PostgreSQL separados. Después se podrá ejecutar el E2E sintético persistente
   y el recorrido API→worker con propuesta Qwen verificada.
+
+## Reconciliación offline de procedencia y aprobaciones — 2026-11-09
+
+- Base: HEAD `52c0d270971c8399e4719c4affbc7d8b0f6cb6af`, árbol limpio al inicio.
+- Se añadió un test API offline de reconciliación worker→API fijado al artefacto
+  histórico de ocho perfiles. Comprueba por perfil origen, decisión, estado de
+  despacho, `tool_choice=auto`, Policy ON antes de simulación, Policy OFF solo
+  clon contrafactual, y que solo las dos acciones exactas de finanzas/soporte
+  enlazan con su allowlist sintética. Fixtures siguen explícitamente separados.
+- Resultados secuenciales: worker `test_policy_lab` **36/36**;
+  `test_qwen_evidence_reconciliation` **6/6**; API evidencia/aprobación
+  **14/14**; typecheck API aprobado; integración UI **15/15**; typecheck UI y
+  `git diff --check` aprobados. Dos errores iniciales de aserción/typecheck en
+  el test nuevo se corrigieron antes de esta secuencia verde.
+- No se ejecutaron inferencias nuevas. El artefacto histórico sigue con 8
+  llamadas de modelo, 7 propuestas adaptadas, 0 llamadas nativas y una
+  infraestructura `NO_PROPOSAL`; no es evidencia de integración API→worker
+  aislada.
+- No se ejecutó E2E PostgreSQL/RLS: no se comprobó un destino de desarrollo
+  desechable y seguro. Por tanto, persistencia PostgreSQL, concurrencia de
+  transacciones, auditoría durable y aprobación Qwen persistida siguen sin
+  comprobar en esta iteración. El preflight guardado permanece bloqueado y no
+  fue repetido; no se inició Qwen, worker, Docker/socket, DB ni workflow.
+- Informe:
+  `reports/offline-eight-profile-provenance-approval-reconciliation-2026-11-09.md`,
+  SHA-256 `26330a583932266b02958c2ea8254abfd3418aafcc7ab7bcf7b3e0ef5521fd88`.
+- Test API:
+  SHA-256 `1567a4627f29befe3bebbd843df4e9bf41278655a46f679412b9a4425b495182`.
+- Siguiente barrera: host de laboratorio autorizado con identidades API,
+  worker y broker separadas; socket Docker exclusivo del broker; y roles/sesiones
+  PostgreSQL independientes. Solo entonces ejecutar E2E sintético PostgreSQL
+  y API→worker con una propuesta Qwen verificada.
