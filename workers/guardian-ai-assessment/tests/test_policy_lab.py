@@ -66,7 +66,62 @@ class GuardianAgentPolicyLabTests(unittest.TestCase):
             QWEN_INFRASTRUCTURE_PROFILE,
             QWEN_MULTIAGENT_PROFILE,
         }
+        required_adversarial_cases = {
+            QWEN_EMAIL_PROFILE: {
+                "qwen_email_indirect_injection_en",
+                "qwen_email_indirect_injection_es",
+                "qwen_email_attachment_injection_en",
+                "qwen_email_injection_recipient_es",
+            },
+            QWEN_DATABASE_PROFILE: {
+                "qwen_database_indirect_injection_es",
+                "qwen_database_indirect_injection_en",
+                "qwen_database_export_injection_en",
+                "qwen_database_cross_tenant_delete_es",
+            },
+            QWEN_FINANCE_PROFILE: {
+                "qwen_finance_indirect_bank_change_en",
+                "qwen_finance_indirect_payment_es",
+                "qwen_finance_beneficiary_injection_es",
+                "qwen_finance_hidden_beneficiary_es",
+            },
+            QWEN_SUPPORT_PROFILE: {
+                "qwen_support_indirect_injection_en",
+                "qwen_support_ticket_injection_es",
+                "qwen_support_ticket_injection_en",
+                "qwen_support_identity_injection_es",
+                "qwen_support_refund_identity_injection_en",
+            },
+            QWEN_PROGRAMMING_PROFILE: {
+                "qwen_programming_indirect_injection_en",
+                "qwen_programming_indirect_injection_es",
+                "qwen_programming_comment_injection_en",
+                "qwen_programming_secret_command_injection_es",
+            },
+            QWEN_BROWSER_PROFILE: {
+                "qwen_browser_indirect_injection_en",
+                "qwen_browser_indirect_injection_es",
+                "qwen_browser_form_injection_en",
+                "qwen_browser_external_form_injection_es",
+            },
+            QWEN_INFRASTRUCTURE_PROFILE: {
+                "qwen_infra_indirect_injection_en",
+                "qwen_infra_indirect_injection_es",
+                "qwen_infra_deployment_note_injection_en",
+                "qwen_infra_privilege_injection_es",
+            },
+            QWEN_MULTIAGENT_PROFILE: {
+                "qwen_multiagent_indirect_injection_en",
+                "qwen_multiagent_indirect_injection_es",
+                "qwen_multiagent_child_escalation_en",
+                "qwen_multiagent_cross_tenant_escalation_es",
+                "qwen_multiagent_permission_laundering_en",
+                "qwen_multiagent_cycle_injection_es",
+                "qwen_multiagent_expired_revoked_injection_en",
+            },
+        }
         self.assertEqual(set(QWEN_POLICY_CASES), expected_profiles)
+        self.assertEqual(set(required_adversarial_cases), expected_profiles)
 
         all_case_ids = []
         for profile_id, cases in QWEN_POLICY_CASES.items():
@@ -82,6 +137,13 @@ class GuardianAgentPolicyLabTests(unittest.TestCase):
                     self.assertTrue(case["request"].strip())
                     self.assertIsInstance(case["untrusted"], str)
                     self.assertTrue(case["untrusted"].strip())
+            observed_adversarial = {
+                case["caseId"] for case in cases if case["label"] == "adversarial"
+            }
+            self.assertTrue(
+                required_adversarial_cases[profile_id] <= observed_adversarial,
+                f"{profile_id} lost a required synthetic attack scenario",
+            )
         self.assertEqual(len(all_case_ids), len(set(all_case_ids)))
 
     def test_qwen_call_origin_requires_explicit_parser_provenance(self):
@@ -1188,19 +1250,39 @@ class QwenPolicyLabDispatchSelfCheckTests(unittest.TestCase):
             "the v1.8 53-case corpus remains the unchanged baseline",
         )
 
-    def test_adversarial_support_refund_never_receives_approval_binding(self):
-        for case_id in (
-            "qwen_support_ticket_injection_es",
-            "qwen_support_ticket_injection_en",
+    def test_adversarial_and_no_proposal_cases_never_receive_approval_binding(self):
+        finance_cases = [
+            (case["caseId"], "finance", "request_bank_account_change",
+             {"account_id": QWEN_SYNTHETIC_ACCOUNT_ID, "new_iban": QWEN_SYNTHETIC_IBAN})
+            for case in QWEN_POLICY_CASES[QWEN_FINANCE_PROFILE]
+            if case["label"] == "adversarial"
+        ]
+        support_cases = [
+            (case["caseId"], "customer_service", "propose_synthetic_refund",
+             {"ticket_id": SYNTHETIC_SUPPORT_TICKET_ID,
+              "amount_cents": SYNTHETIC_REFUND_AMOUNT_CENTS})
+            for case in QWEN_POLICY_CASES[QWEN_SUPPORT_PROFILE]
+            if case["label"] == "adversarial"
+        ]
+        infrastructure_no_proposal = (
+            next(
+                case["caseId"]
+                for case in QWEN_POLICY_CASES[QWEN_INFRASTRUCTURE_PROFILE]
+                if case["label"] == "adversarial"
+                and "privilege" in case["caseId"]
+            ),
+            "infrastructure",
+            "read_synthetic_infrastructure_config",
+            {"config_id": QWEN_SYNTHETIC_INFRA_CONFIG_ID},
+        )
+        for case_id, vertical, tool, arguments in (
+            finance_cases + support_cases + [infrastructure_no_proposal]
         ):
             action_ref, action_sha256 = _allowlisted_approval_action(
-                vertical="customer_service",
+                vertical=vertical,
                 case_id=case_id,
-                tool="propose_synthetic_refund",
-                arguments={
-                    "ticket_id": SYNTHETIC_SUPPORT_TICKET_ID,
-                    "amount_cents": SYNTHETIC_REFUND_AMOUNT_CENTS,
-                },
+                tool=tool,
+                arguments=arguments,
                 decision="require_approval",
                 dispatch="approval_required_before_dispatch",
                 arguments_sha256="a" * 64,

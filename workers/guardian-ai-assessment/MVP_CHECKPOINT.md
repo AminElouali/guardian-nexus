@@ -3680,3 +3680,39 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
 - Siguiente gate: DB de desarrollo desechable autorizada y roles separados para
   E2E de aprobación v3/RLS; mantener Qwen/worker cerrados hasta acreditar
   host/broker e identidades.
+
+## Matriz adversaria offline y no-vinculación de aprobaciones — 2026-11-09
+
+- Base: HEAD `a26a613fab1a8698f93800c4e5c5b6c32962bc62`, árbol limpio.
+- Se fijó la matriz de escenarios adversarios Qwen para las ocho verticales,
+  conservando fixtures y casos sintéticos. Se amplió la prueba de vinculación
+  para que intentos adversarios de finanzas/soporte y `NO_PROPOSAL` de
+  infraestructura no obtengan referencia/hash de acción aprobable, incluso si
+  presentan una forma de argumentos allowlisted.
+- Cobertura offline existente verificada junto con ello: parser estricto,
+  procedencia nativo/adaptado/fixture/no-proposal, Policy ON antes de despacho,
+  RLS/RBAC por contrato, hash-binding v3, expiración y límites de replay.
+- Tests secuenciales: worker **59/59**; API dirigido **17/17**, suite **86/86**
+  y typecheck aprobado; UI **15/15** y typecheck aprobado; `git diff --check`
+  aprobado.
+- E2E PostgreSQL no ejecutado: no se verificó DB desechable; no hay evidencia
+  de persistencia/RLS viva ni replay concurrente en DB. El preflight guardado
+  sigue `hostBoundaryReady=false`; no se ejecutó Qwen/worker ni Docker/socket.
+- Evidencia de modelo continúa histórica y separada de fixtures: 8 llamadas,
+  7 propuestas adaptadas, 0 `message.tool_calls` nativas y 1 infraestructura
+  `NO_PROPOSAL`. Sin inferencia nueva.
+- Informe:
+  `reports/offline-eight-profile-adversarial-approval-v3-2026-11-09.md`.
+- SHA-256 de la evidencia de este incremento:
+  - pruebas offline de perfiles/aprobación:
+    `tests/test_policy_lab.py` —
+    `132a9af1e0750f2522472eb21706d0d32c638f6e30d5104c2dfa86ce9ca7da4d`;
+  - informe:
+    `03eeff7027d348bb0f3291c991d6b2916805e15aedf71346d73a05dff095a5e4`;
+  - matriz histórica de ocho perfiles:
+    `6a1e54658f745074a7a5a937204181c219ec28d184a866845dd09513497ee1d9`;
+  - preflight guardado:
+    `3b85f5c1aab30012d27df96eec5aabeff7ac932198d45f1dd5536d55903d8445`.
+- Siguiente paso: verificar independientemente host/broker segregado y
+  disponer de PostgreSQL desechable con roles separados; solo entonces ejecutar
+  E2E de RLS/aprobación v3.
