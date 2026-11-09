@@ -20,6 +20,35 @@ type GuardianApprovalInboxProps = {
   ) => void;
 };
 
+function describeAction(approval: AiAssessmentApproval) {
+  if (approval.syntheticActionRef === "guardian.synthetic.finance.bank-change.v1") {
+    return {
+      action: "Revisar un cambio de cuenta bancaria ficticio",
+      scope: "Datos financieros sintéticos; no se modifica ninguna cuenta real.",
+      risk: "Riesgo considerado: cambio de datos de pago sin autorización.",
+    };
+  }
+  if (approval.syntheticActionRef === "guardian.synthetic.support.refund.v1") {
+    return {
+      action: "Revisar una solicitud de reembolso ficticia",
+      scope: "Cuenta y solicitud de soporte sintéticas; no se emite ningún reembolso.",
+      risk: "Riesgo considerado: aprobar un reembolso sin la revisión correspondiente.",
+    };
+  }
+  return {
+    action: "Acción sintética; el detalle no está disponible en este registro.",
+    scope: "El alcance concreto no consta en los datos de la solicitud.",
+    risk: "No hay información suficiente para describir un riesgo específico.",
+  };
+}
+
+export function buildSyntheticApprovalConfirmationMessage(
+  approval: AiAssessmentApproval,
+) {
+  const { action, scope } = describeAction(approval);
+  return `Confirmación de impacto sintético\n\n${action}.\n${scope}\n\nLa aprobación puede registrar una simulación en memoria, pero no ejecuta herramientas ni afecta sistemas externos. ¿Quieres continuar?`;
+}
+
 export function GuardianApprovalInbox({
   approvals,
   canDecide,
@@ -31,37 +60,12 @@ export function GuardianApprovalInbox({
   onRetry,
   onDecision,
 }: GuardianApprovalInboxProps) {
-  function describeAction(approval: AiAssessmentApproval) {
-    if (approval.syntheticActionRef === "guardian.synthetic.finance.bank-change.v1") {
-      return {
-        action: "Revisar un cambio de cuenta bancaria ficticio",
-        scope: "Datos financieros sintéticos; no se modifica ninguna cuenta real.",
-        risk: "Riesgo considerado: cambio de datos de pago sin autorización.",
-      };
-    }
-    if (approval.syntheticActionRef === "guardian.synthetic.support.refund.v1") {
-      return {
-        action: "Revisar una solicitud de reembolso ficticia",
-        scope: "Cuenta y solicitud de soporte sintéticas; no se emite ningún reembolso.",
-        risk: "Riesgo considerado: aprobar un reembolso sin la revisión correspondiente.",
-      };
-    }
-    return {
-      action: "Acción sintética; el detalle no está disponible en este registro.",
-      scope: "El alcance concreto no consta en los datos de la solicitud.",
-      risk: "No hay información suficiente para describir un riesgo específico.",
-    };
-  }
-
   function confirmDecision(
     approval: AiAssessmentApproval,
     decision: ApprovalDecision,
   ) {
     if (decision === "approve") {
-      const { action, scope } = describeAction(approval);
-      const confirmed = window.confirm(
-        `Confirmación de impacto sintético\n\n${action}.\n${scope}\n\nLa aprobación puede registrar una simulación en memoria, pero no ejecuta herramientas ni afecta sistemas externos. ¿Quieres continuar?`,
-      );
+      const confirmed = window.confirm(buildSyntheticApprovalConfirmationMessage(approval));
       if (!confirmed) return;
     }
     onDecision(

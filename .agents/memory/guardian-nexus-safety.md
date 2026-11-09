@@ -129,6 +129,12 @@ description: Product boundaries for security integrations, claims, and productio
 
 **How to apply:** Keep machine-readable codes in API/audit evidence. In UI, map known codes to verified explanations, collapse duplicates, and ensure unknown values are never echoed.
 
+**Rule:** Dashboard summaries must not present static risk profiles as connected agents or aggregated findings as incident records; say explicitly when incident details are unavailable.
+
+**Why:** The user requires customer-facing language to reflect only data-backed capabilities and forbids implying live integrations or verified protection.
+
+**How to apply:** Label catalog totals as reference profiles, use only existing tenant-scoped records for approval counts, and show missing incident feeds as unavailable rather than inventing incidents.
+
 **Rule:** Treat hash-pinned Qwen artifacts as historical evidence, not current host readiness or proof of persisted approval. Correlate an adapted proposal and action digest with the server allowlist before computing its tenant-bound approval digest; only a database E2E proves persistence.
 
 **Why:** A local inference artifact and an API approval fixture can each be valid while still representing different proposals or different execution paths.

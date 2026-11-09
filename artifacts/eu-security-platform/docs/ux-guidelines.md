@@ -49,3 +49,16 @@ Los ocho perfiles son ejemplos de laboratorio con herramientas y datos sintétic
 - El navegador de captura muestra Clerk en la pantalla de inicio de sesión. No se hizo login ni se validó una sesión autenticada en navegador.
 - No se ejecutó Qwen, el worker ni Docker; no hubo conexiones a servicios empresariales y no se publicó ni desplegó.
 - El build pasa con el aviso existente de ubicación de sourcemap en `tooltip.tsx` y el aviso de bundle JavaScript mayor de 500 kB.
+
+## Checkpoint de UX (2026-11-09)
+
+- Base incremental: `3b469de` (`Polish Guardian Nexus operations UX`).
+- La landing usa un CTA principal de creación de espacio, un enlace secundario al enfoque, estados de producto explícitos y menos secciones repetidas. El título y la descripción del artifact ahora identifican Guardian Nexus.
+- El diagrama público se presenta como ejemplo sintético. No afirma una conexión o control activo. GSAP/ScrollTrigger anima entradas breves; el contenido permanece visible y la animación se desactiva con `prefers-reduced-motion`. No se añadió React Three Fiber ni Three.js al código de la página.
+- El centro de operaciones resume los ocho perfiles del catálogo y las aprobaciones consultadas mediante el endpoint existente. No inventa incidentes: indica que no hay una bandeja de detalle integrada y que los perfiles no son agentes conectados.
+- Los resultados sintéticos conservan un resumen ejecutivo; el panel técnico se renderiza solo para roles con capacidad de ejecutar. Los registros Qwen de la lista de trabajos usan una tarjeta de resumen para los demás roles. Las aprobaciones explican el alcance antes de confirmar.
+- No se añadieron rutas ni endpoints, y no se cambiaron Policy Engine, Clerk, RLS, RBAC, cola, persistencia ni gates. El detalle de incidentes reales queda pendiente porque no existe una entidad o API de incidentes en este artifact.
+- Verificación: UI 23/23; prueba API offline de evidencia/aprobaciones 17/17; typecheck web y API correctos; build Vite correcto. La captura visual cubrió landing de escritorio (1440 px, página completa) y móvil (390 × 844 px). La página autenticada no se pudo revisar en navegador sin iniciar sesión.
+- El build conserva avisos de sourcemap en `tooltip.tsx` y un chunk principal de 628 kB sin comprimir (184 kB gzip). La carga diferida separa las páginas de IA, Risk Intelligence e Integraciones; el aviso de tamaño permanece.
+- No se ejecutó Qwen ni worker, no se usó Docker, no se conectaron servicios empresariales y no se publicó ni desplegó. `hostBoundaryReady` y los gates existentes no se alteraron.
+- Límite de privacidad: el cambio controla qué se muestra en la interfaz, no redacta el payload de la API. Si los detalles técnicos deben ser inaccesibles también desde respuestas de red a roles no administradores, se necesita una revisión independiente de autorización/redacción server-side.

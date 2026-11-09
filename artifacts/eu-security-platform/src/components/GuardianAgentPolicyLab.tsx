@@ -334,6 +334,7 @@ export function AgentPolicyLabCatalog({
           <AgentPolicyLabResult
             evidence={selectedFreshPreview.evidence}
             focusedCaseId={selectedCaseId}
+            showTechnicalDetails={canRun}
             onViewApprovals={onViewApprovals}
           />
           <Button
@@ -406,6 +407,7 @@ export function AgentPolicyLabCatalog({
                 focusedCaseId={selectedCaseId}
                 recordedSnapshot
                 recordedArtifactSha256={recordedArtifactSha256}
+                showTechnicalDetails={canRun}
                 onViewApprovals={onViewApprovals}
               />
             </div>
@@ -421,12 +423,14 @@ export function AgentPolicyLabResult({
   focusedCaseId,
   recordedSnapshot = false,
   recordedArtifactSha256,
+  showTechnicalDetails = false,
   onViewApprovals,
 }: {
   evidence: PolicyLabEvidence;
   focusedCaseId?: string;
   recordedSnapshot?: boolean;
   recordedArtifactSha256?: string;
+  showTechnicalDetails?: boolean;
   onViewApprovals?: () => void;
 }) {
   const focusedCase = evidence.cases.find((item) => item.caseId === focusedCaseId);
@@ -516,7 +520,7 @@ export function AgentPolicyLabResult({
           Evidencia histórica de solo lectura. Abrir esta vista no realizó ninguna operación.
         </div>
       )}
-      <details className="agent-policy-result-details">
+      {showTechnicalDetails && <details className="agent-policy-result-details">
         <summary>Ver detalles de la prueba</summary>
         <p>
           La información técnica de la evaluación se conserva en los registros del espacio. Esta vista
@@ -593,7 +597,7 @@ export function AgentPolicyLabResult({
           </dl>
           <small>Los resultados corresponden a los escenarios incluidos; no son una medición de eficacia general.</small>
         </details>
-      </details>
+      </details>}
     </section>
   );
 }

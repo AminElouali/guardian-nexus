@@ -735,6 +735,8 @@ export function LabJobCard({
   retryPending: boolean;
   focusedCaseId?: string;
 }) {
+  if (!canRun) return <ExecutiveLabJobCard job={job} />;
+
   const evidence = job.result;
   const garakEvidence = evidence?.engine === 'garak' ? evidence : null;
   const localLlmEvidence =
@@ -793,7 +795,7 @@ export function LabJobCard({
     </div>}
     {localLlmEvidence && <LocalLlmResult evidence={localLlmEvidence} />}
     {nativeToolEvidence && <NativeToolSuiteResult evidence={nativeToolEvidence} job={job} />}
-    {policyLabEvidence && <AgentPolicyLabResult evidence={policyLabEvidence} focusedCaseId={focusedCaseId} />}
+    {policyLabEvidence && <AgentPolicyLabResult evidence={policyLabEvidence} focusedCaseId={focusedCaseId} showTechnicalDetails={canRun} />}
     {qwenPolicyLabEvidence && <QwenPolicyLabResult evidence={qwenPolicyLabEvidence} />}
     {job.status === 'failed' && <p className="ai-lab-error">No se completó la evaluación. Código: {job.errorCode ?? 'worker_failed'}. No se guardaron salidas del agente.</p>}
     {canRun && job.status === 'failed' && job.attempts < 2 && <Button variant="outline" onClick={() => onRetry(job.id)} disabled={retryPending} data-testid="button-retry-ai-lab">
@@ -802,7 +804,7 @@ export function LabJobCard({
   </article>;
 }
 
-function ExecutiveLabJobCard({ job }: { job: AiAssessmentLabJob }) {
+export function ExecutiveLabJobCard({ job }: { job: AiAssessmentLabJob }) {
   const state = {
     queued: "En cola",
     running: "En curso",

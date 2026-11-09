@@ -11,8 +11,11 @@ import type {
   AiAssessmentLabJob,
   GuardianPolicyLabPreviewResponse,
 } from "@workspace/api-client-react";
-import { AiEvaluationSectionNav, LabJobCard } from "./AiEvaluationPage";
-import { GuardianApprovalInbox } from "./GuardianApprovalInbox";
+import { AiEvaluationSectionNav, ExecutiveLabJobCard, LabJobCard } from "./AiEvaluationPage";
+import {
+  buildSyntheticApprovalConfirmationMessage,
+  GuardianApprovalInbox,
+} from "./GuardianApprovalInbox";
 import {
   AGENT_POLICY_LABS,
   AgentPolicyLabCatalog,
@@ -157,6 +160,39 @@ test("approval inbox shows tenant-safe decisions without claiming tool execution
   assert.doesNotMatch(customerMarkup, /Qwen|SHA-256|Job:|message\.tool_calls/i);
 });
 
+test("approval confirmation states synthetic impact before any decision", () => {
+  const message = buildSyntheticApprovalConfirmationMessage({
+    id: "11111111-1111-4111-8111-111111111111",
+    jobId: "22222222-2222-4222-8222-222222222222",
+    caseId: "finance_bank_change",
+    proposalSha256: "a".repeat(64),
+    actionSha256: "b".repeat(64),
+    proposalBindingSha256: "c".repeat(64),
+    requestedByUserId: "synthetic-requester",
+    requestedByRole: "member",
+    bindingVersion: 1,
+    syntheticActionRef: "guardian.synthetic.finance.bank-change.v1",
+    modelInference: false,
+    executionMode: "deterministic_fixture",
+    toolCallOrigin: "controlled_fixture_not_llm",
+    status: "pending",
+    canCurrentUserDecide: true,
+    expiresAt: "2026-11-04T12:00:00.000Z",
+    decidedByUserId: null,
+    decidedByRole: null,
+    decidedAt: null,
+    execution: "not_performed",
+    simulatedAt: null,
+    simulationResultCode: null,
+    simulationResultSha256: null,
+    replayBindingSha256: null,
+    createdAt: "2026-11-03T12:00:00.000Z",
+  });
+  assert.match(message, /cambio de cuenta bancaria ficticio/);
+  assert.match(message, /no se modifica ninguna cuenta real/);
+  assert.match(message, /no ejecuta herramientas ni afecta sistemas externos/);
+});
+
 test("AI security navigation separates the laboratory, approvals and audit with accessible tabs", () => {
   const markup = renderToStaticMarkup(
     createElement(AiEvaluationSectionNav, {
@@ -186,7 +222,7 @@ test("renders the real API lab response in the authenticated dashboard card", ()
   const markup = renderToStaticMarkup(
     createElement(LabJobCard, {
       job,
-      canRun: false,
+      canRun: true,
       onRetry: () => undefined,
       retryPending: false,
     }),
@@ -221,7 +257,7 @@ test("renders the real API lab response in the authenticated dashboard card", ()
   const localMarkup = renderToStaticMarkup(
     createElement(LabJobCard, {
       job: localLlmJob,
-      canRun: false,
+      canRun: true,
       onRetry: () => undefined,
       retryPending: false,
     }),
@@ -260,7 +296,7 @@ test("renders real Qwen profiles separately from fixture evidence", () => {
     const card = renderToStaticMarkup(
       createElement(LabJobCard, {
         job,
-        canRun: false,
+        canRun: true,
         onRetry: () => undefined,
         retryPending: false,
       }),
@@ -300,6 +336,17 @@ test("renders real Qwen profiles separately from fixture evidence", () => {
       }
     }
   }
+
+  const emailQwenJob = jobs.find(
+    (candidate) => candidate.profileId === "guardian-agent-qwen-lab-email-v1",
+  );
+  assert.ok(emailQwenJob, "customer summary check needs a real Qwen evidence fixture");
+  const customerSummary = renderToStaticMarkup(
+    createElement(ExecutiveLabJobCard, { job: emailQwenJob }),
+  );
+  assert.match(customerSummary, /EVALUACIÓN SINTÉTICA/);
+  assert.match(customerSummary, /Los detalles técnicos de laboratorio están reservados/);
+  assert.doesNotMatch(customerSummary, /Qwen|SHA-256|tool_choice|NO_PROPOSAL/i);
 
   const catalog = renderToStaticMarkup(
     createElement(QwenPolicyLabCatalog, {
@@ -511,7 +558,10 @@ test("renders all eight synthetic agent verticals and an API-persisted policy la
   assert.equal(policyJob.result.proposalOrigin, "controlled_fixture_not_llm");
   assert.equal(policyJob.result.modelInference, false);
   const resultMarkup = renderToStaticMarkup(
-    createElement(AgentPolicyLabResult, { evidence: policyJob.result }),
+    createElement(AgentPolicyLabResult, {
+      evidence: policyJob.result,
+      showTechnicalDetails: true,
+    }),
   );
   assert.match(resultMarkup, /SEGURIDAD · CONTROL DE ACCESO/);
   assert.match(resultMarkup, /Simulación/);
@@ -651,6 +701,7 @@ test("guided synthetic result explains approval and avoids exposing internal ide
     createElement(AgentPolicyLabResult, {
       evidence: financeJob.result,
       focusedCaseId: approvalCase.caseId,
+      showTechnicalDetails: true,
     }),
   );
   assert.match(markup, /SEGURIDAD · CONTROL DE ACCESO/);
@@ -681,6 +732,7 @@ test("guided synthetic result explains approval and avoids exposing internal ide
       recordedSnapshot: true,
       recordedArtifactSha256:
         "9bbc87ca9ee5c7eac040a0d2f33defb6eeb41f95d5d9940979b5564b435960be",
+      showTechnicalDetails: true,
     }),
   );
   assert.match(recordedMarkup, /Evidencia histórica de solo lectura/);
@@ -734,6 +786,7 @@ test("cross-workspace denial is explained in plain Spanish and never claims data
   assert.match(markup, /El agente no tenía permiso para acceder a esos datos/);
   assert.match(markup, /No. La solicitud se detuvo antes de realizar la operación/);
   assert.match(markup, /No se requiere ninguna acción real; esta prueba es simulada/);
+  assert.doesNotMatch(markup, /Ver detalles de la prueba|SHA-256|resource_outside_workspace/);
   for (const internalValue of [
     deniedCase.caseId,
     deniedCase.policyOn.reasonCode,
@@ -783,7 +836,10 @@ test("fresh API-preview evidence renders its unisolated runtime boundary honestl
     generated.stdout,
   ) as GuardianPolicyLabPreviewResponse["evidence"];
   const markup = renderToStaticMarkup(
-    createElement(AgentPolicyLabResult, { evidence }),
+    createElement(AgentPolicyLabResult, {
+      evidence,
+      showTechnicalDetails: true,
+    }),
   );
   assert.match(markup, /no demuestra el aislamiento del entorno/i);
   assert.match(markup, /ninguna; esta prueba utiliza únicamente datos sintéticos/i);
@@ -897,7 +953,7 @@ test("renders native tool-call evidence separately from JSON emulation and fixtu
   const markup = renderToStaticMarkup(
     createElement(LabJobCard, {
       job,
-      canRun: false,
+      canRun: true,
       onRetry: () => undefined,
       retryPending: false,
     }),
@@ -930,7 +986,7 @@ test("renders the Qwen run as an honest Spanish executive report with bounded ev
   const markup = renderToStaticMarkup(
     createElement(LabJobCard, {
       job,
-      canRun: false,
+      canRun: true,
       onRetry: () => undefined,
       retryPending: false,
     }),

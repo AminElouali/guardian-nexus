@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ButtonHTMLAttributes, type FormEvent, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState, type ButtonHTMLAttributes, type FormEvent, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { ClerkProvider, SignIn, SignUp, useAuth, useClerk, useUser } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
@@ -11,9 +11,9 @@ import {
 } from 'lucide-react';
 import {
   getGetWorkspaceDashboardQueryKey, getListPlansQueryKey, getListWorkspacesQueryKey,
-  getListWorkspaceAssetsQueryKey, getListWorkspaceIntegrationsQueryKey, getListWorkspaceMembersQueryKey, useBeginMicrosoftAuthorization, useConfigureAwsIntegration, useCreateWorkspace,
+  getListWorkspaceAiAssessmentApprovalsQueryKey, getListWorkspaceAssetsQueryKey, getListWorkspaceIntegrationsQueryKey, getListWorkspaceMembersQueryKey, useBeginMicrosoftAuthorization, useConfigureAwsIntegration, useCreateWorkspace,
   useCreateWorkspaceAsset, useDeleteWorkspaceAsset, useGetWorkspaceDashboard, useHealthCheck,
-  useListPlans, useListWorkspaceAssets, useListWorkspaceIntegrations, useListWorkspaceMembers, useListWorkspaces,
+  useListPlans, useListWorkspaceAiAssessmentApprovals, useListWorkspaceAssets, useListWorkspaceIntegrations, useListWorkspaceMembers, useListWorkspaces,
   useRevokeWorkspaceIntegration, useUpdateWorkspaceMember, useVerifyAwsIntegration,
 } from '@workspace/api-client-react';
 import type { Asset, AssetInput, AwsIntegrationSetup, IntegrationConnection, Member, Plan, Workspace } from '@workspace/api-client-react';
@@ -21,10 +21,13 @@ import { Route, Switch, Link, useLocation, Router as WouterRouter } from 'wouter
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import IntegrationReadinessPage from '@/components/IntegrationsPage';
-import AiEvaluationPage from '@/components/AiEvaluationPage';
-import RiskIntelligencePage from '@/components/RiskIntelligencePage';
+import { PublicLandingMotion } from '@/components/PublicLandingMotion';
 import NotFound from '@/pages/not-found';
+import { RISK_INTELLIGENCE_CATALOG } from '@/risk-intelligence/catalog.v1';
+
+const IntegrationReadinessPage = lazy(() => import('@/components/IntegrationsPage'));
+const AiEvaluationPage = lazy(() => import('@/components/AiEvaluationPage'));
+const RiskIntelligencePage = lazy(() => import('@/components/RiskIntelligencePage'));
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 20_000, retry: 1, refetchOnWindowFocus: false } },
@@ -98,10 +101,11 @@ function PublicHome() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const startHref = isSignedIn ? '/dashboard' : '/sign-up';
   return <main className="public-page">
+    <PublicLandingMotion />
     <header className="public-nav wrap">
       <Brand />
       <nav id="public-navigation" className={`public-links ${mobileOpen ? 'public-links-open' : ''}`} aria-label="Navegación principal">
-        <a href="#alcance" onClick={() => setMobileOpen(false)} data-testid="link-capacidades">Capacidades</a><a href="#disponible" onClick={() => setMobileOpen(false)} data-testid="link-disponible">Disponible hoy</a><a href="#preparacion" onClick={() => setMobileOpen(false)} data-testid="link-preparacion">Preparación europea</a>
+        <a href="#flujo" onClick={() => setMobileOpen(false)} data-testid="link-capacidades">Cómo funciona</a><a href="#disponible" onClick={() => setMobileOpen(false)} data-testid="link-disponible">Qué está disponible</a><a href="#preparacion" onClick={() => setMobileOpen(false)} data-testid="link-preparacion">Preparación</a>
       </nav>
       <div className="public-actions">
         {isLoaded && isSignedIn
@@ -111,34 +115,34 @@ function PublicHome() {
       </div>
     </header>
     <section className="hero wrap">
-      <div className="hero-copy reveal">
+      <div className="hero-copy">
         <div className="eyebrow"><span className="eyebrow-dot" /> Guardian Nexus · Seguridad de sistemas de IA</div>
         <h1>Ciberseguridad<br />para la era de <em>la IA.</em></h1>
-        <p className="hero-lede">Verificación de acciones propuestas por agentes de IA: contexto, permisos y límites antes de que una acción pueda avanzar.</p>
+        <p className="hero-lede">Explora cómo se revisaría una acción propuesta: con contexto, permisos y una decisión explícita. La demostración usa escenarios sintéticos.</p>
         <div className="hero-ctas">
           <Link href={startHref} className="button button-primary button-large" data-testid="link-hero-start">{isSignedIn ? 'Abrir mi espacio' : 'Crear espacio de trabajo'} <ArrowRight size={17} /></Link>
-          <span className="hero-note"><LockKeyhole size={14} /> Preparación, no certificación</span>
+          <a href="#flujo" className="button button-secondary button-large" data-testid="link-hero-how-it-works">Cómo funciona <ArrowRight size={17} /></a>
         </div>
-        <div className="hero-meta"><span className="meta-line" /> Un punto de partida claro para equipos responsables.</div>
+        <div className="hero-meta"><span className="meta-line" /> Laboratorio sintético · sin conexiones a sistemas de clientes.</div>
       </div>
       <div className="hero-visual reveal reveal-delay-1" aria-label="Ilustración del enfoque de seguridad de Guardian Nexus">
-        <div className="hero-visual-top"><span>GUARDIAN NEXUS / ENFOQUE</span><span className="live-mark"><i /> PREPARACIÓN CONTINUA</span></div>
+        <div className="hero-visual-top"><span>GUARDIAN NEXUS / EJEMPLO</span><span className="live-mark"><i /> ESCENARIO SINTÉTICO</span></div>
         <div className="visual-orbit orbit-one" /><div className="visual-orbit orbit-two" />
-        <div className="visual-center"><div className="visual-shield"><ShieldCheck size={41} strokeWidth={1.4} /></div><span>PREPARACIÓN</span><b>Controles con contexto</b></div>
+        <div className="visual-center"><div className="visual-shield"><ShieldCheck size={41} strokeWidth={1.4} /></div><span>LABORATORIO</span><b>Revisión antes de actuar</b></div>
         <div className="orbit-node node-a"><CloudGlyph /><span>Infraestructura cloud</span></div>
         <div className="orbit-node node-b"><Globe2 size={16} /><span>Sistemas de IA</span></div>
         <div className="orbit-node node-c"><Fingerprint size={16} /><span>Identidades</span></div>
         <div className="orbit-node node-d"><Database size={16} /><span>Exposición de datos</span></div>
-        <div className="visual-footer"><span><span className="tiny-square" /> Visibilidad con supervisión humana</span><span>Sin promesas de certificación</span></div>
+        <div className="visual-footer"><span><span className="tiny-square" /> Solo escenarios ficticios</span><span>Sin conexiones activas</span></div>
       </div>
     </section>
     <section className="lab-disclosure wrap" aria-labelledby="lab-disclosure-title" data-testid="notice-lab-scope">
       <span className="lab-disclosure-mark"><FlaskConical size={19} /></span>
-      <div><p className="lab-disclosure-kicker">Alcance actual · laboratorio</p><h2 id="lab-disclosure-title">Validado en un laboratorio con datos y herramientas sintéticos.</h2><p>Hoy no hay Gmail, bancos, proveedores cloud, robots ni sistemas de clientes conectados o protegidos. Las capacidades descritas para agentes son ámbitos de evaluación, no una protección activa en entornos reales.</p></div>
+      <div><p className="lab-disclosure-kicker">Alcance actual · laboratorio</p><h2 id="lab-disclosure-title">Las evaluaciones usan escenarios ficticios.</h2><p>No se conectan cuentas, proveedores ni sistemas de clientes. Los resultados del laboratorio no representan protección activa ni certificación.</p></div>
     </section>
     <section id="flujo" className="agent-flow-section" aria-labelledby="agent-flow-title">
       <div className="wrap">
-        <div className="agent-flow-heading"><div className="eyebrow">Un modelo de control, no una promesa de conexión</div><h2 id="agent-flow-title">Cada acción pasa por una decisión.</h2><p>El enfoque previsto coloca una verificación entre la intención del agente y su herramienta.</p></div>
+        <div className="agent-flow-heading"><div className="eyebrow">El enfoque</div><h2 id="agent-flow-title">Una decisión antes de una acción.</h2><p>El laboratorio muestra cómo se revisaría una propuesta; no actúa sobre herramientas conectadas.</p></div>
         <ol className="agent-flow" data-testid="agent-flow">
           <li><span className="flow-index">01</span><div><b>El agente propone</b><p>Una acción y sus argumentos, antes de ejecutarse.</p></div></li>
           <li><span className="flow-index">02</span><div><b>Guardian verifica</b><p>La petición frente al contexto, el acceso y las reglas definidas.</p></div></li>
@@ -148,7 +152,7 @@ function PublicHome() {
     </section>
     <section id="alcance" className="principles-section">
       <div className="wrap">
-        <div className="section-intro"><div className="eyebrow">Ámbitos de evaluación · solo laboratorio</div><h2>Ocho tipos de agente.<br />Riesgos concretos.</h2><p>Escenarios de referencia con datos y herramientas sintéticos. No equivalen a cobertura en producción ni a conectores disponibles.</p></div>
+        <div className="section-intro"><div className="eyebrow">Contexto de riesgo · catálogo consultivo</div><h2>Ocho perfiles.<br />Un marco de revisión.</h2><p>Son clases de agente para escenarios sintéticos; no indican agentes conectados ni sistemas evaluados.</p></div>
         <div className="agent-risk-grid" data-testid="agent-risk-grid">
           <article className="agent-risk-card" data-testid="agent-risk-email"><span className="agent-risk-number">01 / COMUNICACIÓN</span><div className="agent-risk-icon"><Activity size={18} /></div><h3>Email</h3><p>Phishing, exfiltración de información y envíos no autorizados.</p></article>
           <article className="agent-risk-card" data-testid="agent-risk-database"><span className="agent-risk-number">02 / DATOS</span><div className="agent-risk-icon"><Database size={18} /></div><h3>Bases de datos</h3><p>Extracción, eliminación o cambios de registros sin autorización.</p></article>
@@ -159,28 +163,17 @@ function PublicHome() {
           <article className="agent-risk-card" data-testid="agent-risk-infrastructure"><span className="agent-risk-number">07 / SISTEMAS</span><div className="agent-risk-icon"><Cloud size={18} /></div><h3>Infraestructura</h3><p>Elevación de privilegios y modificaciones de configuración.</p></article>
           <article className="agent-risk-card" data-testid="agent-risk-multiagent"><span className="agent-risk-number">08 / ORQUESTACIÓN</span><div className="agent-risk-icon"><Layers3 size={18} /></div><h3>Sistemas multiagente</h3><p>Delegaciones inseguras y escalada de privilegios entre agentes.</p></article>
         </div>
-        <div className="agent-ia-cta"><div><span className="eyebrow">Seguridad de IA</span><h3>Explora las evaluaciones disponibles en laboratorio.</h3><p>Perfiles y resultados acotados a escenarios sintéticos; no prueban sistemas de clientes.</p></div><Link href="/ai-evaluations" className="button button-primary" data-testid="link-home-ai-evaluations">Ver Seguridad IA <ArrowRight size={16} /></Link></div>
-        <div className="section-intro capability-intro"><div className="eyebrow">Preparación de la plataforma</div><h2>Construir controles con contexto.</h2><p>Capacidades actuales y previstas, con su estado descrito de forma explícita.</p></div>
-        <div className="capability-grid">
-          <article className="capability-card capability-featured"><span className="capability-number">01 / SISTEMAS</span><div className="capability-icon"><Sparkles size={20} /></div><h3>Evaluación de seguridad de IA</h3><p>Prueba real y acotada sobre un agente propio de laboratorio. No analiza agentes ni datos de clientes.</p><span className="capability-state">Activo en laboratorio interno · servicio a clientes no disponible</span></article>
-          <article className="capability-card"><span className="capability-number">02 / EXPOSICIÓN</span><div className="capability-icon"><Layers3 size={20} /></div><h3>Configuración, identidades y datos</h3><p>Señales sobre configuraciones incorrectas, permisos, identidades y posibles exposiciones de datos.</p><span className="capability-state">Previsto · no disponible aún</span></article>
-          <article className="capability-card"><span className="capability-number">03 / AMENAZAS</span><div className="capability-icon"><ShieldEllipsis size={20} /></div><h3>Vulnerabilidades e inyección de prompts</h3><p>Consideración de vulnerabilidades y riesgos de prompt injection en los contextos relevantes.</p><span className="capability-state">Previsto · no disponible aún</span></article>
-          <article className="capability-card"><span className="capability-number">04 / OPERACIÓN</span><div className="capability-icon"><Activity size={20} /></div><h3>Correlación y monitorización</h3><p>Correlación de amenazas y señales a lo largo del tiempo para dar contexto a la revisión del equipo.</p><span className="capability-state">Previsto · no disponible aún</span></article>
-          <article className="capability-card"><span className="capability-number">05 / EVIDENCIA</span><div className="capability-icon"><Check size={20} /></div><h3>Evidencias verificables</h3><p>Organización de evidencias que permitan documentar controles y facilitar su revisión.</p><span className="capability-state">Previsto · no disponible aún</span></article>
-          <article className="capability-card"><span className="capability-number">06 / DECISIONES</span><div className="capability-icon"><Users size={20} /></div><h3>Recomendaciones supervisadas</h3><p>Orientación para priorizar trabajo, manteniendo las decisiones y la aprobación en manos de personas.</p><span className="capability-state">Previsto · no disponible aún</span></article>
-        </div>
+        <div className="agent-ia-cta"><div><span className="eyebrow">Laboratorio de Seguridad IA</span><h3>Consulta una demostración con escenarios ficticios.</h3><p>El acceso requiere iniciar sesión; las pruebas no evalúan sistemas de clientes.</p></div><Link href="/ai-evaluations" className="button button-primary" data-testid="link-home-ai-evaluations">Ver el laboratorio <ArrowRight size={16} /></Link></div>
       </div>
     </section>
     <section id="disponible" className="workspace-band">
       <div className="wrap availability-layout">
-        <div className="availability-copy"><div className="eyebrow">Disponible hoy · espacio de trabajo</div><h2>Empieza por lo que ya puedes hacer.</h2><p>La experiencia actual es deliberadamente sencilla. No depende de integraciones ni presenta resultados de análisis que aún no existen.</p><Link href={startHref} className="button button-light" data-testid="link-band-create">{isSignedIn ? 'Abrir mi espacio' : 'Crear un espacio'} <ArrowRight size={16} /></Link></div>
+          <div className="availability-copy"><div className="eyebrow">Estado del producto</div><h2>Un espacio para organizar el trabajo actual.</h2><p>Empieza por registrar activos y administrar miembros. Las evaluaciones de agentes permanecen en el laboratorio sintético.</p><Link href={startHref} className="button button-light" data-testid="link-band-create">{isSignedIn ? 'Abrir mi espacio' : 'Crear un espacio'} <ArrowRight size={16} /></Link></div>
         <div className="available-list">
-          <div className="available-row"><span className="available-check"><Check size={15} /></span><div><b>Espacio de trabajo de autoservicio</b><p>Crea y gestiona un espacio para tu organización.</p></div><span className="availability-tag">Disponible</span></div>
-          <div className="available-row"><span className="available-check"><Check size={15} /></span><div><b>Inventario manual de activos</b><p>Registra sistemas, entorno y criticidad con contexto.</p></div><span className="availability-tag">Disponible</span></div>
-          <div className="available-row"><span className="available-check"><Check size={15} /></span><div><b>Roles básicos por función</b><p>Permisos distintos para lectura y cambios de activos.</p></div><span className="availability-tag">Disponible</span></div>
-          <div className="available-row"><span className="available-check"><FlaskConical size={15} /></span><div><b>Evaluación de Seguridad de IA</b><p>Solo laboratorio interno con agente local fijo; no está disponible para sistemas de clientes.</p></div><span className="availability-tag">Laboratorio</span></div>
-          <div className="available-row planned-row"><span className="planned-mark"><Layers3 size={15} /></span><div><b>Conectores empresariales</b><p>Previstos para una fase futura. No hay Gmail, bancos ni proveedores cloud conectados hoy.</p></div><span className="planned-tag">Planificado</span></div>
-          <div className="available-row planned-row"><span className="planned-mark"><Command size={15} /></span><div><b>SDK, API y MCP Gateway</b><p>Vías de integración previstas, todavía no disponibles ni conectadas a sistemas externos.</p></div><span className="planned-tag">Planificado</span></div>
+          <div className="available-row"><span className="available-check"><Check size={15} /></span><div><b>Espacio e inventario manual</b><p>Registra activos, entorno y criticidad.</p></div><span className="availability-tag">Disponible</span></div>
+          <div className="available-row"><span className="available-check"><Check size={15} /></span><div><b>Equipo y roles básicos</b><p>Administra miembros y permisos del espacio.</p></div><span className="availability-tag">Disponible</span></div>
+          <div className="available-row"><span className="available-check"><FlaskConical size={15} /></span><div><b>Seguridad de agentes IA</b><p>Demostración interna con datos y herramientas ficticios.</p></div><span className="availability-tag">Laboratorio</span></div>
+          <div className="available-row planned-row"><span className="planned-mark"><Layers3 size={15} /></span><div><b>Conectores y evaluaciones de clientes</b><p>No disponibles en esta fase; no hay conexiones activas a sistemas externos.</p></div><span className="planned-tag">Futuro</span></div>
         </div>
       </div>
     </section>
@@ -506,6 +499,9 @@ function IntegrationsPage({ workspace }: { workspace: Workspace }) {
 
 function DashboardPage({ workspace }: { workspace: Workspace }) {
   const dashboard = useGetWorkspaceDashboard(workspace.id, { query: { queryKey: getGetWorkspaceDashboardQueryKey(workspace.id), enabled: !!workspace.id } });
+  const approvalList = useListWorkspaceAiAssessmentApprovals(workspace.id, {
+    query: { queryKey: getListWorkspaceAiAssessmentApprovalsQueryKey(workspace.id) },
+  });
   const health = useHealthCheck();
   if (dashboard.isLoading) return <LoadingState />;
   if (dashboard.isError) return <QueryError onRetry={() => dashboard.refetch()} />;
@@ -513,6 +509,9 @@ function DashboardPage({ workspace }: { workspace: Workspace }) {
   if (!d) return null;
   const assetLimit = d.plan.maxAssets;
   const remaining = Math.max(0, assetLimit - d.assetCount);
+  const approvals = approvalList.data?.approvals ?? [];
+  const pendingApprovals = approvals.filter((approval) => approval.status === 'pending').length;
+  const completedReviews = approvals.filter((approval) => approval.status === 'approved' || approval.status === 'denied').length;
   const date = new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   return <div className="dashboard-page">
      <PageHeading eyebrow={date} title="Centro de operaciones" detail={`${workspace.name} · inventario, uso y actividad registrada en este espacio.`} action={<span className={`connection-state ${health.isError ? 'connection-muted' : ''}`} data-testid="status-service-health"><i /> {health.isSuccess ? 'API disponible' : health.isError ? 'Estado de API no disponible' : 'Comprobando API'}</span>} />
@@ -522,6 +521,39 @@ function DashboardPage({ workspace }: { workspace: Workspace }) {
       <div className="banner-divider" />
       <div className="banner-capacity"><span>Capacidad de activos</span><strong>{remaining}<small> disponibles</small></strong><span className="banner-capacity-note">de {assetLimit} en {planLabel(d.plan)}</span></div>
       <span className="banner-corner">01 / BASE</span>
+    </section>
+    <section className="operations-overview" aria-labelledby="operations-overview-title" data-testid="operations-overview">
+      <div className="operations-overview-heading">
+        <div><span className="panel-kicker">ESTADO DEL ESPACIO</span><h2 id="operations-overview-title">Riesgos y revisiones</h2></div>
+        <p>Resumen de registros disponibles. No es una alerta en vivo ni un análisis de tus sistemas.</p>
+      </div>
+      <div className="operations-overview-grid">
+        <article className="operations-overview-item">
+          <span>Perfiles de agente</span>
+          <strong>{RISK_INTELLIGENCE_CATALOG.profiles.length}</strong>
+          <p>Clases de riesgo documentadas; no son agentes conectados.</p>
+          <Link href="/risk-intelligence" data-testid="link-dashboard-risk">Ver perfiles</Link>
+        </article>
+        <article className="operations-overview-item">
+          <span>Incidentes</span>
+          <strong>Sin detalle</strong>
+          <p>Este espacio no tiene una bandeja de incidentes. El contador de hallazgos es agregado.</p>
+        </article>
+        <article className="operations-overview-item">
+          <span>Aprobaciones pendientes</span>
+          <strong>{approvalList.isLoading ? '…' : approvalList.isError ? '—' : pendingApprovals}</strong>
+          <p>{approvalList.isError ? 'No se pudo cargar el estado de revisiones.' : 'Solicitudes de revisión del laboratorio sintético.'}</p>
+          {approvalList.isError
+            ? <button type="button" onClick={() => void approvalList.refetch()} data-testid="button-retry-dashboard-approvals">Reintentar</button>
+            : <Link href="/ai-evaluations" data-testid="link-dashboard-approvals">Ver revisiones</Link>}
+        </article>
+        <article className="operations-overview-item">
+          <span>Revisiones completadas</span>
+          <strong>{approvalList.isLoading ? '…' : approvalList.isError ? '—' : completedReviews}</strong>
+          <p>Decisiones humanas registradas; no implican acciones en sistemas externos.</p>
+          <Link href="/ai-evaluations" data-testid="link-dashboard-decisions">Consultar Seguridad IA</Link>
+        </article>
+      </div>
     </section>
     <section className="metric-grid">
       <MetricCard label="Activos registrados" value={d.assetCount} detail={`de ${d.plan.maxAssets} disponibles`} icon={Box} href="/assets" />
@@ -736,7 +768,7 @@ function AiEvaluationRoute() { return <AuthGuard><WorkspaceFrame page={({ worksp
 function RiskIntelligenceRoute() { return <AuthGuard><WorkspaceFrame page={({ workspace }) => <RiskIntelligencePage workspaceRole={workspace.role} />} /></AuthGuard>; }
 
 function Router() {
-  return <RoutedErrorBoundary><Switch>
+  return <RoutedErrorBoundary><Suspense fallback={<LoadingState />}><Switch>
     <Route path="/" component={PublicHome} />
     <Route path="/sign-in/*?" component={() => <AuthPage mode="sign-in" />} />
     <Route path="/sign-up/*?" component={() => <AuthPage mode="sign-up" />} />
@@ -750,7 +782,7 @@ function Router() {
     <Route path="/plans" component={PlansRoute} />
     <Route path="/roadmap" component={RoadmapRoute} />
     <Route component={NotFound} />
-  </Switch></RoutedErrorBoundary>;
+  </Switch></Suspense></RoutedErrorBoundary>;
 }
 
 function ClerkAppProvider() {
