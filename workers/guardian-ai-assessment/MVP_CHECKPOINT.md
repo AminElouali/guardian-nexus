@@ -3526,3 +3526,41 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   socket Docker exclusivo del broker y roles PostgreSQL independientes;
   después ejecutar el E2E sintético persistente contra una base desechable
   verificada. No abrir Qwen antes de acreditar el aislamiento.
+
+## Reparación offline de la política RLS para aprobación v3 — 2026-11-09
+
+- Base: HEAD `1b0be653026b81c8305bfa6a1b8bbf7429d76b5c`, árbol limpio.
+- Brecha encontrada: el worker insertaba solicitudes de aprobación con
+  `bindingVersion: 3`, pero las políticas INSERT de SQL y Drizzle limitaban
+  `app_runtime` a versiones 1 y 2. La ruta Qwen v3 no podía persistir bajo esa
+  política.
+- Reparación: ambas definiciones permiten versiones 1, 2 y 3, conservando el
+  alcance workspace/usuario, rol owner/admin, estado pending, trabajo
+  completado y restricciones de hashes/procedencia. Se añadió una prueba
+  estática offline de paridad SQL/Drizzle/worker, RLS forzado, unicidad por
+  workspace/job/case y rechazo de `no_tool_call` como origen aprobable.
+- Pruebas ejecutadas en serie: contrato API dirigido **16/16**; suite offline
+  API **85/85**; typecheck API aprobado; `git diff --check` aprobado. La primera
+  ejecución del test nuevo encontró una ruta relativa incorrecta; se corrigió
+  y las ejecuciones completas posteriores pasaron.
+- No se conectó PostgreSQL ni se aplicó la política; RLS efectivo, INSERT bajo
+  `app_runtime`, concurrencia y auditoría durable siguen sin verificar. No se
+  ejecutaron Qwen, worker real, Docker/socket ni despliegues. El último
+  preflight guardado (2026-11-04) sigue marcando `hostBoundaryReady=false` y no
+  se repitió.
+- La evidencia Qwen sigue siendo histórica: ocho llamadas, siete adaptadas,
+  cero tool_calls nativas y una `NO_PROPOSAL` de infraestructura. No es
+  inferencia nueva ni persistencia probada.
+- Informe: `reports/offline-approval-v3-rls-contract-2026-11-09.md`,
+  SHA-256 `0149acfeb66844e828b9d07ef19db37aa57039b5f6ab3e98ae2a3b5b41a58842`.
+- SHA-256 de cambios:
+  - `lib/db/sql/rls-policies.sql`:
+    `30940ba33057bf9621109f68531a21be9f29bcf93ff3d7636d354acabc7f420c`
+  - `lib/db/src/schema/ai-assessment-jobs.ts`:
+    `67cae96c265e22394b1659153fac3d5ce2e62f75b64bb9fac9ac292a4127e1b2`
+  - `artifacts/api-server/src/lib/ai-assessment-qwen-evidence.test.ts`:
+    `9e656fd7040aef191d80fccade4a028fb21016250b90fea50321cbc1d288f65b`
+- Próximo paso seguro: contra PostgreSQL de desarrollo desechable y autorizado,
+  aplicar la política revisada y ejecutar el E2E sintético para INSERT v3 bajo
+  `app_runtime`, aislamiento tenant, expiración, binding, concurrencia y replay.
+  Esto no requiere Qwen y no debe presentarse como inferencia nueva.

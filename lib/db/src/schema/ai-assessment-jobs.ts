@@ -1366,7 +1366,7 @@ export const aiAssessmentApprovalRequestsTable = pgTable(
         ${ownerOrAdminScope(table.workspaceId)}
         AND ${table.requestedByUserId} = NULLIF(current_setting('app.user_id', true), '')
         AND ${table.status} = 'pending'
-        AND ${table.bindingVersion} IN (1, 2)
+        AND ${table.bindingVersion} IN (1, 2, 3)
         AND ${table.decidedByUserId} IS NULL
         AND ${table.decidedByRole} IS NULL
         AND ${table.decidedAt} IS NULL

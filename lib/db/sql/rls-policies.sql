@@ -160,7 +160,7 @@ CREATE POLICY ai_assessment_approvals_insert_owner
     AND decided_by_user_id IS NULL
     AND decided_by_role IS NULL
     AND decided_at IS NULL
-    AND binding_version IN (1, 2)
+    AND binding_version IN (1, 2, 3)
     AND EXISTS (
       SELECT 1 FROM public.workspace_memberships AS membership
       WHERE membership.workspace_id = ai_assessment_approval_requests.workspace_id

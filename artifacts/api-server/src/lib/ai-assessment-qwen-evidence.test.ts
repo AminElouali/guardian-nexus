@@ -416,6 +416,89 @@ test("historical infrastructure NO_PROPOSAL cannot enter approval provenance or 
   );
 });
 
+test("offline approval persistence source contract admits provenance-bound v3 under tenant RLS", () => {
+  const rlsSql = readFileSync(
+    new URL("../../../../lib/db/sql/rls-policies.sql", import.meta.url),
+    "utf8",
+  );
+  const schemaSource = readFileSync(
+    new URL(
+      "../../../../lib/db/src/schema/ai-assessment-jobs.ts",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  const workerSource = readFileSync(
+    new URL("./ai-assessment-worker.ts", import.meta.url),
+    "utf8",
+  );
+
+  const insertPolicy = rlsSql.match(
+    /CREATE POLICY ai_assessment_approvals_insert_owner[\s\S]*?;\n/,
+  )?.[0];
+  assert.ok(insertPolicy, "SQL RLS insert policy must exist");
+  assert.match(
+    insertPolicy,
+    /binding_version IN\s*\(1,\s*2,\s*3\)/,
+    "the app_runtime RLS policy must admit the binding v3 written by the worker",
+  );
+  assert.match(insertPolicy, /status = 'pending'/);
+  assert.match(insertPolicy, /requested_by_user_id = NULLIF\(current_setting\('app\.user_id', true\), ''\)/);
+  assert.match(insertPolicy, /membership\.role IN \('owner', 'admin'\)/);
+  assert.match(insertPolicy, /job\.status = 'succeeded'/);
+
+  const drizzleInsertPolicy = schemaSource.match(
+    /pgPolicy\("ai_assessment_approvals_insert_owner",[\s\S]*?\n    \}\),\n    pgPolicy\("ai_assessment_approvals_update_approver"/,
+  )?.[0];
+  assert.ok(drizzleInsertPolicy, "Drizzle insert policy must mirror SQL RLS");
+  assert.match(
+    drizzleInsertPolicy,
+    /\$\{table\.bindingVersion\} IN \(1, 2, 3\)/,
+  );
+  assert.match(drizzleInsertPolicy, /ownerOrAdminScope\(table\.workspaceId\)/);
+  assert.match(drizzleInsertPolicy, /job\.status = 'succeeded'/);
+
+  const provenanceConstraint = rlsSql.match(
+    /CONSTRAINT ai_assessment_approval_provenance_check CHECK \(([\s\S]*?)\n  \),\n  CONSTRAINT ai_assessment_approval_action_ref_check/,
+  )?.[1];
+  assert.ok(provenanceConstraint, "database provenance constraint must exist");
+  assert.match(provenanceConstraint, /model_inference = false/);
+  assert.match(provenanceConstraint, /'controlled_fixture_not_llm'/);
+  assert.match(provenanceConstraint, /model_inference = true/);
+  assert.match(provenanceConstraint, /'guardian_qwen_native_markup_adapter'/);
+  assert.match(provenanceConstraint, /'runtime_message_tool_calls'/);
+  assert.doesNotMatch(
+    provenanceConstraint,
+    /no_tool_call/,
+    "NO_PROPOSAL must never become a persisted proposal approval",
+  );
+
+  assert.match(
+    rlsSql,
+    /ALTER TABLE public\.ai_assessment_approval_requests ENABLE ROW LEVEL SECURITY;/,
+  );
+  assert.match(
+    rlsSql,
+    /ALTER TABLE public\.ai_assessment_approval_requests FORCE ROW LEVEL SECURITY;/,
+  );
+  assert.match(
+    rlsSql,
+    /CREATE UNIQUE INDEX IF NOT EXISTS ai_assessment_approval_job_case_idx\s+ON public\.ai_assessment_approval_requests \(workspace_id, job_id, case_id\);/,
+    "duplicate approval records for the same tenant job case must conflict",
+  );
+
+  const workerApprovalInsert = workerSource.slice(
+    workerSource.indexOf(".insert(aiAssessmentApprovalRequestsTable)"),
+    workerSource.indexOf(".returning({", workerSource.indexOf(".insert(aiAssessmentApprovalRequestsTable)")),
+  );
+  assert.notEqual(workerApprovalInsert.length, 0);
+  assert.match(workerApprovalInsert, /bindingVersion:\s*3/);
+  assert.match(workerApprovalInsert, /computeApprovalProposalBindingV3/);
+  assert.match(workerApprovalInsert, /modelInference:\s*candidate\.modelInference/);
+  assert.match(workerApprovalInsert, /toolCallOrigin:\s*candidate\.toolCallOrigin/);
+  assert.match(workerApprovalInsert, /onConflictDoNothing\(\)/);
+});
+
 test("offline worker-to-API reconciliation preserves provenance, Policy ON order, and approval boundaries for all eight profiles", () => {
   const artifactUrl = new URL(
     "../../../../generated-artifacts/guardian-qwen-offline/qwen-policy-lab-eight-profiles.json",
