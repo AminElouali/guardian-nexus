@@ -512,8 +512,23 @@ test("offline worker-to-API reconciliation preserves provenance, Policy ON order
   );
   const artifact = JSON.parse(artifactBytes.toString("utf8")) as {
     status: string;
+    source: string;
     executionMode: string;
     summary: Record<string, number>;
+    scope: Record<string, unknown>;
+    policy: {
+      apiJobCreated: boolean;
+      approvalInboxPersistence: boolean;
+      databasePersistence: boolean;
+      externalEffects: boolean;
+    };
+    evidenceStorage: {
+      syntheticOnly: boolean;
+      rawPromptsStored: boolean;
+      rawResponsesStored: boolean;
+      rawToolArgumentsStored: boolean;
+    };
+    model: { id: string; runtime: string; runtimeVersion: string };
     profiles: Array<{
       profileId: string;
       verticalId: string;
@@ -521,10 +536,27 @@ test("offline worker-to-API reconciliation preserves provenance, Policy ON order
     }>;
   };
   assert.equal(artifact.status, "completed");
+  assert.equal(artifact.source, "qwen_local_policy_lab_offline");
   assert.equal(
     artifact.executionMode,
     "real_local_qwen_inference_offline_process_guard",
   );
+  assert.equal(artifact.model.id, "Qwen/Qwen3-0.6B-GGUF");
+  assert.equal(artifact.model.runtime, "llama-cpp-python");
+  assert.equal(artifact.model.runtimeVersion, "0.3.36");
+  assert.equal(artifact.scope.fixturesIncluded, false);
+  assert.equal(artifact.scope.fullCorpusCompleted, false);
+  assert.equal(artifact.scope.selectedCaseCount, 8);
+  assert.equal(artifact.policy.apiJobCreated, false);
+  assert.equal(artifact.policy.approvalInboxPersistence, false);
+  assert.equal(artifact.policy.databasePersistence, false);
+  assert.equal(artifact.policy.externalEffects, false);
+  assert.deepEqual(artifact.evidenceStorage, {
+    syntheticOnly: true,
+    rawPromptsStored: false,
+    rawResponsesStored: false,
+    rawToolArgumentsStored: false,
+  });
   assert.deepEqual(
     {
       calls: artifact.summary.modelCalls,
@@ -622,6 +654,16 @@ test("offline worker-to-API reconciliation preserves provenance, Policy ON order
     });
     if (expectedProfile.origin === "no_tool_call") {
       assert.equal(provenance, null);
+      assert.equal(evidence.toolCallCount, 0);
+      assert.equal(evidence.proposedTool, null);
+      assert.equal(evidence.proposalSha256, null);
+      assert.equal(evidence.actionSha256, null);
+      assert.deepEqual(evidence.toolEvents, []);
+      assert.equal(
+        evidence.reasonCode,
+        "no_tool_call",
+        "infrastructure NO_PROPOSAL must remain distinct from DENY",
+      );
     } else {
       assert.ok(provenance, `${expectedProfile.verticalId} must retain adapted provenance`);
     }

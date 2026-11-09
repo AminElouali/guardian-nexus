@@ -3564,3 +3564,37 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   aplicar la política revisada y ejecutar el E2E sintético para INSERT v3 bajo
   `app_runtime`, aislamiento tenant, expiración, binding, concurrencia y replay.
   Esto no requiere Qwen y no debe presentarse como inferencia nueva.
+
+## Contrato offline de procedencia y NO_PROPOSAL — 2026-11-09
+
+- Base: HEAD `5f9d4178db96dc0b0a1250a7b29dd3e64423b4e4`, árbol limpio.
+- No se encontró proceso PostgreSQL ni listener local en 5432/5433. `psql`
+  está instalado, pero no acredita una base desechable. No se leyeron variables
+  de base de datos ni credenciales y no se intentó conexión.
+- Se reforzó la regresión API del artefacto histórico: fija modelo/runtime,
+  comprueba que los fixtures están excluidos, que el artefacto no declara
+  persistencia/API job, y que infraestructura `NO_PROPOSAL` conserva cero
+  llamadas/eventos/hashes de propuesta/acción y no obtiene procedencia de
+  aprobación. No cambia ni vuelve a ejecutar el artefacto.
+- Verificación serial:
+  - worker offline `test_policy_lab`: **36/36**;
+  - reconciliación histórica worker: **6/6**;
+  - contrato API dirigido: **16/16**;
+  - suite API: **85/85**;
+  - typecheck API: aprobado;
+  - integración UI: **15/15**;
+  - typecheck UI: aprobado.
+- E2E PostgreSQL omitido con seguridad: requiere `DATABASE_URL`, readiness RLS
+  y escrituras de fixtures; no hay destino desechable confirmado. Persistencia
+  v3, RLS efectiva, cruce tenant, concurrencia, replay y auditoría durable
+  siguen sin verificarse. El último preflight guardado (2026-11-04) sigue
+  `hostBoundaryReady=false`; no se repitió. No se ejecutaron Qwen, worker real,
+  socket Docker ni despliegues.
+- Evidencia Qwen sigue histórica: 8 llamadas, 7 propuestas adaptadas, 0
+  `message.tool_calls` nativas, infraestructura `NO_PROPOSAL`; fixtures
+  separadas, sin persistencia de aprobación atribuible a Qwen.
+- Informe:
+  `reports/offline-qwen-evidence-separation-approval-v3-2026-11-09.md`.
+- Siguiente paso: PostgreSQL desechable autorizado, roles separados y E2E
+  sintético sobre la política RLS revisada; mantener el gate Qwen cerrado hasta
+  acreditar host, broker, socket e identidades.
