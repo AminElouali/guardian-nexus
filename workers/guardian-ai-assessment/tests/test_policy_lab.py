@@ -29,6 +29,7 @@ from guardian_ai_assessment.qwen_policy_lab import (
     SYNTHETIC_DELEGATION_TASK_ID as QWEN_SYNTHETIC_DELEGATION_TASK_ID,
     SYNTHETIC_EMAIL_ID as QWEN_SYNTHETIC_EMAIL_ID,
     SYNTHETIC_INFRA_CONFIG_ID as QWEN_SYNTHETIC_INFRA_CONFIG_ID,
+    SYNTHETIC_LOCAL_PAGE_ID as QWEN_SYNTHETIC_LOCAL_PAGE_ID,
     SYNTHETIC_ACCOUNT_ID as QWEN_SYNTHETIC_ACCOUNT_ID,
     SYNTHETIC_IBAN as QWEN_SYNTHETIC_IBAN,
     _action_for,
@@ -49,6 +50,7 @@ from guardian_ai_assessment.qwen_policy_lab import (
 )
 from guardian_ai_assessment.offline_qwen_runner import _OFFLINE_CASE_IDS
 from guardian_ai_assessment.tool_adapter import (
+    INVOICE_ID,
     evaluate_synthetic_action_policy,
     trusted_goal_scope_status,
     validate_synthetic_tool_arguments,
@@ -288,28 +290,62 @@ class GuardianAgentPolicyLabTests(unittest.TestCase):
         self.assertEqual(multi_evidence["toolEvents"], [])
         dispatch.assert_not_called()
 
-    def test_malformed_email_database_and_infrastructure_markup_is_rejected_before_policy_or_dispatch(self):
+    def test_malformed_markup_for_all_profiles_is_rejected_before_policy_or_dispatch(self):
         cases = (
             (
                 "email",
                 QWEN_EMAIL_PROFILE,
-                "qwen_email_indirect_injection_en",
                 "read_synthetic_email",
                 {"email_id": QWEN_SYNTHETIC_EMAIL_ID},
             ),
             (
                 "database",
                 QWEN_DATABASE_PROFILE,
-                "qwen_database_cross_tenant_delete_es",
                 "query_synthetic_database",
                 {"row_id": QWEN_SYNTHETIC_DB_ROW_ID},
             ),
             (
+                "finance",
+                QWEN_FINANCE_PROFILE,
+                "consult_synthetic_invoice",
+                {"invoice_id": INVOICE_ID},
+            ),
+            (
+                "programming",
+                QWEN_PROGRAMMING_PROFILE,
+                "propose_synthetic_code_diff",
+                {"change_id": QWEN_SYNTHETIC_CODE_DIFF_ID},
+            ),
+            (
+                "customer_service",
+                QWEN_SUPPORT_PROFILE,
+                "propose_synthetic_refund",
+                {
+                    "ticket_id": SYNTHETIC_SUPPORT_TICKET_ID,
+                    "amount_cents": SYNTHETIC_REFUND_AMOUNT_CENTS,
+                },
+            ),
+            (
+                "browser",
+                QWEN_BROWSER_PROFILE,
+                "read_local_synthetic_page",
+                {"page_id": QWEN_SYNTHETIC_LOCAL_PAGE_ID},
+            ),
+            (
                 "infrastructure",
                 QWEN_INFRASTRUCTURE_PROFILE,
-                "qwen_infra_privilege_injection_es",
                 "read_synthetic_infrastructure_config",
-                {"config_id": "INFRA-SYNTH-001"},
+                {"config_id": QWEN_SYNTHETIC_INFRA_CONFIG_ID},
+            ),
+            (
+                "multiagent",
+                QWEN_MULTIAGENT_PROFILE,
+                "delegate_synthetic_read_only_task",
+                {
+                    "task_id": QWEN_SYNTHETIC_DELEGATION_TASK_ID,
+                    "child_agent_id": "guardian-multiagent-specialist-v1",
+                    "permissions": ["database.read.scoped"],
+                },
             ),
         )
 
@@ -343,15 +379,14 @@ class GuardianAgentPolicyLabTests(unittest.TestCase):
                     }
                 )
 
-        for vertical, profile, case_id, tool_name, arguments in cases:
+        for vertical, profile, tool_name, arguments in cases:
             with self.subTest(vertical=vertical):
                 client = MalformedMarkupClient(tool_name, arguments)
                 case = next(
                     item
                     for item in QWEN_POLICY_CASES[profile]
-                    if item["caseId"] == case_id
+                    if item["label"] == "adversarial"
                 )
-                self.assertEqual(case["label"], "adversarial")
                 with patch(
                     "guardian_ai_assessment.qwen_policy_lab.call_synthetic_tool"
                 ) as dispatch, patch(

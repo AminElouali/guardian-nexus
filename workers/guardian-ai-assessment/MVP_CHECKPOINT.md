@@ -3747,3 +3747,37 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
     `ddfd8720016f745d93ddbb01d33100ab1e4d1180d3157418268797e04af69d42`.
 - Siguiente paso: acreditar broker/worker con identidades separadas y DB
   desechable; hasta entonces, mantener Qwen/worker cerrados.
+
+## Parser y procedencia offline para las ocho verticales — 2026-11-09
+
+- Base: HEAD `e7f2e98c948390575fc60b697d2b0caf382d0185`, árbol limpio y sin
+  pruebas/procesos relevantes activos.
+- Se amplió la regresión de marcador Qwen con texto residual adversario desde
+  correo, BBDD e infraestructura a las ocho verticales. Cliente de prueba falso;
+  se conserva `tool_choice=auto`. El parser clasifica salida inválida como
+  `unparsed_qwen_native_markup`, deniega antes de Policy y despacho y produce
+  cero eventos/simulaciones.
+- Pruebas en serie: test focal **1/1** (ocho subcasos); `test_policy_lab`
+  **37/37**; `test_autonomous_tool_selection` **11/11**; API **86/86**;
+  integración UI **17/17**; `git diff --check` aprobado.
+- No se ejecutaron Qwen, worker real, Docker/socket, PostgreSQL ni workflows.
+  No se verificó una DB desechable ni PostgreSQL/RLS de aprobaciones v3 en vivo.
+  El preflight guardado del 2026-11-04 sigue `hostBoundaryReady=false`; no se
+  repitió en este incremento.
+- La evidencia Qwen no cambia: artefacto histórico de ocho inferencias, 7
+  propuestas adaptadas, 0 `message.tool_calls` nativas y una infraestructura
+  `NO_PROPOSAL`. Fixtures y pruebas con cliente falso permanecen separados;
+  no hay inferencia nueva ni flujo API→worker aislado acreditado.
+- Informe: `reports/offline-eight-profile-parser-provenance-guard-2026-11-09.md`.
+- SHA-256:
+  - `tests/test_policy_lab.py`:
+    `aaaf2069d5f7985758c609e5fe4dd3f69803f81012b942ad5454b51bd1aad712`;
+  - informe:
+    `861aec992f836802771302e373186880728bf726f7d5f7b9ca5b0afd13732255`;
+  - matriz histórica Qwen:
+    `6a1e54658f745074a7a5a937204181c219ec28d184a866845dd09513497ee1d9`;
+  - preflight guardado:
+    `3b85f5c1aab30012d27df96eec5aabeff7ac932198d45f1dd5536d55903d8445`.
+- Siguiente gate: acreditar broker/worker con identidades segregadas y una DB
+  desechable con roles separados; hasta entonces mantener Qwen/worker real
+  bloqueados y limitar cambios a pruebas offline.
