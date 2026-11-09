@@ -3867,3 +3867,40 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   autenticada con un espacio sintético. No habilitar Qwen/worker hasta verificar
   separadamente el aislamiento del host/broker; usar PostgreSQL desechable
   separado antes de reclamar aprobación persistente o RLS E2E.
+
+## Propuestas adversarias offline de correo/BBDD — 2026-11-09
+
+- Base: HEAD `589e20b3f4c6234ff7bcf1dc1bf841073a023523`, árbol limpio y sin
+  procesos Guardian/Qwen/pruebas distintos de la inspección actual.
+- Preflight guardado de 2026-11-04: `hostBoundaryReady=false`; el proceso de
+  sondeo tiene acceso de lectura/escritura al socket Docker y las identidades y
+  sesiones DB de API/broker/worker no están verificadas. No se refrescó el
+  preflight ni se intentó cambiar el gate.
+- Se añadió una regresión offline para correo y bases de datos con respuestas
+  sintéticas fijas: contrasta procedencia `runtime_message_tool_calls` frente
+  a marcadores completos adaptados. En ambos orígenes Policy independiente
+  deniega por discordancia de alcance de la solicitud; no se despacha ni se
+  crea referencia/hash de aprobación. La validación del adaptador sigue siendo
+  un resultado separado y también fail-closed.
+- Verificación secuencial: `test_policy_lab.py` **39/39**;
+  `test_autonomous_tool_selection.py` **11/11**;
+  `test_qwen_evidence_reconciliation.py` **6/6**; API offline
+  `ai-assessment-qwen-evidence.test.ts` **17/17**; `git diff --check` aprobado.
+  Estas son pruebas unitarias/contractuales offline, no inferencia.
+- No se ejecutaron Qwen, worker privilegiado, Docker/socket, workflows,
+  PostgreSQL ni servicios externos. La persistencia PostgreSQL y RLS runtime
+  continúan sin acreditarse. La suite API verifica contratos/código fuente
+  v3 con datos sintéticos, no una conexión ni una E2E DB.
+- La evidencia de Qwen sigue siendo histórica: 8 inferencias, 7 propuestas
+  adaptadas, 0 `message.tool_calls` nativas y `NO_PROPOSAL` para infraestructura;
+  los 8 fixtures baseline permanecen separados.
+- Informe: `reports/offline-email-database-adversarial-policy-2026-11-09.md`.
+- SHA-256:
+  - `tests/test_policy_lab.py`:
+    `2cd3c403306ca124dd6b27cae4a36d5fa56d182bea3936eea1bc508e33c05d24`;
+  - informe:
+    `d3d257c9538e88a592561410d837542253de23ed758cfd3ec0d796c79cffe9ca`;
+  - preflight guardado: el SHA está registrado en la entrada anterior.
+- Próximo gate: verificar aislamiento independiente de host/broker/worker y
+  disponer de PostgreSQL desechable con roles segregados. Hasta entonces,
+  mantener bloqueadas inferencia Qwen y pruebas persistentes de aprobación/RLS.
