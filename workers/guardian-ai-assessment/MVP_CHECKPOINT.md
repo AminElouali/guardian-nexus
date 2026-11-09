@@ -3598,3 +3598,41 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
 - Siguiente paso: PostgreSQL desechable autorizado, roles separados y E2E
   sintético sobre la política RLS revisada; mantener el gate Qwen cerrado hasta
   acreditar host, broker, socket e identidades.
+
+## Refuerzo offline de aprobación v3 y aislamiento de NO_PROPOSAL — 2026-11-09
+
+- Base: HEAD `b9d5323d4a9443daf72892d90434ede8dd46b764`, árbol limpio.
+- Sin laboratorio PostgreSQL local verificable: no se observó proceso/servicio
+  activo ni listener en 5432/5433. No se leyeron secretos ni variables DB y no
+  se intentó conexión; no se asumió que la DB gestionada fuera desechable.
+- Ampliado el contrato API offline para comprobar políticas SELECT/INSERT/
+  UPDATE RLS, scope tenant/membership/roles, expiración, no autoaprobación,
+  grants de columnas, compare-and-set API para una sola decisión, replay de
+  clon en memoria y cobertura existente de cross-tenant/concurrencia/replay.
+  Se añadió regresión negativa que rechaza evidencia rehasheada que convierte
+  `NO_PROPOSAL` en propuesta adaptada.
+- Verificación serial: worker policy lab **36/36**; reconciliación worker
+  **6/6**; API dirigido **17/17** y suite offline **86/86**; typecheck API
+  aprobado; UI integration **15/15** y typecheck UI aprobado; `git diff --check`
+  aprobado.
+- No se ejecutó PostgreSQL E2E, Qwen, worker real, Docker/socket, servicios
+  externos ni despliegue. La prueba RLS fue estática: no demuestra políticas
+  aplicadas, roles vivos, persistencia, concurrencia real ni auditoría durable.
+- Se mantiene la evidencia histórica: 8 inferencias, 7 propuestas adaptadas,
+  0 `message.tool_calls` nativas y 1 infraestructura `NO_PROPOSAL`; sin
+  aprobación persistida atribuible a Qwen. El preflight guardado de 2026-11-04
+  sigue `hostBoundaryReady=false` y no se repitió.
+- Informe:
+  `reports/offline-v3-approval-rls-race-contract-2026-11-09.md`.
+- SHA-256 de evidencia:
+  - prueba API `artifacts/api-server/src/lib/ai-assessment-qwen-evidence.test.ts`:
+    `6a4dbbee59aeaf7906a34c970cf05a3f7b73a8533359d13369a4ef577b74a2a1`;
+  - informe:
+    `2fed6ea6e1b10d9d0409ee05d36aa031afc191c1ef6f959cca15122c80cd0b33`;
+  - artefacto Qwen histórico:
+    `6a1e54658f745074a7a5a937204181c219ec28d184a866845dd09513497ee1d9`;
+  - preflight guardado:
+    `3b85f5c1aab30012d27df96eec5aabeff7ac932198d45f1dd5536d55903d8445`.
+- Próximo paso: confirmar un PostgreSQL desechable autorizado con roles
+  independientes; aplicar/validar RLS y ejecutar el E2E sintético de aprobación
+  v3. Mantener Qwen y worker real bloqueados hasta acreditar el host/broker.

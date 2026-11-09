@@ -432,6 +432,18 @@ test("offline approval persistence source contract admits provenance-bound v3 un
     new URL("./ai-assessment-worker.ts", import.meta.url),
     "utf8",
   );
+  const routeSource = readFileSync(
+    new URL("../routes/ai-assessment-lab.ts", import.meta.url),
+    "utf8",
+  );
+  const approvalActionsSource = readFileSync(
+    new URL("./ai-assessment-approval-actions.ts", import.meta.url),
+    "utf8",
+  );
+  const persistentApprovalE2eSource = readFileSync(
+    new URL("../ai-assessment-synthetic-approval-e2e.test.ts", import.meta.url),
+    "utf8",
+  );
 
   const insertPolicy = rlsSql.match(
     /CREATE POLICY ai_assessment_approvals_insert_owner[\s\S]*?;\n/,
@@ -487,6 +499,57 @@ test("offline approval persistence source contract admits provenance-bound v3 un
     "duplicate approval records for the same tenant job case must conflict",
   );
 
+  const selectPolicy = rlsSql.match(
+    /CREATE POLICY ai_assessment_approvals_select_member[\s\S]*?;\n/,
+  )?.[0];
+  assert.ok(selectPolicy, "SQL RLS select policy must exist");
+  assert.match(
+    selectPolicy,
+    /workspace_id::text = NULLIF\(current_setting\('app\.workspace_id', true\), ''\)/,
+  );
+  assert.match(
+    selectPolicy,
+    /membership\.user_id = NULLIF\(current_setting\('app\.user_id', true\), ''\)/,
+    "approval reads must require current workspace membership",
+  );
+
+  const updatePolicy = rlsSql.match(
+    /CREATE POLICY ai_assessment_approvals_update_approver[\s\S]*?;\n/,
+  )?.[0];
+  assert.ok(updatePolicy, "SQL RLS update policy must exist");
+  assert.match(
+    updatePolicy,
+    /workspace_id::text = NULLIF\(current_setting\('app\.workspace_id', true\), ''\)/,
+  );
+  assert.match(updatePolicy, /membership\.role IN \('owner', 'admin'\)/);
+  assert.match(updatePolicy, /status = 'pending'/);
+  assert.match(
+    updatePolicy,
+    /requested_by_user_id <> NULLIF\(current_setting\('app\.user_id', true\), ''\)/,
+    "a live approval cannot be self-approved",
+  );
+  assert.match(updatePolicy, /expires_at > now\(\)/);
+  assert.match(updatePolicy, /expires_at <= now\(\)/);
+  assert.match(
+    updatePolicy,
+    /decided_by_user_id = NULLIF\(current_setting\('app\.user_id', true\), ''\)/,
+  );
+  assert.match(
+    updatePolicy,
+    /approver\.role = ai_assessment_approval_requests\.decided_by_role/,
+    "the recorded reviewer role must match current workspace membership",
+  );
+
+  const updateGrant = rlsSql.match(
+    /GRANT UPDATE \([\s\S]*?\)\s+ON TABLE public\.ai_assessment_approval_requests TO app_runtime;/,
+  )?.[0];
+  assert.ok(updateGrant, "runtime approval UPDATE grant must be column-scoped");
+  assert.doesNotMatch(
+    updateGrant,
+    /workspace_id|proposal_sha256|proposal_binding_sha256|binding_version|tool_call_origin/,
+    "runtime decision rights must not mutate tenant or proposal provenance",
+  );
+
   const workerApprovalInsert = workerSource.slice(
     workerSource.indexOf(".insert(aiAssessmentApprovalRequestsTable)"),
     workerSource.indexOf(".returning({", workerSource.indexOf(".insert(aiAssessmentApprovalRequestsTable)")),
@@ -497,6 +560,52 @@ test("offline approval persistence source contract admits provenance-bound v3 un
   assert.match(workerApprovalInsert, /modelInference:\s*candidate\.modelInference/);
   assert.match(workerApprovalInsert, /toolCallOrigin:\s*candidate\.toolCallOrigin/);
   assert.match(workerApprovalInsert, /onConflictDoNothing\(\)/);
+
+  const atomicDecisionUpdate = routeSource.match(
+    /const \[updated\] = await tx[\s\S]*?\.update\(aiAssessmentApprovalRequestsTable\)[\s\S]*?\.returning\(\);/,
+  )?.[0];
+  assert.ok(atomicDecisionUpdate, "approval decision must use one conditional database update");
+  assert.match(atomicDecisionUpdate, /eq\(aiAssessmentApprovalRequestsTable\.workspaceId, workspaceId\)/);
+  assert.match(atomicDecisionUpdate, /eq\(aiAssessmentApprovalRequestsTable\.status, "pending"\)/);
+  assert.match(atomicDecisionUpdate, /proposalBindingSha256,\s*expectedBinding/);
+  assert.match(atomicDecisionUpdate, /gt\(aiAssessmentApprovalRequestsTable\.expiresAt, now\)/);
+  assert.match(atomicDecisionUpdate, /isNull\(aiAssessmentApprovalRequestsTable\.simulatedAt\)/);
+  assert.match(
+    routeSource,
+    /if \(!updated\) return \{ kind: "already_decided" as const \};/,
+    "a lost concurrent compare-and-set must not report a successful replay",
+  );
+  assert.match(
+    routeSource,
+    /externalSideEffect: false/,
+    "approval audit must explicitly record that replay is synthetic-only",
+  );
+  assert.match(
+    approvalActionsSource,
+    /structuredClone\(allowlisted\.initialState\)/,
+    "approval replay helper must operate on a fresh in-memory clone",
+  );
+  assert.doesNotMatch(
+    approvalActionsSource,
+    /\b(fetch|spawn|exec|Pool|connect)\s*\(/,
+    "the offline replay helper must not open external or database connections",
+  );
+
+  assert.match(
+    persistentApprovalE2eSource,
+    /exactly one concurrent approval may consume the proposal/,
+    "the DB-backed E2E must keep its one-winner concurrency assertion",
+  );
+  assert.match(
+    persistentApprovalE2eSource,
+    /cross-tenant decision is denied/,
+    "the DB-backed E2E must keep its cross-tenant denial assertion",
+  );
+  assert.match(
+    persistentApprovalE2eSource,
+    /replay is rejected/,
+    "the DB-backed E2E must keep its one-time replay assertion",
+  );
 });
 
 test("offline worker-to-API reconciliation preserves provenance, Policy ON order, and approval boundaries for all eight profiles", () => {
@@ -1120,6 +1229,36 @@ test("Qwen evidence rejects no-proposal records mislabeled with a different reas
       "guardian-agent-qwen-lab-email-v1",
     ),
     "case_evidence",
+  );
+});
+
+test("Qwen evidence cannot promote a no-proposal case into an adapted tool proposal", () => {
+  const evidence = makeEvidence() as unknown as Record<string, unknown>;
+  const cases = evidence.cases as Record<string, unknown>[];
+  const noProposalCase = cases[0]!;
+  noProposalCase.toolCallOrigin = "guardian_qwen_native_markup_adapter";
+  noProposalCase.toolCallCount = 1;
+  noProposalCase.proposedTool = "propose_external_email_send";
+  noProposalCase.proposalSha256 = HASH;
+  noProposalCase.policyOff = {
+    ...(noProposalCase.policyOff as Record<string, unknown>),
+    wouldExecute: true,
+  };
+  const summary = evidence.summary as Record<string, unknown>;
+  summary.adaptedQwenMarkupCalls = 2;
+  summary.noToolCalls = 2;
+  signCase(noProposalCase);
+  delete evidence.evidenceSha256;
+  evidence.evidenceSha256 = digest(evidence);
+
+  assert.equal(
+    validateGuardianQwenPolicyLabEvidence(
+      evidence as unknown as QwenEvidence,
+      evidence,
+      "guardian-agent-qwen-lab-email-v1",
+    ),
+    "case_evidence",
+    "even internally rehashed synthetic evidence cannot relabel NO_PROPOSAL as a proposal",
   );
 });
 
