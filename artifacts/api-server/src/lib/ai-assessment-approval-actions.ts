@@ -13,6 +13,14 @@ export type ApprovalEvidenceProvenance = {
     | "runtime_message_tool_calls";
 };
 
+export function isApprovalDecisionWindowOpen(
+  status: string,
+  expiresAt: Date,
+  now: Date,
+): boolean {
+  return status === "pending" && expiresAt.getTime() > now.getTime();
+}
+
 export function resolveApprovalEvidenceProvenance(input: {
   engine: unknown;
   executionMode: unknown;

@@ -36,6 +36,7 @@ import {
   computeApprovalProposalBindingV3,
   computeApprovalReplayBinding,
   getAllowlistedSyntheticApprovalAction,
+  isApprovalDecisionWindowOpen,
   resolveApprovalEvidenceProvenance,
   type SyntheticApprovalActionRef,
 } from "../lib/ai-assessment-approval-actions";
@@ -359,6 +360,7 @@ function formatApproval(
   execution: "not_performed" | "simulated_once" = "not_performed",
   canCurrentUserDecide = false,
 ) {
+  const now = new Date();
   return {
     ...approval,
     execution:
@@ -370,13 +372,21 @@ function formatApproval(
         ? "synthetic_action_simulated_once"
         : "not_performed",
     status:
-      approval.status === "pending" && approval.expiresAt <= new Date()
+      approval.status === "pending" &&
+      !isApprovalDecisionWindowOpen(
+        approval.status,
+        approval.expiresAt,
+        now,
+      )
         ? "expired"
         : approval.status,
     canCurrentUserDecide:
       canCurrentUserDecide &&
-      approval.status === "pending" &&
-      approval.expiresAt > new Date(),
+      isApprovalDecisionWindowOpen(
+        approval.status,
+        approval.expiresAt,
+        now,
+      ),
   };
 }
 
@@ -902,7 +912,7 @@ routes.post(
         if (approval.requestedByUserId === req.authUserId) {
           return { kind: "self_approval" as const };
         }
-        if (approval.expiresAt <= now) {
+        if (!isApprovalDecisionWindowOpen(approval.status, approval.expiresAt, now)) {
           const [expired] = await tx
             .update(aiAssessmentApprovalRequestsTable)
             .set({ status: "expired", updatedAt: now })

@@ -486,6 +486,9 @@ test("renders all eight synthetic agent verticals and an API-persisted policy la
   if (policyJob.result?.engine !== "guardian_policy_lab") {
     assert.fail("E2E artifact must contain policy lab evidence");
   }
+  assert.equal(policyJob.result.executionMode, "deterministic_fixture");
+  assert.equal(policyJob.result.proposalOrigin, "controlled_fixture_not_llm");
+  assert.equal(policyJob.result.modelInference, false);
   const resultMarkup = renderToStaticMarkup(
     createElement(AgentPolicyLabResult, { evidence: policyJob.result }),
   );
@@ -494,6 +497,7 @@ test("renders all eight synthetic agent verticals and an API-persisted policy la
   assert.match(resultMarkup, /datos sintéticos/);
   assert.match(resultMarkup, /Ver detalles de la prueba/);
   assert.match(resultMarkup, /Hash de suite/);
+  assert.doesNotMatch(resultMarkup, /inferencia Qwen real/i);
   for (const item of policyJob.result.cases) {
     for (const internalValue of [
       item.caseId,

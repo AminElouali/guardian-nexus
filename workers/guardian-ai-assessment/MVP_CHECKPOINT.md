@@ -3391,3 +3391,41 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   socket Docker inaccesible para API/Qwen y exclusivo del broker, y roles/sesiones
   PostgreSQL independientes. Solo tras preflight verificable se podrán repetir
   inferencias y ejecutar E2E persistente con propuesta Qwen real.
+
+## Contrato offline de expiración y replay de aprobación — 2026-11-09
+
+- Base: HEAD `11091221e4b7c55d461fb75c10ce5df4ab17dba3`, árbol limpio.
+- Se extrajo el predicado puro de ventana de decisión de aprobación y la ruta
+  API lo usa para estados pendientes/expirados; el UPDATE transaccional conserva
+  los filtros SQL de estado, expiración y binding como defensa de concurrencia.
+- Cobertura offline de finanzas/soporte: vencimiento estricto en el instante
+  límite; replay digest ligado a propuesta, revisor, rol, hora y resultado; y
+  recibos repetidos idénticos contra clones sintéticos en memoria.
+  Esto no demuestra escritura PostgreSQL, auditoría durable, ni aprobación
+  originada en una inferencia Qwen.
+- UI refuerza que el informe de los ocho perfiles deterministas se identifica
+  como `deterministic_fixture` / `controlled_fixture_not_llm`, separado de Qwen.
+- Pruebas seriales verificadas: worker `test_policy_lab` **36/36** y
+  `test_qwen_evidence_reconciliation` **6/6**; API Qwen/approval contract
+  **12/12** y typecheck API correcto; UI integration **15/15** y typecheck UI
+  correcto. `git diff --check` correcto.
+- No se iniciaron Qwen, worker real, Docker, preflight vivo, PostgreSQL,
+  conectores ni despliegue. El gate de host permanece sin acreditación; no se
+  declara persistencia ni ejecución API→worker aislada.
+- El artefacto histórico de ocho perfiles no cambió: **7 propuestas adaptadas,
+  0 llamadas nativas y 1 NO_PROPOSAL en infraestructura**; fixtures separados.
+  SHA-256 `6a1e54658f745074a7a5a937204181c219ec28d184a866845dd09513497ee1d9`.
+- Hashes de cambios comprobados:
+  - `src/lib/ai-assessment-approval-actions.ts`:
+    `e1e9c627095551546fe7a5c829a8367d05e108834b0930bc7ac70b9ff47d379f`.
+  - `src/routes/ai-assessment-lab.ts`:
+    `f9e8e32b928f519adc93c0590e688d5e0af7457678d2ebd3a4c1288321f2570f`.
+  - `src/lib/ai-assessment-qwen-evidence.test.ts`:
+    `3e53fb0b41391cc0b4555a8dde8e95ee3000f0b553f9bb3ffd7e094e88f66777`.
+  - `src/components/AiEvaluationPage.integration.test.tsx`:
+    `cd20dd300bb92b70ec703437964409086707be16330f6cbea0198a29d4feaab1`.
+  - Informe `reports/offline-approval-lifecycle-contracts-2026-11-09.md`:
+    `46bfc8e8f7394f537dd65530f2e4cb4b8745b6c808e65a18da9f5e5edb622846`.
+- Próximo paso: acreditar host autorizado con identidades API/worker/broker
+  distintas, socket Docker visible solo al broker y roles/sesiones PostgreSQL
+  separados. Después ejecutar el E2E persistente sintético bajo ese gate.

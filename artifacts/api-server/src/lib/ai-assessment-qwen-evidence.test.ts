@@ -10,7 +10,9 @@ import {
 import {
   createSyntheticApprovalSimulationReceipt,
   computeApprovalProposalBindingV3,
+  computeApprovalReplayBinding,
   getAllowlistedSyntheticApprovalAction,
+  isApprovalDecisionWindowOpen,
   resolveApprovalEvidenceProvenance,
 } from "./ai-assessment-approval-actions";
 
@@ -135,6 +137,110 @@ test("approval binding v3 is provenance-bound and rejects unverified origins", (
       adaptedBinding,
       "tenant, job, proposal, action, requester, role and expiry must be hash-bound",
     );
+  }
+});
+
+test("offline finance/support approval contract binds expiry, approver audit, replay, and idempotent clone receipts", () => {
+  const now = new Date("2026-11-09T12:00:00.000Z");
+  const expiresAt = new Date("2026-11-09T12:05:00.000Z");
+  assert.equal(isApprovalDecisionWindowOpen("pending", expiresAt, now), true);
+  assert.equal(
+    isApprovalDecisionWindowOpen("pending", now, now),
+    false,
+    "expiry is exclusive at the exact boundary",
+  );
+  assert.equal(isApprovalDecisionWindowOpen("approved", expiresAt, now), false);
+  assert.equal(
+    isApprovalDecisionWindowOpen(
+      "pending",
+      new Date(now.getTime() - 1),
+      now,
+    ),
+    false,
+  );
+
+  const profiles = [
+    {
+      profileId: "guardian-agent-qwen-lab-finance-v1",
+      caseId: "qwen_finance_benign_bank_change_request_es",
+      actionRef: "guardian.synthetic.finance.bank-change.v1" as const,
+      tool: "request_bank_account_change",
+      resultCode: "synthetic_bank_change_approved_in_clone",
+    },
+    {
+      profileId: "guardian-agent-qwen-lab-customer-service-v1",
+      caseId: "qwen_support_benign_refund_approval_es",
+      actionRef: "guardian.synthetic.support.refund.v1" as const,
+      tool: "propose_synthetic_refund",
+      resultCode: "synthetic_refund_approved_in_clone",
+    },
+  ];
+
+  for (const profile of profiles) {
+    const action = getAllowlistedSyntheticApprovalAction(
+      profile.actionRef,
+      profile.profileId,
+      profile.caseId,
+      profile.tool,
+    );
+    assert.ok(action);
+    const proposalBindingSha256 = computeApprovalProposalBindingV3({
+      workspaceId: `synthetic-${profile.profileId}`,
+      jobId: `offline-${profile.profileId}`,
+      caseId: profile.caseId,
+      proposalSha256: action.proposalSha256,
+      actionSha256: action.actionSha256,
+      syntheticActionRef: profile.actionRef,
+      requestedByUserId: "synthetic-requester",
+      requestedByRole: "member",
+      expiresAt,
+      modelInference: false,
+      executionMode: "deterministic_fixture",
+      toolCallOrigin: "controlled_fixture_not_llm",
+    });
+    const receipt = createSyntheticApprovalSimulationReceipt(action);
+    assert.ok(receipt);
+    assert.equal(receipt.resultCode, profile.resultCode);
+
+    const replayInput = {
+      proposalBindingSha256,
+      decision: "approved" as const,
+      decidedByUserId: "synthetic-reviewer",
+      decidedByRole: profile.profileId.includes("finance")
+        ? "finance_reviewer"
+        : "support_reviewer",
+      decidedAt: now,
+      simulationResultCode: receipt.resultCode,
+      simulationResultSha256: receipt.resultSha256,
+    };
+    const replayBindingSha256 = computeApprovalReplayBinding(replayInput);
+    assert.match(replayBindingSha256, /^[a-f0-9]{64}$/);
+    assert.equal(
+      computeApprovalReplayBinding(replayInput),
+      replayBindingSha256,
+      "repeating the same synthetic decision produces the same replay digest",
+    );
+    for (const mutation of [
+      { ...replayInput, proposalBindingSha256: "0".repeat(64) },
+      { ...replayInput, decidedByUserId: "different-reviewer" },
+      { ...replayInput, decidedByRole: "viewer" },
+      { ...replayInput, decidedAt: new Date(now.getTime() + 1) },
+      { ...replayInput, simulationResultSha256: "f".repeat(64) },
+      { ...replayInput, simulationResultCode: "different-result" },
+    ]) {
+      assert.notEqual(
+        computeApprovalReplayBinding(mutation),
+        replayBindingSha256,
+        "replay audit digest must bind proposal, reviewer, role, time, and result",
+      );
+    }
+
+    const firstReceipt = createSyntheticApprovalSimulationReceipt(action);
+    const replayReceipt = createSyntheticApprovalSimulationReceipt(action);
+    assert.deepEqual(replayReceipt, firstReceipt);
+    assert.equal(receipt.resultSha256, action.simulationResultSha256);
+    assert.equal(receipt.beforeStateSha256, action.beforeStateSha256);
+    assert.equal(receipt.afterStateSha256, action.afterStateSha256);
   }
 });
 
