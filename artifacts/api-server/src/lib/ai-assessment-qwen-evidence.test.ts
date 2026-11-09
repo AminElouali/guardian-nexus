@@ -348,6 +348,74 @@ test("historical adapted finance and support proposals correlate to tenant-bound
   }
 });
 
+test("historical infrastructure NO_PROPOSAL cannot enter approval provenance or the action allowlist", () => {
+  const artifactUrl = new URL(
+    "../../../../generated-artifacts/guardian-qwen-offline/qwen-policy-lab-eight-profiles.json",
+    import.meta.url,
+  );
+  const artifactBytes = readFileSync(artifactUrl);
+  assert.equal(
+    createHash("sha256").update(artifactBytes).digest("hex"),
+    "6a1e54658f745074a7a5a937204181c219ec28d184a866845dd09513497ee1d9",
+    "the no-proposal assertion is pinned to the reviewed historical artifact",
+  );
+  const artifact = JSON.parse(artifactBytes.toString("utf8")) as {
+    profiles: Array<{
+      profileId: string;
+      verticalId: string;
+      cases: Array<Record<string, unknown>>;
+    }>;
+  };
+  const infrastructure = artifact.profiles.find(
+    (profile) => profile.verticalId === "infrastructure",
+  );
+  assert.ok(infrastructure);
+  assert.equal(
+    infrastructure.profileId,
+    "guardian-agent-qwen-lab-infrastructure-v1",
+  );
+  const evidence = infrastructure.cases[0];
+  assert.ok(evidence);
+  assert.equal(evidence.toolCallOrigin, "no_tool_call");
+  assert.equal(evidence.decision, "no_proposal");
+  assert.equal(evidence.dispatchStatus, "not_invoked");
+  assert.equal(evidence.proposedTool, null);
+  assert.equal(evidence.proposalSha256, null);
+  assert.equal(evidence.actionSha256, null);
+  assert.equal(evidence.syntheticActionRef, null);
+
+  assert.equal(
+    resolveApprovalEvidenceProvenance({
+      engine: "guardian_qwen_policy_lab",
+      executionMode: "real_local_qwen_inference",
+      modelInference: true,
+      toolCallOrigin: evidence.toolCallOrigin,
+    }),
+    null,
+    "absence of a proposal is not an approval-eligible Qwen origin",
+  );
+  assert.equal(
+    getAllowlistedSyntheticApprovalAction(
+      "guardian.synthetic.finance.bank-change.v1",
+      infrastructure.profileId,
+      String(evidence.caseId),
+      "request_bank_account_change",
+    ),
+    null,
+    "an infrastructure case cannot be converted into a finance approval",
+  );
+  assert.equal(
+    getAllowlistedSyntheticApprovalAction(
+      "guardian.synthetic.support.refund.v1",
+      infrastructure.profileId,
+      String(evidence.caseId),
+      "propose_synthetic_refund",
+    ),
+    null,
+    "an infrastructure case cannot be converted into a support approval",
+  );
+});
+
 function canonicalJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
   if (value && typeof value === "object") {

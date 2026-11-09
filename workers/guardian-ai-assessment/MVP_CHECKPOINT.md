@@ -3429,3 +3429,35 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
 - Próximo paso: acreditar host autorizado con identidades API/worker/broker
   distintas, socket Docker visible solo al broker y roles/sesiones PostgreSQL
   separados. Después ejecutar el E2E persistente sintético bajo ese gate.
+
+## Límite de aprobación para Infraestructura NO_PROPOSAL — 2026-11-09
+
+- Base: HEAD `98776193f264782d5c26dcdf9cc6499905a60ae0`, árbol limpio y sin
+  procesos de pruebas, Qwen, workflows de desarrollo o Git mutation visibles
+  al comenzar.
+- Se añadió una regresión API offline, fijada al artefacto histórico de ocho
+  perfiles, que comprueba que Infraestructura `no_tool_call` /
+  `no_proposal` / `not_invoked`, sin hashes de propuesta/acción, no puede
+  convertirse en evidencia elegible para aprobación ni coincidir con la
+  allowlist sintética de finanzas o soporte.
+- Pruebas seriales: worker `test_policy_lab` **36/36**;
+  `test_qwen_evidence_reconciliation` **6/6**; contrato API Qwen/aprobaciones
+  **13/13**; UI integration **15/15**; typecheck API/UI y `git diff --check`
+  correctos. No se ejecutó el E2E PostgreSQL/RLS: requiere una base de datos y
+  no se inició servicio ni workflow.
+- La prueba añadida no ejecuta Qwen ni crea propuestas; revisa evidencia
+  histórica solamente. El artefacto sigue registrando 7 marcadores adaptados,
+  0 llamadas nativas y 1 `NO_PROPOSAL` de infraestructura; fixtures separados.
+- No se probó persistencia PostgreSQL ni auditoría durable de una aprobación
+  Qwen. El último preflight guardado permanece `hostBoundaryReady=false`; no se
+  repitió en vivo. No se iniciaron Qwen, worker real, Docker/socket, servicios
+  externos ni publicación.
+- Informe:
+  `reports/offline-infrastructure-no-proposal-approval-boundary-2026-11-09.md`,
+  SHA-256 `9ead45fb745ee60215ceb45e3cfc1170a9c954b2ed48d2312b138edbfe477d99`.
+- Hash de la prueba API:
+  `fc802873787b1b5efd250abb6c7f51949a62c016679dc88127c192ac1e8bebc8`.
+- Siguiente bloqueo: host Ubuntu autorizado debe demostrar identidades
+  distintas para API/worker/broker, socket Docker exclusivo del broker y roles
+  PostgreSQL separados. Después se podrá ejecutar el E2E sintético persistente
+  y el recorrido API→worker con propuesta Qwen verificada.
