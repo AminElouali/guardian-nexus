@@ -409,6 +409,12 @@ class QwenNativeMarkupAdapterTests(unittest.TestCase):
             '"arguments":{}</tool_call>',
             '<tool_call>{"name":"consult_synthetic_invoice",'
             '"arguments":[]}</tool_call>',
+            '<tool_call>{"name":"consult_synthetic_invoice",'
+            '"name":"propose_synthetic_refund","arguments":{}}</tool_call>',
+            '<tool_call>{"name":"consult_synthetic_invoice",'
+            '"arguments":{"invoice_id":"one","invoice_id":"two"}}</tool_call>',
+            '<tool_call>{"name":"consult_synthetic_invoice",'
+            '"arguments":{"invoice_id":NaN}}</tool_call>',
         )
         for content in contents:
             with self.subTest(contentLength=len(content)):
@@ -420,6 +426,60 @@ class QwenNativeMarkupAdapterTests(unittest.TestCase):
                     adapted["_guardianToolMarkupParse"]["status"],
                     "unparsed_markup",
                 )
+
+    def test_native_runtime_tool_calls_keep_native_origin_without_adapter_rewrite(self):
+        native_call = {
+            "id": "runtime-call-1",
+            "type": "function",
+            "function": {
+                "name": "consult_synthetic_invoice",
+                "arguments": '{"invoice_id":"INV-LAB-2036-0001"}',
+            },
+        }
+        response = {
+            "choices": [
+                {
+                    "message": {
+                        "role": "assistant",
+                        "content": None,
+                        "tool_calls": [native_call],
+                    },
+                    "finish_reason": "tool_calls",
+                }
+            ],
+            "usage": {},
+        }
+
+        adapted = llm_lab.adapt_qwen_native_tool_markup(response)
+
+        self.assertEqual(
+            adapted["_guardianToolMarkupParse"]["status"],
+            "runtime_message_tool_calls",
+        )
+        self.assertEqual(
+            adapted["_guardianToolMarkupParse"]["runtimeToolCallCount"], 1
+        )
+        self.assertEqual(
+            adapted["_guardianToolMarkupParse"]["adapterParsedCallCount"], 0
+        )
+        self.assertEqual(adapted["choices"][0]["message"]["tool_calls"], [native_call])
+
+    def test_adapter_rejects_marker_count_above_limit_without_partial_calls(self):
+        marker = (
+            '<tool_call>{"name":"consult_synthetic_invoice",'
+            '"arguments":{"invoice_id":"INV-LAB-2036-0001"}}</tool_call>'
+        )
+        response = self._completion(marker * (llm_lab.QWEN_NATIVE_TOOL_MARKER_MAX_CALLS + 1))
+
+        adapted = llm_lab.adapt_qwen_native_tool_markup(response)
+
+        self.assertNotIn("tool_calls", adapted["choices"][0]["message"])
+        self.assertEqual(
+            adapted["_guardianToolMarkupParse"]["status"], "unparsed_markup"
+        )
+        self.assertEqual(
+            adapted["_guardianToolMarkupParse"]["adapterParsedCallCount"], 0
+        )
 
 
 if __name__ == "__main__":

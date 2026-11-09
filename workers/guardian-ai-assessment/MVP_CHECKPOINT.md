@@ -3294,3 +3294,57 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   bloqueado: verificar UID/GID distintos, ACL del socket y roles/sesiones DB
   desde un host de laboratorio autorizado; entonces repetir la ruta persistente
   y las inferencias reales.
+
+## Contratos offline y parser estricto de Qwen — 2026-11-05
+
+- Base: HEAD `5088a78f99a06ca3346adea4988595a19d6142ef`, árbol limpio. Ese commit
+  añadió GSAP/React Three Fiber/Three.js y tipos Three al paquete web más su
+  lockfile. No añadió dependencias de API o worker. Typecheck y build web
+  posteriores pasaron; no se instalaron ni descargaron paquetes en este hito
+  ni se hizo auditoría CVE/licencias.
+- El parser Qwen ahora rechaza claves JSON duplicadas (también anidadas) y
+  constantes no estándar como `NaN`/`Infinity`. Los nuevos tests verifican
+  también que `message.tool_calls` del runtime conserva origen nativo, que
+  marcadores adaptados no se etiquetan como nativos y que exceder el máximo de
+  marcadores falla sin aceptar llamadas parciales.
+- Se amplió la prueba unitaria del binding v3 de aprobación para confirmar que
+  mutar tenant, job, caso, hash de propuesta/acción, solicitante, rol o
+  expiración cambia el digest. No cambió el Policy Engine ni el flujo API.
+- Pruebas ejecutadas en serie, sin Qwen, Docker, red, secretos ni DB:
+  - `test_autonomous_tool_selection.py`: 11/11.
+  - `test_policy_lab.py`: 35/35.
+  - `test_offline_isolation_preflight.py`: 15/15 (unit tests con mocks; no
+    preflight vivo).
+  - API Qwen evidence + action adapter + policy preview: 16/16.
+  - API typecheck/build: correctos.
+  - UI `AiEvaluationPage.integration.test.tsx`: 14/14.
+  - UI typecheck/build: correctos; avisos de sourcemap y bundle >500 kB.
+  - `git diff --check`: correcto.
+- Cobertura verificada: fixtures deterministas y dobles de parser separan
+  `controlled_fixture_not_llm`, marcador Qwen adaptado,
+  `runtime_message_tool_calls` y `no_tool_call`; Policy ON antes del simulador;
+  DENY y REQUIRE_APPROVAL no despachan; Policy OFF permanece solo en clones;
+  pruebas unitarias de aprobación sintética allow-listed para finanzas/soporte.
+  Estas pruebas no son inferencia real ni E2E persistente de PostgreSQL.
+- Evidencia Qwen no cambia: sigue siendo histórica, 8 inferencias registradas,
+  7 marcadores adaptados, 0 llamadas nativas y 1 `NO_PROPOSAL`; no se ejecutó
+  inferencia nueva ni se probó aprobación persistente originada por Qwen.
+- El preflight vivo no se repitió. El JSON del 2026-11-04 permanece bloqueado:
+  socket Docker accesible por el proceso, nombres de variables sensibles
+  presentes e identidades/sesiones de DB no verificadas;
+  `hostBoundaryReady=false`. SHA-256 del JSON:
+  `3b85f5c1aab30012d27df96eec5aabeff7ac932198d45f1dd5536d55903d8445`.
+- Reporte detallado:
+  `reports/offline-qwen-contracts-parser-approvals-2026-11-05.md`,
+  SHA-256 `0aa8ad0e5a7cc6dcabd909287fc3bab547f5ae9d1f50d74f0aa274f28a875854`.
+  SHA-256 de fuentes/tests:
+  - `guardian_ai_assessment/llm_lab.py`:
+    `b3a0a5d2ac73a2b03598f6d671d3c687a8f84072dd402ea5f31b7f2a853591a4`.
+  - `tests/test_autonomous_tool_selection.py`:
+    `91c6f79af931f8dfd0acd912e01daceb18e14e05c79091dfd2b475a20dbcad2a`.
+  - `artifacts/api-server/src/lib/ai-assessment-qwen-evidence.test.ts`:
+    `a2ecd9dd8f5705331104b6f0ff2c5bdf14f47e983411c5bedd65b2d54db89100`.
+- Bloqueos intactos: probar identidad UID/GID separada, API sin socket Docker,
+  socket exclusivo del broker y roles/sesiones DB independientes en un host
+  autorizado; después repetir inferencias Qwen por perfil y aprobación persistente
+  PostgreSQL derivada de una propuesta Qwen real.

@@ -574,6 +574,21 @@ def sha256_json(value: Any) -> str:
     return sha256_text(canonical_json(value))
 
 
+def _strict_json_object_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    """Reject duplicate member names instead of accepting parser-dependent values."""
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate_json_object_key")
+        result[key] = value
+    return result
+
+
+def _reject_nonstandard_json_constant(value: str) -> None:
+    """Python's json module accepts NaN/Infinity by default; tool JSON must not."""
+    raise ValueError("nonstandard_json_constant")
+
+
 def adapt_qwen_native_tool_markup(response: dict[str, Any]) -> dict[str, Any]:
     """Normalize only complete Qwen GGUF tool markers into structured calls.
 
@@ -640,7 +655,11 @@ def adapt_qwen_native_tool_markup(response: dict[str, Any]) -> dict[str, Any]:
     normalized_calls: list[dict[str, Any]] = []
     try:
         for index, match in enumerate(matches):
-            payload = json.loads(match.group(1))
+            payload = json.loads(
+                match.group(1),
+                object_pairs_hook=_strict_json_object_pairs,
+                parse_constant=_reject_nonstandard_json_constant,
+            )
             if (
                 not isinstance(payload, dict)
                 or set(payload) != {"name", "arguments"}

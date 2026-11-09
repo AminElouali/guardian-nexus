@@ -114,6 +114,27 @@ test("approval binding v3 is provenance-bound and rejects unverified origins", (
   });
   assert.match(adaptedBinding, /^[a-f0-9]{64}$/);
   assert.notEqual(adaptedBinding, nativeBinding);
+
+  const bindingMutations = [
+    { ...base, workspaceId: "workspace-2" },
+    { ...base, jobId: "job-2" },
+    { ...base, caseId: "support-refund-case-2" },
+    { ...base, proposalSha256: "c".repeat(64) },
+    { ...base, actionSha256: "d".repeat(64) },
+    { ...base, requestedByUserId: "requester-2" },
+    { ...base, requestedByRole: "admin" },
+    { ...base, expiresAt: new Date("2026-11-05T12:00:00.000Z") },
+  ];
+  for (const mutation of bindingMutations) {
+    assert.notEqual(
+      computeApprovalProposalBindingV3({
+        ...mutation,
+        ...adaptedQwen!,
+      }),
+      adaptedBinding,
+      "tenant, job, proposal, action, requester, role and expiry must be hash-bound",
+    );
+  }
 });
 
 function canonicalJson(value: unknown): string {
