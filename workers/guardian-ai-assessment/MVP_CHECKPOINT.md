@@ -3636,3 +3636,47 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
 - Próximo paso: confirmar un PostgreSQL desechable autorizado con roles
   independientes; aplicar/validar RLS y ejecutar el E2E sintético de aprobación
   v3. Mantener Qwen y worker real bloqueados hasta acreditar el host/broker.
+
+## Refuerzo offline del parser Qwen e Infraestructura NO_PROPOSAL — 2026-11-09
+
+- Base: HEAD `c297ca1e58a92a91279a5e6d0cb6e80085a85f6c`, árbol limpio.
+- Sin DB desechable verificada: no se hallaron proceso/servicio PostgreSQL ni
+  listener local 5432/5433. No se leyeron credenciales ni variables, no se
+  conectó DB; no se asumió que la DB gestionada fuera desechable.
+- Se ampliaron tests sintéticos del parser para rechazar texto residual tras
+  marcadores y cierres huérfanos sin generar llamadas parciales. Un marcador
+  malformado en el caso adversario de infraestructura debe resultar
+  `unparsed_qwen_native_markup`/DENY, bloqueado por parser y sin invocar
+  simulador. La evidencia histórica Infraestructura `NO_PROPOSAL` se conserva
+  sin inventar propuesta.
+- Cobertura preexistente conservada: ocho perfiles sintéticos, Policy ON antes
+  del despacho, denegaciones cross-tenant, binding/expiración/replay v3 y
+  separación de procedencia.
+- Pruebas en serie: worker offline **59/59**; API dirigido **17/17** y suite
+  offline **86/86**; typecheck API aprobado; UI integration **15/15** y
+  typecheck UI aprobado; `git diff --check` aprobado.
+- No se ejecutó E2E PostgreSQL por falta de destino desechable verificado. Las
+  pruebas RLS siguen estáticas; no prueban persistencia, RLS viva, aislamiento
+  tenant, concurrencia real ni auditoría durable. No se ejecutaron Qwen, worker
+  real, Docker/socket, servicios externos ni despliegue.
+- El artefacto Qwen sigue histórico: 8 llamadas, 7 propuestas adaptadas, 0
+  tool_calls nativas y 1 infraestructura `NO_PROPOSAL`; sin inferencia nueva.
+  Preflight guardado 2026-11-04 sigue `hostBoundaryReady=false`, no repetido.
+- Informe:
+  `reports/offline-qwen-parser-infrastructure-approval-v3-2026-11-09.md`.
+- SHA-256 de evidencia:
+  - parser:
+    `tests/test_autonomous_tool_selection.py` —
+    `aee6f211cd7e0fdff4613c2cf8b2cc7a446acd117b7fa54bcf639b065bf01ca3`;
+  - política/infraestructura:
+    `tests/test_policy_lab.py` —
+    `0f29033b332c43b6976358e7f8b99e3d5af9e08b9347b35cdeb75f4dce101a48`;
+  - informe:
+    `f21aca9d68a901ac8f0d70e0118514cc5ba3ef5e40d34fdad7c609e14cea7516`;
+  - artefacto Qwen histórico:
+    `6a1e54658f745074a7a5a937204181c219ec28d184a866845dd09513497ee1d9`;
+  - preflight guardado:
+    `3b85f5c1aab30012d27df96eec5aabeff7ac932198d45f1dd5536d55903d8445`.
+- Siguiente gate: DB de desarrollo desechable autorizada y roles separados para
+  E2E de aprobación v3/RLS; mantener Qwen/worker cerrados hasta acreditar
+  host/broker e identidades.

@@ -406,6 +406,9 @@ class QwenNativeMarkupAdapterTests(unittest.TestCase):
             'I might call this: <tool_call>{"name":"consult_synthetic_invoice",'
             '"arguments":{}}</tool_call>',
             '<tool_call>{"name":"consult_synthetic_invoice",'
+            '"arguments":{}}</tool_call> trailing prose is not a tool call',
+            '</tool_call>',
+            '<tool_call>{"name":"consult_synthetic_invoice",'
             '"arguments":{}</tool_call>',
             '<tool_call>{"name":"consult_synthetic_invoice",'
             '"arguments":[]}</tool_call>',
