@@ -116,9 +116,10 @@ test("viewer sees executive summary and snapshot, not admin source or STPA inter
   const html = renderPage("viewer");
   assert.match(html, /data-testid="risk-intelligence-page"/);
   assert.match(html, /Catálogo consultivo; no es un control de ejecución/);
-  assert.match(html, /Guardian Policy Engine existente sigue siendo el único decisor determinista/);
+  assert.match(html, /no modifica las decisiones de autorización/);
   assert.match(html, /Controles asociados y estado de evidencia/);
-  assert.match(html, /Prueba fixture · no inferencia Qwen/);
+  assert.match(html, /Prueba sintética/);
+  assert.doesNotMatch(html.replace(/\sdata-testid="[^"]*"/g, ""), /Qwen/i);
   assert.match(html, /No verificado en esta fase/);
   assert.match(html, /Ver evaluaciones y aprobaciones/);
   assert.equal((html.match(/data-testid="risk-profile-/g) ?? []).length, 8);
@@ -141,7 +142,7 @@ test("workspace admins see detailed STPA items and artifact provenance", () => {
 test("page exposes only an advisory capability analyzer, not policy or execution controls", () => {
   const html = renderPage("analyst");
   assert.match(html, /Analizar declaración local/);
-  assert.match(html, /no puntúa riesgos, no modifica políticas ni despacha herramientas/i);
+  assert.match(html, /no puntúa riesgos, no modifica las decisiones de autorización ni ejecuta acciones/i);
   assert.doesNotMatch(html, /<button[^>]+(?:approve|execute|allow|deny)/i);
   assert.equal((html.match(/data-testid="risk-profile-/g) ?? []).length, 8);
 });

@@ -36,10 +36,21 @@ const statusText: Record<ReviewState, string> = {
 
 const evidenceStatusText: Record<ControlEvidenceStatus, string> = {
   historical_artifact_not_currently_reproducible: "Histórico · no reproducible ahora",
-  historical_fixture_only: "Prueba fixture · no inferencia Qwen",
+  historical_fixture_only: "Fixture sintético · sin inferencia",
   blocked_by_current_host_preflight: "Bloqueado por el preflight del host",
   not_verified_in_this_phase: "No verificado en esta fase",
 };
+
+function evidenceStatusLabel(status: ControlEvidenceStatus, detailed: boolean) {
+  if (detailed) return evidenceStatusText[status];
+  const publicLabels: Record<ControlEvidenceStatus, string> = {
+    historical_artifact_not_currently_reproducible: "Histórica · no reproducible ahora",
+    historical_fixture_only: "Prueba sintética",
+    blocked_by_current_host_preflight: "No disponible actualmente",
+    not_verified_in_this_phase: "No verificado en esta fase",
+  };
+  return publicLabels[status];
+}
 
 const iconByProfile: Record<string, typeof Mail> = {
   email: Mail,
@@ -69,6 +80,49 @@ function ReferenceList({ ids }: { ids: string[] }) {
   const sources = RISK_INTELLIGENCE_CATALOG.sources.filter((source) => ids.includes(source.id));
   return <span>{sources.map((source) => source.name).join(" · ") || "Referencia STPA interna"}</span>;
 }
+
+const publicEvidenceCopy: Record<string, { title: string; result: string; limitation: string }> = {
+  "historical-qwen-offline": {
+    title: "Evaluación histórica de laboratorio",
+    result: "Se conserva evidencia histórica de una prueba local; no es reproducible con el entorno actual.",
+    limitation: "No es una ejecución nueva ni permite generalizar resultados.",
+  },
+  "current-qwen-preflight": {
+    title: "Disponibilidad de nuevas pruebas locales",
+    result: "Las nuevas ejecuciones permanecen bloqueadas por comprobaciones previas del entorno.",
+    limitation: "No se inició una evaluación ni una tarea local.",
+  },
+  "historical-qwen-allow-review": {
+    title: "Revisión retrospectiva de decisiones",
+    result: "Revisión de evidencia histórica; no es una prueba nueva ni una garantía de seguridad.",
+    limitation: "La evidencia disponible no establece la causa de cada decisión observada.",
+  },
+  "synthetic-approval-e2e": {
+    title: "Prueba de aprobación sintética",
+    result: "Prueba con datos ficticios; no equivale a una aprobación basada en una sesión real.",
+    limitation: "No acredita una decisión de un usuario real.",
+  },
+  "policy-fixture-baseline": {
+    title: "Escenarios deterministas de referencia",
+    result: "Los fixtures de laboratorio se mantienen separados de la evidencia de inferencia.",
+    limitation: "El catálogo no volvió a ejecutar estos escenarios ni demuestra eficacia general.",
+  },
+  "tenant-rls-risk-cases": {
+    title: "Pruebas de aislamiento de datos",
+    result: "No se ejecutaron pruebas de base de datos para estos escenarios.",
+    limitation: "La biblioteca no sustituye la verificación de controles del espacio.",
+  },
+  "docker-broker-separation": {
+    title: "Separación del evaluador",
+    result: "La separación entre la API y el evaluador no está acreditada en este entorno.",
+    limitation: "No se modificó la configuración del host ni se ejecutaron contenedores.",
+  },
+  "ipv6-dual-stack": {
+    title: "Conectividad de red",
+    result: "El comportamiento de IPv6 no está verificado en esta fase.",
+    limitation: "No se realizó una prueba de red.",
+  },
+};
 
 function ProfileCard({
   profile,
@@ -115,13 +169,13 @@ function ProfileCard({
             {relatedControls.map((record) => (
               <li key={record.id}>
                 <div className="risk-associated-control-head">
-                  <b>{record.title}</b>
+                  <b>{showTechnicalDetails ? record.title : publicEvidenceCopy[record.id]?.title ?? "Evidencia de referencia"}</b>
                   <span className={`risk-evidence-status risk-evidence-status-${record.status}`}>
-                    {evidenceStatusText[record.status]}
+                    {evidenceStatusLabel(record.status, showTechnicalDetails)}
                   </span>
                 </div>
-                <p>{record.result}</p>
-                <small>{record.limitation}</small>
+                <p>{showTechnicalDetails ? record.result : publicEvidenceCopy[record.id]?.result ?? "El estado de esta evidencia no está verificado."}</p>
+                <small>{showTechnicalDetails ? record.limitation : publicEvidenceCopy[record.id]?.limitation ?? "El estado requiere revisión."}</small>
                 {showTechnicalDetails && (
                   <>
                     {record.technicalDetails && <small>{record.technicalDetails}</small>}
@@ -191,15 +245,16 @@ function ControlEvidencePanel({ detailed }: { detailed: boolean }) {
         {RISK_INTELLIGENCE_CATALOG.controlEvidenceSnapshot.freshness}
       </p>
       <div className="risk-evidence-grid">
-        {RISK_INTELLIGENCE_CATALOG.controlEvidenceSnapshot.records.map((record) => (
-          <article key={record.id} data-testid={`risk-evidence-${record.id}`}>
+        {RISK_INTELLIGENCE_CATALOG.controlEvidenceSnapshot.records.map((record) => {
+          const safeCopy = publicEvidenceCopy[record.id];
+          return <article key={record.id} data-testid={`risk-evidence-${record.id}`}>
             <div className="risk-evidence-card-head">
-              <h3>{record.title}</h3>
+              <h3>{detailed ? record.title : safeCopy?.title ?? "Registro de evidencia"}</h3>
               <span className={`risk-evidence-status risk-evidence-status-${record.status}`}>
-                {evidenceStatusText[record.status]}
+                {evidenceStatusLabel(record.status, detailed)}
               </span>
             </div>
-            <p>{record.result}</p>
+            <p>{detailed ? record.result : safeCopy?.result ?? "El estado de esta evidencia no está verificado."}</p>
             {detailed && record.technicalDetails && (
               <p className="risk-evidence-technical">{record.technicalDetails}</p>
             )}
@@ -207,9 +262,9 @@ function ControlEvidencePanel({ detailed }: { detailed: boolean }) {
             {detailed && record.evidenceSha256 && (
               <code className="risk-evidence-hash">SHA-256 {record.evidenceSha256}</code>
             )}
-            <p className="risk-evidence-limitation">{record.limitation}</p>
-          </article>
-        ))}
+            <p className="risk-evidence-limitation">{detailed ? record.limitation : safeCopy?.limitation ?? "El estado requiere revisión."}</p>
+          </article>;
+        })}
       </div>
     </section>
   );
@@ -385,9 +440,8 @@ export default function RiskIntelligencePage({
         <div>
           <b>Catálogo consultivo; no es un control de ejecución</b>
           <p>
-            El análisis local no puntúa riesgos, no modifica políticas ni despacha herramientas.
-            El Guardian Policy Engine existente sigue siendo el único decisor determinista.
-            Los escenarios STPA son especificaciones sintéticas y no se han ejecutado en este
+            El análisis local no puntúa riesgos, no modifica las decisiones de autorización ni
+            ejecuta acciones. Los escenarios son especificaciones sintéticas y no se han ejecutado en este
             incremento.
           </p>
         </div>
@@ -395,7 +449,7 @@ export default function RiskIntelligencePage({
       </section>
 
       <section className="risk-executive-strip" aria-label="Resumen de cobertura del catálogo">
-        <div><b>8</b><span>verticales modeladas</span></div>
+        <div><b>{RISK_INTELLIGENCE_CATALOG.profiles.length}</b><span>verticales modeladas</span></div>
         <div><b>{preparedCaseCount}</b><span>casos sintéticos preparados</span></div>
         <div><b>0</b><span>casos STPA ejecutados</span></div>
         <Link href="/ai-evaluations" className="button button-secondary" data-testid="link-risk-evaluations">

@@ -257,13 +257,13 @@ function AppShell({ children, workspace }: { children: ReactNode; workspace?: Wo
         ))}
       </div>
       <div className="sidebar-bottom">
-        <div className="sidebar-scope"><div className="scope-icon"><LockKeyhole size={14} /></div><div><b>Ámbito del espacio</b><span>Tus datos permanecen aquí</span></div></div>
+      <div className="sidebar-scope"><div className="scope-icon"><LockKeyhole size={14} /></div><div><b>Ámbito del espacio</b><span>Vista del espacio activo</span></div></div>
         <div className="user-row"><div className="user-identity"><div className="user-avatar">{(user?.firstName?.[0] ?? user?.primaryEmailAddress?.emailAddress?.[0] ?? 'U').toUpperCase()}</div><div><b>{user?.fullName ?? 'Sesión iniciada'}</b><span>{user?.primaryEmailAddress?.emailAddress ?? 'Cuenta'}</span></div></div><SignOutButton /></div>
       </div>
     </aside>
     {mobileOpen && <button className="mobile-scrim" onClick={() => setMobileOpen(false)} aria-label="Cerrar navegación" />}
     <main className="main-area">
-      <header className="topbar"><button className="mobile-menu app-mobile-menu" onClick={() => setMobileOpen(true)} aria-label="Abrir navegación"><Menu /></button><div className="breadcrumb"><span>Espacio</span><span className="crumb-slash">/</span><b>{navItems.find(i => i.href === location)?.label ?? 'Configuración del espacio'}</b></div><div className="topbar-right"><span className="secure-pill"><i /> Espacio seguro</span><span className="topbar-separator" /><span className="topbar-region">UE / ES</span><Link href="/roadmap" className="help-button" title="Consultar la hoja de ruta" aria-label="Consultar la hoja de ruta"><CircleHelp size={17} /></Link></div></header>
+      <header className="topbar"><button className="mobile-menu app-mobile-menu" onClick={() => setMobileOpen(true)} aria-label="Abrir navegación"><Menu /></button><div className="breadcrumb"><span>Espacio</span><span className="crumb-slash">/</span><b>{navItems.find(i => i.href === location)?.label ?? 'Configuración del espacio'}</b></div><div className="topbar-right"><span className="secure-pill"><i /> Sesión autenticada</span><span className="topbar-separator" /><span className="topbar-region">UE / ES</span><Link href="/roadmap" className="help-button" title="Consultar la hoja de ruta" aria-label="Consultar la hoja de ruta"><CircleHelp size={17} /></Link></div></header>
       <div className="page-content">{children}</div>
     </main>
   </div>;
@@ -515,10 +515,10 @@ function DashboardPage({ workspace }: { workspace: Workspace }) {
   const remaining = Math.max(0, assetLimit - d.assetCount);
   const date = new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   return <div className="dashboard-page">
-    <PageHeading eyebrow={date} title="Resumen de seguridad" detail={`Una visión actual de ${workspace.name}. Lo esencial, siempre a mano.`} action={<span className={`connection-state ${health.isError ? 'connection-muted' : ''}`}><i /> {health.isSuccess ? 'Servicios conectados' : health.isError ? 'Estado del servicio no disponible' : 'Comprobando servicios'}</span>} />
+     <PageHeading eyebrow={date} title="Centro de operaciones" detail={`${workspace.name} · inventario, uso y actividad registrada en este espacio.`} action={<span className={`connection-state ${health.isError ? 'connection-muted' : ''}`} data-testid="status-service-health"><i /> {health.isSuccess ? 'API disponible' : health.isError ? 'Estado de API no disponible' : 'Comprobando API'}</span>} />
     <section className="overview-banner reveal reveal-delay-1">
       <div className="banner-symbol"><ShieldCheck size={25} /></div>
-      <div className="banner-message"><span>ESTADO DEL ESPACIO</span><h2>{d.findingsCount === 0 ? 'Una base clara sobre la que avanzar.' : `${d.findingsCount} hallazgo${d.findingsCount === 1 ? ' registrado' : 's registrados'}.`}</h2><p>{d.findingsCount === 0 ? 'Este espacio todavía no registra hallazgos. En esta fase solo se muestran el inventario y el uso.' : 'Los hallazgos proceden del backend; en esta fase no se realizan análisis.'}</p></div>
+       <div className="banner-message"><span>RESUMEN EJECUTIVO · DATOS DEL ESPACIO</span><h2>{d.findingsCount === 0 ? 'Aún no hay hallazgos registrados.' : `${d.findingsCount} hallazgo${d.findingsCount === 1 ? '' : 's'} registrado${d.findingsCount === 1 ? '' : 's'}.`}</h2><p>{d.findingsCount === 0 ? 'El espacio muestra el inventario y la actividad que devuelve el servicio; no implica que se haya analizado el entorno.' : 'Conteo informado por el servicio. No se ejecutan análisis de seguridad sobre tus sistemas.'}</p></div>
       <div className="banner-divider" />
       <div className="banner-capacity"><span>Capacidad de activos</span><strong>{remaining}<small> disponibles</small></strong><span className="banner-capacity-note">de {assetLimit} en {planLabel(d.plan)}</span></div>
       <span className="banner-corner">01 / BASE</span>

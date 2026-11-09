@@ -134,6 +134,27 @@ test("approval inbox shows tenant-safe decisions without claiming tool execution
   );
   assert.equal(requesterMarkup.includes('data-testid="button-approve-'), false);
   assert.match(requesterMarkup, /El solicitante no puede aprobarla/);
+
+  const customerMarkup = renderToStaticMarkup(
+    createElement(GuardianApprovalInbox, {
+      approvals: [{
+        ...pending,
+        syntheticActionRef: "guardian.synthetic.finance.bank-change.v1",
+      }],
+      canDecide: false,
+      loading: false,
+      error: false,
+      mutationPending: false,
+      message: "",
+      errorMessage: "",
+      onRetry: () => undefined,
+      onDecision: () => undefined,
+    }),
+  );
+  assert.match(customerMarkup, /Revisar un cambio de cuenta bancaria ficticio/);
+  assert.match(customerMarkup, /Datos financieros sintéticos/);
+  assert.match(customerMarkup, /No hay un motivo de texto en el registro de la API/);
+  assert.doesNotMatch(customerMarkup, /Qwen|SHA-256|Job:|message\.tool_calls/i);
 });
 
 test("AI security navigation separates the laboratory, approvals and audit with accessible tabs", () => {

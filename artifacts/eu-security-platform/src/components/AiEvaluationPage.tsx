@@ -802,6 +802,28 @@ export function LabJobCard({
   </article>;
 }
 
+function ExecutiveLabJobCard({ job }: { job: AiAssessmentLabJob }) {
+  const state = {
+    queued: "En cola",
+    running: "En curso",
+    succeeded: "Resultado registrado",
+    failed: "Sin resultado",
+  }[job.status];
+  const description = job.status === "failed"
+    ? "La evaluación no se completó; este registro no contiene un resultado disponible."
+    : job.status === "succeeded"
+      ? "Hay evidencia de laboratorio asociada a este registro. Su alcance se limita a los escenarios sintéticos evaluados."
+      : "El registro todavía no tiene un resultado final.";
+  return <article className="ai-evaluation-run ai-executive-job" data-testid="ai-lab-job">
+    <div className="ai-evaluation-run-head">
+      <div><span className="ai-evaluation-run-label">EVALUACIÓN SINTÉTICA</span><h3>{state}</h3></div>
+      <time dateTime={job.createdAt}><Clock3 size={13} /> {new Date(job.createdAt).toLocaleString("es-ES")}</time>
+    </div>
+    <p>{description}</p>
+    <small>Los detalles técnicos de laboratorio están reservados a propietarios y administradores.</small>
+  </article>;
+}
+
 export type AiEvaluationSection = 'lab' | 'approvals' | 'audit';
 
 const AI_EVALUATION_SECTIONS: Array<{
@@ -1013,14 +1035,14 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
       <div>
         <div className="eyebrow">GUARDIAN AI SECURITY ASSESSMENT · LABORATORIO</div>
         <h1>Evaluación de Seguridad de IA</h1>
-        <p>Los ocho perfiles de verticales conservan su baseline de fixtures deterministas. Los resultados históricos de Qwen se muestran por separado, con su procedencia; ninguno está conectado a sistemas empresariales ni habilitado como servicio para clientes.</p>
+        <p>Consulta resultados sintéticos, decisiones pendientes y registros de auditoría. Las pruebas se limitan al laboratorio y no evalúan sistemas empresariales.</p>
       </div>
       <span className="ai-evaluation-badge"><FlaskConical size={14} /> LABORATORIO INTERNO</span>
     </div>
 
     <div className="ai-evaluation-disclaimer" role="note" data-testid="ai-evaluation-disclaimer">
       <ShieldAlert size={18} />
-      <div><b>Solo se usan datos y herramientas sintéticos.</b><p>La demostración consulta el Policy Engine desde la API y no inicia Qwen, Docker ni conexiones externas. Esta previsualización no constituye una frontera de aislamiento. El worker queda sujeto al preflight y la disponibilidad en desarrollo no habilita el servicio para clientes.</p></div>
+      <div><b>Solo se usan datos y herramientas sintéticos.</b><p>La demostración consulta el motor de autorización y no inicia modelos, contenedores ni conexiones externas. Esta previsualización no constituye una frontera de aislamiento ni está disponible como servicio para clientes.</p></div>
     </div>
 
     <AiEvaluationSectionNav activeSection={activeSection} onSelect={setActiveSection} />
@@ -1067,7 +1089,7 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
             setLabError('');
           }}
        />
-        <details className="ai-lab-advanced-details" data-testid="ai-lab-advanced-details">
+        {canRun && <details className="ai-lab-advanced-details" data-testid="ai-lab-advanced-details">
           <summary>Evaluaciones técnicas y estado del worker</summary>
           <div className="ai-lab-advanced-content">
             <p>Qwen y Garak permanecen separados de los fixtures. El worker solo se inicia si el preflight está aprobado; los motivos de bloqueo se muestran una vez, no en cada perfil.</p>
@@ -1135,7 +1157,7 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
               <p>Garak v0.17.1 conserva su atribución de terceros y licencia Apache-2.0. La inferencia local utiliza Qwen3-0.6B-GGUF Q8_0 (Apache-2.0) mediante llama-cpp-python 0.3.36 (MIT). Sus versiones, hashes y procedencia se registran por separado en la evidencia.</p>
             </details>
           </div>
-        </details>
+        </details>}
     </section>
     </section>
 
@@ -1178,11 +1200,13 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
         <p>Los resultados se mantienen separados por origen: fixtures deterministas, inferencia Qwen histórica o nueva cuando esté disponible. La ausencia de propuesta no equivale a una denegación.</p>
         {labJobs.isLoading && <div className="ai-history-empty" role="status">Cargando trabajos del laboratorio…</div>}
         {labJobs.isError && <div className="notice notice-error" role="alert">No se pudo cargar el estado del laboratorio. <Button variant="outline" onClick={() => void labJobs.refetch()}>Reintentar</Button></div>}
-        {!!labJobs.data?.length && <div className="ai-history-list">{labJobs.data.map((job) => <LabJobCard key={job.id} job={job} canRun={canRun} onRetry={(id) => void retryLabAssessment(id)} retryPending={retryLabJob.isPending} focusedCaseId={guidedDemo?.jobId === job.id ? guidedDemo.caseId : undefined} />)}</div>}
+        {!!labJobs.data?.length && <div className="ai-history-list">{labJobs.data.map((job) => canRun
+          ? <LabJobCard key={job.id} job={job} canRun={canRun} onRetry={(id) => void retryLabAssessment(id)} retryPending={retryLabJob.isPending} focusedCaseId={guidedDemo?.jobId === job.id ? guidedDemo.caseId : undefined} />
+          : <ExecutiveLabJobCard key={job.id} job={job} />)}</div>}
         {!labJobs.isLoading && !labJobs.isError && !labJobs.data?.length && <div className="ai-history-empty">Aún no hay trabajos del laboratorio en este espacio.</div>}
       </section>
       <section id="ai-evaluation-audit" className="panel ai-evaluation-history">
-        <div className="panel-heading"><div><span className="panel-kicker">DATOS SINTÉTICOS</span><h2>Simulaciones recientes</h2></div><span className="ai-evaluation-state ai-state-pending"><i /> Separadas de evaluaciones reales</span></div>
+        <div className="panel-heading"><div><span className="panel-kicker">REGISTROS SINTÉTICOS</span><h2>Simulaciones recientes</h2></div><span className="ai-evaluation-state ai-state-pending"><i /> Alcance de laboratorio</span></div>
       {history.isLoading && <div className="ai-history-empty" role="status">Cargando historial de este espacio…</div>}
       {history.isError && <div className="notice notice-error" role="alert">No se pudo cargar el historial. <Button variant="outline" onClick={() => void history.refetch()}>Reintentar</Button></div>}
       {!history.isLoading && !history.isError && history.data?.length === 0 && <div className="ai-history-empty">Aún no hay simulaciones. Los resultados reales no se inventan ni se muestran aquí.</div>}

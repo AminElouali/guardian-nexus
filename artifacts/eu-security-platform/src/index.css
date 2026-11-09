@@ -773,6 +773,142 @@ select.text-input { appearance: auto; }
 .risk-source-state-license_not_verified_reference_only { color: #866d3f; background: #f5f0e3; }
 .risk-source-state-not_reused { color: #667887; background: #edf1f3; }
 .risk-intelligence-model { margin-top: 33px; }
+
+/* Guardian Nexus / precision operations visual system */
+:root {
+  --ink: #193044;
+  --ink-soft: #496171;
+  --green: #176b59;
+  --green-dark: #105343;
+  --green-pale: #e5f0e9;
+  --paper: #f4f5f1;
+  --paper-deep: #e9ede7;
+  --line: #d8e0da;
+  --navy: #172c3b;
+  --navy-light: #233d4d;
+  --muted: #62757b;
+  --gold: #a36c2c;
+  --font-display: 'Manrope', sans-serif;
+  --font-mono: 'DM Mono', monospace;
+}
+html { scroll-behavior: smooth; }
+body { color: #203746; background: #f4f5f1; }
+::selection { color: #17372e; background: #cce5d7; }
+:focus-visible { outline: 3px solid #bd8c48; outline-offset: 3px; }
+.brand-mark { background: #176b59; }
+.brand-name { letter-spacing: -.055em; }
+.button { border-radius: 7px; transition: color 160ms ease, background-color 160ms ease, border-color 160ms ease, transform 140ms cubic-bezier(.23,1,.32,1); }
+.button:active:not(:disabled) { transform: scale(.98); }
+.button-primary { background: #176b59; box-shadow: 0 1px 2px #143f3222; }
+.button-primary:hover:not(:disabled) { background: #105343; }
+.button-secondary { background: #fbfcf9; }
+.button:focus-visible, .side-link:focus-visible, .public-links a:focus-visible { outline: 2px solid #c28c43; outline-offset: 3px; }
+.public-page { background: #f6f6f2; }
+.public-nav { height: 76px; border-color: #dce2dc; }
+.public-links { gap: 29px; color: #536974; }
+.public-links a, .nav-signin { transition: color 140ms ease; }
+.hero { min-height: 548px; grid-template-columns: .9fr 1.1fr; gap: 66px; padding-block: 52px 66px; }
+.hero h1 { font-size: clamp(54px, 6vw, 76px); letter-spacing: -.078em; }
+.hero-lede { max-width: 440px; color: #526977; font-size: 15px; }
+.hero-visual { min-height: 390px; border-radius: 10px; background: #1b3545; box-shadow: 0 18px 38px #20394918; }
+.visual-shield { background: #2b725e; }
+.orbit-node { border-radius: 6px; background: #294556eb; }
+.lab-disclosure { border-color: #d8dfd8; background: #edf2eb; }
+.agent-flow-section { background: #1b3545; }
+.principles-section { background: #eef1eb; }
+.agent-risk-card, .capability-card { border-radius: 8px; }
+.workspace-band { background: #1b3545; }
+.compliance-section { background: #f6f6f2; }
+.public-footer { border-color: #dce2dc; }
+.app-shell { background: #f3f5f1; }
+.sidebar { width: 252px; padding: 23px 16px 17px; background: #172d3c; }
+.sidebar-top { padding-bottom: 23px; }
+.workspace-chip { border-color: #ffffff1b; background: #ffffff09; }
+.nav-caption { padding-top: 27px; color: #9aadb2; letter-spacing: .11em; }
+.side-nav { gap: 3px; }
+.side-link { min-height: 40px; border-radius: 6px; font-size: 12px; }
+.side-link-active { background: #ffffff13; }
+.side-link .active-indicator { background: #8bc8a7; }
+.sidebar-scope { border-color: #ffffff1a; background: #ffffff06; }
+.main-area { margin-left: 252px; }
+.topbar { height: 58px; border-color: #dce2dc; background: #f4f5f1f2; }
+.breadcrumb { font-size: 12px; }
+.secure-pill { color: #526a66; background: #e7efe9; border-color: #d3e1d7; }
+.page-content { width: min(1260px, 100%); padding: 35px clamp(24px, 4.3vw, 62px) 68px; }
+.page-heading { margin-bottom: 25px; }
+.page-heading h1 { letter-spacing: -.055em; }
+.eyebrow, .panel-kicker { letter-spacing: .105em; }
+.panel { border-color: #dce2dc; border-radius: 9px; background: #fbfcf9; box-shadow: 0 2px 6px #253a2b06; }
+.panel-heading h2 { letter-spacing: -.035em; }
+.overview-banner { border-radius: 9px; background: #e7efe9; border-color: #d5e1d7; }
+.overview-banner h2 { color: #193b35; }
+.banner-symbol { color: #176b59; }
+.banner-capacity strong { color: #176b59; }
+.metric-grid { gap: 12px; }
+.metric-card { min-height: 134px; padding: 18px; border-radius: 8px; border-color: #dce2dc; background: #fbfcf9; box-shadow: 0 1px 3px #233c3008; }
+.metric-card:hover { border-color: #b7c9bc; }
+.metric-value { letter-spacing: -.06em; }
+.ai-lab-dashboard-card { border-left: 3px solid #176b59; }
+.dashboard-lower { gap: 16px; }
+.recent-panel, .usage-panel { border-radius: 9px; }
+.phase-note { background: #edf2ed; border-color: #dbe3dc; }
+.ai-evaluation-page, .risk-intelligence-page { color: #203746; }
+.ai-evaluation-page .page-heading h1, .risk-intelligence-page .page-heading h1 { letter-spacing: -.055em; }
+.ai-evaluation-disclaimer, .risk-intelligence-notice { border-radius: 8px; }
+.ai-evaluation-section-nav { position: sticky; top: 58px; z-index: 8; padding: 7px; border: 1px solid #dce2dc; border-radius: 8px; background: #f7f8f5ed; backdrop-filter: blur(10px); }
+.ai-evaluation-section-nav button { border-radius: 5px; }
+.ai-evaluation-section-nav button[aria-selected="true"] { background: #e5efe8; color: #155844; }
+.ai-evaluation-card, .ai-evaluation-history, .agent-policy-workbench, .risk-intelligence-profile { border-radius: 9px; }
+.agent-policy-workbench { box-shadow: 0 2px 8px #21372b08; }
+.agent-policy-workbench-stage, .agent-policy-scenario-option { border-radius: 7px; }
+.agent-policy-primary-action { margin-top: 18px; }
+.agent-policy-result-placeholder, .ai-history-empty { border-radius: 8px; }
+.ai-evaluation-run, .ai-evaluation-card { border-radius: 8px; }
+.ai-evaluation-run-label { letter-spacing: .07em; }
+.risk-intelligence-heading { align-items: flex-start; }
+.risk-executive-strip { border-radius: 8px; background: #e7efe9; }
+.risk-intelligence-profile { background: #fbfcf9; }
+.risk-intelligence-profile-head { align-items: flex-start; }
+.approval-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px 22px; margin: 18px 0; padding: 16px; border: 1px solid #dde5df; border-radius: 7px; background: #f5f7f3; }
+.approval-summary > div { min-width: 0; }
+.approval-summary dt { margin-bottom: 4px; color: #63787b; font: 500 9px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
+.approval-summary dd { margin: 0; color: #293f4b; font-size: 12px; line-height: 1.55; overflow-wrap: anywhere; }
+.approval-technical-details { margin-top: 12px; padding: 11px 13px; border: 1px solid #e0e5df; border-radius: 6px; background: #f8f9f6; }
+.approval-technical-details summary { color: #506c70; font-size: 11px; font-weight: 650; cursor: pointer; }
+.approval-technical-details p { margin: 9px 0 0; color: #586a71; font: 10px/1.55 var(--font-mono); overflow-wrap: anywhere; }
+.ai-executive-job { padding: 18px; }
+.ai-executive-job > p { margin: 12px 0 6px; color: #50646f; font-size: 12px; line-height: 1.6; }
+.ai-executive-job > small { color: #708187; font-size: 10px; line-height: 1.5; }
+@media (hover: hover) and (pointer: fine) {
+  .metric-card:hover, .agent-risk-card:hover, .capability-card:hover { transform: translateY(-2px); }
+}
+@media (max-width: 900px) {
+  .public-links { gap: 18px; }
+  .hero { grid-template-columns: 1fr 1fr; gap: 30px; }
+  .page-content { padding-inline: 25px; }
+}
+@media (max-width: 700px) {
+  .public-nav { height: 68px; }
+  .public-links { padding: 14px 20px 18px; }
+  .hero { min-height: auto; grid-template-columns: 1fr; gap: 34px; padding-block: 52px 48px; }
+  .hero h1 { font-size: clamp(48px, 13vw, 68px); }
+  .hero-meta { margin-top: 30px; }
+  .hero-visual { min-height: 350px; }
+  .lab-disclosure { margin-bottom: 44px; }
+  .agent-flow-section, .principles-section, .workspace-band, .compliance-section { padding-block: 52px; }
+  .public-footer { min-height: 110px; flex-wrap: wrap; gap: 12px; padding-block: 20px; }
+  .main-area { margin-left: 0; }
+  .sidebar { width: min(300px, 86vw); }
+  .topbar { padding-inline: 16px; }
+  .page-content { padding: 26px 16px 48px; }
+  .ai-evaluation-section-nav { top: 57px; }
+  .risk-executive-strip { gap: 12px; }
+  .approval-summary { grid-template-columns: 1fr; gap: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
 .risk-intelligence-profiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .risk-intelligence-profile { min-width: 0; border: 1px solid #e0e1d8; border-radius: 10px; padding: 15px; background: #fffefa; }
 .risk-intelligence-profile-detailed { border-color: #cedbd0; }
