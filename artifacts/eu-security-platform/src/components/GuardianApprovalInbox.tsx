@@ -1,6 +1,7 @@
 import React from "react";
 import type { AiAssessmentApproval } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
+import { WorkspaceQueryError } from "@/components/WorkspaceQueryError";
 
 type ApprovalDecision = "approve" | "deny";
 
@@ -9,6 +10,8 @@ type GuardianApprovalInboxProps = {
   canDecide: boolean;
   loading: boolean;
   error: boolean;
+  loadError?: unknown;
+  isRetrying?: boolean;
   mutationPending: boolean;
   message: string;
   errorMessage: string;
@@ -54,6 +57,8 @@ export function GuardianApprovalInbox({
   canDecide,
   loading,
   error,
+  loadError,
+  isRetrying = false,
   mutationPending,
   message,
   errorMessage,
@@ -108,12 +113,14 @@ export function GuardianApprovalInbox({
         </div>
       )}
       {error && (
-        <div className="notice notice-error" role="alert">
-          No se pudo cargar la bandeja.{" "}
-          <Button variant="outline" onClick={onRetry} data-testid="button-retry-approvals">
-            Reintentar
-          </Button>
-        </div>
+        <WorkspaceQueryError
+          error={loadError}
+          onRetry={onRetry}
+          isRetrying={isRetrying}
+          compact
+          testId="status-approval-load-error"
+          buttonTestId="button-retry-approvals"
+        />
       )}
       {!loading && !error && approvals.length === 0 && (
         <div className="ai-history-empty" data-testid="approval-empty">

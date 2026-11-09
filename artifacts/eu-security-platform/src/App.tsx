@@ -21,6 +21,7 @@ import { Route, Switch, Link, useLocation, Router as WouterRouter } from 'wouter
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { WorkspaceQueryError } from '@/components/WorkspaceQueryError';
 import { PublicLandingMotion } from '@/components/PublicLandingMotion';
 import NotFound from '@/pages/not-found';
 import { RISK_INTELLIGENCE_CATALOG } from '@/risk-intelligence/catalog.v1';
@@ -30,7 +31,14 @@ const AiEvaluationPage = lazy(() => import('@/components/AiEvaluationPage'));
 const RiskIntelligencePage = lazy(() => import('@/components/RiskIntelligencePage'));
 
 const queryClient = new QueryClient({
-  defaultOptions: { queries: { staleTime: 20_000, retry: 1, refetchOnWindowFocus: false } },
+  defaultOptions: {
+    queries: {
+      staleTime: 20_000,
+      retry: 1,
+      refetchOnWindowFocus: true,
+      refetchOnReconnect: true,
+    },
+  },
 });
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -78,14 +86,6 @@ function LoadingState({ label = 'Cargando datos del espacio de trabajo' }: { lab
     <div className="skeleton skeleton-title" />
     <div className="skeleton-row"><div className="skeleton" /><div className="skeleton" /><div className="skeleton" /></div>
     <div className="skeleton skeleton-wide" /><span className="sr-only">{label}</span>
-  </div>;
-}
-
-function QueryError({ onRetry, detail = 'No hemos podido recuperar los datos de este espacio de trabajo.' }: { onRetry: () => void; detail?: string }) {
-  return <div className="notice notice-error" role="alert" data-testid="status-query-error">
-    <div className="notice-icon"><RefreshCw size={17} /></div>
-    <div><strong>No se ha podido cargar esta vista</strong><p>{detail}</p></div>
-    <Button variant="secondary" onClick={onRetry} data-testid="button-retry">Reintentar</Button>
   </div>;
 }
 
@@ -256,7 +256,7 @@ function AppShell({ children, workspace }: { children: ReactNode; workspace?: Wo
     </aside>
     {mobileOpen && <button className="mobile-scrim" onClick={() => setMobileOpen(false)} aria-label="Cerrar navegación" />}
     <main className="main-area">
-      <header className="topbar"><button className="mobile-menu app-mobile-menu" onClick={() => setMobileOpen(true)} aria-label="Abrir navegación"><Menu /></button><div className="breadcrumb"><span>Espacio</span><span className="crumb-slash">/</span><b>{navItems.find(i => i.href === location)?.label ?? 'Configuración del espacio'}</b></div><div className="topbar-right"><span className="secure-pill"><i /> Sesión autenticada</span><span className="topbar-separator" /><span className="topbar-region">UE / ES</span><Link href="/roadmap" className="help-button" title="Consultar la hoja de ruta" aria-label="Consultar la hoja de ruta"><CircleHelp size={17} /></Link></div></header>
+      <header className="topbar"><button className="mobile-menu app-mobile-menu" onClick={() => setMobileOpen(true)} aria-label="Abrir navegación"><Menu /></button><div className="breadcrumb"><span>Espacio</span><span className="crumb-slash">/</span><b>{navItems.find(i => i.href === location)?.label ?? 'Configuración del espacio'}</b></div><div className="topbar-right"><span className="secure-pill" title="La sesión del navegador no confirma por sí sola que el servicio o el espacio estén disponibles."><i /> Sesión activa</span><span className="topbar-separator" /><span className="topbar-region">UE / ES</span><Link href="/roadmap" className="help-button" title="Consultar la hoja de ruta" aria-label="Consultar la hoja de ruta"><CircleHelp size={17} /></Link></div></header>
       <div className="page-content">{children}</div>
     </main>
   </div>;
@@ -281,7 +281,7 @@ function WorkspaceFrame({ page: Page }: { page: (props: { workspace: Workspace }
   if (!isLoaded) return <div className="auth-wait"><LoadingState label="Comprobando tu cuenta" /></div>;
   if (!isSignedIn) return <AuthGuard><div /></AuthGuard>;
   if (workspaces.isLoading) return <AppShell><LoadingState /></AppShell>;
-  if (workspaces.isError) return <AppShell><QueryError onRetry={() => workspaces.refetch()} /></AppShell>;
+  if (workspaces.isError) return <AppShell><WorkspaceQueryError error={workspaces.error} onRetry={() => void workspaces.refetch()} isRetrying={workspaces.isFetching} /></AppShell>;
   const workspace = workspaces.data?.[0];
   if (!workspace) return <AppShell><WorkspaceSetup onCreated={() => workspaces.refetch()} /></AppShell>;
   return <AppShell workspace={workspace}><Page workspace={workspace} /></AppShell>;
@@ -305,7 +305,7 @@ function WorkspaceSetup({ onCreated }: { onCreated: () => void }) {
   return <div className="setup-wrap reveal">
     <div className="setup-kicker"><Shield size={15} /> TU ESPACIO DE SEGURIDAD</div>
     <h1>Un lugar para<br /><em>empezar.</em></h1>
-    <p className="setup-intro">Crea un espacio privado para los activos y las personas de los que se responsabiliza tu organización.</p>
+    <p className="setup-intro">No encontramos un espacio asociado a esta cuenta. Si esperabas acceder a uno existente, pide a la persona administradora que compruebe la invitación antes de crear otro. Si necesitas un espacio nuevo, puedes configurarlo aquí.</p>
     <form className="setup-form" onSubmit={submit}>
       <label className="field-label" htmlFor="workspace-name">Nombre del espacio</label>
       <input id="workspace-name" className="text-input" value={name} onChange={e => setName(e.target.value)} required minLength={2} maxLength={100} placeholder="p. ej., Estudio Norte" data-testid="input-workspace-name" />
@@ -504,7 +504,7 @@ function DashboardPage({ workspace }: { workspace: Workspace }) {
   });
   const health = useHealthCheck();
   if (dashboard.isLoading) return <LoadingState />;
-  if (dashboard.isError) return <QueryError onRetry={() => dashboard.refetch()} />;
+  if (dashboard.isError) return <WorkspaceQueryError error={dashboard.error} onRetry={() => void dashboard.refetch()} isRetrying={dashboard.isFetching} />;
   const d = dashboard.data;
   if (!d) return null;
   const assetLimit = d.plan.maxAssets;
@@ -650,7 +650,7 @@ function AssetsPage({ workspace }: { workspace: Workspace }) {
       {formError && <p className="form-error" role="alert">{formError}</p>}
       <div className="form-actions"><Button type="button" variant="quiet" onClick={() => setShowForm(false)} data-testid="button-cancel-asset">Cancelar</Button><Button type="submit" disabled={!assetName.trim() || createAsset.isPending} data-testid="button-submit-asset">{createAsset.isPending ? 'Añadiendo…' : 'Añadir al inventario'} <ArrowRight size={15} /></Button></div>
     </form>}
-    {assetsQuery.isLoading || dashboardQuery.isLoading ? <LoadingState /> : assetsQuery.isError ? <QueryError onRetry={() => assetsQuery.refetch()} /> : assets.length === 0 ? <EmptyState icon={Box} title="Aún no hay activos registrados" copy="Por ahora, el inventario se completa manualmente. Añade el primer sistema del que depende tu organización." action={<Button onClick={() => setShowForm(true)} data-testid="button-empty-add-asset"><Plus size={15} /> Añadir el primer activo</Button>} /> : <section className="panel inventory-panel"><div className="inventory-head"><span>ACTIVO</span><span>CRITICIDAD</span><span>AÑADIDO</span><span /></div>{assets.map(asset => <div className="inventory-table-row" key={asset.id}><div className="asset-row-content"><AssetRow asset={asset} onDelete={() => remove(asset.id, asset.name)} deleting={deleteAsset.isPending} /></div><span className="asset-created">{formatDate(asset.createdAt)}</span></div>)}</section>}
+    {assetsQuery.isLoading || dashboardQuery.isLoading ? <LoadingState /> : assetsQuery.isError ? <WorkspaceQueryError error={assetsQuery.error} onRetry={() => void assetsQuery.refetch()} isRetrying={assetsQuery.isFetching} /> : dashboardQuery.isError ? <WorkspaceQueryError error={dashboardQuery.error} onRetry={() => void dashboardQuery.refetch()} isRetrying={dashboardQuery.isFetching} /> : assets.length === 0 ? <EmptyState icon={Box} title="Aún no hay activos registrados" copy="Por ahora, el inventario se completa manualmente. Añade el primer sistema del que depende tu organización." action={<Button onClick={() => setShowForm(true)} data-testid="button-empty-add-asset"><Plus size={15} /> Añadir el primer activo</Button>} /> : <section className="panel inventory-panel"><div className="inventory-head"><span>ACTIVO</span><span>CRITICIDAD</span><span>AÑADIDO</span><span /></div>{assets.map(asset => <div className="inventory-table-row" key={asset.id}><div className="asset-row-content"><AssetRow asset={asset} onDelete={() => remove(asset.id, asset.name)} deleting={deleteAsset.isPending} /></div><span className="asset-created">{formatDate(asset.createdAt)}</span></div>)}</section>}
     <div className="phase-note"><div className="phase-note-icon"><LockKeyhole size={14} /></div><p>Tu equipo añade los activos manualmente. En esta fase no hay conectores ni descubrimiento automático.</p></div>
   </div>;
 }
@@ -684,7 +684,7 @@ function TeamPage({ workspace }: { workspace: Workspace }) {
   return <div>
     <PageHeading eyebrow="PERSONAS Y ACCESO" title="Equipo" detail="Consulta los miembros y sus roles. Solo los propietarios pueden cambiar los roles." />
     <div className="team-intro"><div className="team-intro-icon"><Users size={18} /></div><p><b>Acceso según el rol</b><span>El propietario tiene el control completo. Los roles de administrador, analista y lector determinan el acceso al espacio.</span></p><span className="team-plan">Plan {planLabel({ id: workspace.planId, name: workspace.planId })}</span></div>
-    {membersQuery.isLoading ? <LoadingState /> : membersQuery.isError ? <QueryError onRetry={() => membersQuery.refetch()} /> : !membersQuery.data?.length ? <EmptyState icon={Users} title="No hay miembros disponibles" copy="Los miembros del espacio aparecerán aquí cuando el servicio los devuelva." /> : <section className="panel members-panel">
+    {membersQuery.isLoading ? <LoadingState /> : membersQuery.isError ? <WorkspaceQueryError error={membersQuery.error} onRetry={() => void membersQuery.refetch()} isRetrying={membersQuery.isFetching} /> : !membersQuery.data?.length ? <EmptyState icon={Users} title="No hay miembros disponibles" copy="Los miembros del espacio aparecerán aquí cuando el servicio los devuelva." /> : <section className="panel members-panel">
       <div className="members-header"><span>MIEMBRO</span><span>ROL</span><span>SE UNIÓ</span><span /></div>
       {membersQuery.data.map(member => <div className="member-row" key={member.id} data-testid={`row-member-${member.id}`}><div className="member-avatar">{member.userId.slice(0, 1).toUpperCase()}</div><div className="member-details"><b>{member.userId}</b><span>ID de miembro · {member.id.slice(0, 8)}</span></div><div className="member-role">{member.role === 'owner' ? <span className="role-badge role-owner"><ShieldCheck size={13} /> Propietario</span> : isOwner ? <select value={member.role} onChange={e => handleRole(member, e.target.value as 'admin' | 'analyst' | 'viewer')} disabled={updateMember.isPending} className="role-select" aria-label={`Cambiar el rol de ${member.userId}`} data-testid={`select-member-role-${member.id}`}><option value="admin">Administrador</option><option value="analyst">Analista</option><option value="viewer">Lector</option></select> : <span className={`role-badge role-${member.role}`}>{roleLabel(member.role)}</span>}</div><div className="member-date">{formatDate(member.createdAt)}</div></div>)}
     </section>}
@@ -700,7 +700,7 @@ function PlansPage({ workspace }: { workspace: Workspace }) {
   const current = dashboard.data?.plan ?? plans.find(p => p.id === workspace.planId);
   return <div>
     <PageHeading eyebrow="CAPACIDAD Y SOPORTE" title="Planes y uso" detail="Consulta las cuotas del espacio con claridad. Los límites proceden directamente de tu plan." />
-    {plansQuery.isLoading || dashboard.isLoading ? <LoadingState /> : plansQuery.isError ? <QueryError onRetry={() => plansQuery.refetch()} /> : <>
+    {plansQuery.isLoading || dashboard.isLoading ? <LoadingState /> : plansQuery.isError ? <WorkspaceQueryError error={plansQuery.error} onRetry={() => void plansQuery.refetch()} isRetrying={plansQuery.isFetching} /> : dashboard.isError ? <WorkspaceQueryError error={dashboard.error} onRetry={() => void dashboard.refetch()} isRetrying={dashboard.isFetching} /> : <>
       {current && <div className="current-plan-callout"><div className="plan-current-mark"><Check size={16} /></div><div><span>PLAN ACTUAL</span><b>{planLabel(current)}</b></div><span className="plan-workspace-name">{workspace.name}</span></div>}
       {dashboard.data && <section className="panel usage-detail-panel"><div className="panel-heading"><div><div className="panel-kicker">USO ACTUAL DEL ESPACIO</div><h2>Cuota mensual</h2></div><span className="usage-updated">Datos del backend</span></div><div className="usage-detail-grid"><Meter label="Activos" used={dashboard.data.assetCount} max={dashboard.data.plan.maxAssets} /><Meter label="Miembros" used={dashboard.data.memberCount} max={dashboard.data.plan.maxUsers} /><Meter label="Análisis" used={dashboard.data.scansUsed} max={dashboard.data.plan.scansPerMonth} /><Meter label="Tokens" used={dashboard.data.tokensUsed} max={dashboard.data.plan.tokensPerMonth} /><Meter label="Solicitudes API" used={dashboard.data.apiRequestsUsed} max={dashboard.data.plan.apiRequestsPerMonth} /></div></section>}
       <div className="plan-section-heading"><div><span className="panel-kicker">PLANES DISPONIBLES</span><h2>Compara los límites</h2></div><span>El administrador del espacio gestiona los cambios de plan.</span></div>

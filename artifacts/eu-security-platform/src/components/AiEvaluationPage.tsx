@@ -26,6 +26,7 @@ import {
   downloadQwenExecutiveReport,
 } from './qwenExecutiveReport';
 import { GuardianApprovalInbox } from './GuardianApprovalInbox';
+import { WorkspaceQueryError } from './WorkspaceQueryError';
 import {
   AgentPolicyLabCatalog,
   AgentPolicyLabResult,
@@ -1067,6 +1068,8 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
         <span className="ai-evaluation-state ai-state-pending"><i />Fixtures deterministas</span>
       </div>
       <p>Elige un perfil y un escenario para recibir una decisión determinista calculada por el backend. El resultado destaca el caso elegido y conserva los detalles técnicos en un panel secundario.</p>
+      {availability.isLoading && <div className="ai-history-empty" role="status">Comprobando disponibilidad del laboratorio…</div>}
+      {availability.isError && <WorkspaceQueryError error={availability.error} onRetry={() => void availability.refetch()} isRetrying={availability.isFetching} compact testId="status-lab-availability-error" buttonTestId="button-retry-lab-availability" />}
        <AgentPolicyLabCatalog
          profiles={availability.data?.profiles ?? []}
          canRun={canRun}
@@ -1176,6 +1179,8 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
       canDecide={approvalList.data?.canDecide ?? false}
       loading={approvalList.isLoading}
       error={approvalList.isError}
+      loadError={approvalList.error}
+      isRetrying={approvalList.isFetching}
       mutationPending={decideApproval.isPending}
       message={approvalMessage}
       errorMessage={approvalError}
@@ -1201,7 +1206,7 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
         </div>
         <p>Los resultados se mantienen separados por origen: fixtures deterministas, inferencia Qwen histórica o nueva cuando esté disponible. La ausencia de propuesta no equivale a una denegación.</p>
         {labJobs.isLoading && <div className="ai-history-empty" role="status">Cargando trabajos del laboratorio…</div>}
-        {labJobs.isError && <div className="notice notice-error" role="alert">No se pudo cargar el estado del laboratorio. <Button variant="outline" onClick={() => void labJobs.refetch()}>Reintentar</Button></div>}
+        {labJobs.isError && <WorkspaceQueryError error={labJobs.error} onRetry={() => void labJobs.refetch()} isRetrying={labJobs.isFetching} compact testId="status-lab-jobs-error" buttonTestId="button-retry-lab-jobs" />}
         {!!labJobs.data?.length && <div className="ai-history-list">{labJobs.data.map((job) => canRun
           ? <LabJobCard key={job.id} job={job} canRun={canRun} onRetry={(id) => void retryLabAssessment(id)} retryPending={retryLabJob.isPending} focusedCaseId={guidedDemo?.jobId === job.id ? guidedDemo.caseId : undefined} />
           : <ExecutiveLabJobCard key={job.id} job={job} />)}</div>}
@@ -1210,7 +1215,7 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
       <section id="ai-evaluation-audit" className="panel ai-evaluation-history">
         <div className="panel-heading"><div><span className="panel-kicker">REGISTROS SINTÉTICOS</span><h2>Simulaciones recientes</h2></div><span className="ai-evaluation-state ai-state-pending"><i /> Alcance de laboratorio</span></div>
       {history.isLoading && <div className="ai-history-empty" role="status">Cargando historial de este espacio…</div>}
-      {history.isError && <div className="notice notice-error" role="alert">No se pudo cargar el historial. <Button variant="outline" onClick={() => void history.refetch()}>Reintentar</Button></div>}
+      {history.isError && <WorkspaceQueryError error={history.error} onRetry={() => void history.refetch()} isRetrying={history.isFetching} compact testId="status-ai-history-error" buttonTestId="button-retry-ai-history" />}
       {!history.isLoading && !history.isError && history.data?.length === 0 && <div className="ai-history-empty">Aún no hay simulaciones. Los resultados reales no se inventan ni se muestran aquí.</div>}
       {!!history.data?.length && <div className="ai-history-list">{history.data.map((run) => <EvaluationCard key={run.id} run={run} />)}</div>}
       </section>

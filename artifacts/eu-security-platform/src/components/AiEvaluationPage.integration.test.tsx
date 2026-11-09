@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { createElement } from "react";
+import type { ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type {
   AiAssessmentApproval,
@@ -16,6 +17,7 @@ import {
   buildSyntheticApprovalConfirmationMessage,
   GuardianApprovalInbox,
 } from "./GuardianApprovalInbox";
+import { WorkspaceQueryError } from "./WorkspaceQueryError";
 import {
   AGENT_POLICY_LABS,
   AgentPolicyLabCatalog,
@@ -35,6 +37,35 @@ import {
   getPublicDecisionLabel,
   getPublicReasonLabel,
 } from "./security-ui-copy";
+
+test("workspace fallback labels API unavailability and keeps a retry action", () => {
+  let retryCount = 0;
+  const retryView = WorkspaceQueryError({
+    error: { status: 502 },
+    onRetry: () => { retryCount += 1; },
+  });
+  const retryChildren = retryView.props.children as [
+    ReactElement,
+    ReactElement,
+    ReactElement<{ onClick: () => void }>,
+  ];
+  retryChildren[2].props.onClick();
+  assert.equal(retryCount, 1);
+
+  const markup = renderToStaticMarkup(
+    createElement(WorkspaceQueryError, {
+      error: { status: 502, message: "private upstream detail" },
+      onRetry: () => undefined,
+      testId: "workspace-api-error",
+      buttonTestId: "workspace-api-retry",
+    }),
+  );
+
+  assert.match(markup, /El servicio del espacio no está disponible/);
+  assert.match(markup, /data-error-kind="unavailable"/);
+  assert.match(markup, /data-testid="workspace-api-retry"/);
+  assert.doesNotMatch(markup, /private upstream detail/);
+});
 
 test("approval inbox shows tenant-safe decisions without claiming tool execution", () => {
   const pending: AiAssessmentApproval = {
