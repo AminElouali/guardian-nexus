@@ -3493,3 +3493,36 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   worker y broker separadas; socket Docker exclusivo del broker; y roles/sesiones
   PostgreSQL independientes. Solo entonces ejecutar E2E sintético PostgreSQL
   y API→worker con una propuesta Qwen verificada.
+
+## Contrato offline de linaje Qwen a aprobación — 2026-11-09
+
+- Base: HEAD `219879218614f091ee82cba3a262d64b5c572c28`, árbol limpio y sin
+  procesos de prueba, Qwen, PostgreSQL o Git mutation visibles al comenzar.
+- Se añadió un test API de composición sobre el artefacto histórico con hash
+  fijado: correo/BBDD verifican propuesta adaptada y Policy ON antes de las
+  dos simulaciones; finanzas/soporte enlazan la propuesta exacta a un binding
+  tenant/procedencia/rol/expiración y al digest de replay/revisor; infraestructura
+  permanece `NO_PROPOSAL`. El recibo de aprobación es solo sobre un clon en
+  memoria, sin escritura ni afirmación de persistencia.
+- Resultados seriales: worker policy lab **36/36**; reconciliación worker
+  **6/6**; contratos API **15/15**; typecheck API aprobado; UI integration
+  **15/15**; typecheck UI y `git diff --check` aprobados. La primera ejecución
+  aislada del test nuevo encontró una expectativa incorrecta de ID de caso de
+  soporte; se corrigió según el artefacto fijado y la secuencia completa pasó.
+- No se ejecutó Qwen, worker real, Docker/socket, PostgreSQL ni servicios.
+  PostgreSQL E2E, RLS en vivo, concurrencia y auditoría durable siguen sin
+  probarse. El último preflight guardado (2026-11-04) sigue indicando
+  `hostBoundaryReady=false`; no fue repetido. No se leyeron credenciales.
+- Evidencia histórica: 8 llamadas de modelo, 7 propuestas adaptadas, 0
+  `message.tool_calls` nativas y 1 `NO_PROPOSAL` de infraestructura. No es
+  inferencia nueva ni prueba de la ruta API→worker aislada.
+- Informe:
+  `reports/offline-qwen-approval-lineage-contract-2026-11-09.md`,
+  SHA-256 `3687598ea07d4b543f0f9bda26876f67e74c77f270f46c92797c757fbddc5fef`.
+- Test API:
+  `artifacts/api-server/src/lib/ai-assessment-qwen-evidence.test.ts`,
+  SHA-256 `a6b3466f6bfddcf401c3c5a8d3b94cf237f08e410b4bc21f8f4a065d8dcfe44b`.
+- Próximo gate: host autorizado con identidades API/worker/broker distintas,
+  socket Docker exclusivo del broker y roles PostgreSQL independientes;
+  después ejecutar el E2E sintético persistente contra una base desechable
+  verificada. No abrir Qwen antes de acreditar el aislamiento.

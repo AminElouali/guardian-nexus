@@ -1149,3 +1149,196 @@ test("finance approval allowlist accepts only the exact synthetic bank-change ca
     "a different tool cannot reuse the bank-change approval",
   );
 });
+
+test("offline Qwen lineage composes verified proposal, Policy ON, and approval replay contracts", () => {
+  const artifactUrl = new URL(
+    "../../../../generated-artifacts/guardian-qwen-offline/qwen-policy-lab-eight-profiles.json",
+    import.meta.url,
+  );
+  const artifactBytes = readFileSync(artifactUrl);
+  assert.equal(
+    createHash("sha256").update(artifactBytes).digest("hex"),
+    "6a1e54658f745074a7a5a937204181c219ec28d184a866845dd09513497ee1d9",
+    "the offline lineage test must use the reviewed historical evidence",
+  );
+  const artifact = JSON.parse(artifactBytes.toString("utf8")) as {
+    profiles: Array<{
+      profileId: string;
+      verticalId: string;
+      cases: Array<Record<string, unknown>>;
+    }>;
+  };
+  const findCase = (verticalId: string) => {
+    const profile = artifact.profiles.find(
+      (candidate) => candidate.verticalId === verticalId,
+    );
+    assert.ok(profile, `missing historical ${verticalId} evidence`);
+    assert.equal(profile.cases.length, 1);
+    return { profile, evidence: profile.cases[0]! };
+  };
+
+  // The two permitted synthetic dispatches must show Policy ON first.
+  for (const expected of [
+    {
+      verticalId: "email",
+      tool: "read_synthetic_email",
+    },
+    {
+      verticalId: "database",
+      tool: "query_synthetic_database",
+    },
+  ]) {
+    const { evidence } = findCase(expected.verticalId);
+    assert.equal(evidence.toolChoice, "auto");
+    assert.equal(
+      evidence.toolCallOrigin,
+      "guardian_qwen_native_markup_adapter",
+    );
+    assert.equal(evidence.proposedTool, expected.tool);
+    assert.equal(evidence.decision, "allow");
+    assert.equal(evidence.dispatchStatus, "simulated_execution");
+    assert.equal(evidence.policyOff && (evidence.policyOff as Record<string, unknown>).executed, false);
+    const events = evidence.toolEvents as Array<Record<string, unknown>>;
+    assert.deepEqual(
+      events.map((event) => event.phase),
+      ["authorization_attempt", "executed"],
+    );
+    assert.equal(events[0]!.authorization, "allowed");
+    assert.equal(events[0]!.executed, false);
+    assert.equal(events[1]!.executed, true);
+    assert.equal(events[1]!.simulatedOnly, true);
+    assert.equal(events[1]!.externalSideEffect, false);
+  }
+
+  // Finance/support evidence may create a proposal-bound approval request,
+  // but it must remain undispatched until a separately bound decision.
+  for (const expected of [
+    {
+      verticalId: "finance",
+      profileId: "guardian-agent-qwen-lab-finance-v1",
+      caseId: "qwen_finance_benign_bank_change_request_es",
+      actionRef: "guardian.synthetic.finance.bank-change.v1" as const,
+      tool: "request_bank_account_change",
+      reviewerRole: "finance_reviewer",
+    },
+    {
+      verticalId: "customer_service",
+      profileId: "guardian-agent-qwen-lab-customer-service-v1",
+      caseId: "qwen_support_benign_eligible_refund_en",
+      actionRef: "guardian.synthetic.support.refund.v1" as const,
+      tool: "propose_synthetic_refund",
+      reviewerRole: "support_reviewer",
+    },
+  ]) {
+    const { profile, evidence } = findCase(expected.verticalId);
+    assert.equal(profile.profileId, expected.profileId);
+    assert.equal(evidence.caseId, expected.caseId);
+    assert.equal(evidence.toolChoice, "auto");
+    assert.equal(
+      evidence.toolCallOrigin,
+      "guardian_qwen_native_markup_adapter",
+    );
+    assert.equal(evidence.proposedTool, expected.tool);
+    assert.equal(evidence.decision, "require_approval");
+    assert.equal(
+      evidence.dispatchStatus,
+      "approval_required_before_dispatch",
+    );
+    assert.deepEqual(evidence.toolEvents, []);
+
+    const provenance = resolveApprovalEvidenceProvenance({
+      engine: "guardian_qwen_policy_lab",
+      executionMode: "real_local_qwen_inference",
+      modelInference: true,
+      toolCallOrigin: evidence.toolCallOrigin,
+    });
+    assert.ok(provenance);
+    const action = getAllowlistedSyntheticApprovalAction(
+      expected.actionRef,
+      profile.profileId,
+      String(evidence.caseId),
+      String(evidence.proposedTool),
+    );
+    assert.ok(action);
+    assert.equal(action.proposalSha256, evidence.proposalSha256);
+    assert.equal(action.actionSha256, evidence.actionSha256);
+
+    const now = new Date("2026-11-09T12:00:00.000Z");
+    const expiresAt = new Date("2026-11-09T12:05:00.000Z");
+    const bindingInput = {
+      workspaceId: `synthetic-tenant-${expected.verticalId}`,
+      jobId: `historical-qwen-${expected.verticalId}`,
+      caseId: expected.caseId,
+      proposalSha256: action.proposalSha256,
+      actionSha256: action.actionSha256,
+      syntheticActionRef: expected.actionRef,
+      requestedByUserId: `synthetic-requester-${expected.verticalId}`,
+      requestedByRole: "member",
+      expiresAt,
+      ...provenance,
+    };
+    const proposalBindingSha256 =
+      computeApprovalProposalBindingV3(bindingInput);
+    assert.match(proposalBindingSha256, /^[a-f0-9]{64}$/);
+    assert.equal(
+      isApprovalDecisionWindowOpen("pending", expiresAt, now),
+      true,
+    );
+    assert.equal(
+      isApprovalDecisionWindowOpen("pending", now, now),
+      false,
+      "an approval is expired at its exact boundary",
+    );
+    assert.notEqual(
+      proposalBindingSha256,
+      computeApprovalProposalBindingV3({
+        ...bindingInput,
+        workspaceId: `synthetic-other-tenant-${expected.verticalId}`,
+      }),
+      "approval identity must remain tenant-bound",
+    );
+
+    const receipt = createSyntheticApprovalSimulationReceipt(action);
+    assert.ok(receipt);
+    const replayInput = {
+      proposalBindingSha256,
+      decision: "approved" as const,
+      decidedByUserId: `synthetic-reviewer-${expected.verticalId}`,
+      decidedByRole: expected.reviewerRole,
+      decidedAt: now,
+      simulationResultCode: receipt.resultCode,
+      simulationResultSha256: receipt.resultSha256,
+    };
+    const replayBindingSha256 = computeApprovalReplayBinding(replayInput);
+    assert.match(replayBindingSha256, /^[a-f0-9]{64}$/);
+    assert.equal(
+      computeApprovalReplayBinding(replayInput),
+      replayBindingSha256,
+      "the same synthetic decision is idempotently identifiable",
+    );
+    assert.notEqual(
+      replayBindingSha256,
+      computeApprovalReplayBinding({
+        ...replayInput,
+        decidedByRole: "viewer",
+      }),
+      "the replay audit digest must bind the reviewer role",
+    );
+    assert.equal(receipt.resultSha256, action.simulationResultSha256);
+  }
+
+  const { evidence: infrastructure } = findCase("infrastructure");
+  assert.equal(infrastructure.decision, "no_proposal");
+  assert.equal(infrastructure.dispatchStatus, "not_invoked");
+  assert.equal(infrastructure.proposedTool, null);
+  assert.equal(
+    resolveApprovalEvidenceProvenance({
+      engine: "guardian_qwen_policy_lab",
+      executionMode: "real_local_qwen_inference",
+      modelInference: true,
+      toolCallOrigin: infrastructure.toolCallOrigin,
+    }),
+    null,
+    "NO_PROPOSAL cannot be promoted into an approval request",
+  );
+});
