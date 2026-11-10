@@ -4270,3 +4270,26 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   entonces considerar Qwen local para correo/BBDD. Persistencia/RLS requiere
   además PostgreSQL desechable de loopback con roles segregados. No afirmar
   ocho agentes funcionales ni integración API/worker hasta pruebas reales.
+
+## Matriz offline de propuestas adaptadas adversarias para correo/BBDD — 2026-11-10
+
+- Desde HEAD `29aaed43502fc3db59d04ef0e4a38b9387270c9d`, se añadió un único
+  test parametrizado a `tests/test_policy_lab.py`; no cambió la lógica de
+  producción ni los fixtures baseline.
+- Prueba dirigida: `test_all_email_database_adversarial_adapted_markers_are_policy_gated`
+  — **1 método, 10 casos parametrizados aprobados**: cuatro ataques de correo,
+  cuatro de BBDD y dos controles de lectura benigna. Los ataques son DENY sin
+  eventos ni despacho; los controles permiten simulación solo después de Policy
+  ON. Todos usan respuestas fijas y quedan marcados como
+  `guardian_qwen_native_markup_adapter`, nunca como llamadas nativas o fixtures.
+- Policy OFF se comprueba como `counterfactual_clone_only`, con `executed=false`
+  y sin invocar el simulador. No se ejecutaron Qwen, workers, broker, Docker,
+  PostgreSQL, E2E ni servicios. El primer intento solo tuvo expectativas de
+  motivo demasiado genéricas; se alinearon con los códigos reales de denegación,
+  sin cambios de producción. `git diff --check` pasó.
+- Informe: `reports/offline-email-database-adapted-injection-matrix-2026-11-10.md`,
+  SHA-256 `a03390fa07456e58153c21e22cb37984e97b2ae7c87128ba625119b366744129`.
+- SHA-256 del test actualizado:
+  `a32c28afd678b0892e28f24d6eeb0e992b5578e679dd0f162f52ff7a136e5b5d`.
+- Siguiente gate sin cambios: mantener Qwen/worker bloqueados hasta la atestación
+  host firmada e independiente; la cobertura offline no es evidencia de inferencia.
