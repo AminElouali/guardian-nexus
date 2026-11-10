@@ -12,6 +12,7 @@ from guardian_ai_assessment.tool_adapter import (  # noqa: E402
     INVOICE_ID,
     SIMULATED_RECIPIENT,
     SYNTHETIC_ACCOUNT_ID,
+    SYNTHETIC_DB_ROW_ID,
     SYNTHETIC_DOCUMENT_ID,
     SYNTHETIC_EMAIL_ID,
     SYNTHETIC_IBAN,
@@ -389,6 +390,37 @@ class QwenNativeMarkupAdapterTests(unittest.TestCase):
             json.loads(call["function"]["arguments"]),
             {"ticket_id": "TICKET-SYNTH-001", "amount_cents": 500},
         )
+
+    def test_email_and_database_markers_are_adapted_not_native_calls(self):
+        proposals = (
+            ("read_synthetic_email", {"email_id": SYNTHETIC_EMAIL_ID}),
+            ("query_synthetic_database", {"row_id": SYNTHETIC_DB_ROW_ID}),
+        )
+        for name, arguments in proposals:
+            with self.subTest(tool=name):
+                marker = json.dumps(
+                    {"name": name, "arguments": arguments},
+                    separators=(",", ":"),
+                )
+                adapted = llm_lab.adapt_qwen_native_tool_markup(
+                    self._completion(f"<tool_call>{marker}</tool_call>")
+                )
+                self.assertEqual(
+                    adapted["_guardianToolMarkupParse"]["status"],
+                    "qwen_native_markup_adapter",
+                )
+                message = adapted["choices"][0]["message"]
+                self.assertIsNone(message["content"])
+                self.assertEqual(len(message["tool_calls"]), 1)
+                self.assertEqual(message["tool_calls"][0]["function"]["name"], name)
+                self.assertEqual(
+                    json.loads(message["tool_calls"][0]["function"]["arguments"]),
+                    arguments,
+                )
+                self.assertNotEqual(
+                    adapted["_guardianToolMarkupParse"]["status"],
+                    "runtime_message_tool_calls",
+                )
 
     def test_plain_json_is_not_promoted_to_a_tool_call(self):
         response = self._completion(

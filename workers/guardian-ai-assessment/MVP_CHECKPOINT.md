@@ -4133,3 +4133,34 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   roles segregados y validar sus políticas/roles en vivo; obtener atestación
   independiente del límite host/broker/worker. No ejecutar Qwen ni worker
   real antes de esa atestación.
+
+## Procedencia explícita de propuestas adaptadas de correo/BBDD — 2026-11-10
+
+- Base: HEAD `6d7caeaff0cfdfd42fe188379a1f90c86de74c14`, `main`, árbol limpio;
+  no se observaron procesos locales Guardian/Qwen/PostgreSQL/test al iniciar.
+- Se agregó una prueba offline para marcadores completos de correo y BBDD:
+  `read_synthetic_email` y `query_synthetic_database` se normalizan como
+  `qwen_native_markup_adapter`, con argumentos sintéticos íntegros. La prueba
+  afirma explícitamente que la procedencia no es `runtime_message_tool_calls`.
+  No es inferencia real; el parser recibe respuestas de prueba deterministas.
+- Pruebas secuenciales: worker `test_autonomous_tool_selection.py` **12/12**,
+  `test_policy_lab.py` **39/39**, `test_qwen_evidence_reconciliation.py`
+  **6/6**; API contrato de evidencia/aprobación **18/18**; UI de evaluación
+  **17/17**. El E2E PostgreSQL se omitió **1** antes de conexión al ejecutar
+  con URL y opt-in unset. `git diff --check` pasó.
+- Los casos existentes de correo/BBDD y los otros seis perfiles mantienen
+  selección `tool_choice=auto`, ataques sintéticos, parser fail-closed,
+  Policy ON previo al despacho y OFF solo en clone contrafactual. Los
+  resultados son de contratos/proveedores de prueba; no acreditan elección
+  de herramientas de Qwen vivo.
+- No se ejecutó Qwen ni worker vivo, no se accedió a Docker/socket y no se
+  conectó PostgreSQL. El último valor documentado sigue
+  `hostBoundaryReady=false`; persistencia y RLS PostgreSQL en ejecución siguen
+  bloqueadas/no verificadas.
+- SHA-256 test worker:
+  `87f37f29077623820c5d77161d8fa0b16afcaa9063dfc04df50851eb06947b09`.
+- Informe: `reports/offline-email-database-adapted-provenance-2026-11-10.md`.
+- Próximo paso seguro: cuando exista atestación independiente de aislamiento,
+  pasar a inferencia local con broker autorizado; validar aprobaciones/RLS
+  solo después de proporcionar una DB PostgreSQL desechable con roles
+  segregados. Mantener los gates cerrados hasta entonces.
