@@ -3904,3 +3904,41 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
 - Próximo gate: verificar aislamiento independiente de host/broker/worker y
   disponer de PostgreSQL desechable con roles segregados. Hasta entonces,
   mantener bloqueadas inferencia Qwen y pruebas persistentes de aprobación/RLS.
+
+## NO_PROPOSAL adversario en ocho verticales — 2026-11-10
+
+- Base: HEAD `5f6c6c4f0c2887c091f80d9da78479cdd262eaa6`, `main`, árbol limpio;
+  no se observaron procesos Guardian/Qwen/pruebas/dev-server activos.
+- Se reforzó el test offline de `NO_PROPOSAL`: ahora usa un caso adversario
+  sintético en cada vertical y selecciona explícitamente
+  `qwen_infra_privilege_injection_es` para infraestructura. Comprueba origen
+  ausente, Policy y simulador no invocados, sin hashes/referencias de acción
+  ni aprobación. No genera inferencia ni modifica las ocho fixtures baseline.
+- El preflight guardado sigue `hostBoundaryReady=false`; identities API/broker/
+  worker y sesiones DB no están verificadas; el proceso de sondeo guardado
+  tenía acceso al socket Docker. No se accedió al socket ni se intentó generar
+  una atestación por vías privilegiadas.
+- Verificación offline secuencial: worker `test_policy_lab.py` **39/39**,
+  `test_autonomous_tool_selection.py` **11/11**,
+  `test_qwen_evidence_reconciliation.py` **6/6**; API
+  `ai-assessment-qwen-evidence.test.ts` **17/17**; UI
+  `AiEvaluationPage.integration.test.tsx` **17/17**; `git diff --check`
+  aprobado. Una primera invocación de unittest desde la raíz falló por ruta de
+  descubrimiento; repetida desde el directorio del worker, pasó. No se inició
+  Qwen, worker vivo, PostgreSQL, Docker, workflow ni servicio externo.
+- Los tests API verifican contratos sintéticos, no persistencia PostgreSQL,
+  RLS runtime, concurrencia real ni una aprobación durable. La UI no se abrió
+  mediante preview autenticado en este ciclo.
+- Evidencia Qwen continúa histórica: ocho inferencias anteriores, siete
+  propuestas adaptadas, cero `message.tool_calls` nativas y una
+  infraestructura `NO_PROPOSAL`; fixtures aparte. SHA-256 de artefacto:
+  `6a1e54658f745074a7a5a937204181c219ec28d184a866845dd09513497ee1d9`.
+- Informe: `reports/offline-adversarial-no-proposal-eight-profiles-2026-11-10.md`.
+- SHA-256 del test actualizado:
+  `7cb6076f51df889096078ec0c9cbd12357c77dfe36b5f99d49aa9f2e753db5f8`.
+- Preflight histórico SHA-256:
+  `3b85f5c1aab30012d27df96eec5aabeff7ac932198d45f1dd5536d55903d8445`.
+- Próximo paso: obtener atestación independiente de aislamiento sin acceso
+  Docker para API/worker y validar aprobaciones/RLS en PostgreSQL desechable
+  con roles segregados. Hasta entonces, mantener esos flujos bloqueados y
+  continuar solo offline.

@@ -760,7 +760,7 @@ class GuardianAgentPolicyLabTests(unittest.TestCase):
         self.assertEqual(evidence["dispatchStatus"], "not_invoked")
         self.assertEqual(evidence["toolCallCount"], 0)
 
-    def test_mocked_explicit_no_proposal_stays_distinct_across_all_qwen_profiles(self):
+    def test_adversarial_no_proposal_stays_distinct_across_all_qwen_profiles(self):
         class NoMarkerClient:
             def __init__(self):
                 self.tool_choice = None
@@ -795,6 +795,22 @@ class GuardianAgentPolicyLabTests(unittest.TestCase):
         for profile_id, vertical in profile_verticals.items():
             with self.subTest(profile_id=profile_id):
                 client = NoMarkerClient()
+                adversarial_cases = [
+                    case
+                    for case in QWEN_POLICY_CASES[profile_id]
+                    if case["label"] == "adversarial"
+                ]
+                self.assertTrue(adversarial_cases)
+                case = next(
+                    (
+                        case
+                        for case in adversarial_cases
+                        if vertical == "infrastructure"
+                        and case["caseId"] == "qwen_infra_privilege_injection_es"
+                    ),
+                    adversarial_cases[0],
+                )
+                self.assertEqual(case["label"], "adversarial")
                 with patch(
                     "guardian_ai_assessment.qwen_policy_lab.evaluate_synthetic_action_policy"
                 ) as policy, patch(
@@ -803,7 +819,7 @@ class GuardianAgentPolicyLabTests(unittest.TestCase):
                     evidence, _usage = _one_case(
                         client=client,
                         vertical=vertical,
-                        case=QWEN_POLICY_CASES[profile_id][0],
+                        case=case,
                         tools=[],
                     )
                 self.assertEqual(client.tool_choice, "auto")
