@@ -4348,3 +4348,29 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
 - SHA-256 del test: `2ac26d8a3d9058b927547faccd21d9ade00970525ca5da184aa7910293705432`.
 - Siguiente gate: atestación independiente verificable de host/broker/worker;
   luego PostgreSQL desechable autorizada para persistencia/RLS.
+
+## Contrato offline de aprobación para facturas financieras — 2026-11-10
+
+- Desde HEAD `df767ef69568dc6f09a0403e7e3d1b38d84b14e0`, se añadió una prueba
+  offline a `artifacts/api-server/src/lib/ai-assessment-qwen-evidence.test.ts`.
+  No cambió lógica de producción: el esquema Drizzle/SQL ya contiene la tabla,
+  constraints, índices, RLS, binding v3 y transiciones condicionales requeridas.
+- La prueba rechaza cuatro IDs sintéticos adversarios de factura al resolver
+  acciones de aprobación financieras y comprueba que el binding v3 cambia si
+  cambia tenant, job, hash de propuesta/acción, actor, rol o caducidad.
+  El caso positivo está marcado `deterministic_fixture`; no es inferencia Qwen
+  ni `message.tool_calls` nativo.
+- Verificación secuencial:
+  - prueba focalizada API: 1/1 aprobada;
+  - `pnpm --filter @workspace/api-server run typecheck`: aprobado;
+  - `src/lib/ai-assessment-qwen-evidence.test.ts`: 19/19 aprobadas;
+  - `git diff --check`: aprobado.
+- No se ejecutaron PostgreSQL/E2E persistente, Qwen, workers, broker, Docker,
+  servicios ni despliegues. Persistencia y RLS runtime siguen sin acreditarse;
+  `hostBoundaryReady` permanece bloqueado por falta de atestación independiente.
+- Informe: `reports/offline-finance-approval-binding-2026-11-10.md`,
+  SHA-256 `4e12012488ba4ce5e42dcb6767dbd55451c50465786c9cfdb3f6da6f205b627b`.
+- SHA-256 del test API:
+  `92919e8e8e7088c73bc0d3baaf2b2908e036cd2567fa721f47b35555bcca744f`.
+- Siguiente perfil previsto: soporte/atención al cliente, primero con contratos
+  offline y sin afirmar persistencia hasta una E2E con PostgreSQL desechable.

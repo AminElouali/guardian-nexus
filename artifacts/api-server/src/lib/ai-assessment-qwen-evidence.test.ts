@@ -1493,6 +1493,84 @@ test("finance approval allowlist accepts only the exact synthetic bank-change ca
   );
 });
 
+test("finance invoice injections cannot create approval actions or reuse a v3 binding", () => {
+  const financeProfile = "guardian-agent-qwen-lab-finance-v1";
+  const financeActionRef = "guardian.synthetic.finance.bank-change.v1";
+  const adversarialInvoiceCases = [
+    "qwen_finance_indirect_bank_change_en",
+    "qwen_finance_indirect_payment_es",
+    "qwen_finance_beneficiary_injection_es",
+    "qwen_finance_hidden_beneficiary_es",
+  ];
+
+  for (const caseId of adversarialInvoiceCases) {
+    assert.equal(
+      getAllowlistedSyntheticApprovalAction(
+        financeActionRef,
+        financeProfile,
+        caseId,
+        "request_bank_account_change",
+      ),
+      null,
+      `${caseId} must not be promoted to a finance approval action`,
+    );
+  }
+
+  const action = getAllowlistedSyntheticApprovalAction(
+    financeActionRef,
+    financeProfile,
+    "qwen_finance_benign_bank_change_request_es",
+    "request_bank_account_change",
+  );
+  assert.ok(action, "only the exact synthetic review case is allow-listed");
+
+  // This is a deterministic contract fixture, not a new Qwen inference.
+  const bindingInput: Parameters<typeof computeApprovalProposalBindingV3>[0] = {
+    workspaceId: "synthetic-finance-tenant-a",
+    jobId: "synthetic-finance-job-001",
+    caseId: "qwen_finance_benign_bank_change_request_es",
+    proposalSha256: action.proposalSha256,
+    actionSha256: action.actionSha256,
+    syntheticActionRef: financeActionRef as
+      | "guardian.synthetic.finance.bank-change.v1",
+    requestedByUserId: "synthetic-finance-requester",
+    requestedByRole: "member",
+    expiresAt: new Date("2026-11-10T20:00:00.000Z"),
+    modelInference: false,
+    executionMode: "deterministic_fixture" as const,
+    toolCallOrigin: "controlled_fixture_not_llm" as const,
+  };
+  const originalBinding = computeApprovalProposalBindingV3(bindingInput);
+
+  for (const [field, changedInput] of [
+    [
+      "tenant",
+      { ...bindingInput, workspaceId: "synthetic-finance-tenant-b" },
+    ],
+    ["job", { ...bindingInput, jobId: "synthetic-finance-job-002" }],
+    ["proposal", { ...bindingInput, proposalSha256: "b".repeat(64) }],
+    ["action", { ...bindingInput, actionSha256: "c".repeat(64) }],
+    [
+      "requester",
+      { ...bindingInput, requestedByUserId: "synthetic-other-requester" },
+    ],
+    ["role", { ...bindingInput, requestedByRole: "admin" }],
+    [
+      "expiry",
+      {
+        ...bindingInput,
+        expiresAt: new Date("2026-11-10T20:01:00.000Z"),
+      },
+    ],
+  ] as const) {
+    assert.notEqual(
+      computeApprovalProposalBindingV3(changedInput),
+      originalBinding,
+      `the v3 approval binding must include the ${field}`,
+    );
+  }
+});
+
 test("offline Qwen lineage composes verified proposal, Policy ON, and approval replay contracts", () => {
   const artifactUrl = new URL(
     "../../../../generated-artifacts/guardian-qwen-offline/qwen-policy-lab-eight-profiles.json",
