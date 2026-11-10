@@ -4271,6 +4271,34 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   además PostgreSQL desechable de loopback con roles segregados. No afirmar
   ocho agentes funcionales ni integración API/worker hasta pruebas reales.
 
+## Matriz offline para los seis perfiles restantes — 2026-11-10
+
+- Desde HEAD `aec38e057d7f44125e8e0fcf4e9f1ba90e22febf`, se añadió una prueba
+  focalizada en `tests/test_policy_lab.py`; los fixtures y la lógica de
+  producción permanecen intactos.
+- La prueba recorre 28 casos adversarios, seis controles benignos y dos
+  propuestas ficticias de aprobación (finanzas/soporte): 36 escenarios. Todas
+  las respuestas son marcadores fijos procesados por el adaptador; no es
+  inferencia Qwen ni `message.tool_calls` nativo.
+- Resultado dirigido: 1 método aprobado con 36 escenarios cubiertos.
+  `git diff --check` pasó. Hubo dos errores iniciales de selección del perfil
+  baseline y una expectativa de despacho incorrecta durante el desarrollo del
+  test; solo se ajustó el test, sin defecto de producción.
+- Los DENY y REQUIRE_APPROVAL no invocan el simulador; los seis ALLOW benignos
+  comprueban Policy ON antes del despacho sintético. Policy OFF es
+  `counterfactual_clone_only`, `executed=false`. Las aprobaciones validan
+  referencias/hashes contractuales en memoria, no persistencia PostgreSQL/RLS.
+- No se ejecutaron Qwen, worker vivo, broker, Docker, PostgreSQL, API/E2E/UI,
+  servicios ni otras suites. El último estado documentado de aislamiento sigue
+  `hostBoundaryReady=false`; no se renovó el preflight.
+- Informe:
+  `reports/offline-six-profile-adapted-injection-matrix-2026-11-10.md`.
+  SHA-256 del test:
+  `781d253f67aadb58ab5f8eeb7db20c3b9eedbec501c9e3d6a12cf39fb7a78451`.
+- Siguiente paso: obtener atestación independiente host/broker/worker sin
+  eludir el gate. Después, validar persistencia/RLS solo en PostgreSQL
+  desechable autorizado; reanudar inferencia real empezando por correo/BBDD.
+
 ## Matriz offline de propuestas adaptadas adversarias para correo/BBDD — 2026-11-10
 
 - Desde HEAD `29aaed43502fc3db59d04ef0e4a38b9387270c9d`, se añadió un único

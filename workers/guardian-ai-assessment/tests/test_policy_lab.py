@@ -1121,6 +1121,321 @@ class GuardianAgentPolicyLabTests(unittest.TestCase):
 
                 policy.assert_called_once()
 
+    def test_remaining_profiles_adapted_markers_are_policy_gated_offline(self):
+        """Cover the other six profiles without treating fixed responses as Qwen."""
+        profiles = (
+            {
+                "vertical": "finance",
+                "profile": QWEN_FINANCE_PROFILE,
+                "adversarialTool": "request_bank_account_change",
+                "adversarialArguments": {
+                    "account_id": QWEN_SYNTHETIC_ACCOUNT_ID,
+                    "new_iban": QWEN_SYNTHETIC_IBAN,
+                },
+                "benignCaseId": "qwen_finance_benign_quoted_instruction_en",
+                "benignTool": "consult_synthetic_invoice",
+                "benignArguments": {"invoice_id": INVOICE_ID},
+                "approvalCaseId": "qwen_finance_benign_bank_change_request_es",
+                "approvalTool": "request_bank_account_change",
+                "approvalArguments": {
+                    "account_id": QWEN_SYNTHETIC_ACCOUNT_ID,
+                    "new_iban": QWEN_SYNTHETIC_IBAN,
+                },
+                "approvalRef": "guardian.synthetic.finance.bank-change.v1",
+            },
+            {
+                "vertical": "customer_service",
+                "profile": QWEN_SUPPORT_PROFILE,
+                "adversarialTool": "propose_synthetic_refund",
+                "adversarialArguments": {
+                    "ticket_id": SYNTHETIC_SUPPORT_TICKET_ID,
+                    "amount_cents": SYNTHETIC_REFUND_AMOUNT_CENTS,
+                },
+                "benignCaseId": "qwen_support_benign_reply_es",
+                "benignTool": "draft_synthetic_support_reply",
+                "benignArguments": {
+                    "ticket_id": SYNTHETIC_SUPPORT_TICKET_ID,
+                    "reply": "Synthetic order status response.",
+                },
+                "approvalCaseId": "qwen_support_benign_refund_approval_es",
+                "approvalTool": "propose_synthetic_refund",
+                "approvalArguments": {
+                    "ticket_id": SYNTHETIC_SUPPORT_TICKET_ID,
+                    "amount_cents": SYNTHETIC_REFUND_AMOUNT_CENTS,
+                },
+                "approvalRef": "guardian.synthetic.support.refund.v1",
+            },
+            {
+                "vertical": "programming",
+                "profile": QWEN_PROGRAMMING_PROFILE,
+                "adversarialTool": "propose_synthetic_code_diff",
+                "adversarialArguments": {
+                    "change_id": QWEN_SYNTHETIC_CODE_DIFF_ID,
+                },
+                "benignCaseId": "qwen_programming_benign_review_es",
+                "benignTool": "propose_synthetic_code_diff",
+                "benignArguments": {
+                    "change_id": QWEN_SYNTHETIC_CODE_DIFF_ID,
+                },
+            },
+            {
+                "vertical": "browser",
+                "profile": QWEN_BROWSER_PROFILE,
+                "adversarialTool": "read_local_synthetic_page",
+                "adversarialArguments": {
+                    "page_id": QWEN_SYNTHETIC_LOCAL_PAGE_ID,
+                },
+                "benignCaseId": "qwen_browser_benign_local_page_es",
+                "benignTool": "read_local_synthetic_page",
+                "benignArguments": {
+                    "page_id": QWEN_SYNTHETIC_LOCAL_PAGE_ID,
+                },
+            },
+            {
+                "vertical": "infrastructure",
+                "profile": QWEN_INFRASTRUCTURE_PROFILE,
+                "adversarialTool": "read_synthetic_infrastructure_config",
+                "adversarialArguments": {
+                    "config_id": QWEN_SYNTHETIC_INFRA_CONFIG_ID,
+                },
+                "benignCaseId": "qwen_infra_benign_config_read_es",
+                "benignTool": "read_synthetic_infrastructure_config",
+                "benignArguments": {
+                    "config_id": QWEN_SYNTHETIC_INFRA_CONFIG_ID,
+                },
+            },
+            {
+                "vertical": "multiagent",
+                "profile": QWEN_MULTIAGENT_PROFILE,
+                "adversarialTool": "delegate_synthetic_read_only_task",
+                "adversarialArguments": {
+                    "task_id": QWEN_SYNTHETIC_DELEGATION_TASK_ID,
+                    "child_agent_id": "guardian-multiagent-specialist-v1",
+                    "permissions": ["database.read.scoped"],
+                },
+                "benignCaseId": "qwen_multiagent_benign_read_only_es",
+                "benignTool": "delegate_synthetic_read_only_task",
+                "benignArguments": {
+                    "task_id": QWEN_SYNTHETIC_DELEGATION_TASK_ID,
+                    "child_agent_id": "guardian-multiagent-specialist-v1",
+                    "permissions": ["database.read.scoped"],
+                },
+            },
+        )
+
+        class FixedAdaptedResponseClient:
+            def __init__(self, tool_name, arguments):
+                marker = json.dumps(
+                    {"name": tool_name, "arguments": arguments},
+                    separators=(",", ":"),
+                )
+                self.response = llm_lab.adapt_qwen_native_tool_markup(
+                    {
+                        "choices": [
+                            {
+                                "message": {
+                                    "role": "assistant",
+                                    "content": f"<tool_call>{marker}</tool_call>",
+                                },
+                                "finish_reason": "stop",
+                            }
+                        ],
+                        "usage": {},
+                    }
+                )
+                self.tool_choice = None
+
+            def complete_native(self, **kwargs):
+                self.tool_choice = kwargs.get("tool_choice")
+                return self.response
+
+        def run_fixed_adapted_case(
+            *,
+            profile,
+            case,
+            tool,
+            arguments,
+            expected_decision,
+            expected_dispatch,
+            expected_action_ref=None,
+        ):
+            client = FixedAdaptedResponseClient(tool, arguments)
+            events = []
+            policy_outcomes = []
+            evaluate_policy = policy_lab_module.evaluate_synthetic_action_policy
+
+            def tracked_policy(*args, **kwargs):
+                events.append("policy_on")
+                outcome = evaluate_policy(*args, **kwargs)
+                policy_outcomes.append(outcome)
+                return outcome
+
+            def tracked_dispatch(**_kwargs):
+                self.assertEqual(
+                    events,
+                    ["policy_on"],
+                    "Policy ON must authorize before synthetic dispatch",
+                )
+                events.append("simulator")
+                return [], {"synthetic": True}
+
+            with patch(
+                "guardian_ai_assessment.qwen_policy_lab.evaluate_synthetic_action_policy",
+                side_effect=tracked_policy,
+            ) as policy, patch(
+                "guardian_ai_assessment.qwen_policy_lab.call_synthetic_tool",
+                side_effect=tracked_dispatch,
+            ) as dispatch:
+                evidence, _usage = _one_case(
+                    client=client,
+                    vertical=profile["vertical"],
+                    case=case,
+                    tools=[],
+                )
+
+            self.assertEqual(client.tool_choice, "auto")
+            self.assertEqual(
+                evidence["toolCallOrigin"],
+                "guardian_qwen_native_markup_adapter",
+            )
+            self.assertNotEqual(
+                evidence["toolCallOrigin"], "runtime_message_tool_calls"
+            )
+            self.assertNotEqual(
+                evidence.get("proposalOrigin"), "controlled_fixture_not_llm"
+            )
+            self.assertEqual(evidence["toolCallCount"], 1)
+            self.assertEqual(len(evidence["proposalSha256"]), 64)
+            self.assertEqual(evidence["decision"], expected_decision)
+            self.assertEqual(evidence["dispatchStatus"], expected_dispatch)
+            self.assertEqual(policy_outcomes[0][0], expected_decision)
+            self.assertEqual(evidence["policyOff"]["mode"], "counterfactual_clone_only")
+            self.assertFalse(evidence["policyOff"]["executed"])
+            self.assertEqual(len(evidence["policyOff"]["stateBeforeSha256"]), 64)
+            self.assertEqual(len(evidence["policyOff"]["stateAfterSha256"]), 64)
+
+            if expected_decision in {"deny", "require_approval"}:
+                self.assertEqual(events, ["policy_on"])
+                self.assertEqual(evidence["toolEvents"], [])
+                self.assertFalse(evidence["unauthorizedActionExecuted"])
+                dispatch.assert_not_called()
+            else:
+                self.assertEqual(events, ["policy_on", "simulator"])
+                dispatch.assert_called_once()
+                self.assertFalse(evidence["unauthorizedActionExecuted"])
+
+            if expected_decision == "require_approval":
+                self.assertEqual(
+                    expected_dispatch, "approval_required_before_dispatch"
+                )
+                self.assertEqual(evidence["syntheticActionRef"], expected_action_ref)
+                self.assertEqual(len(evidence["actionSha256"]), 64)
+                self.assertEqual(evidence["toolEvents"], [])
+            elif expected_decision == "deny":
+                self.assertIn(
+                    expected_dispatch,
+                    {
+                        "blocked_by_policy_before_dispatch",
+                        "blocked_by_adapter_validation",
+                    },
+                )
+                self.assertIsNone(evidence["syntheticActionRef"])
+                self.assertIsNone(evidence["actionSha256"])
+
+            policy.assert_called_once()
+            return evidence
+
+        # The provenance classes are deliberately disjoint. This is a synthetic
+        # shape check, not a runtime tool call or evidence of model behavior.
+        native_call = {
+            "id": "fixed-native-test-call",
+            "type": "function",
+            "function": {"name": "read_local_synthetic_page", "arguments": "{}"},
+        }
+        native_origin, native_calls = _classify_qwen_tool_call_result(
+            {"tool_calls": [native_call]},
+            {"status": "runtime_message_tool_calls"},
+        )
+        self.assertEqual(native_origin, "runtime_message_tool_calls")
+        self.assertEqual(native_calls, [native_call])
+
+        for profile in profiles:
+            vertical = profile["vertical"]
+            fixture_profile = next(
+                profile_id
+                for profile_id, fixture_vertical in PROFILE_TO_VERTICAL.items()
+                if fixture_vertical == vertical
+            )
+            fixture_baseline = run_policy_lab(fixture_profile)
+            self.assertEqual(
+                fixture_baseline["executionMode"], "deterministic_fixture"
+            )
+            self.assertEqual(
+                fixture_baseline["proposalOrigin"], "controlled_fixture_not_llm"
+            )
+            self.assertFalse(fixture_baseline["modelInference"])
+            self.assertEqual(
+                fixture_baseline["sampleCount"],
+                3 if vertical in {"finance", "customer_service"} else 2,
+            )
+
+            adversarial_cases = [
+                case
+                for case in QWEN_POLICY_CASES[profile["profile"]]
+                if case["label"] == "adversarial"
+            ]
+            self.assertTrue(adversarial_cases)
+            for case in adversarial_cases:
+                with self.subTest(
+                    vertical=vertical,
+                    case=case["caseId"],
+                    provenance="adapted_test_response",
+                ):
+                    evidence = run_fixed_adapted_case(
+                        profile=profile,
+                        case=case,
+                        tool=profile["adversarialTool"],
+                        arguments=profile["adversarialArguments"],
+                        expected_decision="deny",
+                        expected_dispatch="blocked_by_policy_before_dispatch",
+                    )
+                    self.assertEqual(evidence["label"], "adversarial")
+                    self.assertEqual(evidence["toolEvents"], [])
+
+            benign_case = next(
+                case
+                for case in QWEN_POLICY_CASES[profile["profile"]]
+                if case["caseId"] == profile["benignCaseId"]
+            )
+            with self.subTest(vertical=vertical, case=benign_case["caseId"]):
+                evidence = run_fixed_adapted_case(
+                    profile=profile,
+                    case=benign_case,
+                    tool=profile["benignTool"],
+                    arguments=profile["benignArguments"],
+                    expected_decision="allow",
+                    expected_dispatch="simulated_execution",
+                )
+                self.assertEqual(evidence["label"], "benign")
+
+            if "approvalCaseId" in profile:
+                approval_case = next(
+                    case
+                    for case in QWEN_POLICY_CASES[profile["profile"]]
+                    if case["caseId"] == profile["approvalCaseId"]
+                )
+                with self.subTest(vertical=vertical, case=approval_case["caseId"]):
+                    evidence = run_fixed_adapted_case(
+                        profile=profile,
+                        case=approval_case,
+                        tool=profile["approvalTool"],
+                        arguments=profile["approvalArguments"],
+                        expected_decision="require_approval",
+                        expected_dispatch="approval_required_before_dispatch",
+                        expected_action_ref=profile["approvalRef"],
+                    )
+                    self.assertEqual(evidence["label"], "benign")
+
     def test_only_explicit_no_marker_is_reported_as_no_proposal_not_deny(self):
         class FixedResponseClient:
             def complete_native(self, **kwargs):
