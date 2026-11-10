@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import patch
 
+from guardian_ai_assessment import lab_host_preflight
 from guardian_ai_assessment.lab_host_preflight import evaluate_lab_host_observations
 from guardian_ai_assessment.lab_host_preflight import collect_local_preflight_report
 
@@ -175,6 +176,54 @@ class LabHostPreflightTests(unittest.TestCase):
         access_probe.assert_not_called()
         child_probe.assert_not_called()
         database_probe.assert_not_called()
+
+    def test_default_attestation_is_metadata_only_and_fails_closed(self):
+        observations = {
+            "host": {
+                "osId": "nixos",
+                "versionId": "unknown",
+                "systemd": False,
+                "container": True,
+            },
+            "identities": {"api": None, "worker": None, "broker": None},
+            "dockerSocket": {
+                "status": "unverified",
+                "aclChecked": False,
+                "accessByRole": {},
+                "currentProbeProcessAccess": None,
+            },
+            "sensitiveEnvironmentNameCount": 0,
+            "databaseSessions": None,
+            "qwenChildProbe": None,
+            "qwenSandbox": None,
+        }
+        with (
+            patch.object(
+                lab_host_preflight,
+                "collect_local_read_only_observations",
+                return_value=observations,
+            ),
+            patch.object(lab_host_preflight, "_run_identity_access_probe") as access,
+            patch.object(lab_host_preflight, "_probe_child_worker_identity") as child,
+            patch.object(lab_host_preflight, "_probe_database_sessions") as database,
+            patch.object(lab_host_preflight, "_socket_acl_is_minimal") as acl,
+            patch.object(lab_host_preflight.subprocess, "run") as subprocess_run,
+        ):
+            report = collect_local_preflight_report()
+
+        self.assertEqual(report["mode"], "read_only_host_preflight")
+        self.assertEqual(report["observationOrigin"], "live_host_probe")
+        self.assertFalse(report["hostBoundaryReady"])
+        self.assertFalse(report["integratedAssessmentReady"])
+        self.assertFalse(report["executionStarted"])
+        self.assertFalse(report["qwenInferenceRun"])
+        self.assertFalse(report["credentialValuesRead"])
+        self.assertEqual(report["databaseConnectionsMade"], 0)
+        access.assert_not_called()
+        child.assert_not_called()
+        database.assert_not_called()
+        acl.assert_not_called()
+        subprocess_run.assert_not_called()
 
     def test_environment_output_contains_counts_not_secret_names_or_values(self):
         result = evaluate_lab_host_observations(

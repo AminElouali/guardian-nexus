@@ -604,6 +604,117 @@ class GuardianAgentPolicyLabTests(unittest.TestCase):
                 policy.assert_not_called()
                 dispatch.assert_not_called()
 
+    def test_adapted_email_and_database_reads_require_policy_before_fixture_dispatch(self):
+        scenarios = (
+            (
+                "email",
+                QWEN_EMAIL_PROFILE,
+                "qwen_email_benign_read_es",
+                "read_synthetic_email",
+                {"email_id": QWEN_SYNTHETIC_EMAIL_ID},
+            ),
+            (
+                "database",
+                QWEN_DATABASE_PROFILE,
+                "qwen_database_benign_read_en",
+                "query_synthetic_database",
+                {"row_id": QWEN_SYNTHETIC_DB_ROW_ID},
+            ),
+        )
+
+        class FixedAdaptedResponseClient:
+            def __init__(self, tool_name, arguments):
+                self.tool_name = tool_name
+                self.arguments = arguments
+                self.tool_choice = None
+
+            def complete_native(self, **kwargs):
+                self.tool_choice = kwargs.get("tool_choice")
+                marker = json.dumps(
+                    {"name": self.tool_name, "arguments": self.arguments},
+                    separators=(",", ":"),
+                )
+                return llm_lab.adapt_qwen_native_tool_markup(
+                    {
+                        "choices": [
+                            {
+                                "message": {
+                                    "role": "assistant",
+                                    "content": f"<tool_call>{marker}</tool_call>",
+                                },
+                                "finish_reason": "stop",
+                            }
+                        ],
+                        "usage": {},
+                    }
+                )
+
+        for vertical, profile_id, case_id, tool_name, arguments in scenarios:
+            with self.subTest(vertical=vertical):
+                case = next(
+                    item
+                    for item in QWEN_POLICY_CASES[profile_id]
+                    if item["caseId"] == case_id
+                )
+                client = FixedAdaptedResponseClient(tool_name, arguments)
+                events = []
+                policy_evaluator = (
+                    policy_lab_module.evaluate_synthetic_action_policy
+                )
+                synthetic_dispatch = policy_lab_module.call_synthetic_tool
+
+                def tracked_policy(*args, **kwargs):
+                    events.append("policy_on")
+                    return policy_evaluator(*args, **kwargs)
+
+                def tracked_dispatch(**kwargs):
+                    self.assertEqual(
+                        events,
+                        ["policy_on"],
+                        "the independent Policy ON decision must precede dispatch",
+                    )
+                    events.append("synthetic_fixture_dispatch")
+                    return synthetic_dispatch(**kwargs)
+
+                with patch(
+                    "guardian_ai_assessment.qwen_policy_lab.evaluate_synthetic_action_policy",
+                    side_effect=tracked_policy,
+                ) as policy, patch(
+                    "guardian_ai_assessment.qwen_policy_lab.call_synthetic_tool",
+                    side_effect=tracked_dispatch,
+                ) as dispatch:
+                    evidence, _usage = _one_case(
+                        client=client,
+                        vertical=vertical,
+                        case=case,
+                        tools=[],
+                    )
+
+                self.assertEqual(client.tool_choice, "auto")
+                self.assertEqual(
+                    evidence["toolCallOrigin"],
+                    "guardian_qwen_native_markup_adapter",
+                )
+                self.assertEqual(evidence["decision"], "allow")
+                self.assertEqual(
+                    evidence["dispatchStatus"], "simulated_execution"
+                )
+                self.assertEqual(events, ["policy_on", "synthetic_fixture_dispatch"])
+                self.assertEqual(len(evidence["toolEvents"]), 2)
+                self.assertEqual(
+                    [event["phase"] for event in evidence["toolEvents"]],
+                    ["authorization_attempt", "executed"],
+                )
+                self.assertTrue(
+                    all(
+                        event["simulatedOnly"] and not event["externalSideEffect"]
+                        for event in evidence["toolEvents"]
+                    )
+                )
+                self.assertFalse(evidence["unauthorizedActionExecuted"])
+                policy.assert_called_once()
+                dispatch.assert_called_once()
+
     def test_adversarial_proposals_require_policy_and_never_dispatch_across_origins_for_all_profiles(self):
         scenarios = (
             (

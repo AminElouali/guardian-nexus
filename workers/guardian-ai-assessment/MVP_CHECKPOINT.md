@@ -4164,3 +4164,49 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   pasar a inferencia local con broker autorizado; validar aprobaciones/RLS
   solo después de proporcionar una DB PostgreSQL desechable con roles
   segregados. Mantener los gates cerrados hasta entonces.
+
+## Atestación pasiva host/broker/worker y autorización offline — 2026-11-10
+
+- Inicio: HEAD `6f61be6e46f6047c4201a08ecb72f1f426a6125a`, `main`, árbol limpio.
+  La inspección de procesos no encontró Qwen, Guardian, pytest, PostgreSQL ni
+  otra tarea local coincidente.
+- Se ejecutó únicamente `python3
+  workers/guardian-ai-assessment/scripts/run_lab_host_preflight.py` sin flags.
+  El modo usa metadatos (`lstat`/`os.access`) y no abre/conecta sockets; no
+  lanzó `runuser`, `psql`, Docker, worker ni Qwen. Exit 2 es el resultado
+  fail-closed esperado. Dos ejecuciones consecutivas produjeron salida
+  idéntica, SHA-256 `d50daf0b68f504b285ccf5975c129269316ebfe2e77268046c305bd4754d581e`.
+- Hallazgo: `hostBoundaryReady=false`, `integratedAssessmentReady=false`.
+  El proceso de sondeo tiene acceso de lectura/escritura según metadatos para
+  el socket Docker presente (`root:runner`, `0660`); API/broker/worker y sus
+  sesiones de DB no están acreditados. El conteo de nombres de variables
+  sensibles es 4; no se leyeron ni registraron nombres ni valores. No se
+  hicieron llamadas Docker, conexiones DB/externas ni inferencia.
+- Se añadieron pruebas para asegurar que el preflight predeterminado no llama
+  los sondeos opcionales de identidad/ACL/DB/worker y para que respuestas
+  deterministas adaptadas de correo y BBDD pasen por Policy ON antes del
+  simulador en memoria. La procedencia se conserva como adaptada; no son
+  inferencias Qwen. La suite offline de aislamiento abre solo un socket Unix
+  temporal de prueba, nunca el socket Docker del host.
+- Pruebas secuenciales: `test_lab_host_preflight.py` **7/7**;
+  `test_offline_isolation_preflight.py` **16/16**;
+  `test_autonomous_tool_selection.py` **12/12**;
+  `test_policy_lab.py` **40/40**;
+  `test_qwen_evidence_reconciliation.py` **6/6**; API evidencia/aprobación
+  **18/18**. E2E PostgreSQL de aprobaciones **SKIP 1** antes de conexión, sin
+  URL/opt-in. `git diff --check` pasó. No se ejecutaron UI/build porque solo
+  cambiaron pruebas y evidencia.
+- No se acreditó una PostgreSQL desechable; persistencia y RLS runtime siguen
+  sin probar. No se ejecutó inferencia Qwen ni worker vivo.
+- Informe:
+  `reports/passive-host-broker-worker-attestation-2026-11-10.md`;
+  resumen JSON:
+  `reports/passive-host-broker-worker-attestation-2026-11-10.json`.
+  SHA-256 de prueba host `6b9d38bef102a02d5e3503ed3a1e8a7aec9d14459c12fa16901c268f0b446fdc`;
+  prueba Policy `95de12b075f45dc70f1babc331d11a24ecf554487e0dc94d09a76a3017d203e5`;
+  JSON `c2b2a3766ce07829261706fed0b408ea3ea5803ea91c181ff8fa93cd96893114`;
+  informe `e9b82b842e03785ef76f2c3e18bf97207cf504c095c0941afd33ec528ad88d22`.
+- Siguiente gate: atestación independiente en host de laboratorio con
+  identidades separadas y socket inaccesible para API/worker; después, y solo
+  con autorización explícita, una PostgreSQL desechable loopback con roles
+  segregados para probar RLS y persistencia. Mantener Qwen/worker bloqueados.
