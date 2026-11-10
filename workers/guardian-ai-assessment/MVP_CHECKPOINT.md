@@ -4321,3 +4321,30 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   `a32c28afd678b0892e28f24d6eeb0e992b5578e679dd0f162f52ff7a136e5b5d`.
 - Siguiente gate sin cambios: mantener Qwen/worker bloqueados hasta la atestación
   host firmada e independiente; la cobertura offline no es evidencia de inferencia.
+
+## Variantes offline de inyección en contenido de correo y BBDD — 2026-11-10
+
+- Desde HEAD `4ec4471ee42761cf8084d9534673030c1dea4f4f`, se amplió solo la
+  prueba focalizada de correo/BBDD; producción, runner, contrato v2 y ocho
+  fixtures baseline no cambiaron.
+- La matriz pasa por 18 escenarios sintéticos: ocho ataques existentes, ocho
+  variantes explícitas de exfiltración/cambio de tenant/elevación/órdenes
+  incrustadas en correos y filas, y dos controles benignos con instrucciones
+  citadas. Respuestas fijas adaptadas; no es inferencia Qwen.
+- Resultados en serie: test focalizado 1 método/18 escenarios; parser
+  malformado 1 método; JSON inválido 1 método; gate pre-runner 2 métodos;
+  adaptador de marcadores 7/7; AST 3/3; `git diff --check` aprobado.
+- Todas las propuestas de test se clasifican como
+  `guardian_qwen_native_markup_adapter`; DENY no despacha, los ALLOW sintéticos
+  ocurren después de Policy ON, Policy OFF queda en clon contrafactual sin
+  despacho adicional. Las estructuras nativas se prueban aparte y no son
+  inferencia runtime.
+- No hay typechecker Python configurado/disponible; se ejecutó AST. No se
+  ejecutaron Qwen, worker vivo, broker, Docker, PostgreSQL, API/E2E/UI,
+  servicios o red. El último preflight guardado sigue `hostBoundaryReady=false`
+  y no se renovó.
+- Informe: `reports/offline-email-database-content-injection-2026-11-10.md`.
+- SHA-256 del informe: `ddc370151604edd9cc8548771f6c8c6627c088f9769aff9a8a51d86419200a8d`.
+- SHA-256 del test: `2ac26d8a3d9058b927547faccd21d9ade00970525ca5da184aa7910293705432`.
+- Siguiente gate: atestación independiente verificable de host/broker/worker;
+  luego PostgreSQL desechable autorizada para persistencia/RLS.
