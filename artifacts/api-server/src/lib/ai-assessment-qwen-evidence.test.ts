@@ -65,18 +65,38 @@ test("persistent approval E2E requires explicit opt-in to a named loopback dispo
     {
       ...safeDisposableTarget,
       DATABASE_URL:
+        "postgresql://synthetic_user:synthetic_password@127.0.0.1:5432/guardian_approval_lab_run_01?service=remote",
+    },
+    {
+      ...safeDisposableTarget,
+      DATABASE_URL:
+        "postgresql://synthetic_user:synthetic_password@127.0.0.1:5432/guardian_approval_lab_run_01?servicefile=%2Ftmp%2Fpg_service.conf",
+    },
+    {
+      ...safeDisposableTarget,
+      DATABASE_URL:
+        "postgresql://synthetic_user:synthetic_password@127.0.0.1:5432/guardian_approval_lab_run_01?options=-c%20search_path%3Dpublic",
+    },
+    {
+      ...safeDisposableTarget,
+      DATABASE_URL:
         "postgresql://synthetic_user:synthetic_password@127.0.0.1:5432/workspace",
     },
     {
       ...safeDisposableTarget,
       GUARDIAN_APPROVAL_E2E_DATABASE_NAME: "workspace",
     },
+    {
+      ...safeDisposableTarget,
+      DATABASE_URL:
+        "postgresql://synthetic_user:synthetic_password@127.0.0.1:5432/guardian_approval_lab_run_01#remote-target",
+    },
     { ...safeDisposableTarget, DATABASE_URL: "not-a-postgres-url" },
   ]) {
     assert.equal(
       isExplicitDisposableApprovalDatabase(unsafeTarget),
       false,
-      "unmarked, deployed, remote, mismatched, or malformed targets must be rejected",
+      "unmarked, deployed, remote, overridden, mismatched, or malformed targets must be rejected",
     );
   }
 });

@@ -4098,3 +4098,38 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   `f47dcd64faf8cb06e6127e53bdbaa3aa135e833f5d61b8d9cacddb230fed67c5`.
 - Próximos bloqueos: base PostgreSQL desechable loopback con roles segregados
   para E2E/RLS; atestación independiente host/broker/worker antes de Qwen.
+
+## Rechazo de overrides en destino E2E de aprobaciones — 2026-11-10
+
+- Base: HEAD `4262f2fbd9eb3e5f0f263d7c15538b8dfc5c4e6c`, rama `main`, árbol
+  limpio y sin procesos Guardian/Qwen/PostgreSQL coincidentes al comenzar.
+- El guard offline del destino DB ahora rechaza cualquier parámetro de query
+  y fragmento URL, además de requerir loopback IP explícita, nombre
+  `guardian_approval_lab_*`, concordancia con el path, opt-in, desarrollo y
+  no despliegue. Esto bloquea `service`, `servicefile`, `options`, `host` y
+  `hostaddr`; no acredita que haya una DB desechable.
+- Se añadieron casos de regresión sintéticos para `service`, `servicefile`,
+  `options` y fragmentos. El contrato offline existente también comprobó
+  binding tenant/propuesta/rol/expiración, replay e idempotencia de recibos,
+  `NO_PROPOSAL` y estructura de RLS. Son comprobaciones de código/contrato,
+  no pruebas PostgreSQL ni RLS en ejecución.
+- Pruebas secuenciales: API `ai-assessment-qwen-evidence.test.ts` **18/18**;
+  worker `test_policy_lab.py` **39/39** y
+  `test_qwen_evidence_reconciliation.py` **6/6**; API typecheck aprobado.
+  El E2E PostgreSQL se ejecutó sin URL ni opt-in y se omitió **1** antes de
+  abrir conexión. La primera invocación worker sin `PYTHONPATH` falló al
+  importar el paquete; repetida con `PYTHONPATH=workers/guardian-ai-assessment`
+  pasó.
+- Sin Qwen, worker vivo, Docker/socket privilegiado, DB o servicio externo.
+  El último preflight documentado permanece `hostBoundaryReady=false`; no se
+  revalidó mediante acceso privilegiado. PostgreSQL persistencia/RLS runtime
+  siguen sin verificar. No hubo cambios UI, así que no se ejecutó suite UI.
+- SHA-256 guard:
+  `f2623a25e1b8ce5c909fb48cb8cf35f4043b21f53347b44b8dd962a8f1b0047e`.
+- SHA-256 test API:
+  `4d33c5fb72b484cd680fdc939bb04c7173dfc3eadad91e09e88d5493225e3d60`.
+- Informe: `reports/approval-db-query-override-guard-2026-11-10.md`.
+- Pendientes: proporcionar una DB de laboratorio PostgreSQL de loopback con
+  roles segregados y validar sus políticas/roles en vivo; obtener atestación
+  independiente del límite host/broker/worker. No ejecutar Qwen ni worker
+  real antes de esa atestación.

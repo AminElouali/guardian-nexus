@@ -34,13 +34,16 @@ export function isExplicitDisposableApprovalDatabase(
 
   try {
     const parsed = new URL(databaseUrl);
-    const overridesSocketTarget = Array.from(parsed.searchParams.keys()).some(
-      (key) => ["host", "hostaddr"].includes(key.toLowerCase()),
-    );
+    // Do not allow libpq/driver options or fragments to alter connection
+    // routing/configuration after this URL has passed the disposable-target
+    // check (for example `service`, `servicefile`, `host`, or `hostaddr`).
+    const hasConnectionOverrides =
+      Array.from(parsed.searchParams.keys()).length > 0 ||
+      parsed.hash.length > 0;
     if (
       !["postgres:", "postgresql:"].includes(parsed.protocol) ||
       !LOOPBACK_HOSTS.has(parsed.hostname.toLowerCase()) ||
-      overridesSocketTarget
+      hasConnectionOverrides
     ) {
       return false;
     }
