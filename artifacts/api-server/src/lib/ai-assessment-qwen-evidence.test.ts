@@ -45,6 +45,11 @@ test("persistent approval E2E requires explicit opt-in to a named loopback dispo
     {
       ...safeDisposableTarget,
       DATABASE_URL:
+        "postgresql://synthetic_user:synthetic_password@localhost:5432/guardian_approval_lab_run_01",
+    },
+    {
+      ...safeDisposableTarget,
+      DATABASE_URL:
         "postgresql://synthetic_user:synthetic_password@127.0.0.1:5432/guardian_approval_lab_run_01?host=db.example.invalid",
     },
     {

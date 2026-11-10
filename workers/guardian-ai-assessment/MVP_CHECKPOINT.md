@@ -4067,3 +4067,34 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   persistencia/RLS runtime; atestación independiente host/broker/worker para
   cualquier Qwen real. No contar mocks, fixtures ni contratos offline como
   esas pruebas.
+
+## Endurecimiento offline del destino E2E de aprobaciones — 2026-11-10
+
+- Base: HEAD `c256af421d2955104cb9a71e6995babaf8e279d6`, rama `main`, árbol
+  limpio. No se observaron procesos locales Guardian/Qwen/pruebas/PostgreSQL
+  antes del cambio.
+- Diagnóstico PostgreSQL reproducible y de solo loopback: `ss -ltn` no mostró
+  listeners loopback; `pg_isready -h 127.0.0.1 -p 5432 -t 1` devolvió
+  `no response` (exit 2). `psql` y `pg_isready` están instalados, pero no hay
+  servidor local detectado. No se leyó ni usó `DATABASE_URL` ni secretos.
+- El guard del E2E ahora rechaza `localhost` y admite únicamente IP loopback
+  explícita (`127.0.0.1` / `::1`), además del opt-in, modo development, no
+  despliegue, nombre `guardian_approval_lab_*` concordante y ausencia de
+  overrides `host`/`hostaddr`. La regresión `localhost` es offline; no prueba
+  que una DB sea desechable.
+- Pruebas secuenciales: worker preflight **16/16**, policy/procedencia **39/39**,
+  reconciliación histórica **6/6**; API **87/87**, typecheck aprobado; E2E DB
+  **omitido 1** antes de conexión por no existir destino opt-in; UI **17/17**;
+  `git diff --check` aprobado.
+- No hubo Qwen, worker vivo, socket privilegiado, servicios reales ni datos
+  reales. PostgreSQL persistencia y RLS runtime siguen sin verificar. El último
+  preflight registrado sigue `hostBoundaryReady=false` y no se repitió aquí.
+- Informe: `reports/approval-e2e-loopback-diagnostic-2026-11-10.md`.
+- SHA-256 guard:
+  `96887232eb12bb6885a11125f94b1a83df1cccf6903c7d88d90b6d06a0298808`.
+- SHA-256 test de regresión:
+  `65131a82f4579b74358243aad6d0fcaf38ada71d781df15ff9b9ed1864045be8`.
+- SHA-256 del informe:
+  `f47dcd64faf8cb06e6127e53bdbaa3aa135e833f5d61b8d9cacddb230fed67c5`.
+- Próximos bloqueos: base PostgreSQL desechable loopback con roles segregados
+  para E2E/RLS; atestación independiente host/broker/worker antes de Qwen.

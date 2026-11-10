@@ -1,4 +1,6 @@
-const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
+// Do not rely on resolving "localhost": a disposable-target gate should only
+// admit an IP literal whose loopback destination is explicit in the URL.
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "::1", "[::1]"]);
 const DISPOSABLE_DATABASE_NAME = /^guardian_approval_lab_[a-z0-9_]+$/;
 
 /**
