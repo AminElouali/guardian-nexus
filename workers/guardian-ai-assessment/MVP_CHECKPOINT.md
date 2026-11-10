@@ -4210,3 +4210,63 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   identidades separadas y socket inaccesible para API/worker; después, y solo
   con autorización explícita, una PostgreSQL desechable loopback con roles
   segregados para probar RLS y persistencia. Mantener Qwen/worker bloqueados.
+
+## Gate firmado para todas las rutas locales Qwen — 2026-11-10
+
+- Base: HEAD `b5df7435209088e009baa6e203e041d96d887197`, `main`, árbol limpio y
+  sin procesos locales Guardian/Qwen/pruebas/PostgreSQL/Docker al inicio.
+- Se añadió verificación de atestación externa Ed25519 en rutas fijas root-owned,
+  no-writable por grupo/otros; no se leen claves privadas ni valores de
+  variables. El payload firmado expira en 24 h, exige revisor independiente,
+  hashes exactos de los módulos Qwen y límites verificables de UID/GID, grupos,
+  socket exclusivo del broker, roles de DB distintos sobre `guardian_lab_*` y
+  sandbox aislado.
+- El gate se comprueba antes de cargar/validar modelo, consultar versión de
+  runtime o instanciar `LocalQwenClient`, también en las entradas de evaluación
+  general, integración de facturas, native tools, selección autónoma y runner
+  Qwen por perfil. El lanzador offline bloquea antes de extraer wheels o crear
+  el directorio de evidencia.
+- Email/BBDD conservan pruebas sintéticas de propuesta adaptada, abstención,
+  prompt injection y Policy ON antes de simulación ficticia. `tool_choice=auto`;
+  `runtime_message_tool_calls`, adaptador de marcadores, `NO_PROPOSAL` y baseline
+  de ocho fixtures siguen separados. No hubo inferencia real nueva ni cambios a
+  los fixtures.
+- Pruebas offline, ejecutadas en serie: `test_host_boundary_attestation.py`
+  **12/12**; `test_offline_isolation_preflight.py` **17/17**;
+  `test_policy_lab.py` **42/42**; `test_autonomous_tool_selection.py` **12/12**;
+  `test_lab_host_preflight.py` **7/7**; `test_qwen_evidence_reconciliation.py`
+  **6/6**; `git diff --check` pasó. Total **96/96**. La suite de preflight usa
+  un socket Unix temporal de prueba, nunca el socket Docker del host.
+- No se inició Qwen/modelo, worker vivo, API, Docker, PostgreSQL, ni proceso
+  OpenSSL; no se conectó a servicios. La prueba de firma usó un verificador
+  simulado, sin generar o utilizar claves. No hubo build/UI/API/DB E2E.
+- El último preflight host previamente registrado sigue
+  `hostBoundaryReady=false`; no fue reejecutado. No existe atestación externa
+  aceptada en esta iteración. PostgreSQL desechable, RLS runtime, aprobaciones
+  persistentes y ruta API v2/cola permanecen sin validar/integrar.
+- SHA-256:
+  - `guardian_ai_assessment/host_boundary_attestation.py`:
+    `c0f1740924be8f786db18eaee39be91856bbcab3bc268956c487273d51e739bc`
+  - `guardian_ai_assessment/offline_isolation_preflight.py`:
+    `7f9a08ff571a1ebf53f4a85dbc749f6c6815143c96b29f6355fceb4865d9c052`
+  - `guardian_ai_assessment/qwen_policy_lab.py`:
+    `a8b75093c2bf9660326c8ad3deb6a7a6b34e642d10fa9483b9e0cdebf7c8097d`
+  - `guardian_ai_assessment/llm_lab.py`:
+    `903501f63b97dc390bca3b6d078a718c87a1368077879b6b47c47caf388681cf`
+  - `guardian_ai_assessment/autonomous_tool_selection.py`:
+    `35adf3ae09d8419dc4f2bae195fb4ef513be6b890eeb2df064b8a31163cdde86`
+  - `guardian_ai_assessment/offline_qwen_runner.py`:
+    `c99b93e0dead61210210f71160795c46792807d713935a2e1a84352c07b282fe`
+  - `tests/test_host_boundary_attestation.py`:
+    `38a11d6cba5df28bc9aa5f130f528551b7644f8023aa2d579d42f8b14f486cdf`
+  - `tests/test_offline_isolation_preflight.py`:
+    `41d5bea7fcf4f939d8ef425019311c6a7605ae8f0f0d1b74c313d60de2787b78`
+  - `tests/test_policy_lab.py`:
+    `3b8523fcf2b5b08dee417ff1cea214413bf496ceda46d53ddba43b1e60abf09c`
+- Informe: `reports/signed-host-boundary-qwen-gate-2026-11-10.md`, SHA-256
+  `faf99d3baea1a6c368c6764229630e25b45a593bea10bdf2651dd4e869d06f09`.
+- Próximo paso: atestación independente provisionada por el propietario del host
+  y revisión independiente, vinculada a los hashes exactos anteriores; solo
+  entonces considerar Qwen local para correo/BBDD. Persistencia/RLS requiere
+  además PostgreSQL desechable de loopback con roles segregados. No afirmar
+  ocho agentes funcionales ni integración API/worker hasta pruebas reales.

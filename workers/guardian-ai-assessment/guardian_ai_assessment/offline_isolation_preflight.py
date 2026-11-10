@@ -209,20 +209,25 @@ def require_offline_qwen_process_ready(
     environment: Mapping[str, str] | None = None,
     socket_paths: Sequence[Path] | None = None,
 ) -> dict[str, Any]:
-    """Block Qwen unless process isolation and host boundaries are both attested."""
+    """Block Qwen unless process isolation and host boundaries are attested."""
     report = collect_offline_isolation_preflight(
         environment=environment,
         socket_paths=socket_paths,
     )
     if not report["offlineQwenProcessReady"]:
         raise RuntimeError(report["reasonCodes"][0])
-    if not report["apiWorkerBoundaryReady"]:
-        boundary_reasons = report.get("apiWorkerBoundaryReasonCodes", [])
-        raise RuntimeError(
-            boundary_reasons[0]
-            if boundary_reasons
-            else "assessment_api_worker_boundary_unverified"
-        )
-    if not report["integratedAssessmentReady"]:
-        raise RuntimeError("assessment_integrated_boundary_unverified")
+    from .host_boundary_attestation import (
+        HostBoundaryAttestationError,
+        require_host_boundary_attestation,
+    )
+
+    try:
+        attestation = require_host_boundary_attestation()
+    except HostBoundaryAttestationError as exc:
+        raise RuntimeError(str(exc)) from None
+    report["hostBoundaryReady"] = True
+    report["apiWorkerBoundaryReady"] = True
+    report["apiWorkerBoundaryReasonCodes"] = []
+    report["integratedAssessmentReady"] = True
+    report["hostBoundaryAttestation"] = attestation
     return report

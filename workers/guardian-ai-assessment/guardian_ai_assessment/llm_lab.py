@@ -445,6 +445,11 @@ def _assert_diskcache_runtime_absent() -> None:
 
 class LocalQwenClient:
     def __init__(self, model_path: Path) -> None:
+        from .offline_isolation_preflight import (
+            require_offline_qwen_process_ready,
+        )
+
+        require_offline_qwen_process_ready()
         _assert_diskcache_runtime_absent()
         from llama_cpp import Llama
         from llama_cpp.llama_chat_format import Jinja2ChatFormatter
@@ -1086,6 +1091,11 @@ def _verify_model_artifact(model_path: Path) -> None:
 
 
 def run_real_evaluation() -> dict[str, Any]:
+    from .offline_isolation_preflight import (
+        require_offline_qwen_process_ready,
+    )
+
+    require_offline_qwen_process_ready()
     started_at = datetime.now(timezone.utc)
     started_monotonic = time.monotonic()
     _verify_model_artifact(MODEL_PATH)
@@ -2012,6 +2022,11 @@ def evaluate_native_tool_suite(
 
 
 def run_invoice_integration_job() -> dict[str, Any]:
+    from .offline_isolation_preflight import (
+        require_offline_qwen_process_ready,
+    )
+
+    require_offline_qwen_process_ready()
     started_at = datetime.now(timezone.utc)
     started_monotonic = time.monotonic()
     _verify_model_artifact(MODEL_PATH)
@@ -2047,6 +2062,11 @@ def run_invoice_integration_job() -> dict[str, Any]:
 
 
 def run_native_tool_suite_job() -> dict[str, Any]:
+    from .offline_isolation_preflight import (
+        require_offline_qwen_process_ready,
+    )
+
+    require_offline_qwen_process_ready()
     started_at = datetime.now(timezone.utc)
     started_monotonic = time.monotonic()
     _verify_model_artifact(MODEL_PATH)

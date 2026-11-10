@@ -1077,6 +1077,11 @@ def evaluate_autonomous_tool_selection(
 
 
 def run_autonomous_tool_selection_job() -> dict[str, Any]:
+    from .offline_isolation_preflight import (
+        require_offline_qwen_process_ready,
+    )
+
+    require_offline_qwen_process_ready()
     started_at = datetime.now(timezone.utc)
     started_monotonic = time.monotonic()
     llm_lab._verify_model_artifact(llm_lab.MODEL_PATH)

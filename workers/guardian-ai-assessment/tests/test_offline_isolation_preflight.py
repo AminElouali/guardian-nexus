@@ -276,11 +276,51 @@ class OfflineIsolationPreflightTests(unittest.TestCase):
             offline_isolation_preflight,
             "collect_offline_isolation_preflight",
             return_value=report,
+        ), patch(
+            "guardian_ai_assessment.host_boundary_attestation.require_host_boundary_attestation",
+            side_effect=RuntimeError("assessment_host_attestation_file_unavailable"),
         ):
             with self.assertRaisesRegex(
-                RuntimeError, "assessment_broker_identity_unverified"
+                RuntimeError, "assessment_host_attestation_file_unavailable"
             ):
                 require_offline_qwen_process_ready()
+
+    def test_verified_host_attestation_is_required_to_mark_integrated_boundary_ready(self):
+        report = {
+            "offlineQwenProcessReady": True,
+            "reasonCodes": [],
+            "apiWorkerBoundaryReady": False,
+            "apiWorkerBoundaryReasonCodes": [
+                "assessment_broker_identity_unverified",
+                "assessment_database_session_identity_unverified",
+            ],
+            "integratedAssessmentReady": False,
+        }
+        attestation = {
+            "status": "verified",
+            "attestationId": "synthetic-test-only",
+            "independentVerifierId": "mocked-verifier",
+            "expiresAt": "2026-11-10T16:00:00+00:00",
+            "sourceCodeSha256": {},
+        }
+        with (
+            patch.object(
+                offline_isolation_preflight,
+                "collect_offline_isolation_preflight",
+                return_value=report,
+            ),
+            patch(
+                "guardian_ai_assessment.host_boundary_attestation.require_host_boundary_attestation",
+                return_value=attestation,
+            ),
+        ):
+            result = require_offline_qwen_process_ready()
+
+        self.assertTrue(result["offlineQwenProcessReady"])
+        self.assertTrue(result["hostBoundaryReady"])
+        self.assertTrue(result["apiWorkerBoundaryReady"])
+        self.assertTrue(result["integratedAssessmentReady"])
+        self.assertEqual(result["hostBoundaryAttestation"], attestation)
 
     def test_metadata_only_clean_process_still_blocks_without_broker_attestation(self):
         environment = KeyOnlyEnvironment(set())
@@ -317,7 +357,7 @@ class OfflineIsolationPreflightTests(unittest.TestCase):
             ),
         ):
             with self.assertRaisesRegex(
-                RuntimeError, "assessment_broker_identity_unverified"
+                RuntimeError, "assessment_host_attestation_file_unavailable"
             ):
                 require_offline_qwen_process_ready(
                     environment=environment,
@@ -343,12 +383,18 @@ class OfflineIsolationPreflightTests(unittest.TestCase):
                     "collect_offline_isolation_preflight",
                     return_value=report,
                 ),
+                patch(
+                    "guardian_ai_assessment.host_boundary_attestation.require_host_boundary_attestation",
+                    side_effect=RuntimeError(
+                        "assessment_host_attestation_file_unavailable"
+                    ),
+                ),
                 patch.object(
                     offline_qwen_runner, "_load_verified_manifests"
                 ) as load_manifests,
             ):
                 with self.assertRaisesRegex(
-                    RuntimeError, "assessment_broker_identity_unverified"
+                    RuntimeError, "assessment_host_attestation_file_unavailable"
                 ):
                     offline_qwen_runner.run_offline_evaluation(workspace)
             load_manifests.assert_not_called()

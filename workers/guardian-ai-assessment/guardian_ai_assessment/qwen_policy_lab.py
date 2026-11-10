@@ -1592,19 +1592,17 @@ def run_qwen_policy_lab(
 ) -> dict[str, Any]:
     if profile_id not in CASES:
         raise ValueError("qwen_policy_profile_invalid")
+    from .offline_isolation_preflight import (
+        require_offline_qwen_process_ready,
+    )
+
+    # This runs before model verification, runtime metadata lookup, or client
+    # construction for both the direct and offline-guarded entry points.
+    require_offline_qwen_process_ready()
     started = datetime.now(timezone.utc)
     monotonic_start = time.monotonic()
     offline_mode = offline_guard is not None
     if offline_mode:
-        from .offline_isolation_preflight import (
-            require_offline_qwen_process_ready,
-        )
-
-        # The standalone guard proves only local syscall/resource properties.
-        # Also require the separately verified host API/broker/DB boundary;
-        # callers must not bypass the launcher by invoking this function
-        # directly with a process-guard proof.
-        require_offline_qwen_process_ready()
         from .offline_process_guard import (
             is_active_offline_guard,
             offline_limit_evidence,

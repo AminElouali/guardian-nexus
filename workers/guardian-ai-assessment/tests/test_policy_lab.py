@@ -1481,6 +1481,94 @@ class GuardianAgentPolicyLabTests(unittest.TestCase):
 
 
 class QwenPolicyLabDispatchSelfCheckTests(unittest.TestCase):
+    def test_email_and_database_abstention_never_runs_policy_or_dispatch(self):
+        scenarios = (
+            (QWEN_EMAIL_PROFILE, "qwen_email_benign_read_es", "email"),
+            (QWEN_EMAIL_PROFILE, "qwen_email_indirect_injection_en", "email"),
+            (QWEN_DATABASE_PROFILE, "qwen_database_benign_read_en", "database"),
+            (
+                QWEN_DATABASE_PROFILE,
+                "qwen_database_cross_tenant_delete_es",
+                "database",
+            ),
+        )
+
+        class AbstainingClient:
+            def __init__(self):
+                self.tool_choice = None
+
+            def complete_native(self, **kwargs):
+                self.tool_choice = kwargs.get("tool_choice")
+                return {
+                    "choices": [
+                        {
+                            "message": {
+                                "role": "assistant",
+                                "content": "No tool proposal.",
+                            },
+                            "finish_reason": "stop",
+                        }
+                    ],
+                    "usage": {},
+                    "_guardianToolMarkupParse": {"status": "no_marker"},
+                }
+
+        for profile_id, case_id, vertical in scenarios:
+            with self.subTest(profile=profile_id, case=case_id):
+                case = next(
+                    item
+                    for item in QWEN_POLICY_CASES[profile_id]
+                    if item["caseId"] == case_id
+                )
+                client = AbstainingClient()
+                with (
+                    patch(
+                        "guardian_ai_assessment.qwen_policy_lab.evaluate_synthetic_action_policy"
+                    ) as policy,
+                    patch(
+                        "guardian_ai_assessment.qwen_policy_lab.call_synthetic_tool"
+                    ) as dispatch,
+                ):
+                    evidence, _usage = _one_case(
+                        client=client,
+                        vertical=vertical,
+                        case=case,
+                        tools=[],
+                    )
+
+                self.assertEqual(client.tool_choice, "auto")
+                self.assertEqual(evidence["toolCallOrigin"], "no_tool_call")
+                self.assertEqual(evidence["decision"], "no_proposal")
+                self.assertEqual(evidence["dispatchStatus"], "not_invoked")
+                self.assertFalse(evidence["unauthorizedActionExecuted"])
+                self.assertFalse(evidence["policyOff"]["executed"])
+                policy.assert_not_called()
+                dispatch.assert_not_called()
+
+    def test_every_live_entrypoint_checks_host_gate_before_model_runtime(self):
+        with (
+            patch(
+                "guardian_ai_assessment.offline_isolation_preflight.require_offline_qwen_process_ready",
+                side_effect=RuntimeError(
+                    "assessment_host_attestation_file_unavailable"
+                ),
+            ) as gate,
+            patch("guardian_ai_assessment.llm_lab._verify_model_artifact") as verify_model,
+            patch("guardian_ai_assessment.llm_lab.LocalQwenClient") as client,
+            patch("importlib.metadata.version") as runtime_version,
+            patch("guardian_ai_assessment.__main__.verify_network_isolation") as network,
+        ):
+            with self.assertRaisesRegex(
+                RuntimeError, "assessment_host_attestation_file_unavailable"
+            ):
+                run_qwen_policy_lab(QWEN_EMAIL_PROFILE)
+
+        gate.assert_called_once_with()
+        verify_model.assert_not_called()
+        client.assert_not_called()
+        runtime_version.assert_not_called()
+        network.assert_not_called()
+
     def test_direct_offline_entrypoint_requires_integrated_host_boundary(self):
         with (
             patch(

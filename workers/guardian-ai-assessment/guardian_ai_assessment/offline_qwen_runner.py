@@ -687,6 +687,24 @@ def _build_bundle(
     return bundle
 
 
+def _source_code_hashes(worker_root: Path) -> dict[str, str]:
+    files = {
+        "offlineRunner": Path(__file__),
+        "offlineProcessGuard": worker_root / "guardian_ai_assessment/offline_process_guard.py",
+        "hostBoundaryAttestation": worker_root
+        / "guardian_ai_assessment/host_boundary_attestation.py",
+        "offlineIsolationPreflight": worker_root
+        / "guardian_ai_assessment/offline_isolation_preflight.py",
+        "llmLab": worker_root / "guardian_ai_assessment/llm_lab.py",
+        "autonomousToolSelection": worker_root
+        / "guardian_ai_assessment/autonomous_tool_selection.py",
+        "networkPreflight": worker_root / "guardian_ai_assessment/__main__.py",
+        "offlineQwenLauncher": worker_root / "scripts/run_qwen_policy_lab_offline.py",
+        "qwenPolicyLab": worker_root / "guardian_ai_assessment/qwen_policy_lab.py",
+    }
+    return {name: _sha256_file(path) for name, path in files.items()}
+
+
 def run_offline_evaluation(workspace: Path) -> tuple[dict[str, Any], Path]:
     """Verify local artifacts, install a syscall guard, then run all eight profiles."""
     workspace = workspace.resolve()
@@ -714,15 +732,7 @@ def run_offline_evaluation(workspace: Path) -> tuple[dict[str, Any], Path]:
         raise RuntimeError("offline_qwen_model_hash_mismatch")
 
     worker_root = workspace / "workers/guardian-ai-assessment"
-    source_code_hashes = {
-        "offlineRunner": _sha256_file(Path(__file__)),
-        "offlineProcessGuard": _sha256_file(
-            worker_root / "guardian_ai_assessment/offline_process_guard.py"
-        ),
-        "qwenPolicyLab": _sha256_file(
-            worker_root / "guardian_ai_assessment/qwen_policy_lab.py"
-        ),
-    }
+    source_code_hashes = _source_code_hashes(worker_root)
     wheel_records = _runtime_wheels(workspace, local_manifest, wheel_manifest)
     completed_profiles: list[dict[str, Any]] = []
     process_guard: object | None = None
