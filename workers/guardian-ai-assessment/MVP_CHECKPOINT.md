@@ -3972,3 +3972,37 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
 - Próximo bloqueo: atestar separación host/broker/worker sin dar acceso al
   socket Docker a API/worker; para aprobaciones durables, disponer de
   PostgreSQL desechable con roles segregados y probar RLS/runtime.
+
+## Propuestas adversarias y preflight actualizado — 2026-11-10
+
+- Base: HEAD `834e6760e224989ef091f67b68d48451f955281f`, `main`, árbol limpio,
+  sin procesos Guardian/Qwen/tests/dev-server visibles.
+- Ejecutado preflight local en modo solo lectura, sin conexión al socket ni a
+  DB y sin sondeos opcionales: `hostBoundaryReady=false`,
+  `integratedAssessmentReady=false`; API/broker/worker, sesiones DB y sandbox
+  no verificados. Metadatos del socket: presente; el proceso de preflight tiene
+  lectura/escritura. Se observó el conteo de 4 nombres de variables sensibles,
+  sin leer ni imprimir nombres o valores. Qwen y worker vivo siguen bloqueados.
+- Se amplió el test offline de propuestas adversarias de correo/BBDD a las
+  ocho verticales, para llamadas nativas simuladas y marcadores adaptados
+  completos; Policy independiente deniega antes del simulador. Mantiene
+  `NO_PROPOSAL`, fixtures y procedencia en categorías distintas. No hubo
+  inferencia real nueva.
+- Pruebas secuenciales del 2026-11-10: worker `test_policy_lab.py` **39/39**,
+  `test_autonomous_tool_selection.py` **11/11**,
+  `test_qwen_evidence_reconciliation.py` **6/6**,
+  `test_offline_isolation_preflight.py` **15/15**,
+  `test_lab_host_preflight.py` **6/6**,
+  `test_cross_layer_qwen_contract.py` **2/2**; API
+  `ai-assessment-qwen-evidence.test.ts` **17/17**; UI
+  `AiEvaluationPage.integration.test.tsx` **17/17**. La E2E DB-backed no se
+  ejecutó porque no hay PostgreSQL desechable verificado.
+- Informe: `reports/offline-eight-profile-adversarial-policy-preflight-2026-11-10.md`.
+- SHA-256 del test worker:
+  `0200f0f38b5522a2fef40f01c8fc355a84726fa4f3f18e9899bfa58b8309ba0c`.
+- SHA-256 del informe:
+  `f9c2166c3842c0d5f91b97a2a090b9dce67025426ed5fb08200567512eb3d324`.
+- Límite/siguiente gate: conseguir atestación independiente sin acceso
+  Docker-socket para API/worker y preparar PostgreSQL desechable con roles
+  segregados. Hasta entonces no afirmar inferencia actual, persistencia ni RLS
+  runtime.
