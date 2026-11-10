@@ -4006,3 +4006,32 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   Docker-socket para API/worker y preparar PostgreSQL desechable con roles
   segregados. Hasta entonces no afirmar inferencia actual, persistencia ni RLS
   runtime.
+
+## Verificación offline reproducible y plan host/broker — 2026-11-10
+
+- Base: HEAD `43c702aa911590ad47dd0688241863e7a279a4b9`, `main`, limpio;
+  no se observaron procesos Guardian/Qwen/tests/servidores al comenzar.
+- Se añadió regresión de preflight que usa ruta sintética inexistente y
+  metadatos de identidad controlados: aunque el proceso tenga preflight local
+  listo, broker/DB no verificados mantienen el gate integrado cerrado. No se
+  inspeccionó ni conectó el socket Docker real, no se leyeron credenciales.
+- Pruebas secuenciales del 2026-11-10: preflight worker **16/16**,
+  policy/procedencia worker **39/39**, reconciliación histórica worker **6/6**,
+  contrato API evidencia/aprobación **17/17**, componente UI **17/17**.
+- La procedencia comprobada en pruebas sigue siendo fixtures, respuestas
+  mockeadas y reconciliación histórica; no hubo inferencia nueva. Artefacto
+  histórico: 7 adaptadas, 0 `message.tool_calls` nativas, infraestructura
+  `NO_PROPOSAL`; fixtures baseline separados.
+- La cobertura de finanzas/soporte verifica contratos sintéticos de binding,
+  tenant, rol, expiración, idempotencia de digest y replay en clone. No prueba
+  persistencia PostgreSQL ni RLS runtime. No hubo DB E2E, servicio ni Qwen.
+- Informe de procedimiento y evidencia:
+  `reports/offline-provenance-approval-host-boundary-2026-11-10.md`.
+- SHA-256 test preflight:
+  `d639ecd47ba3cb5536ae3ed2f14aa1ce7e4034505e688903df207aa94283f033`.
+- SHA-256 del informe:
+  `a94b6ef6d685f59cee155bad1468bc037b85598e2ea19e8866c9dae8d8dd45c0`.
+- Límite: `hostBoundaryReady=false` sigue siendo el último estado verificado.
+  Mantener gate cerrado hasta que el propietario del host aporte atestación
+  independiente sin acceso del API/worker al socket; validar después las
+  aprobaciones en PostgreSQL desechable con roles separados.

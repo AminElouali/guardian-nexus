@@ -282,6 +282,48 @@ class OfflineIsolationPreflightTests(unittest.TestCase):
             ):
                 require_offline_qwen_process_ready()
 
+    def test_metadata_only_clean_process_still_blocks_without_broker_attestation(self):
+        environment = KeyOnlyEnvironment(set())
+        missing_socket = Path("/path/that/does/not/exist/docker.sock")
+        report = collect_offline_isolation_preflight(
+            environment=environment,
+            socket_paths=[missing_socket],
+            identity=self.identity,
+            inherited_socket_fds={"status": "clear", "count": 0},
+        )
+
+        self.assertTrue(report["offlineQwenProcessReady"])
+        self.assertFalse(report["apiWorkerBoundaryReady"])
+        self.assertFalse(report["integratedAssessmentReady"])
+        self.assertEqual(report["brokerIdentity"]["status"], "unverified")
+        self.assertEqual(
+            report["apiWorkerDatabaseIdentity"]["status"], "unverified"
+        )
+        self.assertFalse(report["credentialValuesRead"])
+        self.assertFalse(report["dockerSocketChecks"][0].get("connected", False))
+
+        # Use only a synthetic absent path and test metadata helpers. Never open
+        # a real Docker socket or read the host process environment.
+        with (
+            patch.object(
+                offline_isolation_preflight,
+                "_current_identity",
+                return_value=self.identity,
+            ),
+            patch.object(
+                offline_isolation_preflight,
+                "_inherited_socket_fds",
+                return_value={"status": "clear", "count": 0},
+            ),
+        ):
+            with self.assertRaisesRegex(
+                RuntimeError, "assessment_broker_identity_unverified"
+            ):
+                require_offline_qwen_process_ready(
+                    environment=environment,
+                    socket_paths=[missing_socket],
+                )
+
     def test_full_qwen_runner_stops_before_artifacts_when_boundary_is_unverified(self):
         report = {
             "offlineQwenProcessReady": True,
