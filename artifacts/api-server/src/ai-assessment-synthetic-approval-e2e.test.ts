@@ -23,6 +23,7 @@ import {
   computeApprovalProposalBindingV3,
   getAllowlistedSyntheticApprovalAction,
 } from "./lib/ai-assessment-approval-actions";
+import { isExplicitDisposableApprovalDatabase } from "./lib/approval-e2e-db-guard";
 import {
   POLICY_LAB_PROFILE_IDS,
   QWEN_POLICY_LAB_PROFILE_IDS,
@@ -40,7 +41,6 @@ import { createAiAssessmentLabRouter } from "./routes/ai-assessment-lab";
 const workerRoot = resolve(
   fileURLToPath(new URL("../../../workers/guardian-ai-assessment", import.meta.url)),
 );
-const databaseUrl = process.env.DATABASE_URL;
 const workspaceAOwner = `synthetic-e2e-owner-${randomUUID()}`;
 const workspaceAAdmin = `synthetic-e2e-admin-${randomUUID()}`;
 const workspaceAAdmin2 = `synthetic-e2e-admin2-${randomUUID()}`;
@@ -329,9 +329,14 @@ test(
   "deterministic worker fixtures exercise persistent approval API without Docker",
   { timeout: 60_000 },
   async (t) => {
-    assert.equal(process.env.NODE_ENV, "development");
-    assert.notEqual(process.env.REPLIT_DEPLOYMENT, "1");
-    assert.ok(databaseUrl, "development DATABASE_URL is required");
+    if (!isExplicitDisposableApprovalDatabase(process.env)) {
+      t.skip(
+        "requires explicit opt-in to a named loopback disposable PostgreSQL database",
+      );
+      return;
+    }
+    const databaseUrl = process.env.DATABASE_URL;
+    assert.ok(databaseUrl);
     await assertRlsRuntimeReady();
     const fixturePool = new pg.Pool({ connectionString: databaseUrl });
     const app = express();

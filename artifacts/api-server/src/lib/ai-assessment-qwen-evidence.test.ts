@@ -15,12 +15,66 @@ import {
   isApprovalDecisionWindowOpen,
   resolveApprovalEvidenceProvenance,
 } from "./ai-assessment-approval-actions";
+import { isExplicitDisposableApprovalDatabase } from "./approval-e2e-db-guard";
 
 type QwenEvidence = Parameters<
   typeof validateGuardianQwenPolicyLabEvidence
 >[0];
 
 const HASH = "a".repeat(64);
+
+test("persistent approval E2E requires explicit opt-in to a named loopback disposable database", () => {
+  const safeDisposableTarget = {
+    NODE_ENV: "development",
+    GUARDIAN_APPROVAL_E2E_DISPOSABLE: "1",
+    GUARDIAN_APPROVAL_E2E_DATABASE_NAME: "guardian_approval_lab_run_01",
+    DATABASE_URL:
+      "postgresql://synthetic_user:synthetic_password@127.0.0.1:5432/guardian_approval_lab_run_01",
+  };
+  assert.equal(isExplicitDisposableApprovalDatabase(safeDisposableTarget), true);
+
+  for (const unsafeTarget of [
+    { ...safeDisposableTarget, GUARDIAN_APPROVAL_E2E_DISPOSABLE: undefined },
+    { ...safeDisposableTarget, NODE_ENV: "production" },
+    { ...safeDisposableTarget, REPLIT_DEPLOYMENT: "1" },
+    {
+      ...safeDisposableTarget,
+      DATABASE_URL:
+        "postgresql://synthetic_user:synthetic_password@db.example.invalid:5432/guardian_approval_lab_run_01",
+    },
+    {
+      ...safeDisposableTarget,
+      DATABASE_URL:
+        "postgresql://synthetic_user:synthetic_password@127.0.0.1:5432/guardian_approval_lab_run_01?host=db.example.invalid",
+    },
+    {
+      ...safeDisposableTarget,
+      DATABASE_URL:
+        "postgresql://synthetic_user:synthetic_password@127.0.0.1:5432/guardian_approval_lab_run_01?Host=db.example.invalid",
+    },
+    {
+      ...safeDisposableTarget,
+      DATABASE_URL:
+        "postgresql://synthetic_user:synthetic_password@127.0.0.1:5432/guardian_approval_lab_run_01?hostaddr=203.0.113.7",
+    },
+    {
+      ...safeDisposableTarget,
+      DATABASE_URL:
+        "postgresql://synthetic_user:synthetic_password@127.0.0.1:5432/workspace",
+    },
+    {
+      ...safeDisposableTarget,
+      GUARDIAN_APPROVAL_E2E_DATABASE_NAME: "workspace",
+    },
+    { ...safeDisposableTarget, DATABASE_URL: "not-a-postgres-url" },
+  ]) {
+    assert.equal(
+      isExplicitDisposableApprovalDatabase(unsafeTarget),
+      false,
+      "unmarked, deployed, remote, mismatched, or malformed targets must be rejected",
+    );
+  }
+});
 
 test("schema diagnostics identify the Qwen result branch without retaining rejected values", () => {
   const parsed = CreateWorkspaceAiAssessmentLabJobResponse.shape.result.safeParse({

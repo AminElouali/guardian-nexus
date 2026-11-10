@@ -4035,3 +4035,35 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   Mantener gate cerrado hasta que el propietario del host aporte atestación
   independiente sin acceso del API/worker al socket; validar después las
   aprobaciones en PostgreSQL desechable con roles separados.
+
+## Puerta explícita para E2E de aprobaciones PostgreSQL — 2026-11-10
+
+- Base: HEAD `4c5edf2a9f571a6098f57b01f59d0490d1d8fc8e`, rama `main`, limpio.
+  No se observaron procesos locales Guardian, Qwen, pruebas o PostgreSQL.
+- El E2E persistente ahora requiere opt-in explícito, entorno development,
+  ausencia de despliegue, URL PostgreSQL loopback sin overrides `host` /
+  `hostaddr`, y nombre dedicado `guardian_approval_lab_*` concordante con la
+  ruta de conexión. El helper offline rechaza destinos remotos, producción,
+  marcador ausente, nombre no dedicado/mismatch y URL malformada.
+- No se encontró ni verificó una base desechable; se ejecutó el test E2E con
+  `DATABASE_URL` y marcadores unset y se confirmó que omite antes de abrir
+  conexión. No se probó persistencia ni RLS en PostgreSQL.
+- Pruebas secuenciales: worker preflight **16/16**, Policy/procedencia
+  **39/39**, reconciliación histórica **6/6**; API **87/87** y typecheck OK;
+  E2E DB **skipped 1** por falta del opt-in/DB lab; UI **17/17**.
+- Sin inferencia Qwen, worker vivo, Docker/socket, credenciales mostradas,
+  sistemas reales ni despliegue. El último preflight registrado continúa
+  `hostBoundaryReady=false`.
+- Informe: `reports/approval-e2e-disposable-db-gate-2026-11-10.md`.
+- SHA-256 informe:
+  `96008ea71ad27249ffbb039ff912234ba73d23f9d08812fd211bc335cea5e43a`.
+- SHA-256 helper DB guard:
+  `33480f6b8b10f93b160f6533b55d4379df1afb5e9276847b6a48569a47bd2cc5`.
+- SHA-256 test contrato API:
+  `a0f8f632e3c86fdbce48d702e6cfff7c890e839a97dd88ec2af534be005d917b`.
+- SHA-256 harness E2E DB:
+  `d24daee861ed9426598d72885cb97b62f926dc7c73b3e94b70f68df657709b0e`.
+- Pendiente: PostgreSQL loopback desechable con roles segregados para validar
+  persistencia/RLS runtime; atestación independiente host/broker/worker para
+  cualquier Qwen real. No contar mocks, fixtures ni contratos offline como
+  esas pruebas.
