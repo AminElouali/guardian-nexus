@@ -4374,3 +4374,32 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   `92919e8e8e7088c73bc0d3baaf2b2908e036cd2567fa721f47b35555bcca744f`.
 - Siguiente perfil previsto: soporte/atención al cliente, primero con contratos
   offline y sin afirmar persistencia hasta una E2E con PostgreSQL desechable.
+
+## Binding de identidad del proceso de inferencia a la atestación — 2026-11-10
+
+- Desde HEAD `4785978ad35a42a8aa80c6278da377c77879a317`, la verificación de la
+  atestación firmada compara el UID efectivo, GID efectivo y grupos
+  suplementarios del proceso con la identidad `worker` incluida en el payload
+  firmado. Identidad ilegible o distinta falla cerrado; se añadieron casos para
+  UID/GID equivocados y grupo del socket del broker heredado.
+- No se modificó configuración del host ni permisos/cuentas; no se abrió ni
+  conectó el socket Docker. La readiness no se elevó. El informe de límites
+  previo documenta que el runner de Replit comparte identidad con acceso al
+  socket y que `setresuid` no está permitido; no se repitió el preflight.
+- Prueba offline ejecutada ahora, en serie:
+  `PYTHONPATH=workers/guardian-ai-assessment python -m unittest discover -s workers/guardian-ai-assessment/tests -p 'test_host_boundary_attestation.py' -v`
+  — **14/14 aprobadas**. La prueba usa documentos de atestación y firma
+  simulados: valida el contrato del gate, no prueba aislamiento real ni firma
+  real. `git diff --check` pasó antes de agregar este registro y se repetirá.
+- No se ejecutaron Qwen, worker/API/broker vivos, Docker, socket, PostgreSQL,
+  servicios, red, E2E/UI ni despliegue. `hostBoundaryReady` permanece
+  **false/no acreditado**; la atestación externa firmada y el host con
+  identidades/roles separados siguen faltando.
+- SHA-256 del código `host_boundary_attestation.py`:
+  `9aa3cd4acdb8e88a14816af13a2b5cbbb8507fa47764cbb76c6ab90241119ea8`.
+- SHA-256 del test `test_host_boundary_attestation.py`:
+  `2e77bc37ba66256af7c5d9a9805347ac56f7f2dd9e3802cc77d1a7083c1f3975`.
+- Informe: `reports/host-boundary-runtime-identity-match-2026-11-10.md`.
+  El siguiente bloqueo requiere al propietario de un host de laboratorio
+  dedicado y un verificador independiente que emitan atestación Ed25519
+  vinculada a los hashes vigentes. No habilitar inferencia antes de aceptarla.

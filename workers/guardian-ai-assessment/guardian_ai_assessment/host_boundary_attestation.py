@@ -348,6 +348,44 @@ def _validate_payload(
         _raise("assessment_host_attestation_source_mismatch")
 
 
+def _verify_current_worker_identity(payload: Mapping[str, Any]) -> None:
+    """Require the inference process to run as the worker identity it attests."""
+    try:
+        uid = os.geteuid()
+        gid = os.getegid()
+        groups = os.getgroups()
+    except (AttributeError, OSError):
+        _raise("assessment_host_runtime_identity_unavailable")
+    if (
+        not isinstance(uid, int)
+        or isinstance(uid, bool)
+        or uid <= 0
+        or not isinstance(gid, int)
+        or isinstance(gid, bool)
+        or gid <= 0
+        or not isinstance(groups, list)
+        or any(
+            not isinstance(group, int)
+            or isinstance(group, bool)
+            or group <= 0
+            for group in groups
+        )
+    ):
+        _raise("assessment_host_runtime_identity_unavailable")
+
+    identities = payload.get("serviceIdentities")
+    worker = identities.get("worker") if isinstance(identities, dict) else None
+    if not isinstance(worker, dict):
+        _raise("assessment_host_service_identities_invalid")
+    current_groups = sorted(set(groups) | {gid})
+    if (
+        uid != worker.get("uid")
+        or gid != worker.get("gid")
+        or current_groups != sorted(worker.get("groups", []))
+    ):
+        _raise("assessment_host_runtime_identity_mismatch")
+
+
 def _verify_ed25519_signature(
     *, payload_bytes: bytes, signature: bytes, public_key_bytes: bytes
 ) -> None:
@@ -471,6 +509,9 @@ def verify_host_boundary_attestation(
         signature=signature,
         public_key_bytes=public_key_bytes,
     )
+    # The signed host inventory must describe the identity actually running
+    # this model process; a valid report for a different UID/GID is not enough.
+    _verify_current_worker_identity(payload)
     return {
         "status": "verified",
         "attestationId": payload["attestationId"],

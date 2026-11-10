@@ -206,7 +206,9 @@ class HostBoundaryAttestationTests(unittest.TestCase):
             envelope, sort_keys=True, separators=(",", ":")
         ).encode("utf-8")
         with (
-            patch.object(host_boundary_attestation.os, "geteuid", return_value=1000),
+            patch.object(host_boundary_attestation.os, "geteuid", return_value=1102),
+            patch.object(host_boundary_attestation.os, "getegid", return_value=1102),
+            patch.object(host_boundary_attestation.os, "getgroups", return_value=[1102]),
             patch.object(
                 host_boundary_attestation,
                 "_read_root_owned_file",
@@ -228,6 +230,86 @@ class HostBoundaryAttestationTests(unittest.TestCase):
             result["independentVerifierId"], payload["independentVerifierId"]
         )
         self.assertEqual(read_trusted_file.call_count, 2)
+        verify_signature.assert_called_once()
+
+    def test_signed_attestation_must_match_the_current_worker_uid_gid_and_groups(self):
+        payload = _valid_payload()
+        envelope = {
+            "payload": payload,
+            "signatureAlgorithm": "Ed25519",
+            "signatureBase64": base64.b64encode(b"s" * 64).decode("ascii"),
+        }
+        attestation_bytes = json.dumps(
+            envelope, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
+        mismatched_identities = (
+            (1101, 1101, [1101]),  # API UID instead of worker UID.
+            (1102, 1101, [1102, 1101]),  # Unexpected effective GID.
+            (1102, 1102, [1102, 1200]),  # Worker inherited broker socket group.
+        )
+
+        for uid, gid, groups in mismatched_identities:
+            with self.subTest(uid=uid, gid=gid, groups=groups):
+                with (
+                    patch.object(host_boundary_attestation.os, "geteuid", return_value=uid),
+                    patch.object(host_boundary_attestation.os, "getegid", return_value=gid),
+                    patch.object(host_boundary_attestation.os, "getgroups", return_value=groups),
+                    patch.object(
+                        host_boundary_attestation,
+                        "_read_root_owned_file",
+                        side_effect=[attestation_bytes, b"root-installed-public-key"],
+                    ),
+                    patch.object(
+                        host_boundary_attestation,
+                        "_verify_ed25519_signature",
+                    ) as verify_signature,
+                ):
+                    with self.assertRaisesRegex(
+                        HostBoundaryAttestationError,
+                        "assessment_host_runtime_identity_mismatch",
+                    ):
+                        verify_host_boundary_attestation(
+                            now=NOW,
+                            expected_source_hashes=SOURCE_HASHES,
+                        )
+                verify_signature.assert_called_once()
+
+    def test_unreadable_current_worker_groups_fail_closed(self):
+        payload = _valid_payload()
+        envelope = {
+            "payload": payload,
+            "signatureAlgorithm": "Ed25519",
+            "signatureBase64": base64.b64encode(b"s" * 64).decode("ascii"),
+        }
+        attestation_bytes = json.dumps(
+            envelope, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
+        with (
+            patch.object(host_boundary_attestation.os, "geteuid", return_value=1102),
+            patch.object(host_boundary_attestation.os, "getegid", return_value=1102),
+            patch.object(
+                host_boundary_attestation.os,
+                "getgroups",
+                side_effect=OSError("synthetic unavailable"),
+            ),
+            patch.object(
+                host_boundary_attestation,
+                "_read_root_owned_file",
+                side_effect=[attestation_bytes, b"root-installed-public-key"],
+            ),
+            patch.object(
+                host_boundary_attestation,
+                "_verify_ed25519_signature",
+            ) as verify_signature,
+        ):
+            with self.assertRaisesRegex(
+                HostBoundaryAttestationError,
+                "assessment_host_runtime_identity_unavailable",
+            ):
+                verify_host_boundary_attestation(
+                    now=NOW,
+                    expected_source_hashes=SOURCE_HASHES,
+                )
         verify_signature.assert_called_once()
 
     def test_offline_runner_fails_before_model_artifact_or_output_setup(self):
