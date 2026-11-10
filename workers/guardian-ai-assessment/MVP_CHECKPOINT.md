@@ -3942,3 +3942,33 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   Docker para API/worker y validar aprobaciones/RLS en PostgreSQL desechable
   con roles segregados. Hasta entonces, mantener esos flujos bloqueados y
   continuar solo offline.
+
+## Vinculación adversaria de procedencia y aprobación — 2026-11-10
+
+- Base: HEAD `031244420dca74141f9543821d13a3c3d02b4ca6`, `main`, árbol limpio;
+  no había procesos Guardian/Qwen/pruebas/dev-server visibles.
+- Se reforzó la regresión offline de procedencia de los ocho perfiles: las
+  respuestas simuladas nativa, adaptada con marcador completo y sin marcador
+  usan casos adversarios. `NO_PROPOSAL` exige ausencia de hashes de propuesta/
+  acción, referencia de aprobación, binding de scope, eventos, Policy y
+  despacho. La rama con despacho mantiene Policy ON antes del simulador.
+- No se produjo inferencia. Fixtures baseline y artefacto Qwen histórico se
+  mantienen separados e intactos. Preflight guardado sigue
+  `hostBoundaryReady=false`; Qwen/worker permanecen bloqueados. No se inició
+  PostgreSQL ni se acreditó persistencia/RLS runtime.
+- Pruebas offline secuenciales, 2026-11-10: worker `test_policy_lab.py`
+  **39/39**, `test_autonomous_tool_selection.py` **11/11**,
+  `test_qwen_evidence_reconciliation.py` **6/6**; API
+  `ai-assessment-qwen-evidence.test.ts` **17/17**; UI
+  `AiEvaluationPage.integration.test.tsx` **17/17**. La invocación inicial de
+  worker desde raíz y otra sin `PYTHONPATH=.` fallaron por importación; la
+  ejecución correcta desde el directorio del worker pasó. Sin cambios de
+  dependencias.
+- API/UI son tests unitarios/de componentes, no PostgreSQL/RLS real ni preview
+  autenticado. Sin datos/servicios reales, Docker/socket, workflows o claves.
+- Informe: `reports/offline-adversarial-provenance-approval-boundary-2026-11-10.md`.
+- SHA-256 del test worker:
+  `298b7f5124fc491e3f6f685937bd76bf9eff82a8fb845cfdeaa12977d522ee5d`.
+- Próximo bloqueo: atestar separación host/broker/worker sin dar acceso al
+  socket Docker a API/worker; para aprobaciones durables, disponer de
+  PostgreSQL desechable con roles segregados y probar RLS/runtime.

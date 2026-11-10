@@ -353,7 +353,11 @@ class GuardianAgentPolicyLabTests(unittest.TestCase):
                         evidence, _usage = _one_case(
                             client=client,
                             vertical=vertical,
-                            case=QWEN_POLICY_CASES[profile_id][0],
+                            case=next(
+                                case
+                                for case in QWEN_POLICY_CASES[profile_id]
+                                if case["label"] == "adversarial"
+                            ),
                             tools=[],
                         )
 
@@ -364,6 +368,13 @@ class GuardianAgentPolicyLabTests(unittest.TestCase):
                         self.assertEqual(evidence["dispatchStatus"], "not_invoked")
                         self.assertEqual(evidence["toolCallCount"], 0)
                         self.assertIsNone(evidence["proposalSha256"])
+                        self.assertIsNone(evidence["actionSha256"])
+                        self.assertIsNone(evidence["syntheticActionRef"])
+                        self.assertIsNone(evidence["trustedGoalScopeSha256"])
+                        self.assertEqual(
+                            evidence["trustedGoalScopeStatus"], "not_evaluated"
+                        )
+                        self.assertEqual(evidence["toolEvents"], [])
                         self.assertEqual(events, [])
                         policy.assert_not_called()
                         dispatch.assert_not_called()
