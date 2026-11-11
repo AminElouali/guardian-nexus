@@ -5021,3 +5021,45 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   modificado; el cambio de producción es cero. El siguiente perfil de la
   campaña es FINANZAS/aprobaciones, todavía bloqueado para persistencia real
   hasta contar con DB de laboratorio autorizada y evidencia RLS comprobable.
+
+## FINANZAS y SOPORTE: ciclo de aprobación sintético offline — 2026-11-11
+
+- Inicio de fase verificado en HEAD
+  `512ef55a6b4575c05a1d7d66503b61e12328a3df`, `main`, árbol limpio; no se
+  encontró lock Git ni proceso local de pruebas/Qwen. El estado remoto del
+  Agent no es observable desde el repositorio.
+- Se añadió a `src/lib/ai-assessment-qwen-evidence.test.ts` un arnés
+  `TEST ONLY` de Map en memoria para ambos perfiles. Reutiliza el binding v3,
+  allowlist, ventana de expiración, permisos `canRunAiEvaluation`, receipt de
+  clon y digest de replay existentes; no modifica producción.
+- Casos cubiertos en ambos perfiles: pendiente sin simulación; deduplicación
+  por workspace/job/case e idempotencia sintética por workspace; misma clave
+  en otro tenant queda separada; lectura/decisión cruzada se rechaza; cambios
+  de propuesta invalidan el binding; autoaprobación y rol viewer se rechazan;
+  expiración impide aprobar; rechazo no genera receipt; aprobación de owner
+  genera una única receipt solo de clon y el replay queda rechazado. La
+  procedencia usada es `deterministic_fixture`/`modelInference=false`; no es
+  inferencia ni aprobación humana real.
+- Pruebas focalizadas ejecutadas, en serie:
+  - Finance:
+    `cd artifacts/api-server && ./node_modules/.bin/tsx --test --test-name-pattern='TEST ONLY finance approval lifecycle binds proposal' src/lib/ai-assessment-qwen-evidence.test.ts`
+    — **1/1 pasó**.
+  - Support:
+    `cd artifacts/api-server && ./node_modules/.bin/tsx --test --test-name-pattern='TEST ONLY support approval lifecycle binds proposal' src/lib/ai-assessment-qwen-evidence.test.ts`
+    — **1/1 pasó**.
+  - Contratos combinados:
+    `cd artifacts/api-server && ./node_modules/.bin/tsx --test --test-name-pattern='TEST ONLY (finance|support) approval lifecycle|offline finance/support approval contract|offline approval persistence source contract' src/lib/ai-assessment-qwen-evidence.test.ts`
+    — **4/4 pasaron** (dos pruebas TEST ONLY, binding/expiry/replay y contrato estático de ruta/RLS).
+  - Una primera invocación desde la raíz no encontró el binario local `tsx` y
+    no ejecutó tests; la invocación corregida desde `artifacts/api-server`
+    ejecutó las pruebas indicadas. No se ejecutó el test E2E que abre servidor,
+    conecta PostgreSQL o prueba persistencia/RLS real.
+- Límites: el arnés Map no prueba transacción, concurrencia real, API ni RLS.
+  Esas garantías dependen del E2E persistente bajo el guard de DB desechable;
+  no se inspeccionaron secretos ni variables de entorno, no se conectó una DB
+  y no se aplicaron migraciones. No se ejecutaron workers, Qwen, Docker, red ni
+  servicios.
+- Próximo bloque seguro: verificar offline la matriz sintética de las otras
+  seis verticales y, en una fase aparte, inspeccionar solo disponibilidad de
+  artefacto/gates. No ejecutar inferencia hasta tener hostBoundaryReady
+  acreditado independientemente y sin riesgos del entorno.

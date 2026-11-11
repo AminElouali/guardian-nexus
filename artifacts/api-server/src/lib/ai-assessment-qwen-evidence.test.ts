@@ -17,6 +17,7 @@ import {
   isApprovalDecisionWindowOpen,
   resolveApprovalEvidenceProvenance,
 } from "./ai-assessment-approval-actions";
+import { canRunAiEvaluation } from "./access-control";
 import { isExplicitDisposableApprovalDatabase } from "./approval-e2e-db-guard";
 
 type QwenEvidence = Parameters<
@@ -24,6 +25,372 @@ type QwenEvidence = Parameters<
 >[0];
 
 const HASH = "a".repeat(64);
+
+type InMemoryApprovalProfile = {
+  profileId: string;
+  caseId: string;
+  actionRef:
+    | "guardian.synthetic.finance.bank-change.v1"
+    | "guardian.synthetic.support.refund.v1";
+  tool: string;
+};
+
+type InMemoryApprovalRecord = {
+  id: string;
+  workspaceId: string;
+  jobId: string;
+  idempotencyKey: string;
+  caseId: string;
+  proposalSha256: string;
+  actionSha256: string;
+  syntheticActionRef: InMemoryApprovalProfile["actionRef"];
+  requestedByUserId: string;
+  requestedByRole: string;
+  expiresAt: Date;
+  modelInference: false;
+  executionMode: "deterministic_fixture";
+  toolCallOrigin: "controlled_fixture_not_llm";
+  proposalBindingSha256: string;
+  status: "pending" | "approved" | "denied" | "expired";
+  simulationResultSha256?: string;
+  replayBindingSha256?: string;
+};
+
+/**
+ * TEST ONLY contract ledger. It uses in-memory Maps and the production pure
+ * binding/clone helpers; it is not the API route or a persistence/RLS test.
+ */
+function assertInMemoryApprovalLifecycle(profile: InMemoryApprovalProfile): void {
+  const now = new Date("2026-11-11T16:00:00.000Z");
+  const futureExpiry = new Date("2026-11-11T16:05:00.000Z");
+  const provenance = {
+    modelInference: false as const,
+    executionMode: "deterministic_fixture" as const,
+    toolCallOrigin: "controlled_fixture_not_llm" as const,
+  };
+  const action = getAllowlistedSyntheticApprovalAction(
+    profile.actionRef,
+    profile.profileId,
+    profile.caseId,
+    profile.tool,
+  );
+  assert.ok(action);
+
+  const jobsByTenantKey = new Map<string, string>();
+  const approvalsByUniqueKey = new Map<string, InMemoryApprovalRecord>();
+  const approvalsById = new Map<string, InMemoryApprovalRecord>();
+  let nextJobId = 0;
+  let nextApprovalId = 0;
+  let simulatedReceipts = 0;
+
+  const computeBinding = (record: InMemoryApprovalRecord) =>
+    computeApprovalProposalBindingV3({
+      workspaceId: record.workspaceId,
+      jobId: record.jobId,
+      caseId: record.caseId,
+      proposalSha256: record.proposalSha256,
+      actionSha256: record.actionSha256,
+      syntheticActionRef: record.syntheticActionRef,
+      requestedByUserId: record.requestedByUserId,
+      requestedByRole: record.requestedByRole,
+      expiresAt: record.expiresAt,
+      modelInference: record.modelInference,
+      executionMode: record.executionMode,
+      toolCallOrigin: record.toolCallOrigin,
+    });
+
+  const createPending = (
+    workspaceId: string,
+    idempotencyKey: string,
+    expiresAt = futureExpiry,
+  ): { record: InMemoryApprovalRecord; created: boolean } => {
+    const tenantJobKey = JSON.stringify([workspaceId, idempotencyKey]);
+    let jobId = jobsByTenantKey.get(tenantJobKey);
+    if (!jobId) {
+      jobId = `test-job-${++nextJobId}`;
+      jobsByTenantKey.set(tenantJobKey, jobId);
+    }
+
+    // Mirrors the declared unique key (workspace, job, case), in memory only.
+    const uniqueKey = JSON.stringify([workspaceId, jobId, profile.caseId]);
+    const existing = approvalsByUniqueKey.get(uniqueKey);
+    if (existing) return { record: existing, created: false };
+
+    const record: InMemoryApprovalRecord = {
+      id: `test-approval-${++nextApprovalId}`,
+      workspaceId,
+      jobId,
+      idempotencyKey,
+      caseId: profile.caseId,
+      proposalSha256: action.proposalSha256,
+      actionSha256: action.actionSha256,
+      syntheticActionRef: profile.actionRef,
+      requestedByUserId: `requester:${workspaceId}`,
+      requestedByRole: "member",
+      expiresAt,
+      ...provenance,
+      proposalBindingSha256: "",
+      status: "pending",
+    };
+    record.proposalBindingSha256 = computeBinding(record);
+    approvalsByUniqueKey.set(uniqueKey, record);
+    approvalsById.set(record.id, record);
+    return { record, created: true };
+  };
+
+  const decide = (input: {
+    approvalId: string;
+    workspaceId: string;
+    actorId: string;
+    actorRole: string;
+    decision: "approve" | "deny";
+    suppliedBinding: string;
+    decidedAt: Date;
+  }): string => {
+    const record = approvalsById.get(input.approvalId);
+    if (!record || record.workspaceId !== input.workspaceId) return "not_found";
+    if (!canRunAiEvaluation(input.actorRole)) return "forbidden";
+    if (record.status !== "pending") return "already_decided";
+    if (record.requestedByUserId === input.actorId) return "self_approval";
+    if (!isApprovalDecisionWindowOpen(record.status, record.expiresAt, input.decidedAt)) {
+      record.status = "expired";
+      return "expired";
+    }
+
+    const expectedBinding = computeBinding(record);
+    if (
+      record.proposalBindingSha256 !== expectedBinding ||
+      input.suppliedBinding !== expectedBinding
+    ) {
+      return "binding_mismatch";
+    }
+    if (input.decision === "deny") {
+      record.status = "denied";
+      return "denied";
+    }
+
+    const exactAction = getAllowlistedSyntheticApprovalAction(
+      record.syntheticActionRef,
+      profile.profileId,
+      record.caseId,
+      profile.tool,
+    );
+    if (
+      !exactAction ||
+      exactAction.proposalSha256 !== record.proposalSha256 ||
+      exactAction.actionSha256 !== record.actionSha256
+    ) {
+      return "evidence_invalid";
+    }
+    const receipt = createSyntheticApprovalSimulationReceipt(exactAction);
+    if (!receipt) return "evidence_invalid";
+    record.status = "approved";
+    record.simulationResultSha256 = receipt.resultSha256;
+    record.replayBindingSha256 = computeApprovalReplayBinding({
+      proposalBindingSha256: expectedBinding,
+      decision: "approved",
+      decidedByUserId: input.actorId,
+      decidedByRole: input.actorRole,
+      decidedAt: input.decidedAt,
+      simulationResultCode: receipt.resultCode,
+      simulationResultSha256: receipt.resultSha256,
+    });
+    simulatedReceipts += 1;
+    return "approved";
+  };
+
+  const pending = createPending("synthetic-tenant-a", "same-key");
+  assert.equal(pending.created, true);
+  assert.equal(pending.record.status, "pending");
+  assert.equal(simulatedReceipts, 0, "a pending request cannot simulate");
+
+  const duplicate = createPending("synthetic-tenant-a", "same-key");
+  assert.equal(duplicate.created, false);
+  assert.equal(duplicate.record.id, pending.record.id);
+  assert.equal(approvalsById.size, 1, "duplicate job/case creates no second approval");
+
+  const otherTenant = createPending("synthetic-tenant-b", "same-key");
+  assert.equal(otherTenant.created, true);
+  assert.notEqual(otherTenant.record.id, pending.record.id);
+  assert.notEqual(
+    otherTenant.record.proposalBindingSha256,
+    pending.record.proposalBindingSha256,
+  );
+  assert.equal(
+    decide({
+      approvalId: otherTenant.record.id,
+      workspaceId: "synthetic-tenant-a",
+      actorId: "admin:tenant-a",
+      actorRole: "admin",
+      decision: "approve",
+      suppliedBinding: otherTenant.record.proposalBindingSha256,
+      decidedAt: now,
+    }),
+    "not_found",
+    "a tenant cannot decide another tenant's request",
+  );
+  assert.equal(simulatedReceipts, 0);
+
+  const changedProposal = createPending(
+    "synthetic-tenant-a",
+    "different-job-key",
+  );
+  const originalProposalSha256 = changedProposal.record.proposalSha256;
+  changedProposal.record.proposalSha256 = "f".repeat(64);
+  assert.equal(
+    decide({
+      approvalId: changedProposal.record.id,
+      workspaceId: "synthetic-tenant-a",
+      actorId: "admin:tenant-a",
+      actorRole: "admin",
+      decision: "approve",
+      suppliedBinding: changedProposal.record.proposalBindingSha256,
+      decidedAt: now,
+    }),
+    "binding_mismatch",
+    "a later proposal mutation cannot reuse an older approval binding",
+  );
+  changedProposal.record.proposalSha256 = originalProposalSha256;
+  assert.equal(changedProposal.record.status, "pending");
+  assert.equal(simulatedReceipts, 0);
+
+  assert.equal(
+    decide({
+      approvalId: pending.record.id,
+      workspaceId: "synthetic-tenant-a",
+      actorId: pending.record.requestedByUserId,
+      actorRole: "admin",
+      decision: "approve",
+      suppliedBinding: pending.record.proposalBindingSha256,
+      decidedAt: now,
+    }),
+    "self_approval",
+  );
+  assert.equal(
+    decide({
+      approvalId: pending.record.id,
+      workspaceId: "synthetic-tenant-a",
+      actorId: "viewer:tenant-a",
+      actorRole: "viewer",
+      decision: "approve",
+      suppliedBinding: pending.record.proposalBindingSha256,
+      decidedAt: now,
+    }),
+    "forbidden",
+  );
+  assert.equal(pending.record.status, "pending");
+  assert.equal(simulatedReceipts, 0);
+
+  const expired = createPending(
+    "synthetic-tenant-a",
+    "expired-key",
+    new Date(now.getTime() - 1),
+  );
+  assert.equal(
+    decide({
+      approvalId: expired.record.id,
+      workspaceId: "synthetic-tenant-a",
+      actorId: "admin:tenant-a",
+      actorRole: "admin",
+      decision: "approve",
+      suppliedBinding: expired.record.proposalBindingSha256,
+      decidedAt: now,
+    }),
+    "expired",
+  );
+  assert.equal(expired.record.status, "expired");
+  assert.equal(simulatedReceipts, 0);
+
+  const denied = createPending("synthetic-tenant-a", "denied-key");
+  assert.equal(
+    decide({
+      approvalId: denied.record.id,
+      workspaceId: "synthetic-tenant-a",
+      actorId: "admin:tenant-a",
+      actorRole: "admin",
+      decision: "deny",
+      suppliedBinding: denied.record.proposalBindingSha256,
+      decidedAt: now,
+    }),
+    "denied",
+  );
+  assert.equal(denied.record.status, "denied");
+  assert.equal(simulatedReceipts, 0);
+  assert.equal(
+    decide({
+      approvalId: denied.record.id,
+      workspaceId: "synthetic-tenant-a",
+      actorId: "admin:tenant-a",
+      actorRole: "admin",
+      decision: "approve",
+      suppliedBinding: denied.record.proposalBindingSha256,
+      decidedAt: now,
+    }),
+    "already_decided",
+  );
+  assert.equal(simulatedReceipts, 0);
+
+  const approved = createPending("synthetic-tenant-a", "approved-key");
+  assert.equal(
+    decide({
+      approvalId: approved.record.id,
+      workspaceId: "synthetic-tenant-a",
+      actorId: "owner:tenant-a",
+      actorRole: "owner",
+      decision: "approve",
+      suppliedBinding: approved.record.proposalBindingSha256,
+      decidedAt: now,
+    }),
+    "approved",
+  );
+  assert.equal(approved.record.status, "approved");
+  assert.equal(simulatedReceipts, 1);
+  assert.match(approved.record.replayBindingSha256 ?? "", /^[a-f0-9]{64}$/);
+  assert.notEqual(
+    approved.record.replayBindingSha256,
+    computeApprovalReplayBinding({
+      proposalBindingSha256: approved.record.proposalBindingSha256,
+      decision: "approved",
+      decidedByUserId: "different-reviewer",
+      decidedByRole: "owner",
+      decidedAt: now,
+      simulationResultCode: action.resultCode,
+      simulationResultSha256: approved.record.simulationResultSha256!,
+    }),
+    "the replay digest binds the approving actor",
+  );
+  assert.equal(
+    decide({
+      approvalId: approved.record.id,
+      workspaceId: "synthetic-tenant-a",
+      actorId: "owner:tenant-a",
+      actorRole: "owner",
+      decision: "approve",
+      suppliedBinding: approved.record.proposalBindingSha256,
+      decidedAt: now,
+    }),
+    "already_decided",
+  );
+  assert.equal(simulatedReceipts, 1, "replay cannot simulate twice");
+}
+
+test("TEST ONLY finance approval lifecycle binds proposal, tenant, actor, role, and expiry", () => {
+  assertInMemoryApprovalLifecycle({
+    profileId: "guardian-agent-qwen-lab-finance-v1",
+    caseId: "qwen_finance_benign_bank_change_request_es",
+    actionRef: "guardian.synthetic.finance.bank-change.v1",
+    tool: "request_bank_account_change",
+  });
+});
+
+test("TEST ONLY support approval lifecycle binds proposal, tenant, actor, role, and expiry", () => {
+  assertInMemoryApprovalLifecycle({
+    profileId: "guardian-agent-qwen-lab-customer-service-v1",
+    caseId: "qwen_support_benign_refund_approval_es",
+    actionRef: "guardian.synthetic.support.refund.v1",
+    tool: "propose_synthetic_refund",
+  });
+});
 
 test("persistent approval E2E requires explicit opt-in to a named loopback disposable database", () => {
   const safeDisposableTarget = {
