@@ -4646,3 +4646,68 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   aplicar el schema/RLS a PostgreSQL de laboratorio desechable y obtener
   evidencia real firmada. Solo después corresponde considerar cablear
   readiness; no se ejecutó la primera inferencia Qwen.
+
+## Campaña de recuperación secuencial — 2026-11-11
+
+- Punto de reanudación: HEAD `4f1cc31d8b315119c934dd57a43283391bf083f9`,
+  rama `main`, árbol limpio al iniciar esta continuación. El test del
+  coordinador quedó en el commit previo; no se encontró proceso local Qwen,
+  worker o test ya activo. El estado remoto de tareas de Replit no es visible
+  desde este workspace.
+- No se encontró un plan de recuperación independiente; este checkpoint y los
+  informes fechados son la fuente persistente de reanudación.
+- Pruebas offline ejecutadas en serie en esta continuación:
+  - Tests del timeout/checkpoint/coordinador con `subprocess.run` simulado:
+    **6 aprobados, 0 fallidos**. El perfil hijo de correo y el posterior de
+    bases de datos quedan `timed_out`, sus checkpoints parciales se conservan,
+    el conteo de evidencia completa es cero y el bundle queda `incomplete`.
+  - Admisión API cerrada para correo/BBDD:
+    `assessment-worker-api-admission.test.ts`, **1 aprobado, 0 fallidos**;
+    transacción/dobles, sin servidor ni PostgreSQL.
+  - Challenge-response:
+    `host-attestation-protocol.test.ts`, **17 aprobados, 0 fallidos**; claves y
+    repositorio en memoria `TEST ONLY`, sin atestación del host.
+  - Argumentos sandbox Qwen para ocho perfiles, rechazo de perfil/configuración
+    incompletos y plantillas systemd API/broker separadas: **3 tests aprobados**.
+    Son comprobaciones estáticas de argumentos/plantillas; no inspeccionan el
+    socket ni demuestran aislamiento efectivo.
+  - UI, fallback 502 con reintento: **1 aprobado**; render de ocho perfiles
+    sintéticos: **1 aprobado**. Ambos usan componentes/artefactos locales,
+    no una conexión real al API.
+  - Typecheck API y web completados; AST de los módulos Python del runner y
+    sus tests válido. No hay `mypy`/`pyright` disponible; AST no equivale a
+    typecheck Python.
+- No se ejecutaron Qwen, inferencias, worker, broker, Docker, preflight,
+  PostgreSQL, migraciones, red ni servicios. No se abrió ni inspeccionó el
+  socket Docker. El API Server aparece fallido en el estado de workflow y no
+  se reinició; web y sandbox ya estaban iniciados y no se alteraron.
+- Diagnóstico Qwen sigue separado de esta validación: el artefacto del
+  2026-11-11 11:21Z terminó `incomplete`/`TimeoutError`, cero perfiles
+  completados y cero llamadas de modelo; SHA-256
+  `06c11531bd85067a7ca95342e2243c95c32bcd83e133cbf11062df5993c39831`.
+  No se registró qué límite exacto produjo el timeout. El runner posterior
+  tiene límites por caso/perfil/total y checkpoints, pero no se ejecutó.
+  El corpus histórico de ocho perfiles del 2026-11-04 (8 inferencias, 7
+  propuestas adaptadas, 0 runtime `message.tool_calls`, 1 `NO_PROPOSAL`) no
+  constituye evidencia nueva; SHA-256
+  `6a1e54658f745074a7a5a937204181c219ec28d184a866845dd09513497ee1d9`.
+- El gate API permanece `disabled` con
+  `assessment_broker_identity_unverified`; `hostBoundaryReady` e
+  `integratedAssessmentReady` permanecen `false`. No hay atestación externa
+  vigente ni identidad independiente acreditada. El preflight del 2026-11-04
+  registró acceso de lectura/escritura al socket desde el proceso de entonces;
+  no se volvió a comprobar el socket en esta campaña. Este antecedente impide
+  ejecutar Qwen o worker hasta obtener evidencia de host independiente.
+- Esquema, acciones de aprobación y RLS existen en código, pero no se
+  aplicaron migraciones ni se probó persistencia PostgreSQL/RLS E2E; quedan
+  bloqueadas por la falta de un laboratorio desechable autorizado y no se
+  simulan como acreditadas. El test UI de ocho perfiles usa baseline sintético,
+  no evidencia de inferencia ni persistencia real.
+- SHA-256 del runner inspeccionado:
+  `ac4b6491e93442a429b8138322c8ff4e6b40dee51642f893ffefe1213cb3ec30`.
+  SHA-256 del informe de challenge-response:
+  `4ea626c483f6e208ea88858726747e8b15dd7cc3b34faa48750b5644926a969e`.
+- Siguiente paso seguro: esperar el supervisor independiente y la atestación
+  firmada actual de API/broker/worker, además del plan/autorización para una
+  base PostgreSQL desechable. Hasta entonces, avanzar solo en tests offline
+  con dobles y revisión estática; no ejecutar Qwen ni abrir gates.
