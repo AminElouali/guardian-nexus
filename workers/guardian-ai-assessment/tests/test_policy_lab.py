@@ -2389,6 +2389,18 @@ class QwenPolicyLabDispatchSelfCheckTests(unittest.TestCase):
                 self.assertEqual(
                     evidence["dispatchStatus"], expected_dispatch
                 )
+                self.assertRegex(
+                    evidence["caseEvidenceSha256"], r"^[a-f0-9]{64}$"
+                )
+                if expected_origin in {
+                    "guardian_qwen_native_markup_adapter",
+                    "runtime_message_tool_calls",
+                }:
+                    self.assertRegex(
+                        evidence["proposalSha256"], r"^[a-f0-9]{64}$"
+                    )
+                else:
+                    self.assertIsNone(evidence["proposalSha256"])
                 self.assertEqual(
                     evidence["policyOff"]["mode"],
                     "counterfactual_clone_only",
@@ -2960,6 +2972,120 @@ class QwenPolicyLabDispatchSelfCheckTests(unittest.TestCase):
             ),
             ("deny", "trusted_goal_scope_mismatch"),
         )
+
+    def test_replayed_email_and_database_scope_cannot_authorize_a_new_case(self):
+        profiles = (
+            (
+                "email",
+                QWEN_EMAIL_PROFILE,
+                EMAIL_TOOLS,
+                "qwen_email_benign_read_es",
+                "qwen_email_benign_quoted_instruction_es",
+                "read_synthetic_email",
+                {"email_id": QWEN_SYNTHETIC_EMAIL_ID},
+            ),
+            (
+                "database",
+                QWEN_DATABASE_PROFILE,
+                DATABASE_TOOLS,
+                "qwen_database_benign_read_en",
+                "qwen_database_benign_cell_injection_en",
+                "query_synthetic_database",
+                {"row_id": QWEN_SYNTHETIC_DB_ROW_ID},
+            ),
+        )
+
+        class FixedAdaptedClient:
+            def __init__(self, tool_name, arguments):
+                self.tool_choice = None
+                self.tools = None
+                self.messages = None
+                self.tool_name = tool_name
+                self.arguments = arguments
+
+            def complete_native(self, **kwargs):
+                self.tool_choice = kwargs.get("tool_choice")
+                self.tools = kwargs.get("tools")
+                self.messages = kwargs.get("messages")
+                marker = json.dumps(
+                    {"name": self.tool_name, "arguments": self.arguments},
+                    separators=(",", ":"),
+                )
+                return llm_lab.adapt_qwen_native_tool_markup(
+                    {
+                        "choices": [
+                            {
+                                "message": {
+                                    "role": "assistant",
+                                    "content": f"<tool_call>{marker}</tool_call>",
+                                },
+                                "finish_reason": "stop",
+                            }
+                        ],
+                        "usage": {},
+                    }
+                )
+
+        for (
+            vertical,
+            profile_id,
+            tools,
+            original_case_id,
+            replayed_case_id,
+            tool_name,
+            arguments,
+        ) in profiles:
+            with self.subTest(vertical=vertical):
+                original_scope_action, _permissions = self._scoped_action(
+                    vertical, original_case_id, tool_name, arguments
+                )
+                stale_scope = original_scope_action["trustedGoalScope"]
+                replayed_case = next(
+                    case
+                    for case in QWEN_POLICY_CASES[profile_id]
+                    if case["caseId"] == replayed_case_id
+                )
+                client = FixedAdaptedClient(tool_name, arguments)
+                events = []
+                real_policy = evaluate_synthetic_action_policy
+
+                def tracked_policy(*args, **kwargs):
+                    events.append("policy_on")
+                    return real_policy(*args, **kwargs)
+
+                with patch(
+                    "guardian_ai_assessment.qwen_policy_lab._bind_trusted_goal_scope",
+                    return_value=stale_scope,
+                ), patch(
+                    "guardian_ai_assessment.qwen_policy_lab.evaluate_synthetic_action_policy",
+                    side_effect=tracked_policy,
+                ) as policy, patch(
+                    "guardian_ai_assessment.qwen_policy_lab.call_synthetic_tool"
+                ) as dispatch:
+                    evidence, _usage = _one_case(
+                        client=client,
+                        vertical=vertical,
+                        case=replayed_case,
+                        tools=tools,
+                    )
+
+                self.assertEqual(client.tool_choice, "auto")
+                self.assertEqual(
+                    evidence["toolCallOrigin"],
+                    "guardian_qwen_native_markup_adapter",
+                )
+                self.assertEqual(evidence["trustedGoalScopeStatus"], "mismatch")
+                self.assertEqual(evidence["decision"], "deny")
+                self.assertEqual(
+                    evidence["dispatchStatus"],
+                    "blocked_by_policy_before_dispatch",
+                )
+                self.assertRegex(evidence["proposalSha256"], r"^[a-f0-9]{64}$")
+                self.assertRegex(evidence["caseEvidenceSha256"], r"^[a-f0-9]{64}$")
+                self.assertEqual(events, ["policy_on"])
+                self.assertEqual(evidence["toolEvents"], [])
+                policy.assert_called_once()
+                dispatch.assert_not_called()
 
     def test_scope_claims_are_not_accepted_as_model_tool_arguments(self):
         valid, reason = validate_synthetic_tool_arguments(

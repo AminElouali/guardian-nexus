@@ -5288,3 +5288,52 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   y los tests offline que falten; para afirmar persistencia/RLS hace falta una
   base desechable autorizada. La inferencia Qwen y el worker siguen bloqueados
   hasta una atestación independiente verificable.
+
+## Coherencia offline de catálogos, validador y simulador — 2026-11-11
+
+- Base verificada: HEAD `249df7cb5623fd33b5a466b7a2b685b3fe05c768`, rama
+  `main`, árbol limpio antes de este incremento.
+- Cambios exclusivamente de pruebas en `tests/test_llm_tool_adapter.py` y
+  `tests/test_policy_lab.py`; sin cambios de producción, catálogos, Policy
+  Engine, contratos ni fixtures baseline.
+- Nuevo contrato unitario Correo/BBDD verifica que cada herramienta declarada
+  está en `TOOL_IDS`, tiene esquema cerrado con campos obligatorios coherentes,
+  valores de ejemplo compatibles con tipos/enum/longitud y respuesta esperada
+  del validador. Solo los tres casos ALLOW compatibles alcanzan el simulador
+  ficticio después de evaluar Policy; el envío externo y la mutación BBDD
+  quedan DENY/no ejecutables. Se cubren campos extra/ausentes, tipos
+  no válidos, acción no catalogada y tenant mismatch.
+- Se añadió prueba de replay de un `trustedGoalScope` antiguo entre casos de
+  correo y BBDD: ambos devuelven `trusted_goal_scope_mismatch` antes del
+  simulador. Esto prueba rechazo del binding sintético reutilizado, no
+  idempotencia durable de la cola.
+- La matriz ya existente se reforzó para exigir hashes de propuesta y evidencia
+  cuando hay origen de llamada aceptado, y ausencia de hash de propuesta para
+  NO_PROPOSAL/salida no parseable. Pruebas existentes confirman procedencia
+  adaptada frente a nativa, prompt injection benigno/adversario, Policy ON
+  antes del simulador, DENY/REQUIRE_APPROVAL sin despacho y Policy OFF como
+  clon contrafactual sin ejecución.
+- Suite focalizada offline: **19 métodos distintos pasaron**, 0 fallos de
+  aserciones. Incluye catálogo nuevo (1), matrices de correo/BBDD y regresiones
+  relacionadas de procedencia, parser, Policy, inyección, tenant y replay
+  (14), y contratos sintéticos de Finanzas/soporte (4). Dos selecciones previas
+  usaron un nombre de clase incorrecto y produjeron errores de carga; se
+  corrigieron los selectores y ambos métodos pasaron. No se ejecutaron sus
+  cuerpos bajo los selectores erróneos.
+- `git diff --check`: pasó antes del registro. No se ejecutaron Qwen/GGUF,
+  procesos hijos, workers, API, broker, Docker, sockets, PostgreSQL,
+  migraciones, red, typecheck ni E2E. No se inspeccionó `.replit`, secretos ni
+  variables. La prueba de replay usa respuesta adaptada fija y scopes
+  sintéticos; no es inferencia real ni prueba de persistencia/RLS.
+- El artefacto Qwen histórico de ocho perfiles no fue modificado:
+  `generated-artifacts/guardian-qwen-offline/qwen-policy-lab-eight-profiles.json`,
+  SHA-256 `6a1e54658f745074a7a5a937204181c219ec28d184a866845dd09513497ee1d9`.
+  No hay inferencias nuevas en este incremento; las fixtures siguen separadas.
+- SHA-256 de pruebas al cierre del código:
+  `test_llm_tool_adapter.py`
+  `d055f26063a8047ea475f2a8f6eb411f05d48427ce5e739f3558f248dc93b86e`;
+  `test_policy_lab.py`
+  `782b8b5496b77eb61bf250fb9d4a101c079ef2b45bf15854f56b32440b67e639`.
+- Reanudación: siguiente perfil offline, **Programación**. Inferencia real,
+  gates de host/broker/worker y persistencia PostgreSQL/RLS continúan
+  bloqueados/no acreditados; no cambian por estos tests.
