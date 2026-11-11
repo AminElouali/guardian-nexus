@@ -4424,3 +4424,30 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
 - Informe: `reports/offline-api-v2-qwen-provenance-boundary-2026-11-11.md`.
   SHA-256 `40074d9061a556830f604c909fb49676333909c916e933c9665d215f3a5976d7`.
   El gate continúa cerrado hasta una atestación independiente del host.
+
+## Contrato API v2 para propuestas adaptadas de correo y BBDD — 2026-11-11
+
+- Desde HEAD `1eafc66d20cd22dc58e9bcad30036de090aaa354`, se añadió una
+  regresión unitaria parametrizada para correo y bases de datos en
+  `artifacts/api-server/src/lib/ai-assessment-qwen-evidence.test.ts`.
+- La prueba usa marcadores fijos y llama al adaptador Python existente; verifica
+  procedencia `guardian_qwen_native_markup_adapter`, contador nativo cero y una
+  propuesta adaptada. Construye evidencia sintética con modo
+  `real_local_qwen_inference_offline_process_guard` y confirma que API v2 y el
+  resolvedor de aprobación no la aceptan como inferencia viva.
+- No se creó respuesta de modelo ni se clasificó el test como inferencia Qwen.
+  No cambiaron producción, Policy Engine, queue/gates ni los ocho fixtures.
+- Pruebas ejecutadas ahora, en serie: API focalizada **1/1**; typecheck API
+  aprobado; `git diff --check` aprobado. El test emplea un proceso Python
+  acotado solo para el adaptador; no inicia modelo, worker ni servicios.
+- No se ejecutaron Qwen, workers, broker, Docker/socket, PostgreSQL,
+  migraciones, servicios API/E2E/UI, red ni despliegues. No se revalidó
+  `hostBoundaryReady`; el último registro sigue false/no acreditado.
+- SHA-256 del test:
+  `29cca2c299ff7ea9e6170c95b57ae777fba07f16f6cf60fd3e9e509bd3ac23f1`.
+- Informe `reports/offline-email-database-api-v2-adapter-contract-2026-11-11.md`,
+  SHA-256 `2066972a544847b4e9b7dc6e4a32aa5eef1ab46617d1f717ceb05ca77b718c3c`.
+- Siguiente incremento: esperar atestación independiente del host/broker; tras
+  pasar el gate, integrar y validar el flujo de evidencia del runner de correo
+  y BBDD en API v2 con herramientas sintéticas. Este hito es una regresión
+  contractual offline, no inferencia viva ni finalización de agentes.

@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { CreateWorkspaceAiAssessmentLabJobResponse } from "@workspace/api-zod";
 import {
@@ -1362,6 +1364,163 @@ test("API v2 rejects offline process-guard evidence as live and preserves proven
     null,
     "NO_PROPOSAL is not a proposal, native call, or fixture",
   );
+});
+
+test("email and database marker-adapter output stays offline and is rejected as live API v2 evidence", () => {
+  const workerRoot = fileURLToPath(
+    new URL("../../../../workers/guardian-ai-assessment/", import.meta.url),
+  );
+  const adapterProbe = [
+    "import json, sys",
+    "from guardian_ai_assessment.llm_lab import adapt_qwen_native_tool_markup",
+    "response = adapt_qwen_native_tool_markup(json.load(sys.stdin))",
+    "message = response['choices'][0]['message']",
+    "parse = response['_guardianToolMarkupParse']",
+    "print(json.dumps({'parse': parse, 'message': message}, separators=(',', ':')))",
+  ].join("\n");
+  const profiles = [
+    {
+      profileId: "guardian-agent-qwen-lab-email-v1",
+      verticalId: "email",
+      toolName: "read_synthetic_email",
+      arguments: { email_id: "MAIL-LAB-001" },
+      caseId: "qwen_email_benign_read_es",
+      agentId: "qwen-synthetic-email-v1",
+      permissions: ["email.read"],
+    },
+    {
+      profileId: "guardian-agent-qwen-lab-database-v1",
+      verticalId: "database",
+      toolName: "query_synthetic_database",
+      arguments: { row_id: "ROW-SYNTH-001" },
+      caseId: "qwen_database_benign_read_en",
+      agentId: "qwen-synthetic-database-v1",
+      permissions: ["database.read.scoped"],
+    },
+  ] as const;
+
+  for (const profile of profiles) {
+    const marker = JSON.stringify({
+      name: profile.toolName,
+      arguments: profile.arguments,
+    });
+    const syntheticRuntimeResponse = {
+      choices: [
+        {
+          message: {
+            role: "assistant",
+            content: `<tool_call>${marker}</tool_call>`,
+          },
+          finish_reason: "stop",
+        },
+      ],
+      usage: {},
+    };
+    assert.equal(
+      "tool_calls" in syntheticRuntimeResponse.choices[0]!.message,
+      false,
+      `${profile.verticalId} fixed marker input is not a native runtime tool call`,
+    );
+
+    const adaptedOutput = JSON.parse(
+      execFileSync(
+        "python3",
+        ["-c", adapterProbe],
+        {
+          cwd: workerRoot,
+          env: {
+            PATH: process.env.PATH ?? "/usr/bin:/bin",
+            PYTHONPATH: workerRoot,
+            PYTHONDONTWRITEBYTECODE: "1",
+            PYTHONNOUSERSITE: "1",
+          },
+          input: JSON.stringify(syntheticRuntimeResponse),
+          encoding: "utf8",
+          maxBuffer: 16 * 1024,
+        },
+      ),
+    ) as {
+      parse: {
+        status: string;
+        runtimeToolCallCount: number;
+        adapterParsedCallCount: number;
+      };
+      message: {
+        tool_calls?: Array<{
+          function?: { name?: string; arguments?: string };
+        }>;
+      };
+    };
+    assert.deepEqual(adaptedOutput.parse, {
+      status: "qwen_native_markup_adapter",
+      runtimeToolCallCount: 0,
+      adapterParsedCallCount: 1,
+      runtimeFinishReason: "stop",
+    });
+    assert.equal(adaptedOutput.message.tool_calls?.length, 1);
+    const adaptedToolCall = adaptedOutput.message.tool_calls?.[0];
+    assert.ok(adaptedToolCall?.function?.name);
+    assert.equal(
+      adaptedToolCall.function.name,
+      profile.toolName,
+    );
+    assert.equal(
+      adaptedToolCall.function.arguments,
+      JSON.stringify(profile.arguments),
+    );
+    const apiToolCallOrigin =
+      adaptedOutput.parse.status === "qwen_native_markup_adapter"
+        ? "guardian_qwen_native_markup_adapter"
+        : "unparsed_qwen_native_markup";
+    assert.equal(
+      apiToolCallOrigin,
+      "guardian_qwen_native_markup_adapter",
+    );
+
+    const evidence = structuredClone(
+      makeEvidence(),
+    ) as unknown as Record<string, unknown>;
+    evidence.profileId = profile.profileId;
+    evidence.verticalId = profile.verticalId;
+    evidence.executionMode =
+      "real_local_qwen_inference_offline_process_guard";
+    const agentIdentity = evidence.agentIdentity as Record<string, unknown>;
+    agentIdentity.agentId = profile.agentId;
+    agentIdentity.permissions = [...profile.permissions];
+    const cases = evidence.cases as Record<string, unknown>[];
+    const adaptedCase = cases.find(
+      (item) =>
+        item.toolCallOrigin === "guardian_qwen_native_markup_adapter",
+    );
+    assert.ok(adaptedCase, `${profile.verticalId} synthetic adapted case exists`);
+    adaptedCase.caseId = profile.caseId;
+    adaptedCase.toolCallOrigin = apiToolCallOrigin;
+    adaptedCase.toolCallCount = adaptedOutput.parse.adapterParsedCallCount;
+    adaptedCase.proposedTool = adaptedToolCall.function.name;
+    signCase(adaptedCase);
+    delete evidence.evidenceSha256;
+    evidence.evidenceSha256 = digest(evidence);
+
+    assert.equal(
+      resolveApprovalEvidenceProvenance({
+        engine: "guardian_qwen_policy_lab",
+        executionMode: evidence.executionMode,
+        modelInference: true,
+        toolCallOrigin: adaptedCase.toolCallOrigin,
+      }),
+      null,
+      `${profile.verticalId} fixed adapter output must not be promoted to live inference`,
+    );
+    assert.equal(
+      validateGuardianQwenPolicyLabEvidence(
+        evidence as unknown as QwenEvidence,
+        evidence,
+        profile.profileId,
+      ),
+      "identity_provider_network_or_limits",
+      `${profile.verticalId} offline process-guard evidence must be rejected as live`,
+    );
+  }
 });
 
 test("Qwen evidence rejects a simulated execution attached to a denied proposal", () => {
