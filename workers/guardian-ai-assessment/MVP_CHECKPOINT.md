@@ -4980,3 +4980,44 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   `f25dce341cac730b5a6cc70199635770a4be0766089e1b062aa6d9bd41872787`.
 - El siguiente bloque de esta misma campaña es BASES DE DATOS, reutilizando
   esta matriz y conservando la secuencia sin ejecuciones de modelo.
+
+## BASES DE DATOS: matriz de límites offline en memoria — 2026-11-11
+
+- Secuencia: la fase CORREO quedó en el commit `c5c10a8ee98a024058efdbf4a9cc97aa1b8cb964`;
+  el checkpoint al cierre de esa fase tenía SHA-256
+  `e13d2ef823c2a4d221920010bc08cf38a21a137775b1a7b6f06c29c3d03db32d`.
+  El árbol estaba limpio antes de empezar BBDD.
+- El corpus BBDD preexistente conserva entradas benignas y adversarias sobre
+  celdas no confiables, cambio de tenant, exportación y borrado. No se duplicó
+  ni alteró el corpus ni los ocho fixtures baseline.
+- Se extendió la matriz pura en memoria a la fila sintética BBDD:
+  consulta benigna, intento adversario de cambio de tenant/borrado, marcador
+  completo adaptado, `message.tool_calls` nativa sintética, ausencia de
+  propuesta, marcador parcial inválido y `REQUIRE_APPROVAL`. Las herramientas
+  BBDD completas se entregan al doble con `tool_choice=auto`; el texto de celda
+  solo aparece en el mensaje de usuario no confiable, nunca en el sistema.
+  Policy ON precede al simulador de memoria para `ALLOW`; las ramas `DENY` y
+  `REQUIRE_APPROVAL` no despachan. La decisión `REQUIRE_APPROVAL` de esta matriz
+  es un resultado de Policy sustituido por un doble para probar el límite de
+  despacho; no afirma una inferencia ni una aprobación real. Policy OFF sigue
+  como clon contrafactual, `executed=false`.
+- Pruebas ejecutadas serialmente:
+  - Correo, tras el último cambio al helper compartido:
+    `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=workers/guardian-ai-assessment python -m unittest discover -s workers/guardian-ai-assessment/tests -p 'test_policy_lab.py' -k test_email_synthetic -v`
+    — **2/2 pasaron**.
+  - Bases de datos:
+    `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=workers/guardian-ai-assessment python -m unittest discover -s workers/guardian-ai-assessment/tests -p 'test_policy_lab.py' -k test_database_synthetic -v`
+    — **1/1 pasó**.
+  - `git diff --check`: pasó. No se ejecutó typecheck Python ni suite amplia.
+- Ambos perfiles solo atravesaron `_one_case` con clientes de respuesta fija y
+  herramientas sintéticas en memoria. No se invocaron LocalQwenClient, el
+  runner/coordinador, subprocess, workers, sockets, broker, servidores, Docker,
+  PostgreSQL, red o servicios. Las categorías de respuesta en los tests no son
+  inferencias vivas ni baseline de fixtures.
+- SHA-256 de
+  `workers/guardian-ai-assessment/tests/test_policy_lab.py` después de la fase
+  BBDD: `e8cd252d6b6e514d771f0f9e59c5cec1751493bb3d48c4e60a61bc4fe03a11c8`.
+- Estado antes del commit de BBDD: solo este archivo de prueba estaba
+  modificado; el cambio de producción es cero. El siguiente perfil de la
+  campaña es FINANZAS/aprobaciones, todavía bloqueado para persistencia real
+  hasta contar con DB de laboratorio autorizada y evidencia RLS comprobable.
