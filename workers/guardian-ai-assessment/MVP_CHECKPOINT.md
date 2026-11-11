@@ -4552,3 +4552,34 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
 - Bloqueo restante: no hay atestación independiente actual de aislamiento
   host/broker/worker. Este incremento no habilita ni ejecuta Qwen; el siguiente
   paso continúa siendo acreditar esa frontera.
+
+## Atestación independiente host/broker: prerrequisitos ausentes — 2026-11-11
+
+- Base: HEAD `278a959dbd720ee8d454659cece6e9aab8d4547d`, rama `main`, árbol
+  limpio antes de esta anotación.
+- Inspección de metadatos de solo lectura: faltan la atestación firmada en
+  `/run/guardian-nexus/host-boundary-attestation.json`, la clave pública en
+  `/etc/guardian-nexus/host-boundary-attestor-ed25519.pem` y un canal de nonce
+  en `/run/guardian-nexus/host-boundary-challenge.json`.
+- Se confirmó el hueco: el verificador Python existente valida firma Ed25519,
+  esquema/canonicalización, vigencia, hashes, identidades, claims de socket,
+  DB y sandbox, pero no tiene nonce/replay; su identidad de runtime se compara
+  con la del worker. El gate API no invoca ese verificador ni compara la
+  identidad API y sigue hard-coded `disabled` con
+  `assessment_broker_identity_unverified`.
+- Las pruebas existentes de firma/identidad/expiración usan payloads sintéticos
+  y dobles; no son atestación real. No se añadieron ni ejecutaron pruebas en
+  este incremento porque no existe un protocolo/supervisor real contra el que
+  probar desafío fresco, consumo anti-replay o identidad efectiva API.
+- No se abrió ni inspeccionó el socket Docker; no se ejecutaron pruebas,
+  preflights, Qwen, worker, Docker, PostgreSQL, servicios ni red. El último
+  informe pasivo del 2026-11-10 es histórico y dejó readiness falso e
+  identidades API/broker/worker sin verificar.
+- Informe `reports/host-attestation-supervisor-prerequisites-2026-11-11.md`,
+  SHA-256:
+  `9e0760783c4b63b05f3caccb9afd43e336560165be9d121a0f60443943f22ada`.
+- Gate/readiness permanecen cerrados. Requisito externo: un supervisor del
+  propietario del host que emita desafío fresco, respuesta firmada de un solo
+  uso y evidencia actual de los tres procesos, con protección durable contra
+  replay. Tras disponer de ese protocolo, integrar verificación en API y worker;
+  el primer flujo Qwen sería correo y luego BBDD. No se declaró desbloqueo.
