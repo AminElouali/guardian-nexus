@@ -1,4 +1,5 @@
 import json
+import inspect
 import socket
 import subprocess
 import sys
@@ -524,6 +525,145 @@ class OfflineRunnerDockerPrivilegeTests(unittest.TestCase):
             offline_qwen_runner.require_offline_no_docker_socket_access(
                 environment={},
                 socket_paths=[path],
+            )
+
+
+class OfflineRunnerTimeoutCheckpointTests(unittest.TestCase):
+    def test_timeout_defaults_and_validated_upper_bounds(self):
+        defaults = inspect.signature(
+            offline_qwen_runner.run_offline_email_database_evaluation
+        ).parameters
+        self.assertEqual(defaults["case_timeout_seconds"].default, 120)
+        self.assertEqual(defaults["profile_timeout_seconds"].default, 300)
+        self.assertEqual(defaults["wall_timeout_seconds"].default, 660)
+        self.assertEqual(
+            offline_qwen_runner._validate_offline_timeout_config(
+                case_timeout_seconds=180,
+                profile_timeout_seconds=360,
+                wall_timeout_seconds=780,
+            ),
+            {
+                "caseTimeoutSeconds": 180,
+                "profileTimeoutSeconds": 360,
+                "wallTimeoutSeconds": 780,
+            },
+        )
+
+    def test_timeout_configuration_rejects_invalid_values(self):
+        invalid_configs = (
+            (9, 120, 120),
+            (181, 300, 660),
+            (120, 119, 660),
+            (120, 300, 299),
+            (120, 361, 660),
+            (120, 300, 781),
+            (True, 300, 660),
+        )
+        for case_timeout, profile_timeout, wall_timeout in invalid_configs:
+            with self.subTest(
+                case_timeout=case_timeout,
+                profile_timeout=profile_timeout,
+                wall_timeout=wall_timeout,
+            ), self.assertRaises(ValueError):
+                offline_qwen_runner._validate_offline_timeout_config(
+                    case_timeout_seconds=case_timeout,
+                    profile_timeout_seconds=profile_timeout,
+                    wall_timeout_seconds=wall_timeout,
+                )
+
+    def test_partial_checkpoint_is_atomically_written_and_recovered(self):
+        profile_id = "guardian-agent-qwen-lab-email-v1"
+        cases = [
+            {
+                "caseId": "synthetic-email-case-1",
+                "status": "completed",
+                "toolCallOrigin": "no_tool_call",
+            }
+        ]
+        checkpoint = offline_qwen_runner._progress_checkpoint(
+            profile_id=profile_id,
+            status="in_progress",
+            active_case_id="synthetic-email-case-2",
+            completed_cases=cases,
+            error_type="TimeoutError",
+        )
+        self.assertEqual(checkpoint["completedCaseCount"], 1)
+        self.assertEqual(checkpoint["status"], "in_progress")
+        self.assertEqual(
+            checkpoint["activeCaseId"], "synthetic-email-case-2"
+        )
+        self.assertEqual(
+            checkpoint["checkpointSha256"],
+            offline_qwen_runner._canonical_sha256(
+                {
+                    key: value
+                    for key, value in checkpoint.items()
+                    if key != "checkpointSha256"
+                }
+            ),
+        )
+        self.assertFalse(checkpoint["rawPromptsStored"])
+        self.assertFalse(checkpoint["rawResponsesStored"])
+        self.assertFalse(checkpoint["rawToolArgumentsStored"])
+
+        with tempfile.TemporaryDirectory(
+            prefix="guardian-qwen-progress-test-"
+        ) as root:
+            path = Path(root) / "profile.progress.json"
+            real_replace = offline_qwen_runner.os.replace
+            replace_calls = []
+
+            def record_replace(source, destination):
+                replace_calls.append((Path(source), Path(destination)))
+                return real_replace(source, destination)
+
+            with patch.object(
+                offline_qwen_runner.os, "replace", side_effect=record_replace
+            ):
+                offline_qwen_runner._write_progress_checkpoint(path, checkpoint)
+
+            self.assertEqual(replace_calls, [(path.with_suffix(".json.tmp"), path)])
+            self.assertTrue(path.is_file())
+            self.assertFalse(path.with_suffix(path.suffix + ".tmp").exists())
+            recovered = offline_qwen_runner._read_progress_checkpoint(
+                path,
+                expected_profile_id=profile_id,
+            )
+            self.assertEqual(recovered, checkpoint)
+            self.assertEqual(
+                recovered["completedCases"],
+                cases,
+            )
+
+    def test_partial_checkpoint_recovery_fails_closed_on_wrong_or_invalid_file(self):
+        with tempfile.TemporaryDirectory(
+            prefix="guardian-qwen-progress-invalid-test-"
+        ) as root:
+            path = Path(root) / "profile.progress.json"
+            self.assertIsNone(
+                offline_qwen_runner._read_progress_checkpoint(
+                    path,
+                    expected_profile_id="guardian-agent-qwen-lab-email-v1",
+                )
+            )
+
+            path.write_text(
+                json.dumps({"profileId": "guardian-agent-qwen-lab-database-v1"}),
+                encoding="utf-8",
+            )
+            self.assertIsNone(
+                offline_qwen_runner._read_progress_checkpoint(
+                    path,
+                    expected_profile_id="guardian-agent-qwen-lab-email-v1",
+                )
+            )
+
+            path.write_text("{not-json", encoding="utf-8")
+            self.assertIsNone(
+                offline_qwen_runner._read_progress_checkpoint(
+                    path,
+                    expected_profile_id="guardian-agent-qwen-lab-email-v1",
+                )
             )
 
 

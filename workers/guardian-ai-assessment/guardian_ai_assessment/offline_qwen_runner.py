@@ -702,6 +702,24 @@ def _write_progress_checkpoint(path: Path, checkpoint: Mapping[str, Any]) -> Non
     os.replace(temporary, path)
 
 
+def _read_progress_checkpoint(
+    path: Path, *, expected_profile_id: str
+) -> dict[str, Any] | None:
+    """Recover a readable progress record only for the requested profile."""
+    if not path.is_file():
+        return None
+    try:
+        progress_doc = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if (
+        isinstance(progress_doc, dict)
+        and progress_doc.get("profileId") == expected_profile_id
+    ):
+        return progress_doc
+    return None
+
+
 def _write_bundle(path: Path, bundle: dict[str, Any]) -> None:
     temporary = path.with_suffix(path.suffix + ".tmp")
     temporary.write_text(
@@ -1704,17 +1722,10 @@ def run_offline_email_database_evaluation(
             "rawTextStored": False,
         }
 
-        partial_progress: dict[str, Any] | None = None
-        if progress_path.is_file():
-            try:
-                progress_doc = json.loads(progress_path.read_text(encoding="utf-8"))
-                if (
-                    isinstance(progress_doc, dict)
-                    and progress_doc.get("profileId") == profile_id
-                ):
-                    partial_progress = progress_doc
-            except (OSError, json.JSONDecodeError):
-                partial_progress = None
+        partial_progress = _read_progress_checkpoint(
+            progress_path,
+            expected_profile_id=profile_id,
+        )
         if partial_progress is not None:
             record["partialCheckpoint"] = partial_progress
             record["completedCaseCount"] = int(
