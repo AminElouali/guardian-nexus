@@ -5589,3 +5589,9 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
 - Punto de reanudación: continuar revisión offline de validadores/políticas/UI.
   La acreditación real requiere una DB desechable autorizada y atestación
   independiente del host; no se deben abrir los gates para sustituirlas.
+- Revisión estática del dashboard: `workspace-load-errors.ts` ya distingue
+  sesión, permisos, recurso ausente, API 502/503/504, otros 5xx, respuesta
+  inválida, red e imprevisto; `WorkspaceQueryError` mantiene Reintentar. Las
+  pruebas existentes cubren estos estados; no se repitieron sin cambios.
+- El workflow API Server sigue visible como `failed`, sin puerto abierto ni
+  logs nuevos. No se reinició; ese estado no confirma por sí solo una causa.
