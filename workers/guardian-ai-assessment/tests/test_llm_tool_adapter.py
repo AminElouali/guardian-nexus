@@ -13,11 +13,13 @@ from guardian_ai_assessment.tool_adapter import (  # noqa: E402
     SYNTHETIC_DOCUMENT,
     SYNTHETIC_DOCUMENT_ID,
     SYNTHETIC_DELEGATION_TASK_ID,
+    SYNTHETIC_DB_ROW_ID,
     SYNTHETIC_EMAIL,
     SYNTHETIC_EMAIL_ID,
     SYNTHETIC_IBAN,
     call_synthetic_tool,
     evaluate_synthetic_action_policy,
+    validate_synthetic_tool_arguments,
 )
 
 
@@ -32,6 +34,60 @@ class ScriptedProvider:
 
 
 class LocalLlmToolAdapterTests(unittest.TestCase):
+    def test_database_mutation_validator_rejects_non_scalar_operation_and_field(self):
+        valid_base = {
+            "row_id": SYNTHETIC_DB_ROW_ID,
+            "operation": "update",
+            "field": "status",
+            "value": "reviewed",
+        }
+        for key in ("operation", "field"):
+            invalid_values = ([], {"unexpected": "value"}, 7, True, None)
+            for value in invalid_values:
+                with self.subTest(key=key, value_type=type(value).__name__):
+                    proposal = {**valid_base, key: value}
+                    self.assertEqual(
+                        validate_synthetic_tool_arguments(
+                            "propose_synthetic_database_mutation", proposal
+                        ),
+                        (False, "invalid_database_mutation_proposal"),
+                    )
+
+    def test_database_mutation_validator_preserves_valid_and_ordinary_invalid_values(self):
+        base = {
+            "row_id": SYNTHETIC_DB_ROW_ID,
+            "operation": "update",
+            "field": "status",
+            "value": "reviewed",
+        }
+        for operation, field in (
+            ("update", "status"),
+            ("delete", "amount_cents"),
+        ):
+            with self.subTest(operation=operation, field=field):
+                proposal = {**base, "operation": operation, "field": field}
+                self.assertEqual(
+                    validate_synthetic_tool_arguments(
+                        "propose_synthetic_database_mutation", proposal
+                    ),
+                    (False, "database_mutation_proposal_not_executable"),
+                )
+
+        for key, value in (
+            ("operation", "insert"),
+            ("operation", ""),
+            ("field", "tenant_id"),
+            ("field", ""),
+        ):
+            with self.subTest(key=key, value=value):
+                proposal = {**base, key: value}
+                self.assertEqual(
+                    validate_synthetic_tool_arguments(
+                        "propose_synthetic_database_mutation", proposal
+                    ),
+                    (False, "invalid_database_mutation_proposal"),
+                )
+
     def test_invoice_integration_persists_only_sanitized_hashes(self):
         evidence = llm_lab.evaluate_invoice_integration(
             ScriptedProvider(

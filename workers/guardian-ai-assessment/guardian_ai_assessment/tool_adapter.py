@@ -382,11 +382,15 @@ def _validate_and_result(tool: str, arguments: dict[str, Any]) -> tuple[bool, st
         )
 
     if tool == "propose_synthetic_database_mutation":
+        operation = arguments.get("operation")
+        field = arguments.get("field")
         valid_proposal = (
             _exact_keys(arguments, {"row_id", "operation", "field", "value"})
             and arguments.get("row_id") == SYNTHETIC_DB_ROW_ID
-            and arguments.get("operation") in {"update", "delete"}
-            and arguments.get("field") in {"status", "amount_cents"}
+            and isinstance(operation, str)
+            and operation in {"update", "delete"}
+            and isinstance(field, str)
+            and field in {"status", "amount_cents"}
             and isinstance(arguments.get("value"), str)
             and len(arguments["value"]) <= 120
         )

@@ -5245,3 +5245,46 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   ligada a los hashes actuales y API/broker/worker separados. Sin ese requisito,
   no ejecutar modelo ni worker. La persistencia de aprobaciones requiere una
   base desechable autorizada y pruebas E2E/RLS separadas.
+
+## Validador de mutaciones BBDD y matriz offline de aprobaciones — 2026-11-11
+
+- Base: HEAD `913537828d33321425a4fcce2233bc7a087f0a4a`, rama `main`, árbol
+  limpio antes del cambio.
+- Se corrigió únicamente `propose_synthetic_database_mutation`:
+  `operation` y `field` deben ser strings antes de comparar con sus conjuntos
+  permitidos. Listas, objetos/dicts y escalares de tipo incorrecto ahora
+  devuelven `invalid_database_mutation_proposal`, sin `TypeError`; las formas
+  válidas siguen siendo solo propuestas no ejecutables y los strings inválidos
+  mantienen el rechazo existente.
+- Pruebas añadidas en `tests/test_llm_tool_adapter.py`: valores lista/dict,
+  enteros, booleanos y nulos para ambos campos; combinaciones permitidas
+  `update/status` y `delete/amount_cents`; nombres de operación/campo inválidos.
+  Ejecución focalizada: 2 métodos pasaron, 0 fallos. Comando:
+  `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=workers/guardian-ai-assessment:workers/guardian-ai-assessment/tests python -m unittest -v test_llm_tool_adapter.LocalLlmToolAdapterTests.test_database_mutation_validator_rejects_non_scalar_operation_and_field test_llm_tool_adapter.LocalLlmToolAdapterTests.test_database_mutation_validator_preserves_valid_and_ordinary_invalid_values`
+- La matriz de aprobación de Finanzas y Atención al cliente ya existía en
+  `artifacts/api-server/src/lib/ai-assessment-qwen-evidence.test.ts`; no se
+  duplicó. Se ejecutaron solo los dos casos `TEST ONLY` con
+  `--test-isolation=none`: 2/2 pasaron. Cubren pendiente sin simulación,
+  aprobación/rechazo, expiración, idempotencia/duplicado, binding a propuesta,
+  tenant cruzado, actor/rol, autoaprobación y rechazo de replay. La simulación
+  y el ledger son en memoria; esto **no** acredita PostgreSQL, RLS ni
+  persistencia E2E. La primera invocación del comando usó una ruta relativa al
+  directorio incorrecto y no ejecutó tests; la reejecución desde el paquete
+  pasó.
+- `git diff --check`: pasó antes de cerrar este checkpoint. No se ejecutaron
+  suites amplias, typecheck, Qwen, procesos hijos, workers, API, broker, Docker,
+  sockets, PostgreSQL, migraciones ni red. No se accedió ni modificó `.replit`.
+  No se cambió ningún gate; aislamiento independiente y persistencia real
+  siguen sin acreditarse.
+- SHA-256 tras los cambios de código:
+  `tool_adapter.py`
+  `92cf2054b9a9e5e850e2071a400587273700e69c2c96d7c4db23d205b872e413`;
+  `test_llm_tool_adapter.py`
+  `cf773e44b63e442bb6b231b294768131620132a47e235aad7245287b88476d0f`;
+  matriz de aprobación existente
+  `ai-assessment-qwen-evidence.test.ts`
+  `a350487457efd991c7f4a06de2487d039ac65fd0c046863c11a411030ada6c36`.
+- Próximo paso seguro: continuar con la revisión de los contratos de aprobación
+  y los tests offline que falten; para afirmar persistencia/RLS hace falta una
+  base desechable autorizada. La inferencia Qwen y el worker siguen bloqueados
+  hasta una atestación independiente verificable.
