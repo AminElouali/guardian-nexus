@@ -864,7 +864,7 @@ test("historical infrastructure NO_PROPOSAL cannot enter approval provenance or 
   );
 });
 
-test("offline approval persistence source contract admits provenance-bound v3 under tenant RLS", () => {
+test("offline RLS grants match the runtime privilege preflight", () => {
   const rlsSql = readFileSync(
     new URL("../../../../lib/db/sql/rls-policies.sql", import.meta.url),
     "utf8",
@@ -896,6 +896,96 @@ test("offline approval persistence source contract admits provenance-bound v3 un
     new URL("../ai-assessment-synthetic-approval-e2e.test.ts", import.meta.url),
     "utf8",
   );
+  const runtimeRoleBootstrapSource = readFileSync(
+    new URL("../../../../lib/db/scripts/bootstrap-runtime-role.mjs", import.meta.url),
+    "utf8",
+  );
+
+  const hostBoundaryGrantBranch = dbRuntimeSource.match(
+    /WHEN protected\.table_name = 'host_boundary_attestation_challenges'([\s\S]*?)\n\s*WHEN protected\.table_name = 'ai_assessment_approval_requests'/,
+  )?.[1];
+  assert.ok(hostBoundaryGrantBranch);
+  assert.match(
+    hostBoundaryGrantBranch,
+    /has_table_privilege\(\s*runtime\.oid,\s*format\('public\.%I', protected\.table_name\),\s*'SELECT,INSERT'\s*\)/,
+    "attestation table access requires table-level SELECT/INSERT only",
+  );
+  assert.match(
+    hostBoundaryGrantBranch,
+    /NOT has_table_privilege\(\s*runtime\.oid,\s*'public\.host_boundary_attestation_challenges',\s*'UPDATE'\s*\)/,
+    "readiness must reject a global table UPDATE grant",
+  );
+  const hostBoundaryUpdateColumns = [
+    "consumed_at",
+    "status",
+    "response_sha256",
+    "supervisor_id",
+    "updated_at",
+  ];
+  for (const column of hostBoundaryUpdateColumns) {
+    assert.match(
+      hostBoundaryGrantBranch,
+      new RegExp(
+        `has_column_privilege\\(\\s*runtime\\.oid,\\s*'public\\.host_boundary_attestation_challenges',\\s*'${column}',\\s*'UPDATE'\\s*\\)`,
+      ),
+      `readiness must require the restricted ${column} UPDATE privilege`,
+    );
+  }
+  const hostBoundarySqlUpdateGrant = rlsSql.match(
+    /GRANT UPDATE \(\s*consumed_at,\s*status,\s*response_sha256,\s*supervisor_id,\s*updated_at\s*\)\s+ON TABLE public\.host_boundary_attestation_challenges TO app_runtime;/,
+  )?.[0];
+  assert.ok(hostBoundarySqlUpdateGrant);
+  assert.doesNotMatch(
+    rlsSql,
+    /GRANT UPDATE\s+ON TABLE public\.host_boundary_attestation_challenges TO app_runtime;/,
+    "SQL must not grant global UPDATE on host attestation rows",
+  );
+
+  const grantMode = runtimeRoleBootstrapSource.match(
+    /if \(mode === "grant"\) \{([\s\S]*?)\} else if \(mode === "configure-login"\)/,
+  )?.[1];
+  const configureLoginMode = runtimeRoleBootstrapSource.match(
+    /else if \(mode === "configure-login"\) \{([\s\S]*?)const \{ rows: existingLoginRows \}/,
+  )?.[1];
+  assert.ok(grantMode);
+  assert.ok(configureLoginMode);
+  const expectedApprovalUpdateColumns = [
+    "status",
+    "decided_by_user_id",
+    "decided_by_role",
+    "decided_at",
+    "simulated_at",
+    "simulation_result_code",
+    "simulation_result_sha256",
+    "replay_binding_sha256",
+    "updated_at",
+  ];
+  for (const [mode, source] of [
+    ["grant", grantMode],
+    ["configure-login", configureLoginMode],
+  ] as const) {
+    assert.match(
+      source,
+      /GRANT SELECT, INSERT\s+ON TABLE public\.ai_assessment_approval_requests TO app_runtime;/,
+      `${mode} must grant only table-level SELECT/INSERT`,
+    );
+    const updateGrants = [
+      ...source.matchAll(
+        /GRANT UPDATE \(([\s\S]*?)\)\s+ON TABLE public\.ai_assessment_approval_requests TO app_runtime;/g,
+      ),
+    ];
+    assert.equal(updateGrants.length, 1, `${mode} must declare one scoped UPDATE grant`);
+    assert.deepEqual(
+      updateGrants[0]![1].split(",").map((column) => column.trim()),
+      expectedApprovalUpdateColumns,
+      `${mode} must grant exactly the nine decision/receipt columns`,
+    );
+    assert.doesNotMatch(
+      source,
+      /GRANT UPDATE\s+ON TABLE public\.ai_assessment_approval_requests TO app_runtime;/,
+      `${mode} must not grant table-level UPDATE`,
+    );
+  }
 
   const insertPolicy = rlsSql.match(
     /CREATE POLICY ai_assessment_approvals_insert_owner[\s\S]*?;\n/,

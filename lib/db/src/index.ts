@@ -223,8 +223,33 @@ export async function assertRlsRuntimeReady(): Promise<void> {
           THEN has_table_privilege(
             runtime.oid,
             format('public.%I', protected.table_name),
-            'SELECT,INSERT,UPDATE'
+            'SELECT,INSERT'
           )
+            AND NOT has_table_privilege(
+              runtime.oid,
+              'public.host_boundary_attestation_challenges',
+              'UPDATE'
+            )
+            AND has_column_privilege(
+              runtime.oid, 'public.host_boundary_attestation_challenges',
+              'consumed_at', 'UPDATE'
+            )
+            AND has_column_privilege(
+              runtime.oid, 'public.host_boundary_attestation_challenges',
+              'status', 'UPDATE'
+            )
+            AND has_column_privilege(
+              runtime.oid, 'public.host_boundary_attestation_challenges',
+              'response_sha256', 'UPDATE'
+            )
+            AND has_column_privilege(
+              runtime.oid, 'public.host_boundary_attestation_challenges',
+              'supervisor_id', 'UPDATE'
+            )
+            AND has_column_privilege(
+              runtime.oid, 'public.host_boundary_attestation_challenges',
+              'updated_at', 'UPDATE'
+            )
           WHEN protected.table_name = 'ai_assessment_approval_requests'
           THEN has_table_privilege(
             runtime.oid,

@@ -5567,3 +5567,25 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
 - El guard unitario no acredita persistencia ni una DB existente. La E2E de
   aprobación/RLS sigue pendiente de una base de laboratorio desechable
   autorizada; Qwen/worker siguen dependiendo de atestación independiente real.
+
+## Grants del preflight RLS alineados estáticamente — 2026-11-11
+
+- Base `bc5b72677dafee524615dbe9b96c92da83479afe`, `main`, árbol limpio.
+- `assertRlsRuntimeReady()` ahora exige `SELECT,INSERT` para la tabla de
+  atestación, rechaza `UPDATE` global y valida solo sus cinco columnas
+  modificables. Los modos `grant` y `configure-login` conceden las nueve
+  columnas `UPDATE` de aprobación que requiere el preflight.
+- Se añadió una regresión estática focalizada al test de contrato existente:
+  exige las cinco columnas de atestación, ausencia de UPDATE global y la lista
+  exacta de nueve columnas en ambos modos de bootstrap.
+- Comando:
+  `pnpm --filter @workspace/api-server exec tsx --test --test-name-pattern='^offline RLS grants match the runtime privilege preflight$' src/lib/ai-assessment-qwen-evidence.test.ts`
+  Resultado: 1 pasó, 0 fallaron. `git diff --check` pasó.
+- Informe `reports/rls-runtime-grants-contract-offline-2026-11-11.md`,
+  SHA-256 `03807fad2fafbc9e4f040fc25598202756eed2de7f4030aa390ae606e5baa7f9`.
+- El test verifica fuentes estáticas, no ejecuta scripts ni confirma grants,
+  roles, ownership, políticas o RLS en una base. No se conectó PostgreSQL, no
+  se ejecutaron migraciones, servidores, Qwen, workers, Docker/socket ni red.
+- Punto de reanudación: continuar revisión offline de validadores/políticas/UI.
+  La acreditación real requiere una DB desechable autorizada y atestación
+  independiente del host; no se deben abrir los gates para sustituirlas.
