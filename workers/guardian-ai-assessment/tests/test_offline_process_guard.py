@@ -1,5 +1,6 @@
 import json
 import inspect
+import signal
 import socket
 import subprocess
 import sys
@@ -191,7 +192,6 @@ class OfflineRunnerDockerPrivilegeTests(unittest.TestCase):
                 per_case_seconds=180,
                 now=100,
             )
-
     def test_combiner_keeps_synthetic_single_case_results_provenance_separate(self):
         run = lambda case_id, label, origin, decision, dispatch: {
             "profileId": "guardian-agent-qwen-lab-email-v1",
@@ -529,6 +529,118 @@ class OfflineRunnerDockerPrivilegeTests(unittest.TestCase):
 
 
 class OfflineRunnerTimeoutCheckpointTests(unittest.TestCase):
+    def test_case_profile_and_coordinator_timeout_limits_have_distinct_causes(self):
+        self.assertEqual(
+            offline_qwen_runner._case_timeout_selection(
+                wall_deadline=500,
+                per_case_seconds=180,
+                now=100,
+            ),
+            (180, "case"),
+        )
+        self.assertEqual(
+            offline_qwen_runner._case_timeout_selection(
+                wall_deadline=250,
+                per_case_seconds=180,
+                now=100,
+            ),
+            (150, "profile"),
+        )
+        self.assertEqual(
+            offline_qwen_runner._case_timeout_selection(
+                wall_deadline=280,
+                per_case_seconds=180,
+                now=100,
+            ),
+            (180, "case_and_profile"),
+        )
+        self.assertEqual(
+            offline_qwen_runner._coordinator_child_timeout_selection(
+                profile_timeout_seconds=10,
+                remaining_wall_seconds=20,
+            ),
+            (10, "profile"),
+        )
+        self.assertEqual(
+            offline_qwen_runner._coordinator_child_timeout_selection(
+                profile_timeout_seconds=10,
+                remaining_wall_seconds=8.5,
+            ),
+            (8, "overall"),
+        )
+        self.assertEqual(
+            offline_qwen_runner._coordinator_child_timeout_selection(
+                profile_timeout_seconds=10,
+                remaining_wall_seconds=10,
+            ),
+            (10, "profile_and_overall"),
+        )
+        self.assertEqual(
+            offline_qwen_runner._coordinator_child_timeout_selection(
+                profile_timeout_seconds=10,
+                remaining_wall_seconds=0,
+            ),
+            (0, "overall"),
+        )
+
+    def test_timeout_diagnostics_use_only_observed_allowlisted_events(self):
+        with (
+            patch.object(
+                offline_qwen_runner,
+                "_ACTIVE_TIMEOUT_PHASE",
+                "model_call",
+            ),
+            patch.object(
+                offline_qwen_runner,
+                "_ACTIVE_TIMEOUT_CAUSE",
+                "case",
+            ),
+            patch.object(
+                offline_qwen_runner,
+                "_ACTIVE_TIMEOUT_SECONDS",
+                12.5,
+            ),
+        ):
+            with self.assertRaises(offline_qwen_runner._OfflineQwenTimeout) as caught:
+                offline_qwen_runner._deadline(signal.SIGALRM, None)
+        self.assertEqual(
+            caught.exception.diagnostic,
+            {
+                "phase": "model_call",
+                "causeCode": "offline_qwen_case_timeout",
+                "timeoutSeconds": 12.5,
+                "rawContentStored": False,
+            },
+        )
+        with self.assertRaises(offline_qwen_runner._OfflineQwenTimeout) as cpu_caught:
+            offline_qwen_runner._deadline(signal.SIGXCPU, None)
+        self.assertEqual(
+            cpu_caught.exception.diagnostic,
+            {
+                "phase": "process_cpu_limit",
+                "causeCode": "offline_qwen_cpu_limit",
+                "rawContentStored": False,
+            },
+        )
+        with self.assertRaisesRegex(
+            ValueError, "offline_qwen_timeout_diagnostic_invalid"
+        ):
+            offline_qwen_runner._timeout_diagnostic(
+                phase="model_output",
+                cause="case",
+                timeout_seconds=12,
+            )
+        self.assertIsNone(
+            offline_qwen_runner._validated_timeout_diagnostic(
+                {
+                    "phase": "model_output",
+                    "causeCode": "offline_qwen_case_timeout",
+                    "timeoutSeconds": 12,
+                    "rawContentStored": True,
+                }
+            )
+        )
+
     def test_timeout_defaults_and_validated_upper_bounds(self):
         defaults = inspect.signature(
             offline_qwen_runner.run_offline_email_database_evaluation
@@ -580,12 +692,18 @@ class OfflineRunnerTimeoutCheckpointTests(unittest.TestCase):
                 "toolCallOrigin": "no_tool_call",
             }
         ]
+        timeout_diagnostic = offline_qwen_runner._timeout_diagnostic(
+            phase="model_call",
+            cause="case",
+            timeout_seconds=15,
+        )
         checkpoint = offline_qwen_runner._progress_checkpoint(
             profile_id=profile_id,
             status="in_progress",
             active_case_id="synthetic-email-case-2",
             completed_cases=cases,
             error_type="TimeoutError",
+            timeout_diagnostic=timeout_diagnostic,
         )
         self.assertEqual(checkpoint["completedCaseCount"], 1)
         self.assertEqual(checkpoint["status"], "in_progress")
@@ -605,6 +723,15 @@ class OfflineRunnerTimeoutCheckpointTests(unittest.TestCase):
         self.assertFalse(checkpoint["rawPromptsStored"])
         self.assertFalse(checkpoint["rawResponsesStored"])
         self.assertFalse(checkpoint["rawToolArgumentsStored"])
+        self.assertEqual(
+            checkpoint["timeoutDiagnostic"],
+            {
+                "phase": "model_call",
+                "causeCode": "offline_qwen_case_timeout",
+                "timeoutSeconds": 15.0,
+                "rawContentStored": False,
+            },
+        )
 
         with tempfile.TemporaryDirectory(
             prefix="guardian-qwen-progress-test-"
@@ -633,6 +760,10 @@ class OfflineRunnerTimeoutCheckpointTests(unittest.TestCase):
             self.assertEqual(
                 recovered["completedCases"],
                 cases,
+            )
+            self.assertEqual(
+                recovered["timeoutDiagnostic"],
+                checkpoint["timeoutDiagnostic"],
             )
 
     def test_partial_checkpoint_recovery_fails_closed_on_wrong_or_invalid_file(self):
@@ -668,6 +799,140 @@ class OfflineRunnerTimeoutCheckpointTests(unittest.TestCase):
 
 
 class OfflineRunnerCoordinatorTimeoutTests(unittest.TestCase):
+    def test_child_case_and_profile_timeout_causes_survive_checkpoint_recovery(self):
+        profile_ids = offline_qwen_runner._EMAIL_DATABASE_PROFILE_ORDER
+        local_manifest = {
+            "model": {
+                "id": "test-only-model",
+                "revision": "test-only-revision",
+                "file": "test-model.gguf",
+                "sha256": "a" * 64,
+                "sizeBytes": 1,
+                "quantization": "TEST_ONLY",
+            },
+            "runtime": {
+                "name": "test-only-runtime",
+                "version": "0",
+                "wheelSha256": "b" * 64,
+            },
+        }
+        fixture_baselines = {profile_id: {} for profile_id in profile_ids}
+
+        with tempfile.TemporaryDirectory(
+            prefix="guardian-qwen-child-timeout-checkpoint-test-"
+        ) as root:
+            workspace = Path(root)
+            model_path = (
+                workspace
+                / "generated-artifacts/guardian-llm-lab/test-model.gguf"
+            )
+            model_path.parent.mkdir(parents=True)
+            model_path.write_bytes(b"x")
+            child_calls = []
+            timeout_causes = {
+                profile_ids[0]: ("case", "offline_qwen_case_timeout"),
+                profile_ids[1]: ("profile", "offline_qwen_profile_timeout"),
+            }
+
+            def completed_timeout_child(command, **_kwargs):
+                profile_id = command[command.index("--profile-child") + 1]
+                child_calls.append(profile_id)
+                suffix = "email" if profile_id == profile_ids[0] else "database"
+                progress_path = (
+                    workspace
+                    / "generated-artifacts/guardian-qwen-offline"
+                    / f"qwen-policy-lab-email-database-{suffix}-profile.progress.json"
+                )
+                cause, _expected_code = timeout_causes[profile_id]
+                diagnostic = offline_qwen_runner._timeout_diagnostic(
+                    phase="model_call",
+                    cause=cause,
+                    timeout_seconds=7,
+                )
+                partial = offline_qwen_runner._progress_checkpoint(
+                    profile_id=profile_id,
+                    status="incomplete",
+                    active_case_id=f"{profile_id}-active",
+                    completed_cases=[],
+                    error_type="TimeoutError",
+                    timeout_diagnostic=diagnostic,
+                )
+                offline_qwen_runner._write_progress_checkpoint(
+                    progress_path, partial
+                )
+                return subprocess.CompletedProcess(
+                    command,
+                    1,
+                    stdout="RAW_CHILD_PROMPT_MUST_NOT_PERSIST",
+                    stderr="RAW_CHILD_RESPONSE_MUST_NOT_PERSIST",
+                )
+
+            with (
+                patch.object(
+                    offline_qwen_runner,
+                    "require_standalone_offline_environment",
+                ),
+                patch.object(
+                    offline_qwen_runner,
+                    "_load_verified_manifests",
+                    return_value=(local_manifest, {}),
+                ),
+                patch.object(
+                    offline_qwen_runner,
+                    "_sha256_file",
+                    return_value="a" * 64,
+                ),
+                patch.object(
+                    offline_qwen_runner,
+                    "_fixture_baseline_comparison",
+                    return_value=fixture_baselines,
+                ),
+                patch.object(
+                    offline_qwen_runner,
+                    "_source_code_hashes",
+                    return_value={},
+                ),
+                patch.object(
+                    offline_qwen_runner.subprocess,
+                    "run",
+                    side_effect=completed_timeout_child,
+                ) as mocked_subprocess_run,
+            ):
+                bundle, artifact_path = (
+                    offline_qwen_runner.run_offline_email_database_evaluation(
+                        workspace,
+                        case_timeout_seconds=10,
+                        profile_timeout_seconds=10,
+                        wall_timeout_seconds=20,
+                    )
+                )
+
+            self.assertEqual(child_calls, list(profile_ids))
+            self.assertEqual(mocked_subprocess_run.call_count, 2)
+            self.assertEqual(bundle["status"], "incomplete")
+            self.assertEqual(bundle["summary"]["modelCalls"], 0)
+            self.assertEqual(
+                [profile["status"] for profile in bundle["profiles"]],
+                ["timed_out", "timed_out"],
+            )
+            self.assertTrue(
+                all("evidence" not in profile for profile in bundle["profiles"])
+            )
+            self.assertEqual(
+                [
+                    profile["timeoutDiagnostic"]["causeCode"]
+                    for profile in bundle["profiles"]
+                ],
+                [timeout_causes[profile_id][1] for profile_id in profile_ids],
+            )
+            self.assertEqual(
+                [profile["completedInferenceCount"] for profile in bundle["profiles"]],
+                [0, 0],
+            )
+            artifact_text = artifact_path.read_text(encoding="utf-8")
+            self.assertNotIn("RAW_CHILD_PROMPT_MUST_NOT_PERSIST", artifact_text)
+            self.assertNotIn("RAW_CHILD_RESPONSE_MUST_NOT_PERSIST", artifact_text)
+
     def test_timed_out_children_keep_partial_progress_without_completing_profiles(self):
         profile_ids = offline_qwen_runner._EMAIL_DATABASE_PROFILE_ORDER
         self.assertEqual(len(profile_ids), 2)
@@ -699,10 +964,15 @@ class OfflineRunnerCoordinatorTimeoutTests(unittest.TestCase):
             model_path.parent.mkdir(parents=True)
             model_path.write_bytes(b"x")
             child_calls = []
+            clock = [100.0]
+
+            def fake_monotonic():
+                return clock[0]
 
             def timeout_child(command, **kwargs):
                 profile_id = command[command.index("--profile-child") + 1]
                 child_calls.append(profile_id)
+                clock[0] += 12 if len(child_calls) == 1 else 8
                 suffix = "email" if profile_id == profile_ids[0] else "database"
                 progress_path = (
                     Path(kwargs["cwd"])
@@ -732,8 +1002,8 @@ class OfflineRunnerCoordinatorTimeoutTests(unittest.TestCase):
                 raise subprocess.TimeoutExpired(
                     command,
                     timeout=kwargs["timeout"],
-                    output="synthetic stdout",
-                    stderr="synthetic stderr",
+                    output="RAW_SYNTHETIC_PROMPT_MUST_NOT_PERSIST",
+                    stderr="RAW_SYNTHETIC_MODEL_RESPONSE_MUST_NOT_PERSIST",
                 )
 
             with (
@@ -766,6 +1036,11 @@ class OfflineRunnerCoordinatorTimeoutTests(unittest.TestCase):
                     "run",
                     side_effect=timeout_child,
                 ) as mocked_subprocess_run,
+                patch.object(
+                    offline_qwen_runner.time,
+                    "monotonic",
+                    side_effect=fake_monotonic,
+                ),
             ):
                 bundle, artifact_path = (
                     offline_qwen_runner.run_offline_email_database_evaluation(
@@ -789,13 +1064,36 @@ class OfflineRunnerCoordinatorTimeoutTests(unittest.TestCase):
                 [profile["status"] for profile in bundle["profiles"]],
                 ["timed_out", "timed_out"],
             )
+            self.assertEqual(
+                [call.kwargs["timeout"] for call in mocked_subprocess_run.call_args_list],
+                [10, 8],
+            )
             self.assertTrue(
                 all("evidence" not in profile for profile in bundle["profiles"])
             )
 
             email, database = bundle["profiles"]
+            self.assertEqual(
+                email["timeoutDiagnostic"],
+                {
+                    "phase": "child_process_wait",
+                    "causeCode": "offline_qwen_profile_timeout",
+                    "timeoutSeconds": 10.0,
+                    "rawContentStored": False,
+                },
+            )
+            self.assertEqual(
+                database["timeoutDiagnostic"],
+                {
+                    "phase": "child_process_wait",
+                    "causeCode": "offline_qwen_overall_timeout",
+                    "timeoutSeconds": 8.0,
+                    "rawContentStored": False,
+                },
+            )
             self.assertEqual(email["completedCaseCount"], 1)
             self.assertEqual(email["completedInferenceCount"], 1)
+            self.assertEqual(email["status"], "timed_out")
             self.assertEqual(
                 email["partialCheckpoint"]["profileId"], profile_ids[0]
             )
@@ -810,10 +1108,14 @@ class OfflineRunnerCoordinatorTimeoutTests(unittest.TestCase):
             self.assertEqual(
                 database["partialCheckpoint"]["completedCaseCount"], 0
             )
-            self.assertEqual(
-                json.loads(artifact_path.read_text(encoding="utf-8"))["status"],
-                "incomplete",
+            artifact_text = artifact_path.read_text(encoding="utf-8")
+            self.assertEqual(json.loads(artifact_text)["status"], "incomplete")
+            self.assertNotIn("RAW_SYNTHETIC_PROMPT_MUST_NOT_PERSIST", artifact_text)
+            self.assertNotIn(
+                "RAW_SYNTHETIC_MODEL_RESPONSE_MUST_NOT_PERSIST", artifact_text
             )
+            self.assertFalse(email["processOutput"]["rawTextStored"])
+            self.assertFalse(database["processOutput"]["rawTextStored"])
 
 
 if __name__ == "__main__":

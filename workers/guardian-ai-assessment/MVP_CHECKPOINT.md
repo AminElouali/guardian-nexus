@@ -4869,3 +4869,87 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
 - `.replit` apareció modificado durante la actualización de entorno del usuario;
   se preservó sin inspeccionar ni usar su contenido. No se leyó ningún valor de
   entorno y no se conectó ni migró la base.
+
+## Diagnóstico acotado de timeout y cierre RLS — 2026-11-11
+
+- Reanudación: el HEAD efectivo era `eacd40c54c390e51dbd155c6c3fe704bdcf70567`
+  (`main`), no el `518201...` indicado como base. El checkpoint previo tenía
+  SHA-256 `53d6dd0efb8ab51fab8d73718a7a0809192c504f334ea78981614b6e827d8623`.
+  El árbol estaba limpio al inicio; no se leyó, modificó, restauró ni
+  sobrescribió `.replit`. Tampoco se accedió a valores de entorno.
+- Timeout offline: el informe ahora usa una lista cerrada de fase y causa,
+  derivadas del límite realmente elegido o del evento observado. Distingue
+  timeout de caso, perfil, total, coincidencia de límites, espera del proceso
+  hijo, perfil no iniciado tras agotarse el total y límite CPU `SIGXCPU`.
+  El checkpoint parcial conserva solo el código acotado, la fase y el límite
+  numérico; el coordinador recupera ese diagnóstico y mantiene el perfil como
+  `timed_out` o `skipped_overall_timeout`, sin evidencia ni suma global de
+  inferencias completas. stdout/stderr siguen reducidos a tamaño y SHA-256;
+  no se guardan texto, prompts ni respuestas.
+- Montajes: la validación del builder ahora exige rutas absolutas
+  normalizadas, rechaza raíz/rutas padre de `/run/docker.sock` y
+  `/var/run/docker.sock`, y conserva el rechazo literal. La validación es
+  puramente léxica y no consulta el filesystem; aliases o symlinks hacia el
+  socket siguen sin poder verificarse por este método.
+- RLS/aprobaciones: el readiness API ahora incluye
+  `ai_assessment_approval_requests`, exige sus 3 políticas, RLS habilitado y
+  forzado, que `app_runtime` no sea owner, y grants de lectura/creación más
+  solo columnas de decisión/simulación. El preflight rechaza `DELETE` y
+  updates sobre tenant, actor y binding/propuesta. La regresión inspecciona el
+  contrato fuente y las políticas SQL; no ejecuta SQL ni demuestra estado de
+  una base.
+- El contrato exacto del primer readiness SQL exige 12 tablas protegidas,
+  `relrowsecurity=true`, `relforcerowsecurity=true`, el conteo esperado por
+  tabla y cero políticas sin `USING`/`WITH CHECK` o con roles inválidos. Para
+  aprobaciones espera 3 políticas. Luego verifica login no privilegiado,
+  roles efectivos, grants y columnas. El log vigente sigue fallando en la
+  primera comprobación con `Tenant RLS policies are missing, unqualified, or
+  not forced; refusing to start.` No revela qué tabla/condición falla; sin
+  autorización y una base desechable no se puede determinarlo.
+- Estado de workflow leído sin reinicio: API Server `failed`, build correcto,
+  startup rechazado por `assertRlsRuntimeReady`; web y sandbox permanecen
+  ejecutándose. No hubo conexión a PostgreSQL, migración, Qwen, broker, worker,
+  Docker, socket del host, red externa ni cambio de gate.
+- Pruebas ejecutadas en esta etapa:
+  - Python: 8/8 tests focalizados de timeout/checkpoint/coordinador, con
+    `subprocess.run` completamente simulado; cubren selección de timeout,
+    diagnóstico permitido, recuperación del checkpoint, estatus no completado
+    y ausencia de texto bruto en el artefacto.
+  - API mount builder: 1/1 test focalizado de ancestros de socket y rutas no
+    normalizadas.
+  - Contrato RLS de aprobación: 1/1 test fuente focalizado pasó tras corregir
+    dos aserciones estáticas erróneas (conteo de listas y regex de GRANT).
+  - `pnpm --filter @workspace/api-server run typecheck`: pasó.
+  - `git diff --check`: pasó antes de actualizar esta sección; se repite en el
+    cierre.
+- Desviación de ejecución que debe conservarse en el historial: una primera
+  selección demasiado amplia ejecutó 20/20 tests de timeout **y**
+  `OfflineRunnerDockerPrivilegeTests`. En estos últimos, un test inició el CLI
+  en un subprocess real con un `DOCKER_HOST` sintético y dos tests crearon
+  sockets AF_UNIX en directorios temporales. El CLI estaba diseñado para fallar
+  antes de usar el endpoint; no se abrió `/var/run/docker.sock`, no se lanzó
+  Docker/Qwen/worker ni se conectó un servicio. Aun así, se incumplió el límite
+  de no crear procesos/sockets; se informó y las pruebas posteriores se
+  limitaron a los métodos de timeout con mocks.
+- Un primer comando de unittest falló en la importación (`ModuleNotFoundError:
+  tests`), sin ejecutar tests. Los resultados anteriores a la selección
+  demasiado amplia y los dos intentos fallidos del test de contrato se
+  contabilizan como fallos de invocación/aserción, no como validación.
+- SHA-256 de fuentes actuales:
+  - `guardian_ai_assessment/offline_qwen_runner.py`:
+    `c9f636223f1b2845fe63aab4518b10404ccff0267f569044ca46495b355a8f8e`
+  - `tests/test_offline_process_guard.py`:
+    `1d2bc09c0b52079253ac9179aa00ba01e8f2e88d93156cb8971ee635ff4bc864`
+  - `ai-assessment-sandbox.ts`:
+    `5c2edb5c934fd3fb0eceaac3a161736711e771665fb90b4f939cd7a274292ee6`
+  - `ai-assessment-sandbox.test.ts`:
+    `cb700e5710a425795b47e377472fc32ec434fe05da5c43df521342fa59fb9e96`
+  - `lib/db/src/index.ts`:
+    `ac5c2657f76037b0575c0119cf7a6c761d3e02f4f8388c3ba194e5ed69525a4c`
+  - `ai-assessment-qwen-evidence.test.ts`:
+    `0c5a4bcb4e2d0807a2f707bab51b36dbbafaac78623da1cdf87a266ff755e12d`
+- Readiness permanece fail-closed y no se declara verificado. Pendientes que
+  requieren evidencia externa: supervisor host independiente con trust anchor
+  provisionado y mediciones firmadas ligadas al digest actual; además, revisión
+  y autorización explícita de una DB desechable antes de aplicar/verificar RLS
+  y ejecutar aprobación E2E. No se creó commit en esta etapa.

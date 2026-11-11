@@ -100,7 +100,8 @@ export async function assertRlsRuntimeReady(): Promise<void> {
         'connector_oauth_states',
         'connector_jobs',
         'ai_assessment_jobs',
-        'host_boundary_attestation_challenges'
+        'host_boundary_attestation_challenges',
+        'ai_assessment_approval_requests'
       )
     GROUP BY c.relname, c.relrowsecurity, c.relforcerowsecurity
   `);
@@ -116,6 +117,7 @@ export async function assertRlsRuntimeReady(): Promise<void> {
     connector_jobs: 4,
     ai_assessment_jobs: 5,
     host_boundary_attestation_challenges: 3,
+    ai_assessment_approval_requests: 3,
   };
   if (
     rows.length !== Object.keys(expectedPolicyCounts).length ||
@@ -195,7 +197,8 @@ export async function assertRlsRuntimeReady(): Promise<void> {
             'connector_oauth_states',
             'connector_jobs',
             'ai_assessment_jobs',
-            'host_boundary_attestation_challenges'
+            'host_boundary_attestation_challenges',
+            'ai_assessment_approval_requests'
           ])
           AND protected.relowner = runtime.oid
       ) AS runtime_owns_protected_table,
@@ -212,7 +215,8 @@ export async function assertRlsRuntimeReady(): Promise<void> {
           'connector_oauth_states',
           'connector_jobs',
           'ai_assessment_jobs',
-          'host_boundary_attestation_challenges'
+          'host_boundary_attestation_challenges',
+          'ai_assessment_approval_requests'
         ]) AS protected(table_name)
         WHERE NOT CASE
           WHEN protected.table_name = 'host_boundary_attestation_challenges'
@@ -221,6 +225,109 @@ export async function assertRlsRuntimeReady(): Promise<void> {
             format('public.%I', protected.table_name),
             'SELECT,INSERT,UPDATE'
           )
+          WHEN protected.table_name = 'ai_assessment_approval_requests'
+          THEN has_table_privilege(
+            runtime.oid,
+            'public.ai_assessment_approval_requests',
+            'SELECT,INSERT'
+          )
+            AND has_column_privilege(
+              runtime.oid, 'public.ai_assessment_approval_requests',
+              'status', 'UPDATE'
+            )
+            AND has_column_privilege(
+              runtime.oid, 'public.ai_assessment_approval_requests',
+              'decided_by_user_id', 'UPDATE'
+            )
+            AND has_column_privilege(
+              runtime.oid, 'public.ai_assessment_approval_requests',
+              'decided_by_role', 'UPDATE'
+            )
+            AND has_column_privilege(
+              runtime.oid, 'public.ai_assessment_approval_requests',
+              'decided_at', 'UPDATE'
+            )
+            AND has_column_privilege(
+              runtime.oid, 'public.ai_assessment_approval_requests',
+              'simulated_at', 'UPDATE'
+            )
+            AND has_column_privilege(
+              runtime.oid, 'public.ai_assessment_approval_requests',
+              'simulation_result_code', 'UPDATE'
+            )
+            AND has_column_privilege(
+              runtime.oid, 'public.ai_assessment_approval_requests',
+              'simulation_result_sha256', 'UPDATE'
+            )
+            AND has_column_privilege(
+              runtime.oid, 'public.ai_assessment_approval_requests',
+              'replay_binding_sha256', 'UPDATE'
+            )
+            AND has_column_privilege(
+              runtime.oid, 'public.ai_assessment_approval_requests',
+              'updated_at', 'UPDATE'
+            )
+            AND NOT has_table_privilege(
+              runtime.oid,
+              'public.ai_assessment_approval_requests',
+              'DELETE'
+            )
+            AND NOT has_column_privilege(
+              runtime.oid, 'public.ai_assessment_approval_requests',
+              'job_id', 'UPDATE'
+            )
+            AND NOT has_column_privilege(
+              runtime.oid, 'public.ai_assessment_approval_requests',
+              'case_id', 'UPDATE'
+            )
+            AND NOT has_column_privilege(
+              runtime.oid, 'public.ai_assessment_approval_requests',
+              'workspace_id', 'UPDATE'
+            )
+            AND NOT has_column_privilege(
+              runtime.oid, 'public.ai_assessment_approval_requests',
+              'proposal_sha256', 'UPDATE'
+            )
+            AND NOT has_column_privilege(
+              runtime.oid, 'public.ai_assessment_approval_requests',
+              'action_sha256', 'UPDATE'
+            )
+            AND NOT has_column_privilege(
+              runtime.oid, 'public.ai_assessment_approval_requests',
+              'proposal_binding_sha256', 'UPDATE'
+            )
+            AND NOT has_column_privilege(
+              runtime.oid, 'public.ai_assessment_approval_requests',
+              'requested_by_user_id', 'UPDATE'
+            )
+            AND NOT has_column_privilege(
+              runtime.oid, 'public.ai_assessment_approval_requests',
+              'requested_by_role', 'UPDATE'
+            )
+            AND NOT has_column_privilege(
+              runtime.oid, 'public.ai_assessment_approval_requests',
+              'binding_version', 'UPDATE'
+            )
+            AND NOT has_column_privilege(
+              runtime.oid, 'public.ai_assessment_approval_requests',
+              'synthetic_action_ref', 'UPDATE'
+            )
+            AND NOT has_column_privilege(
+              runtime.oid, 'public.ai_assessment_approval_requests',
+              'model_inference', 'UPDATE'
+            )
+            AND NOT has_column_privilege(
+              runtime.oid, 'public.ai_assessment_approval_requests',
+              'execution_mode', 'UPDATE'
+            )
+            AND NOT has_column_privilege(
+              runtime.oid, 'public.ai_assessment_approval_requests',
+              'tool_call_origin', 'UPDATE'
+            )
+            AND NOT has_column_privilege(
+              runtime.oid, 'public.ai_assessment_approval_requests',
+              'expires_at', 'UPDATE'
+            )
           ELSE has_table_privilege(
             runtime.oid,
             format('public.%I', protected.table_name),
@@ -241,7 +348,8 @@ export async function assertRlsRuntimeReady(): Promise<void> {
           'connector_oauth_states',
           'connector_jobs',
           'ai_assessment_jobs',
-          'host_boundary_attestation_challenges'
+          'host_boundary_attestation_challenges',
+          'ai_assessment_approval_requests'
         ]) AS protected(table_name)
         WHERE
           has_table_privilege(role.oid, format('public.%I', protected.table_name), 'SELECT')

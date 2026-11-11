@@ -11,6 +11,7 @@ import hashlib
 import importlib.metadata
 import importlib.util
 import json
+import math
 import os
 import platform
 import re
@@ -81,6 +82,27 @@ _EMAIL_DATABASE_FIXTURE_PROFILE_IDS = {
     "guardian-agent-qwen-lab-email-v1": "guardian-agent-lab-email-v1",
     "guardian-agent-qwen-lab-database-v1": "guardian-agent-lab-database-v1",
 }
+_TIMEOUT_DIAGNOSTIC_PHASES = frozenset(
+    {
+        "profile_setup",
+        "profile_checkpoint_write",
+        "model_call",
+        "child_process_wait",
+        "coordinator_profile_not_started",
+        "process_cpu_limit",
+    }
+)
+_TIMEOUT_DIAGNOSTIC_CAUSES = {
+    "case": "offline_qwen_case_timeout",
+    "profile": "offline_qwen_profile_timeout",
+    "overall": "offline_qwen_overall_timeout",
+    "case_and_profile": "offline_qwen_case_profile_timeout",
+    "profile_and_overall": "offline_qwen_profile_overall_timeout",
+    "cpu": "offline_qwen_cpu_limit",
+}
+_ACTIVE_TIMEOUT_PHASE = "profile_setup"
+_ACTIVE_TIMEOUT_CAUSE = "profile"
+_ACTIVE_TIMEOUT_SECONDS: float | None = None
 
 
 def offline_profile_readiness_matrix(
@@ -604,8 +626,92 @@ def _clear_environment(temp_root: Path) -> None:
     (temp_root / "tmp").mkdir(exist_ok=True)
 
 
-def _deadline(_signum: int, _frame: Any) -> None:
-    raise TimeoutError("offline_qwen_wall_timeout")
+def _timeout_diagnostic(
+    *,
+    phase: str,
+    cause: str,
+    timeout_seconds: float | None = None,
+) -> dict[str, Any]:
+    """Build bounded timeout metadata; never accept exception/output text."""
+    if (
+        phase not in _TIMEOUT_DIAGNOSTIC_PHASES
+        or cause not in _TIMEOUT_DIAGNOSTIC_CAUSES
+        or (
+            timeout_seconds is not None
+            and (
+                isinstance(timeout_seconds, bool)
+                or not isinstance(timeout_seconds, (int, float))
+                or not math.isfinite(float(timeout_seconds))
+                or timeout_seconds < 0
+            )
+        )
+    ):
+        raise ValueError("offline_qwen_timeout_diagnostic_invalid")
+    diagnostic: dict[str, Any] = {
+        "phase": phase,
+        "causeCode": _TIMEOUT_DIAGNOSTIC_CAUSES[cause],
+        "rawContentStored": False,
+    }
+    if timeout_seconds is not None:
+        diagnostic["timeoutSeconds"] = round(float(timeout_seconds), 3)
+    return diagnostic
+
+
+def _validated_timeout_diagnostic(
+    value: Any,
+) -> dict[str, Any] | None:
+    """Accept only the runner's finite timeout vocabulary from checkpoints."""
+    if not isinstance(value, dict):
+        return None
+    phase = value.get("phase")
+    cause_code = value.get("causeCode")
+    cause = next(
+        (
+            name
+            for name, code in _TIMEOUT_DIAGNOSTIC_CAUSES.items()
+            if code == cause_code
+        ),
+        None,
+    )
+    timeout_seconds = value.get("timeoutSeconds")
+    if cause is None or phase not in _TIMEOUT_DIAGNOSTIC_PHASES:
+        return None
+    if (
+        timeout_seconds is not None
+        and (
+            isinstance(timeout_seconds, bool)
+            or not isinstance(timeout_seconds, (int, float))
+            or not math.isfinite(float(timeout_seconds))
+            or timeout_seconds < 0
+        )
+    ):
+        return None
+    return _timeout_diagnostic(
+        phase=phase,
+        cause=cause,
+        timeout_seconds=timeout_seconds,
+    )
+
+
+class _OfflineQwenTimeout(TimeoutError):
+    def __init__(self, diagnostic: Mapping[str, Any]) -> None:
+        self.diagnostic = dict(diagnostic)
+        super().__init__(str(self.diagnostic["causeCode"]))
+
+
+def _deadline(signum: int, _frame: Any) -> None:
+    if signum == getattr(signal, "SIGXCPU", None):
+        diagnostic = _timeout_diagnostic(
+            phase="process_cpu_limit",
+            cause="cpu",
+        )
+    else:
+        diagnostic = _timeout_diagnostic(
+            phase=_ACTIVE_TIMEOUT_PHASE,
+            cause=_ACTIVE_TIMEOUT_CAUSE,
+            timeout_seconds=_ACTIVE_TIMEOUT_SECONDS,
+        )
+    raise _OfflineQwenTimeout(diagnostic)
 
 
 def _bounded_case_timeout_seconds(
@@ -618,6 +724,63 @@ def _bounded_case_timeout_seconds(
     if remaining <= 0 or per_case_seconds <= 0:
         raise TimeoutError("offline_qwen_wall_timeout")
     return min(float(per_case_seconds), remaining)
+
+
+def _case_timeout_selection(
+    *,
+    wall_deadline: float,
+    per_case_seconds: float,
+    now: float | None = None,
+) -> tuple[float, str]:
+    current_time = time.monotonic() if now is None else now
+    remaining = wall_deadline - current_time
+    if remaining <= 0:
+        raise _OfflineQwenTimeout(
+            _timeout_diagnostic(
+                phase="profile_checkpoint_write",
+                cause="profile",
+                timeout_seconds=0,
+            )
+        )
+    if per_case_seconds <= 0:
+        raise ValueError("offline_qwen_timeout_config_invalid")
+    if per_case_seconds < remaining:
+        cause = "case"
+    elif remaining < per_case_seconds:
+        cause = "profile"
+    else:
+        cause = "case_and_profile"
+    return (
+        _bounded_case_timeout_seconds(
+            wall_deadline=wall_deadline,
+            per_case_seconds=per_case_seconds,
+            now=current_time,
+        ),
+        cause,
+    )
+
+
+def _coordinator_child_timeout_selection(
+    *,
+    profile_timeout_seconds: int,
+    remaining_wall_seconds: float,
+) -> tuple[int, str]:
+    if (
+        not isinstance(profile_timeout_seconds, int)
+        or isinstance(profile_timeout_seconds, bool)
+        or profile_timeout_seconds <= 0
+        or not math.isfinite(remaining_wall_seconds)
+    ):
+        raise ValueError("offline_qwen_timeout_config_invalid")
+    if remaining_wall_seconds <= 0:
+        return 0, "overall"
+    if profile_timeout_seconds < remaining_wall_seconds:
+        cause = "profile"
+    elif remaining_wall_seconds < profile_timeout_seconds:
+        cause = "overall"
+    else:
+        cause = "profile_and_overall"
+    return min(profile_timeout_seconds, max(1, int(remaining_wall_seconds))), cause
 
 
 def _validate_offline_timeout_config(
@@ -675,6 +838,7 @@ def _progress_checkpoint(
     active_case_id: str | None,
     completed_cases: Sequence[Mapping[str, Any]],
     error_type: str | None = None,
+    timeout_diagnostic: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     checkpoint: dict[str, Any] = {
         "schemaVersion": 1,
@@ -689,6 +853,13 @@ def _progress_checkpoint(
     }
     if error_type:
         checkpoint["errorType"] = error_type
+    if timeout_diagnostic is not None:
+        validated_diagnostic = _validated_timeout_diagnostic(
+            dict(timeout_diagnostic)
+        )
+        if validated_diagnostic is None:
+            raise ValueError("offline_qwen_timeout_diagnostic_invalid")
+        checkpoint["timeoutDiagnostic"] = validated_diagnostic
     checkpoint["checkpointSha256"] = _canonical_sha256(checkpoint)
     return checkpoint
 
@@ -1178,11 +1349,16 @@ def _run_offline_profiles(
             else:
                 model_client = model_client_cls(model_path)
 
+            global _ACTIVE_TIMEOUT_PHASE, _ACTIVE_TIMEOUT_CAUSE
+            global _ACTIVE_TIMEOUT_SECONDS
             signal.signal(signal.SIGALRM, _deadline)
             signal.signal(signal.SIGXCPU, _deadline)
             wall_deadline = time.monotonic() + min(
                 float(profile_deadline_seconds), float(_WALL_TIMEOUT_SECONDS)
             )
+            _ACTIVE_TIMEOUT_PHASE = "profile_checkpoint_write"
+            _ACTIVE_TIMEOUT_CAUSE = "profile"
+            _ACTIVE_TIMEOUT_SECONDS = float(profile_deadline_seconds)
             signal.setitimer(signal.ITIMER_REAL, max(0.0, wall_deadline - time.monotonic()))
             for profile_id in profile_ids:
                 active_profile_id = profile_id
@@ -1199,12 +1375,16 @@ def _run_offline_profiles(
                     progress_path, profile_progress[profile_id]
                 )
                 for case_id in case_ids:
-                    case_timeout = _bounded_case_timeout_seconds(
+                    case_timeout, timeout_cause = _case_timeout_selection(
                         wall_deadline=wall_deadline,
                         per_case_seconds=effective_case_timeout,
                     )
-                    signal.setitimer(signal.ITIMER_REAL, case_timeout)
                     try:
+                        _ACTIVE_TIMEOUT_PHASE = "profile_checkpoint_write"
+                        _ACTIVE_TIMEOUT_CAUSE = "profile"
+                        _ACTIVE_TIMEOUT_SECONDS = max(
+                            0.0, wall_deadline - time.monotonic()
+                        )
                         profile_progress[profile_id] = _progress_checkpoint(
                             profile_id=profile_id,
                             status="in_progress",
@@ -1214,6 +1394,10 @@ def _run_offline_profiles(
                         _write_progress_checkpoint(
                             progress_path, profile_progress[profile_id]
                         )
+                        _ACTIVE_TIMEOUT_PHASE = "model_call"
+                        _ACTIVE_TIMEOUT_CAUSE = timeout_cause
+                        _ACTIVE_TIMEOUT_SECONDS = case_timeout
+                        signal.setitimer(signal.ITIMER_REAL, case_timeout)
                         case_evidence = qwen_lab.run_qwen_policy_lab(
                             profile_id,
                             offline_guard=process_guard,
@@ -1227,6 +1411,9 @@ def _run_offline_profiles(
                         remaining_wall = max(
                             0.0, wall_deadline - time.monotonic()
                         )
+                        _ACTIVE_TIMEOUT_PHASE = "profile_checkpoint_write"
+                        _ACTIVE_TIMEOUT_CAUSE = "profile"
+                        _ACTIVE_TIMEOUT_SECONDS = remaining_wall
                         signal.setitimer(
                             signal.ITIMER_REAL, remaining_wall
                         )
@@ -1266,6 +1453,11 @@ def _run_offline_profiles(
                         status="in_progress",
                         active_case_id=None,
                         completed_cases=completed_case_summaries,
+                    )
+                    _ACTIVE_TIMEOUT_PHASE = "profile_checkpoint_write"
+                    _ACTIVE_TIMEOUT_CAUSE = "profile"
+                    _ACTIVE_TIMEOUT_SECONDS = max(
+                        0.0, wall_deadline - time.monotonic()
                     )
                     _write_progress_checkpoint(
                         progress_path, profile_progress[profile_id]
@@ -1352,7 +1544,12 @@ def _run_offline_profiles(
                 status="incomplete",
                 active_case_id=existing.get("activeCaseId"),
                 completed_cases=existing.get("completedCases", []),
-                error_type=type(exc).__name__,
+                error_type=(
+                    "TimeoutError"
+                    if isinstance(exc, TimeoutError)
+                    else type(exc).__name__
+                ),
+                timeout_diagnostic=getattr(exc, "diagnostic", None),
             )
             _write_progress_checkpoint(
                 progress_path, profile_progress[active_profile_id]
@@ -1368,7 +1565,11 @@ def _run_offline_profiles(
             status="incomplete",
             full_corpus_case_count=full_corpus_case_count,
             source_code_hashes=source_code_hashes,
-            error_type=type(exc).__name__,
+            error_type=(
+                "TimeoutError"
+                if isinstance(exc, TimeoutError)
+                else type(exc).__name__
+            ),
             profile_ids=profile_ids if standalone_process_only else None,
             selected_case_ids=(
                 selected_case_ids if standalone_process_only else None
@@ -1646,18 +1847,27 @@ def run_offline_email_database_evaluation(
         profile_id = record["profileId"]
         remaining_wall = wall_deadline - time.monotonic()
         if remaining_wall <= 0:
+            timeout_diagnostic = _timeout_diagnostic(
+                phase="coordinator_profile_not_started",
+                cause="overall",
+                timeout_seconds=0,
+            )
             record.update(
                 {
                     "status": "skipped_overall_timeout",
                     "errorType": "TimeoutError",
-                    "errorCode": "offline_qwen_overall_timeout",
+                    "errorCode": timeout_diagnostic["causeCode"],
+                    "timeoutDiagnostic": timeout_diagnostic,
                 }
             )
             _write_bundle(artifact_path, checkpoint("incomplete"))
             continue
 
         profile_started = time.monotonic()
-        child_timeout = min(profile_timeout_seconds, max(1, int(remaining_wall)))
+        child_timeout, child_timeout_cause = _coordinator_child_timeout_selection(
+            profile_timeout_seconds=profile_timeout_seconds,
+            remaining_wall_seconds=remaining_wall,
+        )
         suffix = "email" if profile_id == _PROFILE_ORDER[0] else "database"
         child_artifact_path = (
             workspace
@@ -1732,6 +1942,11 @@ def run_offline_email_database_evaluation(
                 partial_progress.get("completedCaseCount", 0)
             )
             record["completedInferenceCount"] = record["completedCaseCount"]
+            child_timeout_diagnostic = _validated_timeout_diagnostic(
+                partial_progress.get("timeoutDiagnostic")
+            )
+            if child_timeout_diagnostic is not None:
+                record["timeoutDiagnostic"] = child_timeout_diagnostic
 
         child_bundle: dict[str, Any] | None = None
         if child_artifact_path.is_file():
@@ -1742,11 +1957,25 @@ def run_offline_email_database_evaluation(
             except (OSError, json.JSONDecodeError):
                 child_bundle = None
         if timed_out is not None:
+            timeout_diagnostic = _timeout_diagnostic(
+                phase="child_process_wait",
+                cause=child_timeout_cause,
+                timeout_seconds=child_timeout,
+            )
             record.update(
                 {
                     "status": "timed_out",
                     "errorType": "TimeoutExpired",
-                    "errorCode": "offline_qwen_profile_timeout",
+                    "errorCode": timeout_diagnostic["causeCode"],
+                    "timeoutDiagnostic": timeout_diagnostic,
+                }
+            )
+        elif "timeoutDiagnostic" in record:
+            record.update(
+                {
+                    "status": "timed_out",
+                    "errorType": "TimeoutError",
+                    "errorCode": record["timeoutDiagnostic"]["causeCode"],
                 }
             )
         elif (

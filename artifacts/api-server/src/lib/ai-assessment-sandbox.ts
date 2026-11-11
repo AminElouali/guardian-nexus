@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { normalize, resolve } from "node:path";
 
 export type AssessmentProfileId =
   | "guardian-local-agent-v1"
@@ -247,12 +247,21 @@ export function verifyAssessmentImageLockSources(
 }
 
 function isSafeMountSource(path: unknown): path is string {
-  return (
-    typeof path === "string" &&
-    path.startsWith("/") &&
-    !path.includes(",") &&
-    !path.includes("\0") &&
-    !path.toLowerCase().includes("docker.sock")
+  if (
+    typeof path !== "string" ||
+    !path.startsWith("/") ||
+    path === "/" ||
+    normalize(path) !== path ||
+    path.includes(",") ||
+    path.includes("\0") ||
+    path.toLowerCase().includes("docker.sock")
+  ) {
+    return false;
+  }
+
+  const source = path.endsWith("/") ? path.slice(0, -1) : path;
+  return !["/run/docker.sock", "/var/run/docker.sock"].some(
+    (socketPath) => socketPath === source || socketPath.startsWith(`${source}/`),
   );
 }
 

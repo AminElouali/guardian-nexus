@@ -460,6 +460,34 @@ test("Qwen and policy lab builders reject declared Docker socket bind sources", 
   }
 });
 
+test("Qwen and policy lab builders reject socket ancestors and noncanonical paths", () => {
+  const qwenProfile = QWEN_POLICY_LAB_PROFILE_IDS[0];
+  const unsafeSources = ["/", "/var", "/var/run", "/run/", "/workspace/../safe"];
+
+  for (const [index, sourcePath] of unsafeSources.entries()) {
+    assert.throws(
+      () =>
+        buildAssessmentDockerRunArgs(
+          `guardian-ai-unsafe-path-qwen-${index}`,
+          qwenProfile,
+          lock.images.qwen.imageId,
+          { ...mounts, modelPath: sourcePath },
+        ),
+      /worker_mount_configuration_invalid/,
+    );
+    assert.throws(
+      () =>
+        buildAssessmentDockerRunArgs(
+          `guardian-ai-unsafe-path-policy-${index}`,
+          POLICY_LAB_PROFILE_IDS[0],
+          lock.images.qwen.imageId,
+          { ...mounts, sourcePath },
+        ),
+      /worker_mount_configuration_invalid/,
+    );
+  }
+});
+
 test("host service templates declare separate API, broker, and worker identities", () => {
   const systemdRoot = resolve(
     workerRoot,

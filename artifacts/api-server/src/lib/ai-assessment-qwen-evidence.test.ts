@@ -502,6 +502,10 @@ test("offline approval persistence source contract admits provenance-bound v3 un
     new URL("../../../../lib/db/sql/rls-policies.sql", import.meta.url),
     "utf8",
   );
+  const dbRuntimeSource = readFileSync(
+    new URL("../../../../lib/db/src/index.ts", import.meta.url),
+    "utf8",
+  );
   const schemaSource = readFileSync(
     new URL(
       "../../../../lib/db/src/schema/ai-assessment-jobs.ts",
@@ -574,6 +578,46 @@ test("offline approval persistence source contract admits provenance-bound v3 un
     rlsSql,
     /ALTER TABLE public\.ai_assessment_approval_requests FORCE ROW LEVEL SECURITY;/,
   );
+  const approvalReadinessTables = dbRuntimeSource.match(
+    /relname IN \(([\s\S]*?)\n\s*\)/,
+  )?.[1];
+  assert.ok(approvalReadinessTables);
+  assert.match(
+    approvalReadinessTables,
+    /'ai_assessment_approval_requests'/,
+    "API readiness must fail closed unless approval requests are checked too",
+  );
+  assert.match(
+    dbRuntimeSource,
+    /ai_assessment_approval_requests:\s*3/,
+    "runtime readiness must require the three tenant-scoped approval policies",
+  );
+  const ownedTableList = dbRuntimeSource.match(
+    /protected\.relname = ANY\(ARRAY\[([\s\S]*?)\]\)/,
+  )?.[1];
+  assert.ok(ownedTableList);
+  assert.match(ownedTableList, /'ai_assessment_approval_requests'/);
+  const protectedTableLists = [
+    ...dbRuntimeSource.matchAll(
+      /FROM unnest\(ARRAY\[\s*([\s\S]*?)\]\) AS protected\(table_name\)/g,
+    ),
+  ];
+  assert.equal(protectedTableLists.length, 2);
+  assert.ok(
+    protectedTableLists.every((match) =>
+      match[1].includes("'ai_assessment_approval_requests'"),
+    ),
+    "approval requests must be included in owner, grant, and login-access checks",
+  );
+  const approvalGrantBranch = dbRuntimeSource.match(
+    /WHEN protected\.table_name = 'ai_assessment_approval_requests'([\s\S]*?)\n\s*ELSE has_table_privilege/,
+  )?.[1];
+  assert.ok(approvalGrantBranch);
+  assert.match(approvalGrantBranch, /'SELECT,INSERT'/);
+  assert.match(approvalGrantBranch, /'status', 'UPDATE'/);
+  assert.match(approvalGrantBranch, /NOT has_table_privilege/);
+  assert.match(approvalGrantBranch, /'workspace_id', 'UPDATE'/);
+  assert.match(approvalGrantBranch, /'proposal_binding_sha256', 'UPDATE'/);
   assert.match(
     rlsSql,
     /CREATE UNIQUE INDEX IF NOT EXISTS ai_assessment_approval_job_case_idx\s+ON public\.ai_assessment_approval_requests \(workspace_id, job_id, case_id\);/,
@@ -622,7 +666,7 @@ test("offline approval persistence source contract admits provenance-bound v3 un
   );
 
   const updateGrant = rlsSql.match(
-    /GRANT UPDATE \([\s\S]*?\)\s+ON TABLE public\.ai_assessment_approval_requests TO app_runtime;/,
+    /GRANT UPDATE \(\s*status,\s*decided_by_user_id,\s*decided_by_role,\s*decided_at,\s*simulated_at,[\s\S]*?\)\s+ON TABLE public\.ai_assessment_approval_requests TO app_runtime;/,
   )?.[0];
   assert.ok(updateGrant, "runtime approval UPDATE grant must be column-scoped");
   assert.doesNotMatch(
