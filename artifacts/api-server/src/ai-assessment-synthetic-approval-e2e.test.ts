@@ -326,7 +326,7 @@ async function seedApproval(
 }
 
 test(
-  "deterministic worker fixtures exercise persistent approval API without Docker",
+  "deterministic fixtures verify persistent approval state from a fresh database pool",
   { timeout: 60_000 },
   async (t) => {
     if (!isExplicitDisposableApprovalDatabase(process.env)) {
@@ -1114,6 +1114,33 @@ test(
       assert.equal(row.simulation_result_code, approval.expectedResult);
       assert.match(row.simulation_result_sha256 ?? "", /^[a-f0-9]{64}$/);
       assert.match(row.replay_binding_sha256 ?? "", /^[a-f0-9]{64}$/);
+    }
+
+    // Reopen the database path through a fresh pool to verify that approval
+    // states are durable beyond the fixture pool's existing connections.
+    const reopenedPool = new pg.Pool({ connectionString: databaseUrl, max: 1 });
+    try {
+      for (const { approval, expectedStatus } of [
+        { approval: finance, expectedStatus: "approved" },
+        { approval: support, expectedStatus: "approved" },
+        { approval: supportDenied, expectedStatus: "denied" },
+        { approval: expired, expectedStatus: "expired" },
+        { approval: roleRevoked, expectedStatus: "pending" },
+      ]) {
+        const reopened = await reopenedPool.query<{ status: string }>(
+          `SELECT status
+             FROM public.ai_assessment_approval_requests
+            WHERE id = $1 AND workspace_id = $2`,
+          [approval.approvalId, workspaceA],
+        );
+        assert.equal(
+          reopened.rows[0]?.status,
+          expectedStatus,
+          `fresh database connections must observe durable ${expectedStatus} state`,
+        );
+      }
+    } finally {
+      await reopenedPool.end();
     }
 
     const revokedAudit = await fixturePool.query<{ count: string }>(

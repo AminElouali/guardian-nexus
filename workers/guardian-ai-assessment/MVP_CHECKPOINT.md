@@ -5610,3 +5610,39 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   SHA-256 `a4576489cdc2c2029d2b03352b564f24b86881d557edb06873d28717d41bf09b`.
 - El resultado sigue siendo evidencia sintética de contrato, no validación
   PostgreSQL/RLS real; no se ejecutó el workflow API Server.
+
+## Bloque A: PostgreSQL desechable y aprobaciones — preparación offline 2026-11-11
+
+- Base inspeccionada: `main`, `dc64f857570dc07fb51ef4654329e555c18cb6a1`,
+  árbol limpio. No se leyó `.replit`, valores de entorno ni secretos.
+- El inventario estático cuenta 12 tablas protegidas y 34 policies declaradas
+  por el preflight; el SQL habilita y fuerza RLS. No hay migraciones
+  versionadas en `lib/db`; el esquema se prepara mediante Drizzle push y el
+  archivo SQL RLS explícito.
+- Brecha corregida para laboratorio desde cero: el modo `harden` ahora crea
+  `app_runtime` si falta, con `NOLOGIN`, `NOINHERIT`, `NOBYPASSRLS` y sin
+  atributos elevados, antes de conceder membresía worker. No se ejecutó el
+  script.
+- El E2E gated de aprobación añade lectura posterior desde un pool nuevo para
+  estados approved/denied/expired/pending. Sigue siendo código preparado: no
+  se ejecutó contra DB.
+- Se añadió
+  `deployment/lab-as-code/postgresql/README.md`, con orden de provisionamiento,
+  separación del DB de workflows, límites del guard loopback y evidencia
+  requerida. SHA-256 `b80c7f4b7378b11fe7d53083522cb2a82b334fed81e77cfc9f70dd2e2f0f757a`.
+- Informe
+  `reports/block-a-postgresql-preparation-2026-11-11.md`, SHA-256
+  `5db0b32713bb175828ed5ee4b863341cb17c62d1afb99843102c6b7df4ad6232`.
+- Prueba focalizada de 4 casos pasó: dos ciclos sintéticos en memoria, guard
+  de destino con datos sintéticos y contrato estático RLS/bootstrap.
+  Repetición final tras cambios: 4/4 pasó. Prueba RLS aislada tras rol seguro:
+  1/1 pasó. `node --check` del bootstrap, typecheck de `@workspace/api-server`
+  y `git diff --check` pasaron.
+- No hay workflow PostgreSQL visible; solo hay plantillas y documentación de
+  preparación. No se comprobó ni conectó ningún servidor. No se puede acreditar
+  que exista o no un proceso local; no se usó como laboratorio.
+- No se ejecutaron scripts DB, `drizzle-kit push`, RLS, migraciones, E2E,
+  procesos worker, API Server ni servicios. No se modificaron gates. RLS real,
+  aislamiento entre tenants, roles efectivos y persistencia siguen bloqueados
+  hasta que el responsable proporcione y acredite una DB vacía y efímera,
+  separada de la app, accesible por un proceso puntual.

@@ -959,9 +959,33 @@ test("offline RLS grants match the runtime privilege preflight", () => {
   const grantMode = runtimeRoleBootstrapSource.match(
     /if \(mode === "grant"\) \{([\s\S]*?)\} else if \(mode === "configure-login"\)/,
   )?.[1];
+  const hardenMode = runtimeRoleBootstrapSource.match(
+    /if \(mode === "harden"\) \{([\s\S]*?)\} else if \(mode === "grant"\)/,
+  )?.[1];
+  const runtimeRoleBootstrap = runtimeRoleBootstrapSource.match(
+    /const ensureRuntimeRole = async \(\) => \{([\s\S]*?)\n\s*\};/,
+  )?.[1];
   const configureLoginMode = runtimeRoleBootstrapSource.match(
     /else if \(mode === "configure-login"\) \{([\s\S]*?)const \{ rows: existingLoginRows \}/,
   )?.[1];
+  assert.ok(hardenMode);
+  assert.ok(runtimeRoleBootstrap);
+  assert.match(
+    runtimeRoleBootstrap,
+    /CREATE ROLE app_runtime\s+NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE\s+NOINHERIT NOREPLICATION NOBYPASSRLS;/,
+    "fresh lab provisioning must create app_runtime as a non-login, non-privileged group role",
+  );
+  assert.match(
+    runtimeRoleBootstrap,
+    /ALTER ROLE app_runtime\s+NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE\s+NOINHERIT NOREPLICATION NOBYPASSRLS;/,
+    "existing app_runtime roles must be hardened to the same minimum attributes",
+  );
+  assert.ok(
+    hardenMode.indexOf("await ensureRuntimeRole();") >= 0 &&
+      hardenMode.indexOf("await ensureRuntimeRole();") <
+        hardenMode.indexOf("await ensureAssessmentWorkerRole();"),
+    "harden mode must provision the runtime role before granting worker membership",
+  );
   assert.ok(grantMode);
   assert.ok(configureLoginMode);
   const expectedApprovalUpdateColumns = [
