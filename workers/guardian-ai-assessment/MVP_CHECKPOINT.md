@@ -5141,3 +5141,65 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   approvals persistentes, una DB desechable expresamente autorizada. El archivo
   GGUF solo se confirmó por existencia/tamaño en el checkpoint anterior; no se
   cargó ni se comprobó su hash en esta campaña.
+
+## Verificación offline del recorrido Qwen Correo/BBDD — 2026-11-11
+
+- Base observada: `main` en `fdda099376bdf7a767ee630bca832622403c93e2`.
+  No había `.git/index.lock`; las rutas de código y pruebas de esta sección no
+  tenían diffs previos. No se inspeccionó `.replit`.
+- El cableado ya existe: `qwen_policy_lab._one_case()` llama al cliente con
+  `tool_choice="auto"` y el catálogo del perfil; `_classify_qwen_tool_call_result`
+  conserva por separado `runtime_message_tool_calls`,
+  `guardian_qwen_native_markup_adapter`, `no_tool_call` y salida no parseable.
+  El parser/adaptador vive en `llm_lab.py`; la validación y decisión sintética
+  pasan por `tool_adapter.evaluate_synthetic_action_policy()` antes de
+  `call_synthetic_tool()`. DENY/REQUIRE_APPROVAL no despachan; Policy OFF queda
+  como contrafactual sobre clone.
+- No se requirió cambio de producción ni test nuevo: ya existían pruebas
+  focalizadas que cubren el recorrido solicitado, respuestas fijas claramente
+  sintéticas, casos adversarios de correo y BBDD, abstención, procedencia,
+  rechazo de marcadores inválidos, orden Policy→simulador y bloqueo previo al
+  runtime. Los ocho fixtures baseline no se modificaron.
+- Pruebas ejecutadas en esta sesión, serialmente:
+  - En la primera selección, 9 métodos pasaron: `test_qwen_call_origin_requires_explicit_parser_provenance`,
+    `test_native_adapted_and_absent_origins_stay_distinct_for_all_profiles`,
+    `test_malformed_qwen_tool_shape_is_denied_before_simulator_not_no_proposal`,
+    `test_malformed_markup_for_all_profiles_is_rejected_before_policy_or_dispatch`,
+    `test_adapted_email_and_database_reads_require_policy_before_fixture_dispatch`,
+    `test_all_email_database_adversarial_adapted_markers_are_policy_gated`,
+    `test_only_explicit_no_marker_is_reported_as_no_proposal_not_deny`,
+    `test_shared_tool_adapter_runs_only_after_allow_and_never_in_policy_off` y
+    `test_policy_on_decision_precedes_synthetic_dispatch_for_all_profiles`.
+  - Esa invocación terminó con 5 errores de carga porque se indicó la clase
+    incorrecta para los otros cinco métodos; no se ejecutaron sus cuerpos ni
+    falló una aserción. Se corrigió el selector, no el código.
+  - Reejecución corregida: los métodos
+    `test_email_synthetic_response_matrix_keeps_provenance_and_policy_separate`,
+    `test_database_synthetic_response_matrix_keeps_provenance_and_policy_separate`,
+    `test_email_synthetic_adapter_keeps_untrusted_content_out_of_system`,
+    `test_email_and_database_abstention_never_runs_policy_or_dispatch` y
+    `test_every_live_entrypoint_checks_host_gate_before_model_runtime` pasaron
+    (**5/5**). Resultado verificado combinado: **14 métodos aprobados**, sin
+    fallos de aserción.
+  - Comando de la reejecución:
+    `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=workers/guardian-ai-assessment:workers/guardian-ai-assessment/tests python -m unittest -v test_policy_lab.QwenPolicyLabDispatchSelfCheckTests.test_email_synthetic_response_matrix_keeps_provenance_and_policy_separate test_policy_lab.QwenPolicyLabDispatchSelfCheckTests.test_database_synthetic_response_matrix_keeps_provenance_and_policy_separate test_policy_lab.QwenPolicyLabDispatchSelfCheckTests.test_email_synthetic_adapter_keeps_untrusted_content_out_of_system test_policy_lab.QwenPolicyLabDispatchSelfCheckTests.test_email_and_database_abstention_never_runs_policy_or_dispatch test_policy_lab.QwenPolicyLabDispatchSelfCheckTests.test_every_live_entrypoint_checks_host_gate_before_model_runtime`
+- El test Node del gate API
+  `API gate remains unavailable and cannot enqueue without a verified broker`
+  fue inspeccionado, pero no ejecutado en esta sesión para evitar el runner
+  Node que puede aislar tests en procesos. Por tanto, el gate API no se reporta
+  como probado ahora; su último resultado disponible sigue siendo histórico.
+- `git diff --check` en los módulos y pruebas pertinentes pasó antes de este
+  registro. No se ejecutó typecheck: no hubo cambios de código. No se ejecutaron
+  Qwen, GGUF, workers/procesos hijos, API, broker, Docker, sockets, PostgreSQL,
+  red ni servicios.
+- Hashes SHA-256 del código y pruebas examinados:
+  - `qwen_policy_lab.py`: `55958a8b0cbbb4873d81af30c63e17317b8872e359df2435501ca2b5bdff4592`
+  - `llm_lab.py`: `4a2638e9834bef4a86cd941287e11b715fe3c39ca681a3dea40d48d0707bf63b`
+  - `tool_adapter.py`: `f80a2891f5842f05267ab0a93f619e580d56866757ea9edd6561bd25d37133a7`
+  - `offline_qwen_runner.py`: `c9f636223f1b2845fe63aab4518b10404ccff0267f569044ca46495b355a8f8e`
+  - `test_policy_lab.py`: `e8cd252d6b6e514d771f0f9e59c5cec1751493bb3d48c4e60a61bc4fe03a11c8`
+- Este resultado es cobertura contractual offline con dobles, no inferencia
+  Qwen real, no prueba de aislamiento ni integración E2E. Los gates de host,
+  broker y worker siguen cerrados/no acreditados. Siguiente perfil de código:
+  **Finanzas**, empezando por el contrato de aprobación y sus límites tenant/
+  actor/propuesta; no declarar persistencia PostgreSQL/RLS sin E2E autorizado.
