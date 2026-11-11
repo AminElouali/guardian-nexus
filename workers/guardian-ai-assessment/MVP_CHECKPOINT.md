@@ -5646,3 +5646,30 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   aislamiento entre tenants, roles efectivos y persistencia siguen bloqueados
   hasta que el responsable proporcione y acredite una DB vacía y efímera,
   separada de la app, accesible por un proceso puntual.
+
+### Disponibilidad de laboratorio PostgreSQL en Replit — 2026-11-11
+
+- La documentación oficial consultada indica que hay una DB de desarrollo por
+  proyecto y una DB de producción al publicar, pero no una DB efímera adicional
+  de prueba. La DB de desarrollo del proyecto no cumple la separación
+  solicitada respecto de workflows/desarrollo.
+- Referencias:
+  `https://docs.replit.com/features/data-and-storage/development-and-production`
+  y `https://docs.replit.com/features/data-and-storage/sql-database`.
+- No se consultó estado de DB, puertos o procesos; no se leyó ninguna URL ni
+  variable. No se usará la DB gestionada del proyecto para pruebas destructivas.
+- Código disponible para la fase real: `assertRlsRuntimeReady()` valida las 12
+  tablas, ENABLE/FORCE, conteos de policies, expresiones no nulas y roles
+  permitidos; `verify-runtime-role:dev` valida atributos/grants de roles. El
+  preflight no compara semánticamente cada expresión `qual/with_check` con un
+  hash esperado; el comportamiento entre tenants requiere el E2E real. Ese
+  aspecto queda expresamente pendiente, no acreditado por tests de fuente.
+- El README del laboratorio contiene el procedimiento y las condiciones de
+  acreditación previa. La prueba contractual del guard ya rechaza targets
+  remotos, aliases ambiguos, overrides de host/service, nombre incorrecto,
+  fragmentos y despliegue; tampoco puede probar por sí sola que un loopback no
+  reenvíe a otro servidor.
+- SHA-256 actualizado del README de laboratorio:
+  `75301248eeabd123b7802450de44956984cccb5c1b7594c4baa032359e749ef9`.
+- SHA-256 actualizado del informe:
+  `4efee6d2bef0c4b79ac2053cac157f46e2450f46da8370535cbf27688dd2de23`.

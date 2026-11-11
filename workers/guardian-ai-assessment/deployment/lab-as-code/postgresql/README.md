@@ -1,10 +1,21 @@
 # PostgreSQL/RLS y aprobaciones: laboratorio desechable
 
 **Estado en 2026-11-11: PREPARADO, NO EJECUTADO.** No se ha acreditado una
-instancia PostgreSQL local, vacía y aislada para esta sesión; no se intentó
-conectar a la base configurada por la aplicación. En los workflows visibles no
-hay un servicio PostgreSQL. Esta documentación no es evidencia de RLS ni de
-persistencia real.
+instancia PostgreSQL vacía y aislada para esta sesión; no se intentó conectar
+ni detectar un servidor. En los workflows visibles no hay un servicio
+PostgreSQL.
+
+La documentación oficial consultada indica que Replit incluye una DB de
+desarrollo por aplicación y una DB de producción al publicar, pero no una DB
+adicional efímera/desechable para pruebas. La DB de desarrollo pertenece a este
+mismo proyecto y no satisface el requisito de estar separada de la DB de
+workflows/desarrollo. Referencias:
+
+- [Development and production databases](https://docs.replit.com/features/data-and-storage/development-and-production)
+- [SQL database](https://docs.replit.com/features/data-and-storage/sql-database)
+
+Esta documentación y esos enlaces no son evidencia de RLS ni de persistencia
+real.
 
 ## Barrera de seguridad
 

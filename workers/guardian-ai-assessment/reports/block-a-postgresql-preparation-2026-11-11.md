@@ -62,14 +62,22 @@ migraciones ni red.
 ## Instancia y evidencia real
 
 No hay un workflow PostgreSQL en la configuración visible y el repositorio solo
-contiene plantillas de `pg_hba`/`pg_ident` y documentación de laboratorio. No se
-intentó detectar un servidor local ni abrir conexiones, por lo que no se afirma
-que no exista un proceso PostgreSQL fuera de los workflows: se afirma que no
-hay una instancia desechable **acreditada** para esta tarea. El guard del E2E
-solo valida opt-in, entorno de desarrollo, nombre dedicado y URL loopback sin
-overrides; no demuestra que un listener local no sea un túnel ni que la DB sea
-distinta de la app compartida. Esa prueba requiere confirmación del responsable
-del host antes de cualquier escritura.
+contiene plantillas de `pg_hba`/`pg_ident` y documentación de laboratorio. La
+documentación oficial de Replit consultada describe la DB de desarrollo por
+proyecto y la DB de producción al publicar, pero no una DB efímera adicional
+para pruebas. La DB de desarrollo pertenece al mismo proyecto y no satisface
+la separación solicitada. Referencias:
+
+- https://docs.replit.com/features/data-and-storage/development-and-production
+- https://docs.replit.com/features/data-and-storage/sql-database
+
+No se intentó detectar un servidor local ni abrir conexiones, por lo que no se
+afirma que no exista un proceso PostgreSQL fuera de los workflows: se afirma
+que no hay una instancia desechable **acreditada** para esta tarea. El guard del
+E2E solo valida opt-in, entorno de desarrollo, nombre dedicado y URL loopback
+sin overrides; no demuestra que un listener local no sea un túnel ni que la DB
+sea distinta de la app compartida. Esa prueba requiere confirmación del
+responsable del host antes de cualquier escritura.
 
 Resultado de Block A:
 
