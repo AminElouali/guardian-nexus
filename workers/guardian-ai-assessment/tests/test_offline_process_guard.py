@@ -667,5 +667,154 @@ class OfflineRunnerTimeoutCheckpointTests(unittest.TestCase):
             )
 
 
+class OfflineRunnerCoordinatorTimeoutTests(unittest.TestCase):
+    def test_timed_out_children_keep_partial_progress_without_completing_profiles(self):
+        profile_ids = offline_qwen_runner._EMAIL_DATABASE_PROFILE_ORDER
+        self.assertEqual(len(profile_ids), 2)
+        local_manifest = {
+            "model": {
+                "id": "test-only-model",
+                "revision": "test-only-revision",
+                "file": "test-model.gguf",
+                "sha256": "a" * 64,
+                "sizeBytes": 1,
+                "quantization": "TEST_ONLY",
+            },
+            "runtime": {
+                "name": "test-only-runtime",
+                "version": "0",
+                "wheelSha256": "b" * 64,
+            },
+        }
+        fixture_baselines = {profile_id: {} for profile_id in profile_ids}
+
+        with tempfile.TemporaryDirectory(
+            prefix="guardian-qwen-coordinator-timeout-test-"
+        ) as root:
+            workspace = Path(root)
+            model_path = (
+                workspace
+                / "generated-artifacts/guardian-llm-lab/test-model.gguf"
+            )
+            model_path.parent.mkdir(parents=True)
+            model_path.write_bytes(b"x")
+            child_calls = []
+
+            def timeout_child(command, **kwargs):
+                profile_id = command[command.index("--profile-child") + 1]
+                child_calls.append(profile_id)
+                suffix = "email" if profile_id == profile_ids[0] else "database"
+                progress_path = (
+                    Path(kwargs["cwd"])
+                    / "generated-artifacts/guardian-qwen-offline"
+                    / f"qwen-policy-lab-email-database-{suffix}-profile.progress.json"
+                )
+                completed_cases = (
+                    [
+                        {
+                            "caseId": "synthetic-email-case-completed",
+                            "status": "completed",
+                        }
+                    ]
+                    if profile_id == profile_ids[0]
+                    else []
+                )
+                partial = offline_qwen_runner._progress_checkpoint(
+                    profile_id=profile_id,
+                    status="in_progress",
+                    active_case_id=f"{profile_id}-synthetic-active-case",
+                    completed_cases=completed_cases,
+                    error_type="TimeoutError",
+                )
+                offline_qwen_runner._write_progress_checkpoint(
+                    progress_path, partial
+                )
+                raise subprocess.TimeoutExpired(
+                    command,
+                    timeout=kwargs["timeout"],
+                    output="synthetic stdout",
+                    stderr="synthetic stderr",
+                )
+
+            with (
+                patch.object(
+                    offline_qwen_runner,
+                    "require_standalone_offline_environment",
+                ) as standalone_guard,
+                patch.object(
+                    offline_qwen_runner,
+                    "_load_verified_manifests",
+                    return_value=(local_manifest, {}),
+                ),
+                patch.object(
+                    offline_qwen_runner,
+                    "_sha256_file",
+                    return_value="a" * 64,
+                ),
+                patch.object(
+                    offline_qwen_runner,
+                    "_fixture_baseline_comparison",
+                    return_value=fixture_baselines,
+                ),
+                patch.object(
+                    offline_qwen_runner,
+                    "_source_code_hashes",
+                    return_value={},
+                ),
+                patch.object(
+                    offline_qwen_runner.subprocess,
+                    "run",
+                    side_effect=timeout_child,
+                ) as mocked_subprocess_run,
+            ):
+                bundle, artifact_path = (
+                    offline_qwen_runner.run_offline_email_database_evaluation(
+                        workspace,
+                        case_timeout_seconds=10,
+                        profile_timeout_seconds=10,
+                        wall_timeout_seconds=20,
+                    )
+                )
+
+            standalone_guard.assert_called_once_with()
+            self.assertEqual(mocked_subprocess_run.call_count, 2)
+            self.assertEqual(child_calls, list(profile_ids))
+            self.assertEqual(bundle["status"], "incomplete")
+            self.assertEqual(bundle["summary"]["modelCalls"], 0)
+            self.assertEqual(
+                [profile["profileId"] for profile in bundle["profiles"]],
+                list(profile_ids),
+            )
+            self.assertEqual(
+                [profile["status"] for profile in bundle["profiles"]],
+                ["timed_out", "timed_out"],
+            )
+            self.assertTrue(
+                all("evidence" not in profile for profile in bundle["profiles"])
+            )
+
+            email, database = bundle["profiles"]
+            self.assertEqual(email["completedCaseCount"], 1)
+            self.assertEqual(email["completedInferenceCount"], 1)
+            self.assertEqual(
+                email["partialCheckpoint"]["profileId"], profile_ids[0]
+            )
+            self.assertEqual(
+                email["partialCheckpoint"]["status"], "in_progress"
+            )
+            self.assertEqual(database["completedCaseCount"], 0)
+            self.assertEqual(database["completedInferenceCount"], 0)
+            self.assertEqual(
+                database["partialCheckpoint"]["profileId"], profile_ids[1]
+            )
+            self.assertEqual(
+                database["partialCheckpoint"]["completedCaseCount"], 0
+            )
+            self.assertEqual(
+                json.loads(artifact_path.read_text(encoding="utf-8"))["status"],
+                "incomplete",
+            )
+
+
 if __name__ == "__main__":
     unittest.main()
