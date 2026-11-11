@@ -10,9 +10,9 @@ import {
   Sparkles, Trash2, Users, X,
 } from 'lucide-react';
 import {
-  getGetWorkspaceDashboardQueryKey, getListPlansQueryKey, getListWorkspacesQueryKey,
+  getGetWorkspaceAiAssessmentLabAvailabilityQueryKey, getGetWorkspaceDashboardQueryKey, getListPlansQueryKey, getListWorkspacesQueryKey,
   getListWorkspaceAiAssessmentApprovalsQueryKey, getListWorkspaceAssetsQueryKey, getListWorkspaceIntegrationsQueryKey, getListWorkspaceMembersQueryKey, useBeginMicrosoftAuthorization, useConfigureAwsIntegration, useCreateWorkspace,
-  useCreateWorkspaceAsset, useDeleteWorkspaceAsset, useGetWorkspaceDashboard, useHealthCheck,
+  useCreateWorkspaceAsset, useDeleteWorkspaceAsset, useGetWorkspaceAiAssessmentLabAvailability, useGetWorkspaceDashboard, useHealthCheck,
   useListPlans, useListWorkspaceAiAssessmentApprovals, useListWorkspaceAssets, useListWorkspaceIntegrations, useListWorkspaceMembers, useListWorkspaces,
   useRevokeWorkspaceIntegration, useUpdateWorkspaceMember, useVerifyAwsIntegration,
 } from '@workspace/api-client-react';
@@ -25,6 +25,7 @@ import { WorkspaceQueryError } from '@/components/WorkspaceQueryError';
 import { PublicLandingMotion } from '@/components/PublicLandingMotion';
 import NotFound from '@/pages/not-found';
 import { RISK_INTELLIGENCE_CATALOG } from '@/risk-intelligence/catalog.v1';
+import { getDashboardLabStatusPresentation } from '@/lib/dashboard-lab-status';
 
 const IntegrationReadinessPage = lazy(() => import('@/components/IntegrationsPage'));
 const AiEvaluationPage = lazy(() => import('@/components/AiEvaluationPage'));
@@ -502,7 +503,20 @@ function DashboardPage({ workspace }: { workspace: Workspace }) {
   const approvalList = useListWorkspaceAiAssessmentApprovals(workspace.id, {
     query: { queryKey: getListWorkspaceAiAssessmentApprovalsQueryKey(workspace.id) },
   });
+  const labAvailability = useGetWorkspaceAiAssessmentLabAvailability(workspace.id, {
+    query: {
+      queryKey: getGetWorkspaceAiAssessmentLabAvailabilityQueryKey(workspace.id),
+      enabled: !!workspace.id,
+      refetchInterval: 15_000,
+    },
+  });
   const health = useHealthCheck();
+  const labStatus = labAvailability.isError
+    ? 'error'
+    : labAvailability.isLoading
+      ? 'loading'
+      : labAvailability.data?.status;
+  const labStatusPresentation = getDashboardLabStatusPresentation(labStatus);
   if (dashboard.isLoading) return <LoadingState />;
   if (dashboard.isError) return <WorkspaceQueryError error={dashboard.error} onRetry={() => void dashboard.refetch()} isRetrying={dashboard.isFetching} />;
   const d = dashboard.data;
@@ -546,6 +560,14 @@ function DashboardPage({ workspace }: { workspace: Workspace }) {
           {approvalList.isError
             ? <button type="button" onClick={() => void approvalList.refetch()} data-testid="button-retry-dashboard-approvals">Reintentar</button>
             : <Link href="/ai-evaluations" data-testid="link-dashboard-approvals">Ver revisiones</Link>}
+        </article>
+        <article className="operations-overview-item" data-testid="dashboard-lab-availability">
+          <span>Laboratorio de Seguridad IA</span>
+          <strong aria-live="polite">{labStatusPresentation.title}</strong>
+          <p>{labStatusPresentation.description}</p>
+          {labAvailability.isError || labAvailability.data?.status === 'unavailable'
+            ? <button type="button" onClick={() => void labAvailability.refetch()} data-testid="button-retry-dashboard-lab">Reintentar</button>
+            : <Link href="/ai-evaluations" data-testid="link-dashboard-lab">Ver laboratorio sintético</Link>}
         </article>
         <article className="operations-overview-item">
           <span>Revisiones completadas</span>

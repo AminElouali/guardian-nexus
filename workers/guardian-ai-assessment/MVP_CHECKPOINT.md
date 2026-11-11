@@ -5102,3 +5102,33 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   y mediciones de identidad/capacidades/socket; en separado, autorizar una DB
   PostgreSQL desechable para E2E/RLS. Solo después revalidar gates y considerar
   primero correo, luego BBDD, con inferencia local.
+
+## Estado del laboratorio visible en el dashboard — 2026-11-11
+
+- `DashboardPage` ahora consulta el endpoint tenant-scoped de disponibilidad
+  del laboratorio ya existente. Presenta estados `ready`, `disabled`,
+  `unavailable`, carga, error y desconocido con copy comprensible; los estados
+  fallidos/desconocidos no se muestran como disponibles y no expone reason
+  codes, nombres de modelos ni detalles de aislamiento. La tarjeta distingue
+  disponibilidad de pruebas sintéticas de análisis sobre sistemas reales.
+- Se añadió un mapper puro `dashboard-lab-status.ts` y prueba focalizada:
+  `cd artifacts/eu-security-platform && ./node_modules/.bin/tsx --test src/lib/dashboard-lab-status.test.ts`
+  — **1/1 pasó**. Typecheck:
+  `pnpm --filter @workspace/eu-security-platform run typecheck` — **pasó**.
+- Build intentado:
+  `pnpm --filter @workspace/eu-security-platform run build` — **no llegó a
+  compilar** porque `vite.config.ts` requiere `PORT` y el entorno de comando no
+  lo tenía. No se configuró ni modificó variable de entorno ni se reinició el
+  workflow. El navegador reportó un error de HMR durante la edición, seguido
+  de actualización de App; no había diagnóstico detallado. La vista autenticada
+  no se verificó visualmente.
+- El endpoint obtiene disponibilidad de `assessment-worker-api-gate.ts`, que
+  actualmente responde `disabled` / `assessment_broker_identity_unverified`;
+  esta pantalla refleja el estado de API y no lo convierte en ejecución.
+  API Server sigue fallido y no se reinició. No se ejecutaron Qwen, workers,
+  Docker, PostgreSQL, red ni E2E.
+- Próximo bloqueo para cambiar ese estado: atestación independiente real del
+  host ligada a los hashes actuales y verificación de API/broker/worker; para
+  approvals persistentes, una DB desechable expresamente autorizada. El archivo
+  GGUF solo se confirmó por existencia/tamaño en el checkpoint anterior; no se
+  cargó ni se comprobó su hash en esta campaña.
