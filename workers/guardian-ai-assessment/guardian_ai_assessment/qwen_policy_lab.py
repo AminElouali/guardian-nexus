@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 import hashlib
 import importlib.metadata
 import json
@@ -10,7 +11,7 @@ import math
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, cast
 
 from . import llm_lab
 from .tool_adapter import (
@@ -49,6 +50,27 @@ MAX_COMPLETION_TOKENS = 96
 MAX_TOOL_CALLS = 1
 SOURCE = "qwen_local_policy_lab"
 FIXED_SEED = llm_lab.FIXED_SEED
+
+QWEN_PROPOSAL_ORIGIN = Literal[
+    "guardian_qwen_native_markup_adapter",
+    "runtime_message_tool_calls",
+]
+QWEN_PROPOSAL_ORIGINS = frozenset(
+    {
+        "guardian_qwen_native_markup_adapter",
+        "runtime_message_tool_calls",
+    }
+)
+
+
+@dataclass(frozen=True)
+class ParsedQwenToolProposal:
+    """A parsed proposal with verified origin, before policy authorization."""
+
+    origin: QWEN_PROPOSAL_ORIGIN
+    tool_name: str
+    arguments: dict[str, Any]
+
 
 EMAIL_TOOLS = [
     {
@@ -1379,6 +1401,90 @@ def _classify_qwen_tool_call_result(
     return "unparsed_qwen_native_markup", calls
 
 
+def _profile_tool_names(tools: Any) -> frozenset[str] | None:
+    """Read a complete, unique function catalog; reject incomplete catalogs."""
+    if not isinstance(tools, list) or not tools:
+        return None
+    names: list[str] = []
+    for tool in tools:
+        if not isinstance(tool, dict) or tool.get("type") != "function":
+            return None
+        function = tool.get("function")
+        if (
+            not isinstance(function, dict)
+            or not isinstance(function.get("name"), str)
+            or not function["name"]
+            or len(function["name"]) > 128
+        ):
+            return None
+        parameters = function.get("parameters")
+        if (
+            not isinstance(parameters, dict)
+            or parameters.get("type") != "object"
+            or not isinstance(parameters.get("properties"), dict)
+            or not isinstance(parameters.get("required"), list)
+            or any(
+                not isinstance(field, str)
+                for field in parameters["required"]
+            )
+            or not set(parameters["required"]).issubset(
+                parameters["properties"]
+            )
+            or parameters.get("additionalProperties") is not False
+        ):
+            return None
+        names.append(function["name"])
+    if len(names) != len(set(names)):
+        return None
+    return frozenset(names)
+
+
+def _parse_typed_qwen_tool_proposal(
+    origin: str, calls: Any, tools: Any
+) -> tuple[ParsedQwenToolProposal | None, str | None]:
+    """Parse one explicitly sourced call and bind it to this profile's catalog."""
+    if origin not in QWEN_PROPOSAL_ORIGINS:
+        return None, "tool_provenance_unverified"
+    allowed_tools = _profile_tool_names(tools)
+    if allowed_tools is None:
+        return None, "profile_tool_catalog_invalid"
+    if not isinstance(calls, list) or len(calls) != MAX_TOOL_CALLS:
+        return None, "tool_call_count_limit"
+    call = calls[0]
+    if not isinstance(call, dict):
+        return None, "malformed_tool_proposal"
+    tool_name, arguments, structurally_valid = llm_lab._native_call_arguments(
+        call
+    )
+    if (
+        not structurally_valid
+        or not tool_name
+        or tool_name == "unknown"
+        or not isinstance(arguments, dict)
+    ):
+        return None, "malformed_tool_proposal"
+    if tool_name not in allowed_tools:
+        return None, "tool_not_in_profile_catalog"
+    try:
+        json.dumps(
+            arguments,
+            ensure_ascii=False,
+            allow_nan=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    except (TypeError, ValueError):
+        return None, "tool_arguments_not_json"
+    return (
+        ParsedQwenToolProposal(
+            origin=cast(QWEN_PROPOSAL_ORIGIN, origin),
+            tool_name=tool_name,
+            arguments=arguments,
+        ),
+        None,
+    )
+
+
 def _one_case(
     *,
     client: llm_lab.LocalQwenClient,
@@ -1422,10 +1528,7 @@ def _one_case(
     policy_off_after = policy_off_before
     policy_off_would_execute = False
     authorization_duration_ms: int | None = None
-    accepted_call_origin = origin in {
-        "guardian_qwen_native_markup_adapter",
-        "runtime_message_tool_calls",
-    }
+    accepted_call_origin = origin in QWEN_PROPOSAL_ORIGINS
     if origin == "unparsed_qwen_native_markup":
         decision = "deny"
         reason = "malformed_tool_proposal"
@@ -1435,53 +1538,89 @@ def _one_case(
         reason = "tool_call_count_limit"
         dispatch = "blocked_by_parser"
     elif accepted_call_origin:
-        if not isinstance(calls[0], dict):
+        typed_proposal, proposal_parse_error = _parse_typed_qwen_tool_proposal(
+            origin, calls, tools
+        )
+        if typed_proposal is None:
             decision = "deny"
-            reason = "malformed_tool_proposal"
+            reason = proposal_parse_error or "malformed_tool_proposal"
             dispatch = "blocked_by_parser"
         else:
-            name, arguments, valid_arguments = llm_lab._native_call_arguments(calls[0])
-            proposal_arguments = arguments
-            tool_name = name if name in TOOL_IDS else "unknown"
-            argument_hash = _digest(arguments)
-            if not valid_arguments:
+            tool_name = typed_proposal.tool_name
+            proposal_arguments = typed_proposal.arguments
+            argument_hash = _digest(typed_proposal.arguments)
+            proposal_hash = _digest(
+                {
+                    "caseId": case["caseId"],
+                    "tool": tool_name,
+                    "argumentsSha256": argument_hash,
+                }
+            )
+            proposal = {"tool": tool_name, "proposalSha256": proposal_hash}
+            authorization_started_ns = time.perf_counter_ns()
+            try:
+                valid, validation_code = validate_synthetic_tool_arguments(
+                    tool_name, typed_proposal.arguments
+                )
+            except Exception:
+                valid, validation_code = False, "tool_arguments_invalid"
+            if not valid:
                 decision = "deny"
-                reason = "tool_arguments_invalid"
-                dispatch = "blocked_by_parser"
+                reason = validation_code
+                dispatch = "blocked_by_adapter_validation"
             else:
-                proposal_hash = _digest(
-                    {"caseId": case["caseId"], "tool": tool_name, "argumentsSha256": argument_hash}
-                )
-                proposal = {"tool": tool_name, "proposalSha256": proposal_hash}
-                authorization_started_ns = time.perf_counter_ns()
-                valid, validation_code = validate_synthetic_tool_arguments(tool_name, arguments)
-                action, permissions, _required = _action_for(vertical, tool_name, arguments, case)
-                agent_id = f"qwen-synthetic-{vertical}-v1"
-                action.update(
-                    {
-                        "toolId": tool_name,
-                        "profileId": PROFILE_BY_VERTICAL[vertical],
-                        "caseId": case["caseId"],
-                        "actorId": "SYNTHETIC-LAB-OPERATOR",
-                        "agentId": agent_id,
-                        "proposalSha256": proposal_hash,
-                        "trustedGoalScopeRequired": True,
-                        "trustedGoalScope": _bind_trusted_goal_scope(
-                            vertical=vertical,
-                            case_id=case["caseId"],
-                            agent_id=agent_id,
-                            proposal_sha256=proposal_hash,
-                            allowed_actions=_trusted_goal_actions(vertical, case["caseId"]),
-                        ),
-                    }
-                )
-                trusted_scope_sha256 = action["trustedGoalScope"]["scopeSha256"]
-                trusted_scope_status = trusted_goal_scope_status(action)
-                instruction_provenance = action.get("instructionProvenance", "unknown")
-                decision, reason = evaluate_synthetic_action_policy(vertical, action, permissions)
-                decision, reason, dispatch = _resolve_dispatch(
-                    decision, reason, valid, validation_code
-                )
+                try:
+                    action, permissions, _required = _action_for(
+                        vertical, tool_name, typed_proposal.arguments, case
+                    )
+                    agent_id = f"qwen-synthetic-{vertical}-v1"
+                    action.update(
+                        {
+                            "toolId": tool_name,
+                            "profileId": PROFILE_BY_VERTICAL[vertical],
+                            "caseId": case["caseId"],
+                            "actorId": "SYNTHETIC-LAB-OPERATOR",
+                            "agentId": agent_id,
+                            "proposalSha256": proposal_hash,
+                            "trustedGoalScopeRequired": True,
+                            "trustedGoalScope": _bind_trusted_goal_scope(
+                                vertical=vertical,
+                                case_id=case["caseId"],
+                                agent_id=agent_id,
+                                proposal_sha256=proposal_hash,
+                                allowed_actions=_trusted_goal_actions(
+                                    vertical, case["caseId"]
+                                ),
+                            ),
+                        }
+                    )
+                    trusted_scope_sha256 = action["trustedGoalScope"][
+                        "scopeSha256"
+                    ]
+                    trusted_scope_status = trusted_goal_scope_status(action)
+                    instruction_provenance = action.get(
+                        "instructionProvenance", "unknown"
+                    )
+                    policy_result = evaluate_synthetic_action_policy(
+                        vertical, action, permissions
+                    )
+                    if (
+                        not isinstance(policy_result, tuple)
+                        or len(policy_result) != 2
+                        or policy_result[0]
+                        not in {"allow", "deny", "require_approval"}
+                        or not isinstance(policy_result[1], str)
+                    ):
+                        raise ValueError("invalid_policy_result")
+                    decision, reason = policy_result
+                except Exception:
+                    decision = "deny"
+                    reason = "policy_evaluation_error"
+                    dispatch = "blocked_by_policy_error"
+                else:
+                    decision, reason, dispatch = _resolve_dispatch(
+                        decision, reason, True, validation_code
+                    )
                 authorization_duration_ms = max(
                     0,
                     round(
@@ -1490,18 +1629,17 @@ def _one_case(
                     ),
                 )
                 policy_off_would_execute = valid
-                if valid:
-                    policy_off_after = _digest(
-                        {
-                            "clone": "after-counterfactual",
-                            "case": case["caseId"],
-                            "proposal": proposal,
-                        }
-                    )
+                policy_off_after = _digest(
+                    {
+                        "clone": "after-counterfactual",
+                        "case": case["caseId"],
+                        "proposal": proposal,
+                    }
+                )
                 if decision == "allow":
                     events, _private_result = call_synthetic_tool(
                         tool=tool_name,
-                        arguments=arguments,
+                        arguments=typed_proposal.arguments,
                         source=SOURCE,
                         tool_call_id=f"{case['caseId']}-qwen-1",
                         permitted_tools={tool_name},

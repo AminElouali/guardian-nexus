@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 from guardian_ai_assessment import llm_lab
 import guardian_ai_assessment.policy_lab as policy_lab_module
+import guardian_ai_assessment.qwen_policy_lab as qwen_policy_lab_module
 from guardian_ai_assessment.policy_lab import (
     BASE_PERMISSIONS,
     PROFILE_TO_VERTICAL,
@@ -62,6 +63,17 @@ from guardian_ai_assessment.tool_adapter import (
     trusted_goal_scope_status,
     validate_synthetic_tool_arguments,
 )
+
+QWEN_TOOLS_BY_VERTICAL = {
+    "email": EMAIL_TOOLS,
+    "database": DATABASE_TOOLS,
+    "finance": qwen_policy_lab_module.FINANCE_TOOLS,
+    "programming": qwen_policy_lab_module.PROGRAMMING_TOOLS,
+    "customer_service": SUPPORT_TOOLS,
+    "browser": qwen_policy_lab_module.BROWSER_TOOLS,
+    "infrastructure": qwen_policy_lab_module.INFRASTRUCTURE_TOOLS,
+    "multiagent": qwen_policy_lab_module.MULTIAGENT_TOOLS,
+}
 
 
 class GuardianAgentPolicyLabTests(unittest.TestCase):
@@ -708,7 +720,11 @@ class GuardianAgentPolicyLabTests(unittest.TestCase):
                         client=client,
                         vertical=vertical,
                         case=case,
-                        tools=[],
+                        tools=(
+                            EMAIL_TOOLS
+                            if vertical == "email"
+                            else DATABASE_TOOLS
+                        ),
                     )
 
                 self.assertEqual(client.tool_choice, "auto")
@@ -1262,7 +1278,11 @@ class GuardianAgentPolicyLabTests(unittest.TestCase):
                         client=client,
                         vertical=scenario["vertical"],
                         case=scenario["case"],
-                        tools=[],
+                        tools=(
+                            EMAIL_TOOLS
+                            if scenario["vertical"] == "email"
+                            else DATABASE_TOOLS
+                        ),
                     )
 
                 self.assertEqual(client.tool_choice, "auto")
@@ -1292,12 +1312,18 @@ class GuardianAgentPolicyLabTests(unittest.TestCase):
                 self.assertEqual(len(policy_off["stateBeforeSha256"]), 64)
                 self.assertEqual(len(policy_off["stateAfterSha256"]), 64)
 
+                policy_must_run = scenario["expectedDispatch"] not in {
+                    "blocked_by_parser",
+                    "blocked_by_adapter_validation",
+                }
                 if scenario["expectedDecision"] in {"deny", "require_approval"}:
                     if scenario["expectedReason"] is not None:
                         self.assertEqual(
                             evidence["reasonCode"], scenario["expectedReason"]
                         )
-                    self.assertEqual(events, ["policy_on"])
+                    self.assertEqual(
+                        events, ["policy_on"] if policy_must_run else []
+                    )
                     self.assertEqual(evidence["toolEvents"], [])
                     self.assertFalse(evidence["unauthorizedActionExecuted"])
                     dispatch.assert_not_called()
@@ -1306,7 +1332,10 @@ class GuardianAgentPolicyLabTests(unittest.TestCase):
                     self.assertEqual(dispatch.call_count, 1)
                     self.assertFalse(evidence["unauthorizedActionExecuted"])
 
-                policy.assert_called_once()
+                if policy_must_run:
+                    policy.assert_called_once()
+                else:
+                    policy.assert_not_called()
 
     def test_remaining_profiles_adapted_markers_are_policy_gated_offline(self):
         """Cover the other six profiles without treating fixed responses as Qwen."""
@@ -2174,6 +2203,70 @@ class GuardianAgentPolicyLabTests(unittest.TestCase):
 
 
 class QwenPolicyLabDispatchSelfCheckTests(unittest.TestCase):
+    def _fixed_proposal_client(self, origin, tool_name, arguments):
+        """Build a deterministic response; this never invokes the model."""
+
+        class FixedProposalClient:
+            def __init__(self):
+                self.tool_choice = None
+                self.messages = None
+                self.tools = None
+
+            def complete_native(inner_self, **kwargs):
+                inner_self.tool_choice = kwargs.get("tool_choice")
+                inner_self.messages = kwargs.get("messages")
+                inner_self.tools = kwargs.get("tools")
+                if origin == "runtime_message_tool_calls":
+                    raw_arguments = (
+                        arguments
+                        if isinstance(arguments, str)
+                        else json.dumps(arguments, separators=(",", ":"))
+                    )
+                    message = {
+                        "role": "assistant",
+                        "tool_calls": [
+                            {
+                                "id": "TEST-ONLY-native-call",
+                                "type": "function",
+                                "function": {
+                                    "name": tool_name,
+                                    "arguments": raw_arguments,
+                                },
+                            }
+                        ],
+                    }
+                    response = {
+                        "choices": [
+                            {"message": message, "finish_reason": "stop"}
+                        ],
+                        "usage": {},
+                        "_guardianToolMarkupParse": {
+                            "status": "runtime_message_tool_calls"
+                        },
+                    }
+                    return response
+
+                marker = json.dumps(
+                    {"name": tool_name, "arguments": arguments},
+                    separators=(",", ":"),
+                )
+                return llm_lab.adapt_qwen_native_tool_markup(
+                    {
+                        "choices": [
+                            {
+                                "message": {
+                                    "role": "assistant",
+                                    "content": f"<tool_call>{marker}</tool_call>",
+                                },
+                                "finish_reason": "stop",
+                            }
+                        ],
+                        "usage": {},
+                    }
+                )
+
+        return FixedProposalClient()
+
     def _assert_synthetic_profile_response_matrix(
         self,
         *,
@@ -2414,10 +2507,18 @@ class QwenPolicyLabDispatchSelfCheckTests(unittest.TestCase):
                     evidence["toolCallOrigin"],
                     "controlled_fixture_not_llm",
                 )
-                if expected_origin in {
-                    "guardian_qwen_native_markup_adapter",
-                    "runtime_message_tool_calls",
-                }:
+                policy_must_run = expected_dispatch not in {
+                    "blocked_by_parser",
+                    "blocked_by_adapter_validation",
+                }
+                if (
+                    expected_origin
+                    in {
+                        "guardian_qwen_native_markup_adapter",
+                        "runtime_message_tool_calls",
+                    }
+                    and policy_must_run
+                ):
                     policy.assert_called_once()
                 else:
                     policy.assert_not_called()
@@ -2435,7 +2536,8 @@ class QwenPolicyLabDispatchSelfCheckTests(unittest.TestCase):
                 else:
                     expected_events = (
                         ["policy_on"]
-                        if expected_origin
+                        if policy_must_run
+                        and expected_origin
                         in {
                             "guardian_qwen_native_markup_adapter",
                             "runtime_message_tool_calls",
@@ -2482,6 +2584,434 @@ class QwenPolicyLabDispatchSelfCheckTests(unittest.TestCase):
                 "value": "deleted",
             },
         )
+
+    def test_email_database_typed_proposals_validate_before_policy_and_simulator(self):
+        """The fixed responses exercise order only; they are not live inference."""
+        scenarios = (
+            (
+                "email",
+                QWEN_EMAIL_PROFILE,
+                EMAIL_TOOLS,
+                "qwen_email_benign_read_es",
+                "guardian_qwen_native_markup_adapter",
+                "read_synthetic_email",
+                {"email_id": QWEN_SYNTHETIC_EMAIL_ID},
+            ),
+            (
+                "database",
+                QWEN_DATABASE_PROFILE,
+                DATABASE_TOOLS,
+                "qwen_database_benign_read_en",
+                "runtime_message_tool_calls",
+                "query_synthetic_database",
+                {"row_id": QWEN_SYNTHETIC_DB_ROW_ID},
+            ),
+        )
+        parser = qwen_policy_lab_module._parse_typed_qwen_tool_proposal
+        validator = qwen_policy_lab_module.validate_synthetic_tool_arguments
+        policy_engine = evaluate_synthetic_action_policy
+        simulator = qwen_policy_lab_module.call_synthetic_tool
+
+        for (
+            vertical,
+            profile_id,
+            tools,
+            case_id,
+            origin,
+            tool_name,
+            arguments,
+        ) in scenarios:
+            with self.subTest(vertical=vertical, origin=origin):
+                case = next(
+                    item
+                    for item in QWEN_POLICY_CASES[profile_id]
+                    if item["caseId"] == case_id
+                )
+                client = self._fixed_proposal_client(
+                    origin, tool_name, arguments
+                )
+                events = []
+                parsed_proposals = []
+
+                def tracked_parser(*args, **kwargs):
+                    result = parser(*args, **kwargs)
+                    events.append("typed_proposal")
+                    if result[0] is not None:
+                        self.assertIsInstance(
+                            result[0],
+                            qwen_policy_lab_module.ParsedQwenToolProposal,
+                        )
+                        parsed_proposals.append(result[0])
+                    return result
+
+                def tracked_validator(*args, **kwargs):
+                    events.append("strict_validation")
+                    return validator(*args, **kwargs)
+
+                def tracked_policy(*args, **kwargs):
+                    events.append("policy_on")
+                    return policy_engine(*args, **kwargs)
+
+                def tracked_simulator(**kwargs):
+                    self.assertEqual(
+                        events,
+                        [
+                            "typed_proposal",
+                            "strict_validation",
+                            "policy_on",
+                        ],
+                    )
+                    events.append("fictional_simulator")
+                    return simulator(**kwargs)
+
+                with patch(
+                    "guardian_ai_assessment.qwen_policy_lab._parse_typed_qwen_tool_proposal",
+                    side_effect=tracked_parser,
+                ), patch(
+                    "guardian_ai_assessment.qwen_policy_lab.validate_synthetic_tool_arguments",
+                    side_effect=tracked_validator,
+                ), patch(
+                    "guardian_ai_assessment.qwen_policy_lab.evaluate_synthetic_action_policy",
+                    side_effect=tracked_policy,
+                ), patch(
+                    "guardian_ai_assessment.qwen_policy_lab.call_synthetic_tool",
+                    side_effect=tracked_simulator,
+                ):
+                    evidence, _usage = _one_case(
+                        client=client,
+                        vertical=vertical,
+                        case=case,
+                        tools=tools,
+                    )
+
+                self.assertEqual(client.tool_choice, "auto")
+                self.assertEqual(evidence["toolCallOrigin"], origin)
+                self.assertEqual(evidence["decision"], "allow")
+                self.assertEqual(evidence["dispatchStatus"], "simulated_execution")
+                self.assertEqual(
+                    events,
+                    [
+                        "typed_proposal",
+                        "strict_validation",
+                        "policy_on",
+                        "fictional_simulator",
+                    ],
+                )
+                self.assertEqual(len(parsed_proposals), 1)
+                self.assertEqual(parsed_proposals[0].origin, origin)
+                self.assertFalse(evidence["policyOff"]["executed"])
+                self.assertTrue(
+                    all(
+                        event["simulatedOnly"]
+                        and not event["externalSideEffect"]
+                        for event in evidence["toolEvents"]
+                    )
+                )
+
+        fixture_candidate, fixture_error = (
+            qwen_policy_lab_module._parse_typed_qwen_tool_proposal(
+                "controlled_fixture_not_llm",
+                [
+                    {
+                        "function": {
+                            "name": "read_synthetic_email",
+                            "arguments": {
+                                "email_id": QWEN_SYNTHETIC_EMAIL_ID
+                            },
+                        }
+                    }
+                ],
+                EMAIL_TOOLS,
+            )
+        )
+        self.assertIsNone(fixture_candidate)
+        self.assertEqual(fixture_error, "tool_provenance_unverified")
+
+    def test_email_database_cross_profile_tools_stop_before_validation_and_policy(self):
+        """A globally known tool is still invalid outside its profile catalog."""
+        scenarios = (
+            (
+                "email",
+                QWEN_EMAIL_PROFILE,
+                EMAIL_TOOLS,
+                "qwen_email_benign_read_es",
+                "guardian_qwen_native_markup_adapter",
+                "query_synthetic_database",
+                {"row_id": QWEN_SYNTHETIC_DB_ROW_ID},
+            ),
+            (
+                "database",
+                QWEN_DATABASE_PROFILE,
+                DATABASE_TOOLS,
+                "qwen_database_benign_read_en",
+                "runtime_message_tool_calls",
+                "read_synthetic_email",
+                {"email_id": QWEN_SYNTHETIC_EMAIL_ID},
+            ),
+        )
+        for (
+            vertical,
+            profile_id,
+            tools,
+            case_id,
+            origin,
+            tool_name,
+            arguments,
+        ) in scenarios:
+            with self.subTest(vertical=vertical, origin=origin):
+                case = next(
+                    item
+                    for item in QWEN_POLICY_CASES[profile_id]
+                    if item["caseId"] == case_id
+                )
+                client = self._fixed_proposal_client(
+                    origin, tool_name, arguments
+                )
+                with patch(
+                    "guardian_ai_assessment.qwen_policy_lab.validate_synthetic_tool_arguments"
+                ) as validator, patch(
+                    "guardian_ai_assessment.qwen_policy_lab.evaluate_synthetic_action_policy"
+                ) as policy, patch(
+                    "guardian_ai_assessment.qwen_policy_lab.call_synthetic_tool"
+                ) as simulator:
+                    evidence, _usage = _one_case(
+                        client=client,
+                        vertical=vertical,
+                        case=case,
+                        tools=tools,
+                    )
+
+                self.assertEqual(client.tool_choice, "auto")
+                self.assertEqual(evidence["toolCallOrigin"], origin)
+                self.assertEqual(evidence["decision"], "deny")
+                self.assertEqual(
+                    evidence["reasonCode"], "tool_not_in_profile_catalog"
+                )
+                self.assertEqual(
+                    evidence["dispatchStatus"], "blocked_by_parser"
+                )
+                self.assertIsNone(evidence["proposalSha256"])
+                self.assertEqual(evidence["toolEvents"], [])
+                self.assertFalse(evidence["policyOff"]["executed"])
+                validator.assert_not_called()
+                policy.assert_not_called()
+                simulator.assert_not_called()
+
+    def test_email_database_policy_errors_fail_closed_before_simulator(self):
+        """Policy exceptions and malformed results cannot authorize dispatch."""
+        scenarios = (
+            (
+                "email",
+                QWEN_EMAIL_PROFILE,
+                EMAIL_TOOLS,
+                "qwen_email_benign_read_es",
+                "read_synthetic_email",
+                {"email_id": QWEN_SYNTHETIC_EMAIL_ID},
+                RuntimeError("TEST ONLY policy exception"),
+            ),
+            (
+                "database",
+                QWEN_DATABASE_PROFILE,
+                DATABASE_TOOLS,
+                "qwen_database_benign_read_en",
+                "query_synthetic_database",
+                {"row_id": QWEN_SYNTHETIC_DB_ROW_ID},
+                ("allow", None),
+            ),
+        )
+        for (
+            vertical,
+            profile_id,
+            tools,
+            case_id,
+            tool_name,
+            arguments,
+            policy_failure,
+        ) in scenarios:
+            with self.subTest(vertical=vertical):
+                case = next(
+                    item
+                    for item in QWEN_POLICY_CASES[profile_id]
+                    if item["caseId"] == case_id
+                )
+                client = self._fixed_proposal_client(
+                    "guardian_qwen_native_markup_adapter",
+                    tool_name,
+                    arguments,
+                )
+                with patch(
+                    "guardian_ai_assessment.qwen_policy_lab.evaluate_synthetic_action_policy",
+                    side_effect=policy_failure
+                    if isinstance(policy_failure, Exception)
+                    else None,
+                    return_value=(
+                        None
+                        if isinstance(policy_failure, Exception)
+                        else policy_failure
+                    ),
+                ) as policy, patch(
+                    "guardian_ai_assessment.qwen_policy_lab.call_synthetic_tool"
+                ) as simulator:
+                    evidence, _usage = _one_case(
+                        client=client,
+                        vertical=vertical,
+                        case=case,
+                        tools=tools,
+                    )
+
+                self.assertEqual(evidence["decision"], "deny")
+                self.assertEqual(
+                    evidence["reasonCode"], "policy_evaluation_error"
+                )
+                self.assertEqual(
+                    evidence["dispatchStatus"], "blocked_by_policy_error"
+                )
+                self.assertEqual(evidence["toolEvents"], [])
+                self.assertFalse(evidence["policyOff"]["executed"])
+                policy.assert_called_once()
+                simulator.assert_not_called()
+
+    def test_email_database_incomplete_catalog_and_invalid_arguments_fail_closed(self):
+        scenarios = (
+            (
+                "email",
+                QWEN_EMAIL_PROFILE,
+                [],
+                "qwen_email_benign_read_es",
+                "read_synthetic_email",
+                {"email_id": QWEN_SYNTHETIC_EMAIL_ID},
+                "profile_tool_catalog_invalid",
+                "blocked_by_parser",
+            ),
+            (
+                "database",
+                QWEN_DATABASE_PROFILE,
+                DATABASE_TOOLS,
+                "qwen_database_malicious_cell_tenant_escape_es",
+                "propose_synthetic_database_mutation",
+                {
+                    "row_id": QWEN_SYNTHETIC_DB_ROW_ID,
+                    "operation": [],
+                    "field": "status",
+                    "value": "deleted",
+                },
+                None,
+                "blocked_by_adapter_validation",
+            ),
+            (
+                "database",
+                QWEN_DATABASE_PROFILE,
+                DATABASE_TOOLS,
+                "qwen_database_malicious_cell_tenant_escape_es",
+                "propose_synthetic_database_mutation",
+                {
+                    "row_id": QWEN_SYNTHETIC_DB_ROW_ID,
+                    "operation": "delete",
+                    "field": {"value": "status"},
+                    "value": "deleted",
+                },
+                None,
+                "blocked_by_adapter_validation",
+            ),
+        )
+        for (
+            vertical,
+            profile_id,
+            tools,
+            case_id,
+            tool_name,
+            arguments,
+            expected_reason,
+            expected_dispatch,
+        ) in scenarios:
+            with self.subTest(vertical=vertical, dispatch=expected_dispatch):
+                case = next(
+                    item
+                    for item in QWEN_POLICY_CASES[profile_id]
+                    if item["caseId"] == case_id
+                )
+                client = self._fixed_proposal_client(
+                    "guardian_qwen_native_markup_adapter",
+                    tool_name,
+                    arguments,
+                )
+                with patch(
+                    "guardian_ai_assessment.qwen_policy_lab.evaluate_synthetic_action_policy"
+                ) as policy, patch(
+                    "guardian_ai_assessment.qwen_policy_lab.call_synthetic_tool"
+                ) as simulator:
+                    evidence, _usage = _one_case(
+                        client=client,
+                        vertical=vertical,
+                        case=case,
+                        tools=tools,
+                    )
+
+                self.assertEqual(evidence["decision"], "deny")
+                self.assertEqual(
+                    evidence["dispatchStatus"], expected_dispatch
+                )
+                if expected_reason is not None:
+                    self.assertEqual(evidence["reasonCode"], expected_reason)
+                self.assertEqual(evidence["toolEvents"], [])
+                self.assertFalse(evidence["policyOff"]["executed"])
+                policy.assert_not_called()
+                simulator.assert_not_called()
+
+    def test_native_email_database_arguments_reject_ambiguous_json(self):
+        """Duplicate keys and NaN in fixed native-call payloads fail closed."""
+        scenarios = (
+            (
+                "email",
+                QWEN_EMAIL_PROFILE,
+                EMAIL_TOOLS,
+                "qwen_email_benign_read_es",
+                "read_synthetic_email",
+                '{"email_id":"SYNTHETIC-EMAIL-001","email_id":"SYNTHETIC-EMAIL-001"}',
+            ),
+            (
+                "database",
+                QWEN_DATABASE_PROFILE,
+                DATABASE_TOOLS,
+                "qwen_database_benign_read_en",
+                "query_synthetic_database",
+                '{"row_id":"SYNTHETIC-DB-ROW-001","row_id":NaN}',
+            ),
+        )
+        for vertical, profile_id, tools, case_id, tool_name, raw_arguments in scenarios:
+            with self.subTest(vertical=vertical):
+                case = next(
+                    item
+                    for item in QWEN_POLICY_CASES[profile_id]
+                    if item["caseId"] == case_id
+                )
+                client = self._fixed_proposal_client(
+                    "runtime_message_tool_calls",
+                    tool_name,
+                    raw_arguments,
+                )
+                with patch(
+                    "guardian_ai_assessment.qwen_policy_lab.evaluate_synthetic_action_policy"
+                ) as policy, patch(
+                    "guardian_ai_assessment.qwen_policy_lab.call_synthetic_tool"
+                ) as simulator:
+                    evidence, _usage = _one_case(
+                        client=client,
+                        vertical=vertical,
+                        case=case,
+                        tools=tools,
+                    )
+
+                self.assertEqual(
+                    evidence["toolCallOrigin"],
+                    "runtime_message_tool_calls",
+                )
+                self.assertEqual(evidence["decision"], "deny")
+                self.assertEqual(evidence["dispatchStatus"], "blocked_by_parser")
+                self.assertEqual(evidence["toolEvents"], [])
+                self.assertFalse(evidence["policyOff"]["executed"])
+                policy.assert_not_called()
+                simulator.assert_not_called()
 
     def test_email_synthetic_adapter_keeps_untrusted_content_out_of_system(self):
         """Fixed in-memory outputs test the email path, not live Qwen inference."""
@@ -2631,10 +3161,18 @@ class QwenPolicyLabDispatchSelfCheckTests(unittest.TestCase):
                     )
                     dispatch.assert_called_once()
                 else:
-                    self.assertEqual(events, ["policy_on"])
+                    expected_events = (
+                        []
+                        if expected_dispatch == "blocked_by_adapter_validation"
+                        else ["policy_on"]
+                    )
+                    self.assertEqual(events, expected_events)
                     self.assertEqual(evidence["toolEvents"], [])
                     dispatch.assert_not_called()
-                policy.assert_called_once()
+                    if expected_events:
+                        policy.assert_called_once()
+                    else:
+                        policy.assert_not_called()
 
     def test_email_and_database_abstention_never_runs_policy_or_dispatch(self):
         scenarios = (

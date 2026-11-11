@@ -1380,8 +1380,12 @@ def _native_call_arguments(tool_call: dict[str, Any]) -> tuple[str, dict[str, An
         return name, raw_arguments, True
     if isinstance(raw_arguments, str):
         try:
-            arguments = json.loads(raw_arguments)
-        except json.JSONDecodeError:
+            arguments = json.loads(
+                raw_arguments,
+                object_pairs_hook=_strict_json_object_pairs,
+                parse_constant=_reject_nonstandard_json_constant,
+            )
+        except (json.JSONDecodeError, ValueError):
             return name, {}, False
         if isinstance(arguments, dict):
             return name, arguments, True
