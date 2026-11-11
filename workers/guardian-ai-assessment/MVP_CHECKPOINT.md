@@ -5203,3 +5203,45 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   broker y worker siguen cerrados/no acreditados. Siguiente perfil de código:
   **Finanzas**, empezando por el contrato de aprobación y sus límites tenant/
   actor/propuesta; no declarar persistencia PostgreSQL/RLS sin E2E autorizado.
+
+## Continuación offline de perfiles — 2026-11-11
+
+- Base: commit `5b28c2d72152792ae0387e416960352007943ef6` en `main`.
+  No se cambió código de producción, el corpus ni los ocho fixtures.
+- Finanzas y Atención al cliente: **8 pruebas unitarias puras pasaron**.
+  Cubrieron catálogo sintético, casos adversarios/benignos, que los casos
+  adversarios y NO_PROPOSAL no reciban binding de aprobación, argumentos
+  financieros inválidos, semántica de aprobación requerida y rechazo de
+  despacho denegado. El flujo PostgreSQL/RLS persistente no se ejecutó.
+- Programación, Navegador, Infraestructura y Multiagente: **4 pruebas
+  unitarias puras pasaron**. `test_remaining_profiles_adapted_markers_are_policy_gated_offline`
+  pasó para los seis perfiles restantes; además pasaron
+  `test_cross_tenant_scope_denies_before_dispatch_for_all_eight_verticals`,
+  `test_untrusted_injection_fixtures_in_all_eight_profiles_never_dispatch` y
+  `test_adversarial_no_proposal_stays_distinct_across_all_qwen_profiles`.
+  La primera selección de estos tres últimos usó una clase incorrecta y dio
+  errores de carga; se corrigió y los tres métodos pasaron. No hubo fallos de
+  aserción.
+- Los 12 métodos de este bloque se ejecutaron con respuestas/casos sintéticos,
+  Policy Engine y dobles; **no son inferencia real**. Total acumulado en esta
+  sesión para Email/BBDD, Finance/Support y los perfiles restantes: **26
+  métodos aprobados**. Las dos selecciones iniciales con clase errónea se
+  registran como errores de carga corregidos, no como pruebas de producto
+  fallidas.
+- Se inspeccionó estáticamente `ai-assessment-approval-actions.ts`, que define
+  acciones sintéticas allowlisted y provenance/binding; la prueba persistente
+  `ai-assessment-synthetic-approval-e2e.test.ts` no se ejecutó. No se conecta
+  PostgreSQL, no se aplican migraciones y no se afirma RLS ni aprobación
+  persistente probada.
+- No se ejecutaron Qwen/GGUF, procesos hijos, workers, API, broker, Docker,
+  sockets, PostgreSQL, red ni servicios. Tampoco se inspeccionó `.replit`.
+- Cobertura alcanzada: contratos offline para las ocho verticales; **cero
+  inferencias nuevas**, cero llamadas nativas vivas demostradas y ninguna
+  vertical completa funcionalmente. Las propuestas de marcadores de prueba,
+  llamadas nativas creadas por dobles y fixtures permanecen categorías
+  distintas.
+- Próximo bloqueo/orden: la integración real debe empezar otra vez por Correo
+  cuando un supervisor externo aporte atestación independiente verificable
+  ligada a los hashes actuales y API/broker/worker separados. Sin ese requisito,
+  no ejecutar modelo ni worker. La persistencia de aprobaciones requiere una
+  base desechable autorizada y pruebas E2E/RLS separadas.
