@@ -5357,3 +5357,28 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
 - Siguiente perfil offline: **Navegador**; después Infraestructura y
   Multiagente. La persistencia real/RLS y el gate independiente siguen sin
   acreditación.
+
+## Contratos offline de Navegador e Infraestructura — 2026-11-11
+
+- Base: commit `59010d6` en `main`.
+- Se añadió una prueba unitaria parametrizada en
+  `tests/test_llm_tool_adapter.py` para los catálogos de Navegador e
+  Infraestructura. Confirma herramientas admitidas, esquemas cerrados,
+  argumentos sintéticos válidos, autorización Policy ON y simulación solo
+  local (sin cambio de estado, efecto externo, red ni credenciales); campos
+  adicionales se rechazan.
+- Prueba nueva ejecutada:
+  `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=workers/guardian-ai-assessment:workers/guardian-ai-assessment/tests python -m unittest -v test_llm_tool_adapter.LocalLlmToolAdapterTests.test_browser_and_infrastructure_catalogs_stay_local_and_read_only`
+  — 1 test, pasó.
+- Pruebas existentes ejecutadas: distinción de `runtime_message_tool_calls`,
+  propuestas adaptadas y ausencia de llamada en los ocho perfiles; restricción
+  de permisos multiagente — 2 tests, pasaron.
+- `git diff --check`: pasó. No se ejecutaron Qwen, procesos hijos, workers,
+  servicios, red, Docker/socket, PostgreSQL ni migraciones. Las respuestas son
+  sintéticas; no acreditan inferencia, aislamiento, ni integración real.
+- SHA-256 de `tests/test_llm_tool_adapter.py`:
+  `c2631c05b301bf4f568d6645243fade4a85c0a2ba17bd8edddde4ade1ab53b7f`.
+- El siguiente paso offline es completar o reutilizar cobertura contractual
+  equivalente para los catálogos de finanzas/soporte y multiagente. El avance
+  hacia inferencia viva sigue bloqueado por falta de atestación independiente
+  verificable; persistencia PostgreSQL/RLS sigue sin E2E.

@@ -7,13 +7,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from guardian_ai_assessment import llm_lab  # noqa: E402
 from guardian_ai_assessment.qwen_policy_lab import (  # noqa: E402
+    BROWSER_TOOLS,
     DATABASE_TOOLS,
     EMAIL_TOOLS,
+    INFRASTRUCTURE_TOOLS,
     PROGRAMMING_TOOLS,
 )
 from guardian_ai_assessment.tool_adapter import (  # noqa: E402
     INVOICE_ID,
     SYNTHETIC_CODE_DIFF_ID,
+    SYNTHETIC_INFRA_CONFIG_ID,
+    SYNTHETIC_LOCAL_PAGE_ID,
     SIMULATED_RECIPIENT,
     SYNTHETIC_ACCOUNT_ID,
     SYNTHETIC_DOCUMENT,
@@ -41,6 +45,93 @@ class ScriptedProvider:
 
 
 class LocalLlmToolAdapterTests(unittest.TestCase):
+    def test_browser_and_infrastructure_catalogs_stay_local_and_read_only(self):
+        cases = (
+            (
+                "browser",
+                BROWSER_TOOLS,
+                "read_local_synthetic_page",
+                {"page_id": SYNTHETIC_LOCAL_PAGE_ID},
+                {
+                    "resourceWorkspaceId": "SYNTHETIC-WORKSPACE",
+                    "operation": "local_page.read",
+                    "instructionProvenance": "trusted_user_request",
+                    "requiredPermissions": ["browser.local.read"],
+                },
+                {"browser.local.read"},
+                "synthetic_local_page_returned",
+                {"network": "not_used"},
+            ),
+            (
+                "infrastructure",
+                INFRASTRUCTURE_TOOLS,
+                "read_synthetic_infrastructure_config",
+                {"config_id": SYNTHETIC_INFRA_CONFIG_ID},
+                {
+                    "resourceWorkspaceId": "SYNTHETIC-WORKSPACE",
+                    "operation": "config.read",
+                    "instructionProvenance": "trusted_user_request",
+                    "requiredPermissions": ["infra.config.read"],
+                },
+                {"infra.config.read"},
+                "synthetic_infrastructure_config_returned",
+                {"credentials": "none"},
+            ),
+        )
+        for (
+            vertical,
+            catalog,
+            tool_name,
+            arguments,
+            action,
+            permissions,
+            expected_code,
+            expected_result,
+        ) in cases:
+            with self.subTest(vertical=vertical):
+                self.assertEqual(len(catalog), 1)
+                function = catalog[0]["function"]
+                schema = function["parameters"]
+                self.assertEqual(function["name"], tool_name)
+                self.assertIn(tool_name, TOOL_IDS)
+                self.assertEqual(schema["type"], "object")
+                self.assertFalse(schema["additionalProperties"])
+                self.assertEqual(
+                    set(schema["required"]), set(schema["properties"])
+                )
+                self.assertEqual(
+                    validate_synthetic_tool_arguments(tool_name, arguments),
+                    (True, expected_code),
+                )
+                self.assertEqual(
+                    evaluate_synthetic_action_policy(
+                        vertical, action, permissions
+                    )[0],
+                    "allow",
+                )
+                events = ["policy_on"]
+                simulator_events, result = call_synthetic_tool(
+                    tool=tool_name,
+                    arguments=arguments,
+                    source=f"offline_{vertical}_catalog_contract_test",
+                    tool_call_id=f"catalog-{vertical}-read",
+                    permitted_tools={tool_name},
+                )
+                events.append("simulator")
+                self.assertEqual(events, ["policy_on", "simulator"])
+                self.assertEqual(simulator_events[-1]["phase"], "executed")
+                self.assertTrue(simulator_events[-1]["simulatedOnly"])
+                self.assertFalse(simulator_events[-1]["stateChanged"])
+                self.assertFalse(simulator_events[-1]["externalSideEffect"])
+                for key, value in expected_result.items():
+                    self.assertEqual(result[key], value)
+
+                invalid = dict(arguments)
+                invalid["unexpected"] = "synthetic"
+                self.assertFalse(
+                    validate_synthetic_tool_arguments(tool_name, invalid)[0]
+                )
+
     def test_programming_catalog_validator_and_simulator_contract(self):
         self.assertEqual(len(PROGRAMMING_TOOLS), 1)
         item = PROGRAMMING_TOOLS[0]
