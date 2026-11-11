@@ -479,6 +479,250 @@ export const GetWorkspaceAiAssessmentLabAvailabilityResponse = zod.object({
 
 
 /**
+ * Requires a workspace owner or admin. The server uses an externally provisioned root-owned Ed25519 trust anchor and stores only a nonce digest in the durable tenant-scoped challenge repository. Issuing or verifying a challenge never enables the assessment worker or changes host readiness.
+ * @summary Issue a short-lived host attestation challenge
+ */
+export const CreateWorkspaceHostAttestationChallengeParams = zod.object({
+  "workspaceId": zod.uuid()
+})
+
+export const createWorkspaceHostAttestationChallengeResponseNonceRegExp = new RegExp('^[A-Za-z0-9_-]{43}$');
+export const createWorkspaceHostAttestationChallengeResponseRuntimeCommitRegExp = new RegExp('^(?:[a-f0-9]{40}|[a-f0-9]{64})$');
+export const createWorkspaceHostAttestationChallengeResponseRuntimeDigestSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+
+
+export const CreateWorkspaceHostAttestationChallengeResponse = zod.object({
+  "id": zod.uuid(),
+  "workspaceId": zod.uuid(),
+  "nonce": zod.string().regex(createWorkspaceHostAttestationChallengeResponseNonceRegExp),
+  "issuedAt": zod.coerce.date(),
+  "expiresAt": zod.coerce.date(),
+  "runtimeCommit": zod.string().regex(createWorkspaceHostAttestationChallengeResponseRuntimeCommitRegExp),
+  "runtimeDigestSha256": zod.string().regex(createWorkspaceHostAttestationChallengeResponseRuntimeDigestSha256RegExp),
+  "hostBoundaryReady": zod.literal(false),
+  "integratedAssessmentReady": zod.literal(false),
+  "workerAdmission": zod.literal("disabled")
+})
+
+
+/**
+ * Accepts only the fixed, externally provisioned Ed25519 trust anchor. The response is bound to one unexpired nonce, workspace, current Git commit, runtime digest and current API identity. A recorded verification is evidence only; hostBoundaryReady and integratedAssessmentReady remain false and worker admission remains disabled.
+ * @summary Verify an independently signed host challenge response
+ */
+export const SubmitWorkspaceHostAttestationResponseParams = zod.object({
+  "workspaceId": zod.uuid(),
+  "challengeId": zod.uuid()
+})
+
+export const submitWorkspaceHostAttestationResponseBodyPayloadSupervisorIdMax = 160;
+
+export const submitWorkspaceHostAttestationResponseBodyPayloadNonceRegExp = new RegExp('^[A-Za-z0-9_-]{43}$');
+export const submitWorkspaceHostAttestationResponseBodyPayloadRuntimeCommitRegExp = new RegExp('^(?:[a-f0-9]{40}|[a-f0-9]{64})$');
+export const submitWorkspaceHostAttestationResponseBodyPayloadRuntimeDigestSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+
+
+
+export const submitWorkspaceHostAttestationResponseBodyPayloadServiceIdentitiesApiGroupsMax = 64;
+
+export const submitWorkspaceHostAttestationResponseBodyPayloadServiceIdentitiesApiDatabaseRoleMax = 128;
+
+
+
+
+export const submitWorkspaceHostAttestationResponseBodyPayloadServiceIdentitiesBrokerGroupsMax = 64;
+
+export const submitWorkspaceHostAttestationResponseBodyPayloadServiceIdentitiesBrokerDatabaseRoleMax = 128;
+
+
+
+
+export const submitWorkspaceHostAttestationResponseBodyPayloadServiceIdentitiesWorkerGroupsMax = 64;
+
+export const submitWorkspaceHostAttestationResponseBodyPayloadServiceIdentitiesWorkerDatabaseRoleMax = 128;
+
+export const submitWorkspaceHostAttestationResponseBodyPayloadClaimsNamespacesApiUserMax = 128;
+
+export const submitWorkspaceHostAttestationResponseBodyPayloadClaimsNamespacesApiPidMax = 128;
+
+export const submitWorkspaceHostAttestationResponseBodyPayloadClaimsNamespacesApiMountMax = 128;
+
+export const submitWorkspaceHostAttestationResponseBodyPayloadClaimsNamespacesApiNetworkMax = 128;
+
+export const submitWorkspaceHostAttestationResponseBodyPayloadClaimsNamespacesBrokerUserMax = 128;
+
+export const submitWorkspaceHostAttestationResponseBodyPayloadClaimsNamespacesBrokerPidMax = 128;
+
+export const submitWorkspaceHostAttestationResponseBodyPayloadClaimsNamespacesBrokerMountMax = 128;
+
+export const submitWorkspaceHostAttestationResponseBodyPayloadClaimsNamespacesBrokerNetworkMax = 128;
+
+export const submitWorkspaceHostAttestationResponseBodyPayloadClaimsNamespacesWorkerUserMax = 128;
+
+export const submitWorkspaceHostAttestationResponseBodyPayloadClaimsNamespacesWorkerPidMax = 128;
+
+export const submitWorkspaceHostAttestationResponseBodyPayloadClaimsNamespacesWorkerMountMax = 128;
+
+export const submitWorkspaceHostAttestationResponseBodyPayloadClaimsNamespacesWorkerNetworkMax = 128;
+
+export const submitWorkspaceHostAttestationResponseBodyPayloadClaimsProcessHardeningApiSeccompProfileSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const submitWorkspaceHostAttestationResponseBodyPayloadClaimsProcessHardeningApiCapabilitiesMax = 0;
+
+export const submitWorkspaceHostAttestationResponseBodyPayloadClaimsProcessHardeningBrokerSeccompProfileSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const submitWorkspaceHostAttestationResponseBodyPayloadClaimsProcessHardeningBrokerCapabilitiesMax = 0;
+
+export const submitWorkspaceHostAttestationResponseBodyPayloadClaimsProcessHardeningWorkerSeccompProfileSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const submitWorkspaceHostAttestationResponseBodyPayloadClaimsProcessHardeningWorkerCapabilitiesMax = 0;
+
+
+export const submitWorkspaceHostAttestationResponseBodyPayloadClaimsInheritedFileDescriptorsApiItemMin = 0;
+
+export const submitWorkspaceHostAttestationResponseBodyPayloadClaimsInheritedFileDescriptorsApiMax = 0;
+
+export const submitWorkspaceHostAttestationResponseBodyPayloadClaimsInheritedFileDescriptorsBrokerItemMin = 0;
+
+export const submitWorkspaceHostAttestationResponseBodyPayloadClaimsInheritedFileDescriptorsBrokerMax = 0;
+
+export const submitWorkspaceHostAttestationResponseBodyPayloadClaimsInheritedFileDescriptorsWorkerItemMin = 0;
+
+export const submitWorkspaceHostAttestationResponseBodyPayloadClaimsInheritedFileDescriptorsWorkerMax = 0;
+
+export const submitWorkspaceHostAttestationResponseBodyPayloadClaimsDatabaseSessionsApiDatabaseNameRegExp = new RegExp('^guardian_lab_[a-z0-9_]{1,50}$');
+export const submitWorkspaceHostAttestationResponseBodyPayloadClaimsDatabaseSessionsApiRoleMax = 128;
+
+export const submitWorkspaceHostAttestationResponseBodyPayloadClaimsDatabaseSessionsBrokerDatabaseNameRegExp = new RegExp('^guardian_lab_[a-z0-9_]{1,50}$');
+export const submitWorkspaceHostAttestationResponseBodyPayloadClaimsDatabaseSessionsBrokerRoleMax = 128;
+
+export const submitWorkspaceHostAttestationResponseBodyPayloadClaimsDatabaseSessionsWorkerDatabaseNameRegExp = new RegExp('^guardian_lab_[a-z0-9_]{1,50}$');
+export const submitWorkspaceHostAttestationResponseBodyPayloadClaimsDatabaseSessionsWorkerRoleMax = 128;
+
+export const submitWorkspaceHostAttestationResponseBodySignatureBase64RegExp = new RegExp('^[A-Za-z0-9+/]{86}==$');
+
+
+export const SubmitWorkspaceHostAttestationResponseBody = zod.object({
+  "payload": zod.object({
+  "schemaVersion": zod.literal(1),
+  "attestationType": zod.literal("guardian_host_challenge_response"),
+  "supervisorId": zod.string().min(1).max(submitWorkspaceHostAttestationResponseBodyPayloadSupervisorIdMax),
+  "workspaceId": zod.uuid(),
+  "challengeId": zod.uuid(),
+  "nonce": zod.string().regex(submitWorkspaceHostAttestationResponseBodyPayloadNonceRegExp),
+  "issuedAt": zod.coerce.date(),
+  "expiresAt": zod.coerce.date(),
+  "runtimeCommit": zod.string().regex(submitWorkspaceHostAttestationResponseBodyPayloadRuntimeCommitRegExp),
+  "runtimeDigestSha256": zod.string().regex(submitWorkspaceHostAttestationResponseBodyPayloadRuntimeDigestSha256RegExp),
+  "serviceIdentities": zod.object({
+  "api": zod.object({
+  "uid": zod.int().min(1),
+  "gid": zod.int().min(1),
+  "groups": zod.array(zod.int().min(1)).min(1).max(submitWorkspaceHostAttestationResponseBodyPayloadServiceIdentitiesApiGroupsMax),
+  "databaseRole": zod.string().min(1).max(submitWorkspaceHostAttestationResponseBodyPayloadServiceIdentitiesApiDatabaseRoleMax)
+}),
+  "broker": zod.object({
+  "uid": zod.int().min(1),
+  "gid": zod.int().min(1),
+  "groups": zod.array(zod.int().min(1)).min(1).max(submitWorkspaceHostAttestationResponseBodyPayloadServiceIdentitiesBrokerGroupsMax),
+  "databaseRole": zod.string().min(1).max(submitWorkspaceHostAttestationResponseBodyPayloadServiceIdentitiesBrokerDatabaseRoleMax)
+}),
+  "worker": zod.object({
+  "uid": zod.int().min(1),
+  "gid": zod.int().min(1),
+  "groups": zod.array(zod.int().min(1)).min(1).max(submitWorkspaceHostAttestationResponseBodyPayloadServiceIdentitiesWorkerGroupsMax),
+  "databaseRole": zod.string().min(1).max(submitWorkspaceHostAttestationResponseBodyPayloadServiceIdentitiesWorkerDatabaseRoleMax)
+})
+}),
+  "claims": zod.object({
+  "namespaces": zod.object({
+  "api": zod.object({
+  "user": zod.string().min(1).max(submitWorkspaceHostAttestationResponseBodyPayloadClaimsNamespacesApiUserMax),
+  "pid": zod.string().min(1).max(submitWorkspaceHostAttestationResponseBodyPayloadClaimsNamespacesApiPidMax),
+  "mount": zod.string().min(1).max(submitWorkspaceHostAttestationResponseBodyPayloadClaimsNamespacesApiMountMax),
+  "network": zod.string().min(1).max(submitWorkspaceHostAttestationResponseBodyPayloadClaimsNamespacesApiNetworkMax)
+}),
+  "broker": zod.object({
+  "user": zod.string().min(1).max(submitWorkspaceHostAttestationResponseBodyPayloadClaimsNamespacesBrokerUserMax),
+  "pid": zod.string().min(1).max(submitWorkspaceHostAttestationResponseBodyPayloadClaimsNamespacesBrokerPidMax),
+  "mount": zod.string().min(1).max(submitWorkspaceHostAttestationResponseBodyPayloadClaimsNamespacesBrokerMountMax),
+  "network": zod.string().min(1).max(submitWorkspaceHostAttestationResponseBodyPayloadClaimsNamespacesBrokerNetworkMax)
+}),
+  "worker": zod.object({
+  "user": zod.string().min(1).max(submitWorkspaceHostAttestationResponseBodyPayloadClaimsNamespacesWorkerUserMax),
+  "pid": zod.string().min(1).max(submitWorkspaceHostAttestationResponseBodyPayloadClaimsNamespacesWorkerPidMax),
+  "mount": zod.string().min(1).max(submitWorkspaceHostAttestationResponseBodyPayloadClaimsNamespacesWorkerMountMax),
+  "network": zod.string().min(1).max(submitWorkspaceHostAttestationResponseBodyPayloadClaimsNamespacesWorkerNetworkMax)
+})
+}),
+  "processHardening": zod.object({
+  "api": zod.object({
+  "noNewPrivileges": zod.literal(true),
+  "seccompEnforced": zod.literal(true),
+  "seccompProfileSha256": zod.string().regex(submitWorkspaceHostAttestationResponseBodyPayloadClaimsProcessHardeningApiSeccompProfileSha256RegExp),
+  "capabilities": zod.array(zod.string()).max(submitWorkspaceHostAttestationResponseBodyPayloadClaimsProcessHardeningApiCapabilitiesMax),
+  "readOnlyRoot": zod.literal(true)
+}),
+  "broker": zod.object({
+  "noNewPrivileges": zod.literal(true),
+  "seccompEnforced": zod.literal(true),
+  "seccompProfileSha256": zod.string().regex(submitWorkspaceHostAttestationResponseBodyPayloadClaimsProcessHardeningBrokerSeccompProfileSha256RegExp),
+  "capabilities": zod.array(zod.string()).max(submitWorkspaceHostAttestationResponseBodyPayloadClaimsProcessHardeningBrokerCapabilitiesMax),
+  "readOnlyRoot": zod.literal(true)
+}),
+  "worker": zod.object({
+  "noNewPrivileges": zod.literal(true),
+  "seccompEnforced": zod.literal(true),
+  "seccompProfileSha256": zod.string().regex(submitWorkspaceHostAttestationResponseBodyPayloadClaimsProcessHardeningWorkerSeccompProfileSha256RegExp),
+  "capabilities": zod.array(zod.string()).max(submitWorkspaceHostAttestationResponseBodyPayloadClaimsProcessHardeningWorkerCapabilitiesMax),
+  "readOnlyRoot": zod.literal(true)
+})
+}),
+  "dockerSocket": zod.object({
+  "groupGid": zod.int().min(1),
+  "apiAccess": zod.literal("denied"),
+  "brokerAccess": zod.literal("allowed"),
+  "workerAccess": zod.literal("denied"),
+  "mountedIntoApi": zod.literal(false),
+  "mountedIntoWorker": zod.literal(false)
+}),
+  "inheritedFileDescriptors": zod.object({
+  "api": zod.array(zod.int().min(submitWorkspaceHostAttestationResponseBodyPayloadClaimsInheritedFileDescriptorsApiItemMin)).max(submitWorkspaceHostAttestationResponseBodyPayloadClaimsInheritedFileDescriptorsApiMax),
+  "broker": zod.array(zod.int().min(submitWorkspaceHostAttestationResponseBodyPayloadClaimsInheritedFileDescriptorsBrokerItemMin)).max(submitWorkspaceHostAttestationResponseBodyPayloadClaimsInheritedFileDescriptorsBrokerMax),
+  "worker": zod.array(zod.int().min(submitWorkspaceHostAttestationResponseBodyPayloadClaimsInheritedFileDescriptorsWorkerItemMin)).max(submitWorkspaceHostAttestationResponseBodyPayloadClaimsInheritedFileDescriptorsWorkerMax)
+}),
+  "databaseSessions": zod.object({
+  "api": zod.object({
+  "databaseName": zod.string().regex(submitWorkspaceHostAttestationResponseBodyPayloadClaimsDatabaseSessionsApiDatabaseNameRegExp),
+  "role": zod.string().min(1).max(submitWorkspaceHostAttestationResponseBodyPayloadClaimsDatabaseSessionsApiRoleMax),
+  "superuser": zod.literal(false),
+  "bypassRls": zod.literal(false)
+}),
+  "broker": zod.object({
+  "databaseName": zod.string().regex(submitWorkspaceHostAttestationResponseBodyPayloadClaimsDatabaseSessionsBrokerDatabaseNameRegExp),
+  "role": zod.string().min(1).max(submitWorkspaceHostAttestationResponseBodyPayloadClaimsDatabaseSessionsBrokerRoleMax),
+  "superuser": zod.literal(false),
+  "bypassRls": zod.literal(false)
+}),
+  "worker": zod.object({
+  "databaseName": zod.string().regex(submitWorkspaceHostAttestationResponseBodyPayloadClaimsDatabaseSessionsWorkerDatabaseNameRegExp),
+  "role": zod.string().min(1).max(submitWorkspaceHostAttestationResponseBodyPayloadClaimsDatabaseSessionsWorkerRoleMax),
+  "superuser": zod.literal(false),
+  "bypassRls": zod.literal(false)
+})
+}),
+  "workerNetworkEgressDenied": zod.literal(true)
+})
+}),
+  "signatureBase64": zod.string().regex(submitWorkspaceHostAttestationResponseBodySignatureBase64RegExp)
+})
+
+export const SubmitWorkspaceHostAttestationResponseResponse = zod.object({
+  "attestationStatus": zod.enum(['verified', 'rejected', 'expired', 'challenge_not_found', 'replay_rejected', 'prerequisite_unavailable']),
+  "reasonCode": zod.string().nullable(),
+  "hostBoundaryReady": zod.literal(false),
+  "integratedAssessmentReady": zod.literal(false),
+  "workerAdmission": zod.literal("disabled")
+})
+
+
+/**
  * Development-only synchronous preview. The request selects only one allow-listed fixture profile; the server runs the deterministic Policy Engine and in-memory synthetic adapter, with no LLM, Docker command, customer input, external call, or persistent job/history write. This is not an isolated worker: host network and Docker-socket access are not restricted or verified. Policy OFF remains counterfactual only.
  * @summary Evaluate a fixed deterministic policy-lab profile without Docker
  */

@@ -1,5 +1,113 @@
 BEGIN;
 
+CREATE TABLE IF NOT EXISTS public.host_boundary_attestation_challenges (
+  id uuid PRIMARY KEY,
+  workspace_id uuid NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
+  nonce_sha256 text NOT NULL
+    CHECK (nonce_sha256 ~ '^[a-f0-9]{64}$'),
+  runtime_commit text NOT NULL
+    CHECK (runtime_commit ~ '^([a-f0-9]{40}|[a-f0-9]{64})$'),
+  runtime_digest_sha256 text NOT NULL
+    CHECK (runtime_digest_sha256 ~ '^[a-f0-9]{64}$'),
+  issued_by_user_id text NOT NULL,
+  issued_at timestamptz NOT NULL,
+  expires_at timestamptz NOT NULL CHECK (expires_at > issued_at),
+  consumed_at timestamptz,
+  status text NOT NULL DEFAULT 'issued'
+    CHECK (status IN ('issued', 'verified', 'rejected', 'expired')),
+  response_sha256 text CHECK (
+    response_sha256 IS NULL OR response_sha256 ~ '^[a-f0-9]{64}$'
+  ),
+  supervisor_id text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CHECK (
+    (status = 'issued' AND consumed_at IS NULL
+      AND response_sha256 IS NULL AND supervisor_id IS NULL)
+    OR (status IN ('verified', 'rejected', 'expired')
+      AND consumed_at IS NOT NULL)
+  )
+);
+
+CREATE INDEX IF NOT EXISTS host_boundary_attestation_workspace_expiry_idx
+  ON public.host_boundary_attestation_challenges (workspace_id, expires_at);
+CREATE UNIQUE INDEX IF NOT EXISTS host_boundary_attestation_nonce_sha256_idx
+  ON public.host_boundary_attestation_challenges (nonce_sha256);
+GRANT SELECT, INSERT ON TABLE public.host_boundary_attestation_challenges
+  TO app_runtime;
+GRANT UPDATE (
+  consumed_at, status, response_sha256, supervisor_id, updated_at
+)
+  ON TABLE public.host_boundary_attestation_challenges TO app_runtime;
+ALTER TABLE public.host_boundary_attestation_challenges
+  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.host_boundary_attestation_challenges
+  FORCE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS host_boundary_attestation_select_owner
+  ON public.host_boundary_attestation_challenges;
+CREATE POLICY host_boundary_attestation_select_owner
+  ON public.host_boundary_attestation_challenges FOR SELECT TO app_runtime
+  USING (
+    workspace_id::text = NULLIF(current_setting('app.workspace_id', true), '')
+    AND EXISTS (
+      SELECT 1 FROM public.workspace_memberships AS membership
+      WHERE membership.workspace_id =
+        host_boundary_attestation_challenges.workspace_id
+        AND membership.user_id = NULLIF(current_setting('app.user_id', true), '')
+        AND membership.role IN ('owner', 'admin')
+    )
+  );
+
+DROP POLICY IF EXISTS host_boundary_attestation_insert_owner
+  ON public.host_boundary_attestation_challenges;
+CREATE POLICY host_boundary_attestation_insert_owner
+  ON public.host_boundary_attestation_challenges FOR INSERT TO app_runtime
+  WITH CHECK (
+    workspace_id::text = NULLIF(current_setting('app.workspace_id', true), '')
+    AND issued_by_user_id = NULLIF(current_setting('app.user_id', true), '')
+    AND status = 'issued'
+    AND consumed_at IS NULL
+    AND response_sha256 IS NULL
+    AND supervisor_id IS NULL
+    AND EXISTS (
+      SELECT 1 FROM public.workspace_memberships AS membership
+      WHERE membership.workspace_id =
+        host_boundary_attestation_challenges.workspace_id
+        AND membership.user_id = NULLIF(current_setting('app.user_id', true), '')
+        AND membership.role IN ('owner', 'admin')
+    )
+  );
+
+DROP POLICY IF EXISTS host_boundary_attestation_update_owner
+  ON public.host_boundary_attestation_challenges;
+CREATE POLICY host_boundary_attestation_update_owner
+  ON public.host_boundary_attestation_challenges FOR UPDATE TO app_runtime
+  USING (
+    workspace_id::text = NULLIF(current_setting('app.workspace_id', true), '')
+    AND status = 'issued'
+    AND consumed_at IS NULL
+    AND EXISTS (
+      SELECT 1 FROM public.workspace_memberships AS membership
+      WHERE membership.workspace_id =
+        host_boundary_attestation_challenges.workspace_id
+        AND membership.user_id = NULLIF(current_setting('app.user_id', true), '')
+        AND membership.role IN ('owner', 'admin')
+    )
+  )
+  WITH CHECK (
+    workspace_id::text = NULLIF(current_setting('app.workspace_id', true), '')
+    AND status IN ('verified', 'rejected', 'expired')
+    AND consumed_at IS NOT NULL
+    AND EXISTS (
+      SELECT 1 FROM public.workspace_memberships AS membership
+      WHERE membership.workspace_id =
+        host_boundary_attestation_challenges.workspace_id
+        AND membership.user_id = NULLIF(current_setting('app.user_id', true), '')
+        AND membership.role IN ('owner', 'admin')
+    )
+  );
+
 CREATE TABLE IF NOT EXISTS public.ai_assessment_approval_requests (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   workspace_id uuid NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,

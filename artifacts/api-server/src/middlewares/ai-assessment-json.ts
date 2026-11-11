@@ -4,6 +4,8 @@ export const AI_ASSESSMENT_LAB_JOB_ROUTE =
   "/api/workspaces/:workspaceId/ai-security-assessments/lab/jobs";
 export const AI_ASSESSMENT_POLICY_PREVIEW_ROUTE =
   "/api/workspaces/:workspaceId/ai-security-assessments/lab/policy-preview";
+export const HOST_ATTESTATION_RESPONSE_ROUTE =
+  "/api/workspaces/:workspaceId/ai-security-assessments/host-attestation/challenges/:challengeId/responses";
 export const AGENT_ACTION_INTENT_ROUTE =
   "/api/workspaces/:workspaceId/agent-action-adapter/intents";
 export const AI_ASSESSMENT_LAB_JSON_LIMIT_BYTES = 8 * 1024;
@@ -13,7 +15,7 @@ export const aiAssessmentLabJsonParser = express.json({
 });
 
 const AI_ASSESSMENT_LAB_JOB_PATH_PATTERN =
-  /^\/api\/workspaces\/[^/]+\/(?:ai-security-assessments\/lab\/(?:jobs|policy-preview)|agent-action-adapter\/intents)\/?$/;
+  /^\/api\/workspaces\/[^/]+\/(?:ai-security-assessments\/lab\/(?:jobs|policy-preview)|ai-security-assessments\/host-attestation\/challenges(?:\/[^/]+\/responses)?|agent-action-adapter\/intents)\/?$/;
 
 export const aiAssessmentLabBodySizeErrorHandler: ErrorRequestHandler = (
   error,

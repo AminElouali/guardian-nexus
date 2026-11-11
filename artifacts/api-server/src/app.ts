@@ -8,6 +8,7 @@ import {
   AGENT_ACTION_INTENT_ROUTE,
   AI_ASSESSMENT_LAB_JOB_ROUTE,
   AI_ASSESSMENT_POLICY_PREVIEW_ROUTE,
+  HOST_ATTESTATION_RESPONSE_ROUTE,
   aiAssessmentLabBodySizeErrorHandler,
   aiAssessmentLabJsonParser,
 } from "./middlewares/ai-assessment-json";
@@ -41,6 +42,7 @@ app.use(
 app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 app.use(AI_ASSESSMENT_LAB_JOB_ROUTE, aiAssessmentLabJsonParser);
 app.use(AI_ASSESSMENT_POLICY_PREVIEW_ROUTE, aiAssessmentLabJsonParser);
+app.use(HOST_ATTESTATION_RESPONSE_ROUTE, aiAssessmentLabJsonParser);
 app.use(AGENT_ACTION_INTENT_ROUTE, aiAssessmentLabJsonParser);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

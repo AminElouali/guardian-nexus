@@ -396,6 +396,195 @@ export interface AiAssessmentLabAvailability {
   profiles: AiAssessmentLabProfileAvailability[];
 }
 
+export interface HostAttestationChallenge {
+  id: string;
+  workspaceId: string;
+  /** @pattern ^[A-Za-z0-9_-]{43}$ */
+  nonce: string;
+  issuedAt: string;
+  expiresAt: string;
+  /** @pattern ^(?:[a-f0-9]{40}|[a-f0-9]{64})$ */
+  runtimeCommit: string;
+  /** @pattern ^[a-f0-9]{64}$ */
+  runtimeDigestSha256: string;
+  hostBoundaryReady: false;
+  integratedAssessmentReady: false;
+  workerAdmission: 'disabled';
+}
+
+export interface HostAttestationServiceIdentity {
+  /** @minimum 1 */
+  uid: number;
+  /** @minimum 1 */
+  gid: number;
+  /**
+     * @minItems 1
+     * @maxItems 64
+     * @items.minimum 1
+     */
+  groups: number[];
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  databaseRole: string;
+}
+
+export interface HostAttestationNamespaceIds {
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  user: string;
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  pid: string;
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  mount: string;
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  network: string;
+}
+
+export interface HostAttestationProcessHardening {
+  noNewPrivileges: true;
+  seccompEnforced: true;
+  /** @pattern ^[a-f0-9]{64}$ */
+  seccompProfileSha256: string;
+  /** @maxItems 0 */
+  capabilities: string[];
+  readOnlyRoot: true;
+}
+
+export interface HostAttestationDatabaseSession {
+  /** @pattern ^guardian_lab_[a-z0-9_]{1,50}$ */
+  databaseName: string;
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  role: string;
+  superuser: false;
+  bypassRls: false;
+}
+
+export type HostAttestationResponsePayloadServiceIdentities = {
+  api: HostAttestationServiceIdentity;
+  broker: HostAttestationServiceIdentity;
+  worker: HostAttestationServiceIdentity;
+};
+
+export type HostAttestationResponsePayloadClaimsNamespaces = {
+  api: HostAttestationNamespaceIds;
+  broker: HostAttestationNamespaceIds;
+  worker: HostAttestationNamespaceIds;
+};
+
+export type HostAttestationResponsePayloadClaimsProcessHardening = {
+  api: HostAttestationProcessHardening;
+  broker: HostAttestationProcessHardening;
+  worker: HostAttestationProcessHardening;
+};
+
+export type HostAttestationResponsePayloadClaimsDockerSocket = {
+  /** @minimum 1 */
+  groupGid: number;
+  apiAccess: 'denied';
+  brokerAccess: 'allowed';
+  workerAccess: 'denied';
+  mountedIntoApi: false;
+  mountedIntoWorker: false;
+};
+
+export type HostAttestationResponsePayloadClaimsInheritedFileDescriptors = {
+  /**
+     * @maxItems 0
+     * @items.minimum 0
+     */
+  api: number[];
+  /**
+     * @maxItems 0
+     * @items.minimum 0
+     */
+  broker: number[];
+  /**
+     * @maxItems 0
+     * @items.minimum 0
+     */
+  worker: number[];
+};
+
+export type HostAttestationResponsePayloadClaimsDatabaseSessions = {
+  api: HostAttestationDatabaseSession;
+  broker: HostAttestationDatabaseSession;
+  worker: HostAttestationDatabaseSession;
+};
+
+export type HostAttestationResponsePayloadClaims = {
+  namespaces: HostAttestationResponsePayloadClaimsNamespaces;
+  processHardening: HostAttestationResponsePayloadClaimsProcessHardening;
+  dockerSocket: HostAttestationResponsePayloadClaimsDockerSocket;
+  inheritedFileDescriptors: HostAttestationResponsePayloadClaimsInheritedFileDescriptors;
+  databaseSessions: HostAttestationResponsePayloadClaimsDatabaseSessions;
+  workerNetworkEgressDenied: true;
+};
+
+export interface HostAttestationResponsePayload {
+  schemaVersion: 1;
+  attestationType: 'guardian_host_challenge_response';
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  supervisorId: string;
+  workspaceId: string;
+  challengeId: string;
+  /** @pattern ^[A-Za-z0-9_-]{43}$ */
+  nonce: string;
+  issuedAt: string;
+  expiresAt: string;
+  /** @pattern ^(?:[a-f0-9]{40}|[a-f0-9]{64})$ */
+  runtimeCommit: string;
+  /** @pattern ^[a-f0-9]{64}$ */
+  runtimeDigestSha256: string;
+  serviceIdentities: HostAttestationResponsePayloadServiceIdentities;
+  claims: HostAttestationResponsePayloadClaims;
+}
+
+export interface HostAttestationResponseEnvelope {
+  payload: HostAttestationResponsePayload;
+  /** @pattern ^[A-Za-z0-9+/]{86}==$ */
+  signatureBase64: string;
+}
+
+export type HostAttestationVerificationResultAttestationStatus = typeof HostAttestationVerificationResultAttestationStatus[keyof typeof HostAttestationVerificationResultAttestationStatus];
+
+
+export const HostAttestationVerificationResultAttestationStatus = {
+  verified: 'verified',
+  rejected: 'rejected',
+  expired: 'expired',
+  challenge_not_found: 'challenge_not_found',
+  replay_rejected: 'replay_rejected',
+  prerequisite_unavailable: 'prerequisite_unavailable',
+} as const;
+
+export interface HostAttestationVerificationResult {
+  attestationStatus: HostAttestationVerificationResultAttestationStatus;
+  /** @nullable */
+  reasonCode: string | null;
+  hostBoundaryReady: false;
+  integratedAssessmentReady: false;
+  workerAdmission: 'disabled';
+}
+
 export type AiAssessmentLabJobRequestProfileId = typeof AiAssessmentLabJobRequestProfileId[keyof typeof AiAssessmentLabJobRequestProfileId];
 
 

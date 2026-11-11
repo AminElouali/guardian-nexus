@@ -69,6 +69,14 @@ import { withWorkspaceUserTransaction } from "../lib/tenant-db";
 import { UsageQuotaError, reserveWorkspaceUsageInTransaction } from "../lib/usage";
 import { logger } from "../lib/logger";
 import { requireAuth } from "../middlewares/requireAuth";
+import {
+  computeCurrentHostRuntimeIdentity,
+  createHostAttestationChallenge,
+  getCurrentApiServiceIdentity,
+  hostAttestationResponseEnvelopeSchema,
+  loadPinnedHostTrustAnchor,
+} from "../lib/host-attestation-protocol";
+import { createHostAttestationNonceRepository } from "../lib/host-attestation-persistence";
 
 const routes: IRouter = Router();
 const UUID_PATTERN =
@@ -674,6 +682,149 @@ function verifyPersistedApprovalEvidence(
   }
   return proof;
 }
+
+routes.post(
+  "/workspaces/:workspaceId/ai-security-assessments/host-attestation/challenges",
+  async (req, res): Promise<void> => {
+    const workspaceId = req.params.workspaceId;
+    if (typeof workspaceId !== "string" || !UUID_PATTERN.test(workspaceId)) {
+      res.status(400).json({ error: "Invalid workspace ID" });
+      return;
+    }
+    try {
+      const access = await withWorkspaceUserTransaction(
+        req.authUserId!,
+        workspaceId,
+        async (tx, membership) => {
+          if (!canRunAiEvaluation(membership.role)) {
+            return { kind: "forbidden" as const };
+          }
+          const protocol = createHostAttestationChallenge({
+            repository: createHostAttestationNonceRepository(tx),
+            loadTrustAnchor: loadPinnedHostTrustAnchor,
+            getRuntimeIdentity: computeCurrentHostRuntimeIdentity,
+            getApiIdentity: getCurrentApiServiceIdentity,
+          });
+          const challenge = await protocol.issue({
+            workspaceId,
+            issuedByUserId: req.authUserId!,
+          });
+          await tx.insert(workspaceAuditEventsTable).values({
+            workspaceId,
+            actorUserId: req.authUserId!,
+            action: "ai_assessment.host_attestation.challenge_issued",
+            resourceType: "host_attestation_challenge",
+            resourceId: challenge.id,
+            metadata: {
+              runtimeCommit: challenge.runtimeCommit,
+              runtimeDigestSha256: challenge.runtimeDigestSha256,
+              expiresAt: challenge.expiresAt,
+            },
+          });
+          return { kind: "challenge" as const, challenge };
+        },
+      );
+      if (!access.authorized) {
+        res.status(403).json({ error: "Workspace membership required" });
+        return;
+      }
+      if (access.value.kind === "forbidden") {
+        res.status(403).json({ error: "Workspace owner or admin role required" });
+        return;
+      }
+      res.status(201).json({
+        ...access.value.challenge,
+        hostBoundaryReady: false,
+        integratedAssessmentReady: false,
+        workerAdmission: "disabled",
+      });
+    } catch {
+      res.status(503).json({
+        error: "Independent host attestation prerequisites are unavailable",
+      });
+    }
+  },
+);
+
+routes.post(
+  "/workspaces/:workspaceId/ai-security-assessments/host-attestation/challenges/:challengeId/responses",
+  async (req, res): Promise<void> => {
+    const workspaceId = req.params.workspaceId;
+    const challengeId = req.params.challengeId;
+    if (
+      typeof workspaceId !== "string" ||
+      !UUID_PATTERN.test(workspaceId) ||
+      typeof challengeId !== "string" ||
+      !UUID_PATTERN.test(challengeId)
+    ) {
+      res.status(400).json({ error: "Invalid workspace or challenge ID" });
+      return;
+    }
+    const envelope = hostAttestationResponseEnvelopeSchema.safeParse(req.body);
+    if (!envelope.success) {
+      res.status(400).json({ error: "Invalid host attestation response" });
+      return;
+    }
+    try {
+      const access = await withWorkspaceUserTransaction(
+        req.authUserId!,
+        workspaceId,
+        async (tx, membership) => {
+          if (!canRunAiEvaluation(membership.role)) {
+            return { kind: "forbidden" as const };
+          }
+          const protocol = createHostAttestationChallenge({
+            repository: createHostAttestationNonceRepository(tx),
+            loadTrustAnchor: loadPinnedHostTrustAnchor,
+            getRuntimeIdentity: computeCurrentHostRuntimeIdentity,
+            getApiIdentity: getCurrentApiServiceIdentity,
+          });
+          const result = await protocol.respond({
+            workspaceId,
+            challengeId,
+            envelope: envelope.data,
+          });
+          await tx.insert(workspaceAuditEventsTable).values({
+            workspaceId,
+            actorUserId: req.authUserId!,
+            action: "ai_assessment.host_attestation.response_recorded",
+            resourceType: "host_attestation_challenge",
+            resourceId: challengeId,
+            metadata: {
+              attestationStatus: result.attestationStatus,
+              reasonCode: result.reasonCode,
+              hostBoundaryReady: false,
+              integratedAssessmentReady: false,
+            },
+          });
+          return { kind: "result" as const, result };
+        },
+      );
+      if (!access.authorized) {
+        res.status(403).json({ error: "Workspace membership required" });
+        return;
+      }
+      if (access.value.kind === "forbidden") {
+        res.status(403).json({ error: "Workspace owner or admin role required" });
+        return;
+      }
+      if (
+        access.value.result.attestationStatus === "prerequisite_unavailable"
+      ) {
+        res.status(503).json({
+          error: "Independent host attestation prerequisites are unavailable",
+          ...access.value.result,
+        });
+        return;
+      }
+      res.status(200).json(access.value.result);
+    } catch {
+      res.status(503).json({
+        error: "Host attestation could not be recorded safely",
+      });
+    }
+  },
+);
 
 routes.get(
   "/workspaces/:workspaceId/ai-security-assessments/lab/availability",

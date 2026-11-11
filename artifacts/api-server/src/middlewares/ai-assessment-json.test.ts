@@ -6,6 +6,7 @@ import {
   AI_ASSESSMENT_LAB_JOB_ROUTE,
   AI_ASSESSMENT_LAB_JSON_LIMIT_BYTES,
   AI_ASSESSMENT_POLICY_PREVIEW_ROUTE,
+  HOST_ATTESTATION_RESPONSE_ROUTE,
   aiAssessmentLabBodySizeErrorHandler,
   aiAssessmentLabJsonParser,
 } from "./ai-assessment-json";
@@ -55,4 +56,40 @@ test("oversized evaluation JSON returns 413 before a job handler can run", async
       });
     });
   }
+});
+
+test("oversized host attestation response is rejected by the bounded body gate", () => {
+  let statusCode: number | undefined;
+  let responseBody: unknown;
+  let nextCalled = false;
+  const response = {
+    status(code: number) {
+      statusCode = code;
+      return this;
+    },
+    json(body: unknown) {
+      responseBody = body;
+      return this;
+    },
+  } as unknown as express.Response;
+  const request = {
+    method: "POST",
+    path: HOST_ATTESTATION_RESPONSE_ROUTE.replace(":workspaceId", "workspace")
+      .replace(":challengeId", "challenge"),
+  } as express.Request;
+
+  aiAssessmentLabBodySizeErrorHandler(
+    { type: "entity.too.large" },
+    request,
+    response,
+    () => {
+      nextCalled = true;
+    },
+  );
+
+  assert.equal(statusCode, 413);
+  assert.deepEqual(responseBody, {
+    error: "AI assessment request body too large",
+  });
+  assert.equal(nextCalled, false);
 });

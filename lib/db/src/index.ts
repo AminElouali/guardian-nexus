@@ -99,7 +99,8 @@ export async function assertRlsRuntimeReady(): Promise<void> {
         'provider_connections',
         'connector_oauth_states',
         'connector_jobs',
-        'ai_assessment_jobs'
+        'ai_assessment_jobs',
+        'host_boundary_attestation_challenges'
       )
     GROUP BY c.relname, c.relrowsecurity, c.relforcerowsecurity
   `);
@@ -114,6 +115,7 @@ export async function assertRlsRuntimeReady(): Promise<void> {
     connector_oauth_states: 3,
     connector_jobs: 4,
     ai_assessment_jobs: 5,
+    host_boundary_attestation_challenges: 3,
   };
   if (
     rows.length !== Object.keys(expectedPolicyCounts).length ||
@@ -192,7 +194,8 @@ export async function assertRlsRuntimeReady(): Promise<void> {
             'provider_connections',
             'connector_oauth_states',
             'connector_jobs',
-            'ai_assessment_jobs'
+            'ai_assessment_jobs',
+            'host_boundary_attestation_challenges'
           ])
           AND protected.relowner = runtime.oid
       ) AS runtime_owns_protected_table,
@@ -208,15 +211,22 @@ export async function assertRlsRuntimeReady(): Promise<void> {
           'provider_connections',
           'connector_oauth_states',
           'connector_jobs',
-          'ai_assessment_jobs'
+          'ai_assessment_jobs',
+          'host_boundary_attestation_challenges'
         ]) AS protected(table_name)
-        WHERE NOT (
-          has_table_privilege(
+        WHERE NOT CASE
+          WHEN protected.table_name = 'host_boundary_attestation_challenges'
+          THEN has_table_privilege(
+            runtime.oid,
+            format('public.%I', protected.table_name),
+            'SELECT,INSERT,UPDATE'
+          )
+          ELSE has_table_privilege(
             runtime.oid,
             format('public.%I', protected.table_name),
             'SELECT,INSERT,UPDATE,DELETE'
           )
-        )
+        END
       ) AS runtime_has_required_table_grants,
       EXISTS (
         SELECT 1
@@ -230,7 +240,8 @@ export async function assertRlsRuntimeReady(): Promise<void> {
           'provider_connections',
           'connector_oauth_states',
           'connector_jobs',
-          'ai_assessment_jobs'
+          'ai_assessment_jobs',
+          'host_boundary_attestation_challenges'
         ]) AS protected(table_name)
         WHERE
           has_table_privilege(role.oid, format('public.%I', protected.table_name), 'SELECT')

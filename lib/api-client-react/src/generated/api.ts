@@ -44,6 +44,9 @@ import type {
   GuardianPolicyLabPreviewRequest,
   GuardianPolicyLabPreviewResponse,
   HealthStatus,
+  HostAttestationChallenge,
+  HostAttestationResponseEnvelope,
+  HostAttestationVerificationResult,
   IntegrationConnection,
   Member,
   MemberRoleInput,
@@ -2188,6 +2191,173 @@ export function useGetWorkspaceAiAssessmentLabAvailability<TData = Awaited<Retur
 
 
 
+
+export const getCreateWorkspaceHostAttestationChallengeUrl = (workspaceId: string,) => {
+
+
+
+
+  return `/api/workspaces/${workspaceId}/ai-security-assessments/host-attestation/challenges`
+}
+
+/**
+ * Requires a workspace owner or admin. The server uses an externally provisioned root-owned Ed25519 trust anchor and stores only a nonce digest in the durable tenant-scoped challenge repository. Issuing or verifying a challenge never enables the assessment worker or changes host readiness.
+ * @summary Issue a short-lived host attestation challenge
+ */
+export const createWorkspaceHostAttestationChallenge = async (workspaceId: string, options?: Parameters<typeof customFetch>[1]): Promise<HostAttestationChallenge> => {
+
+  return customFetch<HostAttestationChallenge>(getCreateWorkspaceHostAttestationChallengeUrl(workspaceId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getCreateWorkspaceHostAttestationChallengeMutationKey = () => ['createWorkspaceHostAttestationChallenge'] as const;
+
+export const getCreateWorkspaceHostAttestationChallengeMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createWorkspaceHostAttestationChallenge>>, TError,CreateWorkspaceHostAttestationChallengeMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createWorkspaceHostAttestationChallenge>>, TError,CreateWorkspaceHostAttestationChallengeMutationVariables, TContext> => {
+
+const mutationKey = getCreateWorkspaceHostAttestationChallengeMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createWorkspaceHostAttestationChallenge>>, CreateWorkspaceHostAttestationChallengeMutationVariables> = (props) => {
+          const {workspaceId} = props ?? {};
+
+          return  createWorkspaceHostAttestationChallenge(workspaceId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateWorkspaceHostAttestationChallengeMutationResult = NonNullable<Awaited<ReturnType<typeof createWorkspaceHostAttestationChallenge>>>
+
+    export type CreateWorkspaceHostAttestationChallengeMutationError = ErrorType<void>
+    export type CreateWorkspaceHostAttestationChallengeMutationVariables = {workspaceId: string}
+
+    /**
+ * @summary Issue a short-lived host attestation challenge
+ */
+export const useCreateWorkspaceHostAttestationChallenge = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createWorkspaceHostAttestationChallenge>>, TError,CreateWorkspaceHostAttestationChallengeMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createWorkspaceHostAttestationChallenge>>,
+        TError,
+        CreateWorkspaceHostAttestationChallengeMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateWorkspaceHostAttestationChallengeMutationOptions(options), queryClient);
+    }
+
+export const getSubmitWorkspaceHostAttestationResponseUrl = (workspaceId: string,
+    challengeId: string,) => {
+
+
+
+
+  return `/api/workspaces/${workspaceId}/ai-security-assessments/host-attestation/challenges/${challengeId}/responses`
+}
+
+/**
+ * Accepts only the fixed, externally provisioned Ed25519 trust anchor. The response is bound to one unexpired nonce, workspace, current Git commit, runtime digest and current API identity. A recorded verification is evidence only; hostBoundaryReady and integratedAssessmentReady remain false and worker admission remains disabled.
+ * @summary Verify an independently signed host challenge response
+ */
+export const submitWorkspaceHostAttestationResponse = async (workspaceId: string,
+    challengeId: string,
+    hostAttestationResponseEnvelope: HostAttestationResponseEnvelope, options?: Parameters<typeof customFetch>[1]): Promise<HostAttestationVerificationResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<HostAttestationVerificationResult>(getSubmitWorkspaceHostAttestationResponseUrl(workspaceId,challengeId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(hostAttestationResponseEnvelope)
+  }
+);}
+
+
+
+
+
+export const getSubmitWorkspaceHostAttestationResponseMutationKey = () => ['submitWorkspaceHostAttestationResponse'] as const;
+
+export const getSubmitWorkspaceHostAttestationResponseMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitWorkspaceHostAttestationResponse>>, TError,SubmitWorkspaceHostAttestationResponseMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof submitWorkspaceHostAttestationResponse>>, TError,SubmitWorkspaceHostAttestationResponseMutationVariables, TContext> => {
+
+const mutationKey = getSubmitWorkspaceHostAttestationResponseMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitWorkspaceHostAttestationResponse>>, SubmitWorkspaceHostAttestationResponseMutationVariables> = (props) => {
+          const {workspaceId,challengeId,data} = props ?? {};
+
+          return  submitWorkspaceHostAttestationResponse(workspaceId,challengeId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SubmitWorkspaceHostAttestationResponseMutationResult = NonNullable<Awaited<ReturnType<typeof submitWorkspaceHostAttestationResponse>>>
+    export type SubmitWorkspaceHostAttestationResponseMutationBody = BodyType<HostAttestationResponseEnvelope>
+    export type SubmitWorkspaceHostAttestationResponseMutationError = ErrorType<void>
+    export type SubmitWorkspaceHostAttestationResponseMutationVariables = {workspaceId: string;challengeId: string;data: BodyType<HostAttestationResponseEnvelope>}
+
+    /**
+ * @summary Verify an independently signed host challenge response
+ */
+export const useSubmitWorkspaceHostAttestationResponse = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitWorkspaceHostAttestationResponse>>, TError,SubmitWorkspaceHostAttestationResponseMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof submitWorkspaceHostAttestationResponse>>,
+        TError,
+        SubmitWorkspaceHostAttestationResponseMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSubmitWorkspaceHostAttestationResponseMutationOptions(options), queryClient);
+    }
 
 export const getPreviewWorkspaceAiAssessmentPolicyLabUrl = (workspaceId: string,) => {
 

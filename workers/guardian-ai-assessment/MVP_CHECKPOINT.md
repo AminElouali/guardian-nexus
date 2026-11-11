@@ -4585,3 +4585,64 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   uso y evidencia actual de los tres procesos, con protección durable contra
   replay. Tras disponer de ese protocolo, integrar verificación en API y worker;
   el primer flujo Qwen sería correo y luego BBDD. No se declaró desbloqueo.
+
+## Protocolo host challenge-response firmado — 2026-11-11
+
+- Base verificada al iniciar: HEAD
+  `d91130195e28554c1e9965bd75720afb5781f096`, rama `main`; árbol limpio antes
+  de este incremento. No se observó otro proceso local de API, worker o tests.
+  El estado remoto de tareas de Agent no se puede consultar desde el workspace.
+- Se añadió challenge-response Ed25519 con nonce aleatorio de 256 bits, TTL de
+  dos minutos, canonicalización con separación de dominio y clave pública fija
+  en `/etc/guardian-nexus/host-boundary-attestor-ed25519.pem`. La clave debe
+  ser pública, root-owned y no modificable por grupo/otros; no hay override de
+  entorno ni mecanismo para que el worker se autoateste.
+- El payload enlaza workspace, challenge/nonce, commit, digest del runtime y
+  bundle de API, identidades distintas API/broker/worker, namespaces,
+  privilegios/seccomp, claims del socket Docker, descriptores heredados y roles
+  de DB. Un rechazo, firma inválida, claim incompleto, expiración, identidad o
+  digest discordante y replay se mantienen fail-closed.
+- Se añadió repositorio PostgreSQL tenant-scoped con nonce digest único,
+  consumo bajo `FOR UPDATE`, estados terminales, grants mínimos y tres
+  políticas RLS owner/admin. El `assertRlsRuntimeReady` ahora exige esta tabla
+  y políticas antes de aceptar la configuración de RLS. No se aplicó schema,
+  no se conectó PostgreSQL y no se probó persistencia/concurrencia.
+- Endpoints API/OpenAPI emiten desafíos y verifican respuestas dentro de una
+  transacción RLS owner/admin. Aun tras una respuesta sintética válida,
+  `hostBoundaryReady=false`, `integratedAssessmentReady=false` y
+  `workerAdmission=disabled`; el gate preexistente no se modificó.
+- Pruebas actuales (2026-11-11):
+  - `pnpm --filter @workspace/api-spec run codegen`: pasó; incluyó
+    `pnpm -w run typecheck:libs`.
+  - `pnpm --filter @workspace/api-server run typecheck`: pasó.
+  - `pnpm --filter @workspace/api-server exec tsx --test src/lib/host-attestation-protocol.test.ts`:
+    17 pasaron, 0 fallaron. Clave, firma y repositorio en memoria TEST ONLY;
+    esto no acredita aislamiento real ni durabilidad PostgreSQL.
+  - `pnpm --filter @workspace/api-server exec tsx --test --test-name-pattern="oversized host attestation response" src/middlewares/ai-assessment-json.test.ts`:
+    1 pasó, 0 fallaron; prueba directa del handler sin servidor HTTP.
+  - `git diff --check`: pasó.
+- No se ejecutaron Qwen, worker, Docker, socket, PostgreSQL, migración,
+  servicio externo ni despliegue. No se midieron ni actualizaron inferencias.
+  Supervisor independiente, clave instalada, hostBoundaryReady, integración
+  PostgreSQL/RLS y replay durable siguen no verificados; la API falla cerrada
+  si falta el trust anchor, runtime bundle o tabla/RLS.
+- Informe:
+  `reports/host-attestation-challenge-response-2026-11-11.md`,
+  SHA-256 `4ea626c483f6e208ea88858726747e8b15dd7cc3b34faa48750b5644926a969e`.
+- SHA-256 de artefactos principales:
+  - `artifacts/api-server/src/lib/host-attestation-protocol.ts`:
+    `27b639595e5088efe2f8950d5a6c941fde5a6a5f08510b051bc733a2834e173c`
+  - `artifacts/api-server/src/lib/host-attestation-persistence.ts`:
+    `12bc461582e631f96df7251ddd9c935e5b6df41066be468b9c603a50b18e0c8b`
+  - `artifacts/api-server/src/lib/host-attestation-protocol.test.ts`:
+    `9e811d325aae2cc431e6b9866cf474c813ac5dff16e1063ceba3839ca6d295b1`
+  - `lib/api-zod/src/host-attestation.ts`:
+    `67d65b386ecacdcc8a0fcf0622c4cced7d5b5a4a43d745f6bf49fc88b05ad157`
+  - `lib/db/src/schema/host-attestation.ts`:
+    `63db032e11018e67ae1aade233e916b7fd287e034862a87e3088b7508c9ccb0d`
+  - `lib/db/sql/rls-policies.sql`:
+    `c0b4d08fb458e7f995ae30424388e15cd7d5a0fa9f3d99ed9903691ee751d4f9`
+- Siguiente bloqueo: provisionar el supervisor independiente y clave pública,
+  aplicar el schema/RLS a PostgreSQL de laboratorio desechable y obtener
+  evidencia real firmada. Solo después corresponde considerar cablear
+  readiness; no se ejecutó la primera inferencia Qwen.

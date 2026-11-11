@@ -535,6 +535,73 @@ paths:
               schema: { $ref: "#/components/schemas/AiAssessmentLabAvailability" }
         "403":
           description: User is not a workspace member
+  /workspaces/{workspaceId}/ai-security-assessments/host-attestation/challenges:
+    post:
+      operationId: createWorkspaceHostAttestationChallenge
+      tags: [ai-evaluations]
+      summary: Issue a short-lived host attestation challenge
+      description: >-
+        Requires a workspace owner or admin. The server uses an externally
+        provisioned root-owned Ed25519 trust anchor and stores only a nonce
+        digest in the durable tenant-scoped challenge repository. Issuing or
+        verifying a challenge never enables the assessment worker or changes
+        host readiness.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "201":
+          description: Short-lived challenge bound to the API's current runtime digest
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HostAttestationChallenge" }
+        "400":
+          description: Invalid workspace identifier
+        "403":
+          description: Workspace owner or admin role required
+        "503":
+          description: External trust anchor, runtime identity, or durable challenge storage is unavailable
+  /workspaces/{workspaceId}/ai-security-assessments/host-attestation/challenges/{challengeId}/responses:
+    post:
+      operationId: submitWorkspaceHostAttestationResponse
+      tags: [ai-evaluations]
+      summary: Verify an independently signed host challenge response
+      description: >-
+        Accepts only the fixed, externally provisioned Ed25519 trust anchor.
+        The response is bound to one unexpired nonce, workspace, current Git
+        commit, runtime digest and current API identity. A recorded verification
+        is evidence only; hostBoundaryReady and integratedAssessmentReady remain
+        false and worker admission remains disabled.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: challengeId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/HostAttestationResponseEnvelope" }
+      responses:
+        "200":
+          description: Verification result, never a readiness or worker-enable signal
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HostAttestationVerificationResult" }
+        "400":
+          description: Invalid challenge identifier or response envelope
+        "403":
+          description: Workspace owner or admin role required
+        "503":
+          description: External trust anchor, current runtime identity, or durable nonce repository is unavailable
   /workspaces/{workspaceId}/ai-security-assessments/lab/policy-preview:
     post:
       operationId: previewWorkspaceAiAssessmentPolicyLab
@@ -978,6 +1045,156 @@ components:
           type: array
           items: { $ref: "#/components/schemas/AiAssessmentLabProfileAvailability" }
       required: [status, workerVersion, reasonCode, profiles]
+    HostAttestationChallenge:
+      type: object
+      additionalProperties: false
+      properties:
+        id: { type: string, format: uuid }
+        workspaceId: { type: string, format: uuid }
+        nonce: { type: string, pattern: "^[A-Za-z0-9_-]{43}$" }
+        issuedAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+        runtimeCommit: { type: string, pattern: "^(?:[a-f0-9]{40}|[a-f0-9]{64})$" }
+        runtimeDigestSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        hostBoundaryReady: { type: boolean, const: false }
+        integratedAssessmentReady: { type: boolean, const: false }
+        workerAdmission: { type: string, const: disabled }
+      required: [id, workspaceId, nonce, issuedAt, expiresAt, runtimeCommit, runtimeDigestSha256, hostBoundaryReady, integratedAssessmentReady, workerAdmission]
+    HostAttestationServiceIdentity:
+      type: object
+      additionalProperties: false
+      properties:
+        uid: { type: integer, minimum: 1 }
+        gid: { type: integer, minimum: 1 }
+        groups:
+          type: array
+          minItems: 1
+          maxItems: 64
+          items: { type: integer, minimum: 1 }
+        databaseRole: { type: string, minLength: 1, maxLength: 128 }
+      required: [uid, gid, groups, databaseRole]
+    HostAttestationNamespaceIds:
+      type: object
+      additionalProperties: false
+      properties:
+        user: { type: string, minLength: 1, maxLength: 128 }
+        pid: { type: string, minLength: 1, maxLength: 128 }
+        mount: { type: string, minLength: 1, maxLength: 128 }
+        network: { type: string, minLength: 1, maxLength: 128 }
+      required: [user, pid, mount, network]
+    HostAttestationProcessHardening:
+      type: object
+      additionalProperties: false
+      properties:
+        noNewPrivileges: { type: boolean, const: true }
+        seccompEnforced: { type: boolean, const: true }
+        seccompProfileSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        capabilities:
+          type: array
+          maxItems: 0
+          items: { type: string }
+        readOnlyRoot: { type: boolean, const: true }
+      required: [noNewPrivileges, seccompEnforced, seccompProfileSha256, capabilities, readOnlyRoot]
+    HostAttestationDatabaseSession:
+      type: object
+      additionalProperties: false
+      properties:
+        databaseName: { type: string, pattern: "^guardian_lab_[a-z0-9_]{1,50}$" }
+        role: { type: string, minLength: 1, maxLength: 128 }
+        superuser: { type: boolean, const: false }
+        bypassRls: { type: boolean, const: false }
+      required: [databaseName, role, superuser, bypassRls]
+    HostAttestationResponsePayload:
+      type: object
+      additionalProperties: false
+      properties:
+        schemaVersion: { type: integer, const: 1 }
+        attestationType: { type: string, const: guardian_host_challenge_response }
+        supervisorId: { type: string, minLength: 1, maxLength: 160 }
+        workspaceId: { type: string, format: uuid }
+        challengeId: { type: string, format: uuid }
+        nonce: { type: string, pattern: "^[A-Za-z0-9_-]{43}$" }
+        issuedAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+        runtimeCommit: { type: string, pattern: "^(?:[a-f0-9]{40}|[a-f0-9]{64})$" }
+        runtimeDigestSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        serviceIdentities:
+          type: object
+          additionalProperties: false
+          properties:
+            api: { $ref: "#/components/schemas/HostAttestationServiceIdentity" }
+            broker: { $ref: "#/components/schemas/HostAttestationServiceIdentity" }
+            worker: { $ref: "#/components/schemas/HostAttestationServiceIdentity" }
+          required: [api, broker, worker]
+        claims:
+          type: object
+          additionalProperties: false
+          properties:
+            namespaces:
+              type: object
+              additionalProperties: false
+              properties:
+                api: { $ref: "#/components/schemas/HostAttestationNamespaceIds" }
+                broker: { $ref: "#/components/schemas/HostAttestationNamespaceIds" }
+                worker: { $ref: "#/components/schemas/HostAttestationNamespaceIds" }
+              required: [api, broker, worker]
+            processHardening:
+              type: object
+              additionalProperties: false
+              properties:
+                api: { $ref: "#/components/schemas/HostAttestationProcessHardening" }
+                broker: { $ref: "#/components/schemas/HostAttestationProcessHardening" }
+                worker: { $ref: "#/components/schemas/HostAttestationProcessHardening" }
+              required: [api, broker, worker]
+            dockerSocket:
+              type: object
+              additionalProperties: false
+              properties:
+                groupGid: { type: integer, minimum: 1 }
+                apiAccess: { type: string, const: denied }
+                brokerAccess: { type: string, const: allowed }
+                workerAccess: { type: string, const: denied }
+                mountedIntoApi: { type: boolean, const: false }
+                mountedIntoWorker: { type: boolean, const: false }
+              required: [groupGid, apiAccess, brokerAccess, workerAccess, mountedIntoApi, mountedIntoWorker]
+            inheritedFileDescriptors:
+              type: object
+              additionalProperties: false
+              properties:
+                api: { type: array, maxItems: 0, items: { type: integer, minimum: 0 } }
+                broker: { type: array, maxItems: 0, items: { type: integer, minimum: 0 } }
+                worker: { type: array, maxItems: 0, items: { type: integer, minimum: 0 } }
+              required: [api, broker, worker]
+            databaseSessions:
+              type: object
+              additionalProperties: false
+              properties:
+                api: { $ref: "#/components/schemas/HostAttestationDatabaseSession" }
+                broker: { $ref: "#/components/schemas/HostAttestationDatabaseSession" }
+                worker: { $ref: "#/components/schemas/HostAttestationDatabaseSession" }
+              required: [api, broker, worker]
+            workerNetworkEgressDenied: { type: boolean, const: true }
+          required: [namespaces, processHardening, dockerSocket, inheritedFileDescriptors, databaseSessions, workerNetworkEgressDenied]
+      required: [schemaVersion, attestationType, supervisorId, workspaceId, challengeId, nonce, issuedAt, expiresAt, runtimeCommit, runtimeDigestSha256, serviceIdentities, claims]
+    HostAttestationResponseEnvelope:
+      type: object
+      additionalProperties: false
+      properties:
+        payload: { $ref: "#/components/schemas/HostAttestationResponsePayload" }
+        signatureBase64: { type: string, pattern: "^[A-Za-z0-9+/]{86}==$" }
+      required: [payload, signatureBase64]
+    HostAttestationVerificationResult:
+      type: object
+      additionalProperties: false
+      properties:
+        attestationStatus:
+          type: string
+          enum: [verified, rejected, expired, challenge_not_found, replay_rejected, prerequisite_unavailable]
+        reasonCode: { type: ["string", "null"] }
+        hostBoundaryReady: { type: boolean, const: false }
+        integratedAssessmentReady: { type: boolean, const: false }
+        workerAdmission: { type: string, const: disabled }
+      required: [attestationStatus, reasonCode, hostBoundaryReady, integratedAssessmentReady, workerAdmission]
     AiAssessmentLabProfileAvailability:
       type: object
       properties:

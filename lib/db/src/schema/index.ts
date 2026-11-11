@@ -24,3 +24,4 @@ export * from "./audit";
 export * from "./roles";
 export * from "./integrations";
 export * from "./ai-assessment-jobs";
+export * from "./host-attestation";
