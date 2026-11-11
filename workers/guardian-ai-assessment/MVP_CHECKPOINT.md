@@ -4953,3 +4953,30 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   provisionado y mediciones firmadas ligadas al digest actual; además, revisión
   y autorización explícita de una DB desechable antes de aplicar/verificar RLS
   y ejecutar aprobación E2E. No se creó commit en esta etapa.
+
+## CORREO: matriz de límites offline en memoria — 2026-11-11
+
+- Base confirmada: HEAD `f8001067bede1e2a2a9304744450be6c2f938e0e`,
+  `main`; el checkpoint previo coincidía con SHA-256
+  `0d25c4d0a79d1a109c7bd390dcc3465ed02de35b986bb52601eed4c1df13fb26`.
+- El corpus de correo existente ya contiene casos sintéticos benignos y
+  adversarios; no se duplicó ni modificó el corpus ni los ocho fixtures.
+- Se añadió una matriz unitaria `TEST ONLY` con un cliente de respuesta fija
+  en memoria y llamada directa a `_one_case`. Comprueba correo benigno y ataque
+  de exfiltración, `tool_choice=auto` con el conjunto de herramientas libre,
+  límites del contenido no confiable dentro del mensaje de usuario, parser de
+  marcador completo, procedencia adaptada frente a `message.tool_calls`
+  nativa, `NO_PROPOSAL`, marcador parcial inválido y ramas `ALLOW`, `DENY` y
+  `REQUIRE_APPROVAL`. `ALLOW` llega al simulador ficticio después de Policy ON;
+  las otras decisiones no despachan. Policy OFF permanece
+  `counterfactual_clone_only` y `executed=false`.
+- Prueba ejecutada en serie:
+  `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=workers/guardian-ai-assessment python -m unittest discover -s workers/guardian-ai-assessment/tests -p 'test_policy_lab.py' -k test_email_synthetic -v`
+  — **2 tests, 2 pasaron, 0 fallaron**. No se llamó a Qwen/`LocalQwenClient`,
+  al runner, a `subprocess`, sockets ni servicios. Son respuestas sintéticas,
+  no inferencias.
+- `git diff --check`: pasó. SHA-256 de
+  `workers/guardian-ai-assessment/tests/test_policy_lab.py`:
+  `f25dce341cac730b5a6cc70199635770a4be0766089e1b062aa6d9bd41872787`.
+- El siguiente bloque de esta misma campaña es BASES DE DATOS, reutilizando
+  esta matriz y conservando la secuencia sin ejecuciones de modelo.
