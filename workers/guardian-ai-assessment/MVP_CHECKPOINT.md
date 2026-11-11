@@ -5467,3 +5467,43 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
 - Pendiente: obtener primero la evidencia independiente del host; después,
   con autorización separada, validar RLS y ciclo de aprobación en DB
   desechable. Mantener los gates cerrados hasta entonces.
+
+## Propuestas tipadas y Policy fail-closed para Correo/BBDD — 2026-11-11
+
+- Base solicitada: `377521899a7700562e58f81d353af101fbcc47dd`, rama `main`,
+  árbol limpio antes del cambio.
+- Cambio de código registrado en `a9957e61400ae560b5b523193e6d7e293ac61e7d`;
+  ajuste focalizado de harness/tests en
+  `afecbbe1e8c0f200f5885bf0d306c19126fd5abe`.
+- `qwen_policy_lab.py` usa una propuesta tipada con procedencia explícita,
+  valida catálogo completo por vertical y argumentos antes de Policy, y
+  bloquea ante excepción o respuesta mal formada del motor. Solo ALLOW con
+  Policy ON alcanza el simulador sintético; DENY/REQUIRE_APPROVAL y Policy OFF
+  no despachan. `tool_choice` permanece `auto`.
+- `llm_lab.py` rechaza argumentos JSON nativos ambiguos (claves duplicadas y
+  NaN/constantes no estándar). La adaptación de marcadores completos conserva
+  origen adaptado; las categorías nativa, adaptada, abstención e inválida
+  siguen separadas de fixtures.
+- Informe: `reports/qwen-email-database-typed-policy-2026-11-11.md`,
+  SHA-256 `1df046b3d178c4a257049bcf1066723feae0abd8e211ee1eb5a393be1d961e1d`.
+- SHA-256 de código/tests en el estado probado:
+  - `llm_lab.py`: `9693e450f4510770b83d26a82182ac5fdad4df3b3f92a4f3357edf596b71321e`
+  - `qwen_policy_lab.py`: `06a8fac23412e904c9b0e76bb674c7af7bffcae4bff2fe0b883f9a334e470158`
+  - `tests/test_policy_lab.py`: `c5d0cc39a81c27615f87334b737a329182d8f86bc5f2a33417214d5613cc890e`
+- Suite unitaria offline focalizada: **18 métodos pasaron, 0 fallaron**.
+  Incluyó respuestas fijas, casos benignos/adversarios de correo y filas DB,
+  procedencia, catálogos, parser, abstención y orden Policy→simulador. Una
+  selección inicial falló por nombres de tests; otra reveló harnesses que
+  suministraban catálogos vacíos. Se corrigieron solo los tests para usar los
+  catálogos declarados; el último run focalizado pasó. `git diff --check` pasó.
+  No se ejecutó typecheck separado (no se encontró configuración mypy/pyright).
+- Todo lo ejecutado fue sintético en memoria. No hubo inferencia Qwen, carga de
+  GGUF, subprocess hijos, workers, API, broker, Docker/socket, PostgreSQL,
+  migraciones, red o servicios externos. Los fixtures baseline permanecen
+  intactos. Esta entrega no acredita tool_calls emitidas por modelo,
+  aislamiento, gates, persistencia/RLS ni integración E2E.
+- Siguiente incremento offline: respuestas fijas tipadas de Finanzas/Soporte
+  que acrediten REQUIRE_APPROVAL, binding exacto de propuesta y cero despacho;
+  identificarlo como prueba contractual en memoria, no como persistencia real.
+  La acreditación RLS/aprobaciones durable sigue pendiente de DB de laboratorio
+  autorizada, y Qwen real sigue bloqueado por falta de atestación independiente.
