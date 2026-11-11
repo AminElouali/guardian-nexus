@@ -4403,3 +4403,24 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   El siguiente bloqueo requiere al propietario de un host de laboratorio
   dedicado y un verificador independiente que emitan atestación Ed25519
   vinculada a los hashes vigentes. No habilitar inferencia antes de aceptarla.
+
+## Regresión de procedencia offline frente a evidencia viva de API v2 — 2026-11-11
+
+- Desde HEAD `38ef323d853f13ae84d181cab955960eb414b044`, se añadió una prueba
+  unitaria sintética en `artifacts/api-server/src/lib/ai-assessment-qwen-evidence.test.ts`.
+- La prueba confirma que `real_local_qwen_inference_offline_process_guard` se
+  rechaza como evidencia viva por el validador API v2. También mantiene
+  separados propuestas adaptadas, `runtime message.tool_calls`, fixtures
+  deterministas y `NO_PROPOSAL`.
+- No se cambió lógica de producción, cola, gate de broker ni los ocho fixtures.
+  No se ejecutó inferencia Qwen, worker, Docker, PostgreSQL, migración ni
+  servicio externo.
+- Verificación secuencial:
+  - prueba focalizada: **1/1 aprobada**;
+  - typecheck API: **aprobado**;
+  - `git diff --check`: aprobado.
+- SHA-256 del test:
+  `58c89ccfda5aed488e6d1a4d26ca2eb54efdf6f33e423816fc182d3a3f769e53`.
+- Informe: `reports/offline-api-v2-qwen-provenance-boundary-2026-11-11.md`.
+  SHA-256 `40074d9061a556830f604c909fb49676333909c916e933c9665d215f3a5976d7`.
+  El gate continúa cerrado hasta una atestación independiente del host.

@@ -1282,6 +1282,88 @@ test("Qwen evidence accepts adapter-validation blocks without calling them polic
   );
 });
 
+test("API v2 rejects offline process-guard evidence as live and preserves provenance classes", () => {
+  const offlineGuardEvidence = {
+    ...makeEvidence(),
+    executionMode: "real_local_qwen_inference_offline_process_guard",
+  } as unknown as Record<string, unknown>;
+  delete offlineGuardEvidence.evidenceSha256;
+  offlineGuardEvidence.evidenceSha256 = digest(offlineGuardEvidence);
+
+  assert.equal(
+    validateGuardianQwenPolicyLabEvidence(
+      offlineGuardEvidence as unknown as QwenEvidence,
+      offlineGuardEvidence,
+      "guardian-agent-qwen-lab-email-v1",
+    ),
+    "identity_provider_network_or_limits",
+    "the v2 live-evidence validator must reject offline process-guard artifacts",
+  );
+  assert.equal(
+    resolveApprovalEvidenceProvenance({
+      engine: "guardian_qwen_policy_lab",
+      executionMode: offlineGuardEvidence.executionMode,
+      modelInference: true,
+      toolCallOrigin: "guardian_qwen_native_markup_adapter",
+    }),
+    null,
+    "offline-process evidence must not be normalized as live Qwen inference",
+  );
+
+  assert.deepEqual(
+    resolveApprovalEvidenceProvenance({
+      engine: "guardian_qwen_policy_lab",
+      executionMode: "real_local_qwen_inference",
+      modelInference: true,
+      toolCallOrigin: "guardian_qwen_native_markup_adapter",
+    }),
+    {
+      modelInference: true,
+      executionMode: "real_local_qwen_inference",
+      toolCallOrigin: "guardian_qwen_native_markup_adapter",
+    },
+    "complete adapted proposals remain distinct from runtime-native calls",
+  );
+  assert.deepEqual(
+    resolveApprovalEvidenceProvenance({
+      engine: "guardian_qwen_policy_lab",
+      executionMode: "real_local_qwen_inference",
+      modelInference: true,
+      toolCallOrigin: "runtime_message_tool_calls",
+    }),
+    {
+      modelInference: true,
+      executionMode: "real_local_qwen_inference",
+      toolCallOrigin: "runtime_message_tool_calls",
+    },
+    "native runtime message.tool_calls retain their own provenance",
+  );
+  assert.deepEqual(
+    resolveApprovalEvidenceProvenance({
+      engine: "guardian_policy_lab",
+      executionMode: "deterministic_fixture",
+      modelInference: false,
+      toolCallOrigin: "controlled_fixture_not_llm",
+    }),
+    {
+      modelInference: false,
+      executionMode: "deterministic_fixture",
+      toolCallOrigin: "controlled_fixture_not_llm",
+    },
+    "deterministic fixtures remain non-inference evidence",
+  );
+  assert.equal(
+    resolveApprovalEvidenceProvenance({
+      engine: "guardian_qwen_policy_lab",
+      executionMode: "real_local_qwen_inference",
+      modelInference: true,
+      toolCallOrigin: "no_tool_call",
+    }),
+    null,
+    "NO_PROPOSAL is not a proposal, native call, or fixture",
+  );
+});
+
 test("Qwen evidence rejects a simulated execution attached to a denied proposal", () => {
   const evidence = makeEvidence(true);
   assert.equal(
