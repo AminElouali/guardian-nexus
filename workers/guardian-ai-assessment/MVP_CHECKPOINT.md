@@ -5127,6 +5127,15 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   esta pantalla refleja el estado de API y no lo convierte en ejecución.
   API Server sigue fallido y no se reinició. No se ejecutaron Qwen, workers,
   Docker, PostgreSQL, red ni E2E.
+- Tras el cambio se ejecutó también:
+  `cd artifacts/api-server && ./node_modules/.bin/tsx --test --test-name-pattern='API gate remains unavailable and cannot enqueue without a verified broker' src/lib/assessment-worker-mode.test.ts`
+  — **1/1 pasó**, confirmando de forma unitaria que la disponibilidad sigue
+  deshabilitada y enqueue devuelve `false`; no inspecciona sockets ni inicia
+  Docker. `git diff --check` pasó antes del commit de dashboard.
+- Commits de la fase: `e205af40833bc359269d3201b42d402273f85f73`
+  (tests Finance/Support), `0b711511d5e5dfc99f45dd56bb702c23ed810c97`
+  (checkpoint offline), y `d183ed784f8acfd712c23c4c38d6cb4cad134046`
+  (tarjeta de disponibilidad del dashboard).
 - Próximo bloqueo para cambiar ese estado: atestación independiente real del
   host ligada a los hashes actuales y verificación de API/broker/worker; para
   approvals persistentes, una DB desechable expresamente autorizada. El archivo
