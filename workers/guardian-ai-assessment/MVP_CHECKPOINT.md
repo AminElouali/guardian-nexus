@@ -4559,8 +4559,10 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   limpio antes de esta anotación.
 - Inspección de metadatos de solo lectura: faltan la atestación firmada en
   `/run/guardian-nexus/host-boundary-attestation.json`, la clave pública en
-  `/etc/guardian-nexus/host-boundary-attestor-ed25519.pem` y un canal de nonce
-  en `/run/guardian-nexus/host-boundary-challenge.json`.
+  `/etc/guardian-nexus/host-boundary-attestor-ed25519.pem`. El código no define
+  un path ni protocolo de challenge; el path candidato
+  `/run/guardian-nexus/host-boundary-challenge.json` también estaba ausente en
+  la inspección de metadatos y no es una interfaz existente.
 - Se confirmó el hueco: el verificador Python existente valida firma Ed25519,
   esquema/canonicalización, vigencia, hashes, identidades, claims de socket,
   DB y sandbox, pero no tiene nonce/replay; su identidad de runtime se compara
@@ -4577,7 +4579,7 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   identidades API/broker/worker sin verificar.
 - Informe `reports/host-attestation-supervisor-prerequisites-2026-11-11.md`,
   SHA-256:
-  `9e0760783c4b63b05f3caccb9afd43e336560165be9d121a0f60443943f22ada`.
+  `af5dbaaf3bfcb16474d7cd60bff49a4706347dd03d93107ed3c17fd2039f9a3e`.
 - Gate/readiness permanecen cerrados. Requisito externo: un supervisor del
   propietario del host que emita desafío fresco, respuesta firmada de un solo
   uso y evidencia actual de los tres procesos, con protección durable contra

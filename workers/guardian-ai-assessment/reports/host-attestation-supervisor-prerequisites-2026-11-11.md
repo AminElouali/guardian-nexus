@@ -11,10 +11,13 @@ certification.
 
 - Starting state: HEAD
   `278a959dbd720ee8d454659cece6e9aab8d4547d`, branch `main`, clean.
-- Metadata checks found these expected inputs absent:
+- Metadata checks found the existing attestation inputs absent:
   - `/run/guardian-nexus/host-boundary-attestation.json`
   - `/etc/guardian-nexus/host-boundary-attestor-ed25519.pem`
-  - `/run/guardian-nexus/host-boundary-challenge.json`
+- The inspected code does not define a challenge-file path or challenge
+  exchange. As a metadata-only check, the candidate path
+  `/run/guardian-nexus/host-boundary-challenge.json` was also absent; this is
+  not an existing protocol endpoint.
 - The existing Python verifier
   `guardian_ai_assessment/host_boundary_attestation.py` performs Ed25519
   verification, canonical JSON and exact-schema checks, root-owned file checks,
