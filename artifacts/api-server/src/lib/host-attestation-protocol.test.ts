@@ -266,6 +266,28 @@ test("TEST ONLY valid signed challenge is recorded but never enables runtime gat
   );
 });
 
+test("TEST ONLY worker-supplied public key is rejected and cannot change readiness", async () => {
+  const { protocol, repository } = makeHarness();
+  const challenge = await protocol.issue({ workspaceId, issuedByUserId });
+  const envelope = {
+    ...signedEnvelope(payloadFor(challenge)),
+    publicKey: "TEST ONLY worker-controlled key",
+  };
+  const result = await protocol.respond({
+    workspaceId,
+    challengeId: challenge.id,
+    envelope,
+  });
+
+  assert.equal(result.attestationStatus, "rejected");
+  assert.equal(result.reasonCode, "assessment_host_response_invalid");
+  assert.equal(result.hostBoundaryReady, false);
+  assert.equal(result.integratedAssessmentReady, false);
+  assert.equal(result.workerAdmission, "disabled");
+  assert.equal(repository.rows.get(challenge.id)?.status, "issued");
+  assert.equal(getLocalWorkerAvailability().status, "disabled");
+});
+
 test("TEST ONLY altered signature is rejected and consumes its one-use challenge", async () => {
   const { protocol, repository } = makeHarness();
   const challenge = await protocol.issue({ workspaceId, issuedByUserId });

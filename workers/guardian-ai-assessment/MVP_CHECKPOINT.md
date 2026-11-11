@@ -4711,3 +4711,161 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   firmada actual de API/broker/worker, además del plan/autorización para una
   base PostgreSQL desechable. Hasta entonces, avanzar solo en tests offline
   con dobles y revisión estática; no ejecutar Qwen ni abrir gates.
+
+## Continuación estática de host, atestación y RLS — 2026-11-11
+
+- Reanudación desde HEAD `518201ea523b6108595ad4b834f0152dae162df3` en `main`;
+  árbol limpio al comenzar esta etapa. El commit anterior solo añadió el
+  historial de campaña a este checkpoint. No hay un indicador accesible aquí
+  para confirmar tareas remotas de Replit.
+- Configuración/API: el artifact declara `pnpm --filter @workspace/api-server
+  run dev` y el workflow está `failed`. Se consultó su log ya existente, sin
+  reinicio: el build terminó, pero el proceso de API rehusó arrancar con
+  `RLS readiness checks failed` / `Tenant RLS policies are missing,
+  unqualified, or not forced`. No se conectó a PostgreSQL durante esta etapa.
+- Evidencia declarativa de aislamiento (no efectiva): las imágenes fijan
+  `USER 65532:65532`; el constructor usa red deshabilitada, filesystem de solo
+  lectura, `cap-drop=ALL`, `no-new-privileges`, y argumentos fijos sin
+  `--privileged`, `--device` ni namespaces host. Los argumentos montan
+  atestación y clave pública en solo lectura, no `docker.sock`. Las plantillas
+  systemd declaran usuarios/grupos API, broker y worker distintos; el grupo
+  Docker aparece solo en broker. Nada de esto prueba las identidades, mounts,
+  descriptores, capabilities o permisos efectivos del host actual.
+- Hallazgo corregido en el constructor: la rama Policy Lab montaba `sourcePath`
+  sin validación lexical, aunque las demás rutas Qwen exigían rutas absolutas.
+  Ahora toda fuente de bind Qwen/Policy Lab que contenga `docker.sock` se
+  rechaza. La defensa no resuelve aliases, enlaces simbólicos, bind mounts
+  externos ni exposición fuera del constructor; eso requiere medición
+  independiente del host.
+- La API contiene comprobaciones de metadata del socket para el camino de
+  disponibilidad y el lanzamiento de Docker vive en el API, detrás del gate.
+  No se ejecutó ese código: no se inspeccionó ni abrió el socket. El gate fuente
+  mantiene todos los perfiles `disabled` con
+  `assessment_broker_identity_unverified`; rutas/protocolo mantienen
+  `hostBoundaryReady=false` e `integratedAssessmentReady=false`.
+- El endpoint usa `loadPinnedHostTrustAnchor` y la clave pública se fija fuera
+  del payload; el sobre Zod es estricto y el verificador Python solo consume
+  clave pública root-owned. La prueba añadida rechaza un campo `publicKey`
+  aportado por un supuesto worker. Esta prueba y las demás de protocolo son
+  sintéticas `TEST ONLY`; no acreditan que exista el supervisor externo ni
+  que sus claims sean medidos independientemente.
+- Cobertura ejecutada ahora, focalizada y en serie: constructor de argumentos
+  de 8 perfiles Qwen, Policy Lab de 8 perfiles, rechazo de rutas declaradas
+  `docker.sock`, y plantillas con identidades separadas: **4/4**. Protocolo de
+  atestación `TEST ONLY` (firma sintética sin readiness, public key suministrada
+  por worker rechazada, UID/GID/roles compartidos): **5/5**, incluidos 2
+  subtests. Typecheck API: pasó; `git diff --check`: pasó. No se repitieron las
+  29 pruebas ni los typechecks del checkpoint anterior.
+- Se omitieron deliberadamente el test de modo de worker que llama a
+  `isLocalDockerWorkerAllowed` con `NODE_ENV=development` (su implementación
+  consulta `statSync` sobre `/var/run/docker.sock`), los preflights de host,
+  contenedor, workers, Qwen, DB/E2E, migraciones y todas las conexiones.
+- Aprobaciones: Drizzle define binding/version, hashes, roles, estado, caducidad,
+  recibos/replay y RLS; SQL declara políticas tenant-scoped y `FORCE RLS`.
+  El E2E exige una base loopback `guardian_approval_lab_*` y opt-in explícito.
+  No se aplicó schema ni se ejecutó ese E2E. El error actual del API indica que
+  la base configurada no satisface su readiness RLS; no se inspeccionó ni
+  modificó.
+- Timeout offline: el coordinador actual registra duración, timeout asignado,
+  número/hash de bytes stdout/stderr y checkpoint parcial, pero descarta texto
+  bruto y no identifica fase interna más allá del error/código del proceso.
+  El artefacto histórico `TimeoutError` de 11:21Z no permite recuperar qué
+  límite exacto se agotó. Una mejora futura segura sería añadir un código de
+  fase estructurado y acotado, sin prompts ni respuestas, y fijarlo con un test
+  de subprocess simulado.
+- SHA-256 de archivos de código/test tras esta etapa:
+  - `artifacts/api-server/src/lib/ai-assessment-sandbox.ts`:
+    `8888f207398ad877b2609220f8bda3d02ec77d6cea06369208caff2efcd5c531`
+  - `artifacts/api-server/src/lib/ai-assessment-sandbox.test.ts`:
+    `851ef23a7710106b444d4e022530a239db2b4d4c6cfaac27ca3bfa91f377b17a`
+  - `artifacts/api-server/src/lib/host-attestation-protocol.test.ts`:
+    `ab16027fbcc36b9fa6ec0b4ad9f92deac753682ca78f8d1093d7144c85439110`
+- Bloqueo externo para reconsiderar readiness: el propietario del host debe
+  provisionar un supervisor independiente y su trust anchor raíz de solo
+  lectura fuera del worker; emitir y verificar un challenge-response fresco,
+  no repetible, ligado al commit/digest vigente y a datos medidos de API/broker/
+  worker (identidades, grupos, namespaces, capabilities, seccomp,
+  no-new-privileges, mounts, FDs y acceso Docker). La base desechable requiere
+  además revisión de destino/plan y autorización explícita antes de migraciones,
+  con roles segregados y RLS aplicado y comprobado.
+- No se ejecutaron inferencias ni se cambió readiness. Siguiente paso offline:
+  añadir diagnóstico estructurado y seguro del timeout. La primera inferencia
+  Qwen sigue bloqueada hasta la atestación externa real y la recuperación del
+  API requiere corregir/aplicar RLS solo en una base autorizada, nunca a ciegas.
+
+## Reanudación documental y regresiones fail-closed — 2026-11-11
+
+- Inicio de etapa: HEAD `518201ea523b6108595ad4b834f0152dae162df3`, rama `main`,
+  árbol limpio. Se preservó el checkpoint anterior y se añadió esta sección;
+  no hay aquí una señal de estado para confirmar tareas remotas del Agent.
+- Auditoría estática del host:
+  - `artifact.toml` declara API como `pnpm --filter @workspace/api-server run
+    dev`; `Dockerfile.qwen.offline` declara `USER 65532:65532`.
+  - El builder genera argumentos fijos sin `--privileged`, `--device`,
+    `--network=host`, `--pid=host`, `--ipc=host` ni un mount de `docker.sock`;
+    fija red none, root FS read-only, cap-drop ALL y no-new-privileges. Los
+    mounts de atestación y clave son declarados read-only.
+  - Las plantillas Ubuntu 24.04 declaran usuarios y grupos distintos para API,
+    broker y worker; solo el broker tiene el grupo Docker. Son ejemplos de
+    configuración y no se verificaron como unidades instaladas.
+  - El API contiene `statSync("/var/run/docker.sock")` en la ruta de
+    disponibilidad y `spawn("docker", args)` detrás del gate. No se invocó esa
+    ruta ni se inspeccionó el socket en esta etapa. La identidad/grupos,
+    namespaces, capabilities, FD heredados, mounts efectivos y permisos del
+    proceso actual siguen sin medición independiente.
+- Cambio mínimo de código: se rechazaron fuentes de bind Qwen/Policy Lab cuyo
+  texto declara `docker.sock`; antes, la ruta Policy Lab pasaba `sourcePath`
+  sin validación. Es una protección lexical del constructor, no resuelve
+  symlinks, aliases ni mounts externos.
+- Atestación: el endpoint API carga `loadPinnedHostTrustAnchor`; la clave no
+  forma parte del sobre, cuyo schema es estricto. El verifier Python lee una
+  clave pública root-owned y solo verifica firmas. Test añadido: un supuesto
+  worker no puede adjuntar `publicKey` al response. Todas las pruebas de firma
+  usan harness y claves generadas `TEST ONLY`; no acreditan un supervisor.
+- Readiness permanece cerrado en código: el API gate devuelve `disabled` con
+  `assessment_broker_identity_unverified`; los resultados del protocolo y las
+  rutas reportan `hostBoundaryReady=false` e
+  `integratedAssessmentReady=false`. La regla de identidad compartida está
+  cubierta con valores sintéticos, no con UID/GID medidos.
+- Workflow API: se consultó únicamente el estado y log ya disponible, sin
+  reinicio. Build pasó, pero el inicio falla en `assertRlsRuntimeReady` con
+  `Tenant RLS policies are missing, unqualified, or not forced; refusing to
+  start.` El workflow queda `failed`, sin puerto abierto.
+- Aprobaciones/RLS revisadas sin DB: Drizzle declara vínculo/hash de propuesta,
+  tenant/job, actor/rol, estado/expiración, idempotencia y recibos; SQL define
+  políticas de tenant y FORCE RLS. El E2E exige opt-in y destino loopback
+  `guardian_approval_lab_*`. El API indica que esas políticas no están listas
+  en la base de runtime; no se aplicaron migraciones ni se probó persistencia.
+- Timeout: el coordinador ya registra `durationSeconds`, `timeoutSeconds`,
+  tamaños y SHA-256 de stdout/stderr, y checkpoint parcial; no almacena salida
+  bruta ni etiqueta una fase interna de timeout. El artefacto histórico de
+  11:21Z no contiene información suficiente para determinar el límite exacto.
+- Pruebas ejecutadas ahora, solo focalizadas:
+  - `ai-assessment-sandbox.test.ts`: **4/4** sobre argumentos de los ocho
+    perfiles, rechazo de socket declarado, configuración de Policy Lab e
+    identidades de plantillas.
+  - `host-attestation-protocol.test.ts`: **5/5** `TEST ONLY`, incluyendo
+    response con clave aportada por worker rechazado, firma sintética sin
+    readiness y rechazo de identidades compartidas/mal emparejadas.
+  - Typecheck API pasó; `git diff --check` pasó.
+  - Se omitió `assessment-worker-mode.test.ts`, porque uno de sus tests llama
+    la ruta development que consulta metadata de `/var/run/docker.sock`.
+    También se omitieron todos los preflights, worker, Qwen, Docker, sockets,
+    PostgreSQL, migraciones, red y suites E2E. No se repitieron las 29 pruebas
+    del checkpoint anterior.
+- SHA-256 tras esta etapa:
+  - `artifacts/api-server/src/lib/ai-assessment-sandbox.ts`:
+    `8888f207398ad877b2609220f8bda3d02ec77d6cea06369208caff2efcd5c531`
+  - `artifacts/api-server/src/lib/ai-assessment-sandbox.test.ts`:
+    `851ef23a7710106b444d4e022530a239db2b4d4c6cfaac27ca3bfa91f377b17a`
+  - `artifacts/api-server/src/lib/host-attestation-protocol.test.ts`:
+    `ab16027fbcc36b9fa6ec0b4ad9f92deac753682ca78f8d1093d7144c85439110`
+- Bloqueo externo exacto: el propietario del host debe instalar/configurar un
+  supervisor fuera del control de API/broker/worker y provisionar su trust
+  anchor raíz; el supervisor debe medir y firmar el estado actual ligado al
+  commit/digest. Además, el responsable de DB debe revisar y autorizar una
+  base disposable, aplicar RLS con roles segregados y aportar evidencia. Hasta
+  entonces no ejecutar inferencia/worker ni habilitar el API.
+- `.replit` apareció modificado durante la actualización de entorno del usuario;
+  se preservó sin inspeccionar ni usar su contenido. No se leyó ningún valor de
+  entorno y no se conectó ni migró la base.

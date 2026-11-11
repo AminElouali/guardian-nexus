@@ -409,12 +409,88 @@ test("eight policy lab profiles use the pinned offline image with minimal read-o
     assert.ok(args.includes("--pids-limit=64"));
     assert.ok(args.includes(ASSESSMENT_EXECUTION_LIMITS.policyLab.tmpfs));
     assert.ok(args.some((arg) => arg.endsWith("/guardian_ai_assessment,readonly")));
+    assert.equal(args.includes("--privileged"), false);
+    assert.equal(args.some((arg) => arg.startsWith("--device")), false);
+    assert.equal(args.includes("--network=host"), false);
+    assert.equal(args.includes("--pid=host"), false);
+    assert.equal(args.includes("--ipc=host"), false);
     assert.equal(args.some((arg) => arg.includes("/models/")), false);
     assert.equal(args.some((arg) => arg.includes("/wheelhouse")), false);
     assert.equal(args.some((arg) => arg.includes("docker.sock")), false);
     assert.equal(args.at(-1), profileId);
     assert.ok(args.includes("exec python -B -m guardian_ai_assessment.policy_lab --profile-id \"$1\""));
   }
+});
+
+test("Qwen and policy lab builders reject declared Docker socket bind sources", () => {
+  const qwenProfile = QWEN_POLICY_LAB_PROFILE_IDS[0];
+  for (const [index, field] of [
+    "modelPath",
+    "wheelhousePath",
+    "manifestPath",
+    "sourcePath",
+  ].entries()) {
+    const unsafeMounts = {
+      ...mounts,
+      [field]: "/var/run/docker.sock",
+    };
+    assert.throws(
+      () =>
+        buildAssessmentDockerRunArgs(
+          `guardian-ai-socket-source-qwen-${index}`,
+          qwenProfile,
+          lock.images.qwen.imageId,
+          unsafeMounts,
+        ),
+      /worker_mount_configuration_invalid/,
+    );
+  }
+
+  for (const [index, profileId] of POLICY_LAB_PROFILE_IDS.entries()) {
+    assert.throws(
+      () =>
+        buildAssessmentDockerRunArgs(
+          `guardian-ai-socket-source-policy-${index}`,
+          profileId,
+          lock.images.qwen.imageId,
+          { ...mounts, sourcePath: "/var/run/docker.sock" },
+        ),
+      /worker_mount_configuration_invalid/,
+    );
+  }
+});
+
+test("host service templates declare separate API, broker, and worker identities", () => {
+  const systemdRoot = resolve(
+    workerRoot,
+    "lab-host/ubuntu-24.04/systemd",
+  );
+  const api = readFileSync(resolve(systemdRoot, "guardian-api.service.example"), "utf8");
+  const broker = readFileSync(
+    resolve(systemdRoot, "guardian-broker.service.example"),
+    "utf8",
+  );
+  const worker = readFileSync(
+    resolve(systemdRoot, "guardian-worker.service.example"),
+    "utf8",
+  );
+  const user = (unit: string) => unit.match(/^User=(.+)$/m)?.[1];
+  const group = (unit: string) => unit.match(/^Group=(.+)$/m)?.[1];
+  const users = [user(api), user(broker), user(worker)];
+  const groups = [group(api), group(broker), group(worker)];
+
+  assert.deepEqual(users, ["guardian-api", "guardian-broker", "guardian-worker"]);
+  assert.deepEqual(groups, ["guardian-api", "guardian-broker", "guardian-worker"]);
+  assert.equal(new Set(users).size, 3);
+  assert.equal(new Set(groups).size, 3);
+  assert.match(broker, /^SupplementaryGroups=.*guardian-docker-broker/m);
+  assert.doesNotMatch(api, /^SupplementaryGroups=.*docker/m);
+  assert.doesNotMatch(worker, /^SupplementaryGroups=.*docker/m);
+  for (const unit of [api, broker, worker]) {
+    assert.match(unit, /^NoNewPrivileges=yes$/m);
+  }
+  assert.doesNotMatch(api, /docker\.sock/i);
+  assert.doesNotMatch(worker, /docker\.sock/i);
 });
 
 test("profile image lock cannot be redirected to an arbitrary image or command", () => {

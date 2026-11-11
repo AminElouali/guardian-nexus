@@ -21,3 +21,8 @@ timeoutMs = 20000
 
 [nix]
 channel = "stable-25_05"
+
+[userenv]
+
+[userenv.shared]
+REPLIT_DATABASE_MIGRATIONS = "Antes de proporcionar REPLIT_DATABASE_MIGRATIONS, inspecciona en modo solo lectura qué componente la requiere, dónde se consume, qué formato y valor espera y qué migraciones ejecutaría. No solicites ni reveles secretos. No ejecutes migraciones, no conectes PostgreSQL y no modifiques variables de entorno ni bases de datos. Indica si es imprescindible para la campaña actual o si podemos continuar el trabajo offline sin configurarla."

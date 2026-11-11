@@ -246,6 +246,16 @@ export function verifyAssessmentImageLockSources(
   }
 }
 
+function isSafeMountSource(path: unknown): path is string {
+  return (
+    typeof path === "string" &&
+    path.startsWith("/") &&
+    !path.includes(",") &&
+    !path.includes("\0") &&
+    !path.toLowerCase().includes("docker.sock")
+  );
+}
+
 function assertCompleteQwenMounts(mounts: AssessmentMountPaths): void {
   if (!isRecord(mounts)) {
     throw new Error("worker_mount_configuration_invalid");
@@ -256,15 +266,7 @@ function assertCompleteQwenMounts(mounts: AssessmentMountPaths): void {
     mounts.manifestPath,
     mounts.sourcePath,
   ];
-  if (
-    paths.some(
-      (path) =>
-        typeof path !== "string" ||
-        !path.startsWith("/") ||
-        path.includes(",") ||
-        path.includes("\0"),
-    )
-  ) {
+  if (paths.some((path) => !isSafeMountSource(path))) {
     throw new Error("worker_mount_configuration_invalid");
   }
 }
@@ -312,8 +314,14 @@ export function buildAssessmentDockerRunArgs(
     throw new Error("worker_image_identity_mismatch");
   }
   const imageKey = imageKeyForProfile(profileId);
-  if (imageKey === "qwen" && !isPolicyLabProfile(profileId)) {
-    assertCompleteQwenMounts(mounts);
+  if (imageKey === "qwen") {
+    if (isPolicyLabProfile(profileId)) {
+      if (!isRecord(mounts) || !isSafeMountSource(mounts.sourcePath)) {
+        throw new Error("worker_mount_configuration_invalid");
+      }
+    } else {
+      assertCompleteQwenMounts(mounts);
+    }
   }
   const common = [
     "run",
