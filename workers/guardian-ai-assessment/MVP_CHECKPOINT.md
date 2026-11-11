@@ -5415,3 +5415,31 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   independiente de host/broker/worker y una base PostgreSQL de laboratorio
   autorizada para probar RLS y aprobaciones persistentes; los gates permanecen
   cerrados y la inferencia Qwen sigue sin acreditación.
+
+## Revalidación focalizada solicitada — 2026-11-11
+
+- HEAD verificado antes de la revalidación: `d808d241ac2fd1576c08442854cfffd6499c6d67`,
+  rama `main`, árbol limpio.
+- Se comprobó que la matriz focalizada de Finanzas/soporte/multiagente ya está
+  implementada en el commit anterior; no se duplicó el código.
+- Comando: `PYTHONDONTWRITEBYTECODE=1
+  PYTHONPATH=workers/guardian-ai-assessment:workers/guardian-ai-assessment/tests
+  python -m unittest -v` con estos diez métodos:
+  `test_finance_support_and_multiagent_catalogs_match_policy_contracts`,
+  `test_native_adapted_and_absent_origins_stay_distinct_for_all_profiles`,
+  `test_adversarial_proposals_require_policy_and_never_dispatch_across_origins_for_all_profiles`,
+  `test_policy_on_decision_precedes_synthetic_dispatch_for_all_profiles`,
+  `test_untrusted_injection_fixtures_in_all_eight_profiles_never_dispatch`,
+  `test_shared_tool_adapter_runs_only_after_allow_and_never_in_policy_off`,
+  `test_cross_tenant_scope_denies_before_dispatch_for_all_eight_verticals`,
+  `test_scope_tampering_unknown_provenance_and_tenant_mismatch_fail_closed`,
+  `test_support_refund_tool_has_fixed_arguments_and_approval_only_semantics`,
+  `test_invalid_finance_arguments_cannot_become_an_approval_request`.
+  Resultado: **10 pasaron, 0 fallaron**.
+- Revalidación exclusivamente unitaria en memoria. No se ejecutó Qwen,
+  procesos hijos, worker/API/broker, servicios, Docker/socket, PostgreSQL,
+  migraciones o red. No hubo typecheck ni suite amplia. No es prueba de
+  persistencia/RLS ni de inferencia real.
+- Se preservan el código y fixtures existentes; no apareció discrepancia de
+  producción. Atestación independiente, aislamiento real y persistencia E2E
+  siguen bloqueados/no acreditados.
