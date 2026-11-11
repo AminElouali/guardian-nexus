@@ -5544,3 +5544,26 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   existente solo cuando el propietario proporcione una DB de laboratorio
   desechable autorizada y roles segregados; no sustituirla con un fake en
   memoria.
+
+## Revisión de cobertura de aprobaciones sin duplicados — 2026-11-11
+
+- En `src/lib/ai-assessment-qwen-evidence.test.ts` ya existían pruebas offline
+  de ciclo Finance/Support, binding v3 y procedencia, replay, expiración,
+  decisión/dispatch en memoria y guard del destino PostgreSQL desechable.
+  Se ejecutaron 5 tests filtrados: 5 pasaron, 0 fallaron.
+- Se redujo `artifacts/api-server/src/lib/ai-assessment-approval-actions.test.ts`
+  a una regresión no cubierta por esos tests: binding separada para fixture,
+  afirmaciones sintéticas adaptadas/nativas y `syntheticActionRef`. El test pasó
+  (1/1); no representa una inferencia ni aprobación real.
+- Informe
+  `reports/finance-support-approval-coverage-recheck-2026-11-11.md`,
+  SHA-256 `c70e1146aae80afa7f3713757864145653300dd475f6548cb1ccec6355bb78c3`.
+  Test retenido SHA-256
+  `7fb0e59189898e0c7056d137e6dcc506831e17a501eb0228136dd39a961ee751`.
+- Commit de la regresión reducida: `93742fdf434252fd10f090b4bd4e05d0bccc828a`.
+- `git diff --check` pasó. No se ejecutaron suites amplias, typecheck,
+  inferencia Qwen, workers, API/broker, Docker/socket, PostgreSQL, migraciones
+  ni red. No se inspeccionó ni cambió `.replit`, variables o secretos.
+- El guard unitario no acredita persistencia ni una DB existente. La E2E de
+  aprobación/RLS sigue pendiente de una base de laboratorio desechable
+  autorizada; Qwen/worker siguen dependiendo de atestación independiente real.
