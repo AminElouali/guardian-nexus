@@ -32,6 +32,10 @@ const profileEngines: Array<{
 
 const BROKER_UNAVAILABLE_REASON = "assessment_broker_identity_unverified";
 
+export type AssessmentWorkerAdmission =
+  | { admitted: true }
+  | { admitted: false; reasonCode: string };
+
 export function getLocalWorkerAvailability(): LocalWorkerAvailability {
   return {
     status: "disabled",
@@ -46,10 +50,29 @@ export function getLocalWorkerAvailability(): LocalWorkerAvailability {
   };
 }
 
+export function decideAssessmentWorkerAdmission(
+  profileId: AssessmentProfileId,
+): AssessmentWorkerAdmission {
+  const availability = getLocalWorkerAvailability();
+  const profile = availability.profiles.find(
+    (candidate) => candidate.profileId === profileId,
+  );
+  if (availability.status === "ready" && profile?.status === "ready") {
+    return { admitted: true };
+  }
+  return {
+    admitted: false,
+    reasonCode:
+      profile?.reasonCode ??
+      availability.reasonCode ??
+      "assessment_profile_unavailable",
+  };
+}
+
 export function isAssessmentProfileAvailable(
-  _profileId: AssessmentProfileId,
+  profileId: AssessmentProfileId,
 ): boolean {
-  return false;
+  return decideAssessmentWorkerAdmission(profileId).admitted;
 }
 
 export function enqueueLocalAssessmentJob(_item: {

@@ -4517,3 +4517,38 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   aislamiento real ni habilita el gate. Siguiente paso: obtener atestación
   independiente actual de host/broker/worker; después, validar inferencia real
   primero en correo y BBDD.
+
+## Admisión API fail-closed para correo y BBDD — 2026-11-11
+
+- Base: HEAD `a963014de5d9a7da4baa266c61eed4339bb9c3d8`, rama `main`, árbol
+  limpio antes de este cambio.
+- El gate existente expone una decisión pura de admisión. El POST
+  `/ai-security-assessments/lab/jobs` reutiliza el flujo común
+  `requestLabJob`; tras comprobar workspace/rol, la decisión se evalúa antes
+  de lecturas de idempotencia y trabajos pendientes, inserciones, reserva de
+  cuota, auditoría de job y enqueue.
+- Prueba de ruta con dobles para correo y BBDD: ambas respuestas son 503
+  `worker_unavailable`; cero consultas de idempotencia/pendientes, inserciones,
+  reservas de cuota y enqueue. No se genera evento de rechazo porque no existe
+  en el flujo actual un requisito/evento obligatorio para esta denegación.
+- El gate no se altera: worker y todos los perfiles siguen deshabilitados con
+  `assessment_broker_identity_unverified`.
+- Pruebas offline, en serie: admisión API **1/1**; modo/gate del worker
+  **4/4**; typecheck API aprobado; `git diff --check` aprobado. La prueba
+  invoca el handler directamente con una transacción simulada; no abre servidor
+  HTTP, DB ni cola. No verifica Clerk/RLS/persistencia, y no es inferencia
+  Qwen.
+- No se ejecutaron Qwen, workers, broker, Docker/socket, PostgreSQL, servicios,
+  red, pruebas E2E de base de datos, despliegue ni publicación.
+- SHA-256:
+  - `artifacts/api-server/src/lib/assessment-worker-api-gate.ts`:
+    `799308245a98cb42ffb074290a766456cc59386ab2d26b59e08cc24ae18f14f3`
+  - `artifacts/api-server/src/routes/ai-assessment-lab.ts`:
+    `b67c1d1ff6e176d96c12de6e047e6cf97475b4184fc43c58c04d3d03b3a69fe0`
+  - `artifacts/api-server/src/lib/assessment-worker-api-admission.test.ts`:
+    `7263f2b4c734e030c749832d26877ca20b3ec098ec80fd1698f9681ee4a17aab`
+  - Informe `reports/api-worker-admission-email-database-2026-11-11.md`:
+    `5c48a4d0a989e02cd83b73817759290b37fb73f1ab4074054e4560ad60aedcee`
+- Bloqueo restante: no hay atestación independiente actual de aislamiento
+  host/broker/worker. Este incremento no habilita ni ejecuta Qwen; el siguiente
+  paso continúa siendo acreditar esa frontera.

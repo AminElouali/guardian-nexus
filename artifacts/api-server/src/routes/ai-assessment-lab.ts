@@ -59,9 +59,10 @@ import {
   isAiAssessmentJobRetryable,
 } from "../lib/assessment-queue-contract";
 import {
-  isAssessmentProfileAvailable,
+  decideAssessmentWorkerAdmission,
   enqueueLocalAssessmentJob,
   getLocalWorkerAvailability,
+  isAssessmentProfileAvailable,
 } from "../lib/assessment-worker-api-gate";
 import type { AssessmentProfileId } from "../lib/ai-assessment-sandbox";
 import { withWorkspaceUserTransaction } from "../lib/tenant-db";
@@ -104,21 +105,44 @@ type LabJobRequestBinding = {
 };
 
 type LabJobRequestOutcome =
-  | { kind: "not_member" | "forbidden" | "unavailable" | "queue_full" | "idempotency_conflict" }
+  | {
+      kind:
+        | "not_member"
+        | "forbidden"
+        | "worker_unavailable"
+        | "queue_full"
+        | "idempotency_conflict";
+    }
   | {
       kind: "job";
       job: AiAssessmentJob;
       bindingMetadata: unknown;
     };
 
-async function requestLabJob(input: {
-  userId: string;
-  workspaceId: string;
-  profileId: AssessmentProfileId;
-  idempotencyKey: string;
-  bindingForRole?: (role: string) => LabJobRequestBinding;
-}): Promise<LabJobRequestOutcome> {
-  const access = await withWorkspaceUserTransaction(
+export type LabJobRequestDependencies = {
+  withWorkspaceUserTransaction: typeof withWorkspaceUserTransaction;
+  reserveWorkspaceUsageInTransaction: typeof reserveWorkspaceUsageInTransaction;
+  enqueueLocalAssessmentJob: typeof enqueueLocalAssessmentJob;
+};
+
+export async function requestLabJob(
+  input: {
+    userId: string;
+    workspaceId: string;
+    profileId: AssessmentProfileId;
+    idempotencyKey: string;
+    bindingForRole?: (role: string) => LabJobRequestBinding;
+  },
+  dependencies: Partial<LabJobRequestDependencies> = {},
+): Promise<LabJobRequestOutcome> {
+  const runWorkspaceTransaction =
+    dependencies.withWorkspaceUserTransaction ?? withWorkspaceUserTransaction;
+  const reserveUsage =
+    dependencies.reserveWorkspaceUsageInTransaction ??
+    reserveWorkspaceUsageInTransaction;
+  const enqueueJob =
+    dependencies.enqueueLocalAssessmentJob ?? enqueueLocalAssessmentJob;
+  const access = await runWorkspaceTransaction(
     input.userId,
     input.workspaceId,
     async (tx, membership) => {
@@ -132,8 +156,8 @@ async function requestLabJob(input: {
       ) {
         return { kind: "forbidden" as const };
       }
-      if (!isAssessmentProfileAvailable(input.profileId)) {
-        return { kind: "unavailable" as const };
+      if (!decideAssessmentWorkerAdmission(input.profileId).admitted) {
+        return { kind: "worker_unavailable" as const };
       }
       const binding = input.bindingForRole?.(membership.role);
       const idempotencyKey = binding?.idempotencyKey ?? input.idempotencyKey;
@@ -210,7 +234,7 @@ async function requestLabJob(input: {
           : { kind: "queue_full" as const };
       }
 
-      await reserveWorkspaceUsageInTransaction(tx, input.workspaceId, {
+      await reserveUsage(tx, input.workspaceId, {
         scans: 1,
         apiRequests: 1,
       });
@@ -241,7 +265,7 @@ async function requestLabJob(input: {
     outcome.job.status === "queued" &&
     outcome.job.attempts < AI_ASSESSMENT_JOB_MAX_ATTEMPTS
   ) {
-    enqueueLocalAssessmentJob({
+    enqueueJob({
       jobId: outcome.job.id,
       workspaceId: input.workspaceId,
       actorUserId: input.userId,
@@ -250,7 +274,7 @@ async function requestLabJob(input: {
   return outcome;
 }
 
-function sendLabJobRequestError(
+export function sendLabJobRequestError(
   res: import("express").Response,
   outcome: Exclude<LabJobRequestOutcome, { kind: "job" }>,
 ): boolean {
@@ -261,7 +285,7 @@ function sendLabJobRequestError(
     case "forbidden":
       res.status(403).json({ error: "Workspace owner or admin role required" });
       return true;
-    case "unavailable":
+    case "worker_unavailable":
       res.status(503).json({
         error: "Requested isolated local assessment profile is unavailable",
       });
@@ -1083,9 +1107,10 @@ routes.post(
   },
 );
 
-routes.post(
-  "/workspaces/:workspaceId/ai-security-assessments/lab/jobs",
-  async (req, res): Promise<void> => {
+export function createLabJobPostHandler(
+  submitLabJob: typeof requestLabJob = requestLabJob,
+): RequestHandler {
+  return async (req, res): Promise<void> => {
     const params = CreateWorkspaceAiAssessmentLabJobParams.safeParse(req.params);
     const body = CreateWorkspaceAiAssessmentLabJobBody.safeParse(req.body);
     if (
@@ -1100,144 +1125,17 @@ routes.post(
 
     const { workspaceId } = params.data;
     try {
-      const access = await withWorkspaceUserTransaction(
-        req.authUserId!,
+      const outcome = await submitLabJob({
+        userId: req.authUserId!,
         workspaceId,
-        async (tx, membership) => {
-          if (!canRunAiEvaluation(membership.role)) {
-            return { kind: "forbidden" as const };
-          }
-          if (!isAssessmentProfileAvailable(profileId)) {
-            return { kind: "worker_unavailable" as const };
-          }
-          const [existing] = await tx
-            .select()
-            .from(aiAssessmentJobsTable)
-            .where(
-              and(
-                eq(aiAssessmentJobsTable.workspaceId, workspaceId),
-                eq(
-                  aiAssessmentJobsTable.idempotencyKey,
-                  body.data.idempotencyKey,
-                ),
-              ),
-            )
-            .limit(1);
-          if (existing) {
-            return existing.profileId === profileId
-              ? { kind: "existing" as const, job: existing }
-              : { kind: "idempotency_conflict" as const };
-          }
-
-          const pending = await tx
-            .select({ id: aiAssessmentJobsTable.id })
-            .from(aiAssessmentJobsTable)
-            .where(
-              and(
-                eq(aiAssessmentJobsTable.workspaceId, workspaceId),
-                sql`${aiAssessmentJobsTable.status} IN ('queued', 'running')`,
-              ),
-            )
-            .limit(MAX_PENDING_PER_WORKSPACE);
-          if (pending.length >= MAX_PENDING_PER_WORKSPACE) {
-            return { kind: "queue_full" as const };
-          }
-
-          const [inserted] = await tx
-            .insert(aiAssessmentJobsTable)
-            .values({
-              workspaceId,
-              requestedByUserId: req.authUserId!,
-              idempotencyKey: body.data.idempotencyKey,
-              profileId,
-              workerVersion: AI_ASSESSMENT_WORKER_VERSION,
-              status: "queued",
-            })
-            .onConflictDoNothing({
-              target: [
-                aiAssessmentJobsTable.workspaceId,
-                aiAssessmentJobsTable.idempotencyKey,
-              ],
-            })
-            .returning();
-          if (!inserted) {
-            const [raced] = await tx
-              .select()
-              .from(aiAssessmentJobsTable)
-              .where(
-                and(
-                  eq(aiAssessmentJobsTable.workspaceId, workspaceId),
-                  eq(
-                    aiAssessmentJobsTable.idempotencyKey,
-                    body.data.idempotencyKey,
-                  ),
-                ),
-              )
-              .limit(1);
-            return raced
-              ? raced.profileId === profileId
-                ? { kind: "existing" as const, job: raced }
-                : { kind: "idempotency_conflict" as const }
-              : { kind: "queue_full" as const };
-          }
-
-          await reserveWorkspaceUsageInTransaction(tx, workspaceId, {
-            scans: 1,
-            apiRequests: 1,
-          });
-          await tx.insert(workspaceAuditEventsTable).values({
-            workspaceId,
-            actorUserId: req.authUserId!,
-            action: "ai_assessment.lab.requested",
-            resourceType: "ai_assessment_job",
-            resourceId: inserted.id,
-            metadata: {
-              profileId: inserted.profileId,
-              workerVersion: inserted.workerVersion,
-              environment: "development_lab",
-            },
-          });
-          return { kind: "created" as const, job: inserted };
-        },
-      );
-      if (!access.authorized) {
-        res.status(403).json({ error: "Workspace membership required" });
+        profileId,
+        idempotencyKey: body.data.idempotencyKey,
+      });
+      if (outcome.kind !== "job") {
+        sendLabJobRequestError(res, outcome);
         return;
       }
-      if (access.value.kind === "forbidden") {
-        res.status(403).json({
-          error: "Workspace owner or admin role required",
-        });
-        return;
-      }
-      if (access.value.kind === "worker_unavailable") {
-        res.status(503).json({
-          error: "Requested isolated local assessment profile is unavailable",
-        });
-        return;
-      }
-      if (access.value.kind === "queue_full") {
-        res.setHeader("Retry-After", "3");
-        res.status(409).json({ error: "Laboratory assessment queue is full" });
-        return;
-      }
-      if (access.value.kind === "idempotency_conflict") {
-        res.status(409).json({
-          error: "Idempotency key already belongs to another assessment profile",
-        });
-        return;
-      }
-      if (
-        access.value.job.status === "queued" &&
-        access.value.job.attempts < AI_ASSESSMENT_JOB_MAX_ATTEMPTS
-      ) {
-        enqueueLocalAssessmentJob({
-          jobId: access.value.job.id,
-          workspaceId,
-          actorUserId: req.authUserId!,
-        });
-      }
-      res.status(202).json(formatJob(access.value.job));
+      res.status(202).json(formatJob(outcome.job));
     } catch (error) {
       if (error instanceof UsageQuotaError) {
         res.status(409).json({ error: "Workspace monthly scan quota reached" });
@@ -1276,7 +1174,12 @@ routes.post(
       }
       res.status(500).json({ error: "Laboratory assessment request failed" });
     }
-  },
+  };
+}
+
+routes.post(
+  "/workspaces/:workspaceId/ai-security-assessments/lab/jobs",
+  createLabJobPostHandler(),
 );
 
 routes.post(
