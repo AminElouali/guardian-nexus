@@ -444,12 +444,24 @@ def _assert_diskcache_runtime_absent() -> None:
 
 
 class LocalQwenClient:
-    def __init__(self, model_path: Path) -> None:
-        from .offline_isolation_preflight import (
-            require_offline_qwen_process_ready,
-        )
+    def __init__(
+        self,
+        model_path: Path,
+        *,
+        offline_guard: object | None = None,
+        standalone_process_only: bool = False,
+    ) -> None:
+        if standalone_process_only:
+            from .offline_process_guard import is_active_offline_guard
 
-        require_offline_qwen_process_ready()
+            if not is_active_offline_guard(offline_guard):
+                raise RuntimeError("offline_qwen_guard_not_active")
+        else:
+            from .offline_isolation_preflight import (
+                require_offline_qwen_process_ready,
+            )
+
+            require_offline_qwen_process_ready()
         _assert_diskcache_runtime_absent()
         from llama_cpp import Llama
         from llama_cpp.llama_chat_format import Jinja2ChatFormatter

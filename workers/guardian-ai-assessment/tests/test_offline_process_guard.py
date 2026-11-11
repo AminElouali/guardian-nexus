@@ -4,6 +4,7 @@ import subprocess
 import sys
 import tempfile
 import textwrap
+import types
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -12,6 +13,8 @@ WORKER_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(WORKER_ROOT))
 
 from guardian_ai_assessment import offline_process_guard, offline_qwen_runner
+from guardian_ai_assessment import llm_lab
+from guardian_ai_assessment import qwen_policy_lab
 
 
 class OfflineProcessGuardTests(unittest.TestCase):
@@ -164,6 +167,274 @@ class OfflineProcessGuardTests(unittest.TestCase):
 
 
 class OfflineRunnerDockerPrivilegeTests(unittest.TestCase):
+    def test_per_case_timeout_is_bounded_by_profile_and_overall_limits(self):
+        self.assertEqual(
+            offline_qwen_runner._bounded_case_timeout_seconds(
+                wall_deadline=500,
+                per_case_seconds=180,
+                now=100,
+            ),
+            180,
+        )
+        self.assertEqual(
+            offline_qwen_runner._bounded_case_timeout_seconds(
+                wall_deadline=250,
+                per_case_seconds=180,
+                now=100,
+            ),
+            150,
+        )
+        with self.assertRaisesRegex(TimeoutError, "offline_qwen_wall_timeout"):
+            offline_qwen_runner._bounded_case_timeout_seconds(
+                wall_deadline=100,
+                per_case_seconds=180,
+                now=100,
+            )
+
+    def test_combiner_keeps_synthetic_single_case_results_provenance_separate(self):
+        run = lambda case_id, label, origin, decision, dispatch: {
+            "profileId": "guardian-agent-qwen-lab-email-v1",
+            "cases": [
+                {
+                    "caseId": case_id,
+                    "label": label,
+                    "toolCallOrigin": origin,
+                    "decision": decision,
+                    "dispatchStatus": dispatch,
+                    "inferenceDurationMs": 100,
+                    "authorizationDurationMs": 5,
+                }
+            ],
+            "summary": {
+                "sampleCount": 1,
+                "modelCalls": 1,
+                "runtimeMessageToolCalls": int(
+                    origin == "runtime_message_tool_calls"
+                ),
+                "adaptedQwenMarkupCalls": int(
+                    origin == "guardian_qwen_native_markup_adapter"
+                ),
+                "noToolCalls": int(origin == "no_tool_call"),
+                "denied": int(decision == "deny"),
+                "policyDenials": int(decision == "deny"),
+                "adapterValidationBlocks": 0,
+                "simulatedExecutions": int(decision == "allow"),
+                "trustedGoalScopeMatches": 1,
+                "trustedGoalScopeMismatches": 0,
+                "unauthorizedExecutions": 0,
+                "policyOffExecutions": 0,
+                "externalCalls": 0,
+                "authorizationSampleCount": 1,
+                "promptTokens": 10,
+                "completionTokens": 10,
+                "casesPerSecondMilli": 1000,
+                "inferenceLatencyP50Ms": 100,
+                "inferenceLatencyP95Ms": 100,
+                "authorizationLatencyP50Ms": 5,
+                "authorizationLatencyP95Ms": 5,
+            },
+            "selfChecks": {"policyBeforeDispatch": True, "policyOffCloneOnly": True},
+            "corpusSelection": {
+                "mode": "fixed_single_case_offline",
+                "selectedCaseIds": [case_id],
+                "selectedCaseCount": 1,
+                "fullCorpusCaseCount": 8,
+            },
+            "limits": {"maxCases": 1},
+            "startedAt": "2026-11-11T00:00:00Z",
+            "completedAt": "2026-11-11T00:00:01Z",
+            "durationSeconds": 1.0,
+            "evidenceSha256": "e" * 64,
+        }
+        combined = offline_qwen_runner._combine_single_case_profile_runs(
+            qwen_policy_lab,
+            "guardian-agent-qwen-lab-email-v1",
+            ("email-safe", "email-attack"),
+            (
+                run(
+                    "email-safe",
+                    "benign",
+                    "guardian_qwen_native_markup_adapter",
+                    "allow",
+                    "simulated",
+                ),
+                run(
+                    "email-attack",
+                    "adversarial",
+                    "no_tool_call",
+                    "deny",
+                    "blocked_by_policy_before_dispatch",
+                ),
+            ),
+        )
+        self.assertEqual(combined["summary"]["sampleCount"], 2)
+        self.assertEqual(combined["summary"]["modelCalls"], 2)
+        self.assertEqual(combined["summary"]["adaptedQwenMarkupCalls"], 1)
+        self.assertEqual(combined["summary"]["noToolCalls"], 1)
+        self.assertEqual(combined["corpusSelection"]["selectedCaseIds"], [
+            "email-safe", "email-attack"
+        ])
+        self.assertEqual(combined["limits"]["maxCases"], 2)
+        self.assertTrue(combined["selfChecks"]["policyBeforeDispatch"])
+        self.assertTrue(combined["selfChecks"]["policyOffCloneOnly"])
+
+    def test_local_qwen_client_standalone_mode_requires_guard_and_skips_host_gate(self):
+        with (
+            patch(
+                "guardian_ai_assessment.offline_process_guard.is_active_offline_guard",
+                return_value=False,
+            ),
+            patch(
+                "guardian_ai_assessment.offline_isolation_preflight.require_offline_qwen_process_ready"
+            ) as integrated_gate,
+            patch("guardian_ai_assessment.llm_lab._assert_diskcache_runtime_absent") as diskcache,
+        ):
+            with self.assertRaisesRegex(
+                RuntimeError, "offline_qwen_guard_not_active"
+            ):
+                llm_lab.LocalQwenClient(
+                    Path("/synthetic/model.gguf"),
+                    offline_guard=object(),
+                    standalone_process_only=True,
+                )
+        integrated_gate.assert_not_called()
+        diskcache.assert_not_called()
+
+    def test_local_qwen_client_skips_host_gate_only_with_active_guard(self):
+        def stop_before_loading_model(*_args, **_kwargs):
+            raise RuntimeError("test_stop_before_model_load")
+
+        llama_module = types.ModuleType("llama_cpp")
+        llama_module.Llama = stop_before_loading_model
+        chat_format_module = types.ModuleType("llama_cpp.llama_chat_format")
+        chat_format_module.Jinja2ChatFormatter = object
+        with (
+            patch(
+                "guardian_ai_assessment.offline_process_guard.is_active_offline_guard",
+                return_value=True,
+            ),
+            patch(
+                "guardian_ai_assessment.offline_isolation_preflight.require_offline_qwen_process_ready",
+                side_effect=AssertionError("standalone path must not check Docker"),
+            ) as integrated_gate,
+            patch(
+                "guardian_ai_assessment.llm_lab._assert_diskcache_runtime_absent"
+            ),
+            patch.dict(
+                "sys.modules",
+                {
+                    "llama_cpp": llama_module,
+                    "llama_cpp.llama_chat_format": chat_format_module,
+                },
+            ),
+        ):
+            with self.assertRaisesRegex(
+                RuntimeError, "test_stop_before_model_load"
+            ):
+                llm_lab.LocalQwenClient(
+                    Path("/synthetic/model.gguf"),
+                    offline_guard=object(),
+                    standalone_process_only=True,
+                )
+        integrated_gate.assert_not_called()
+
+    def test_standalone_environment_guard_never_inspects_docker_socket_paths(self):
+        with patch.object(
+            Path, "stat", side_effect=AssertionError("socket path must not be inspected")
+        ), patch("os.access", side_effect=AssertionError("socket access must not be checked")):
+            offline_qwen_runner.require_standalone_offline_environment(
+                environment={},
+                effective_uid=1000,
+            )
+
+    def test_standalone_environment_guard_rejects_root_and_docker_environment(self):
+        with self.assertRaisesRegex(
+            RuntimeError, "offline_standalone_non_root_identity_required"
+        ):
+            offline_qwen_runner.require_standalone_offline_environment(
+                environment={}, effective_uid=0
+            )
+        for variable in ("DOCKER_HOST", "DOCKER_CONTEXT", "CONTAINER_HOST"):
+            with self.subTest(variable=variable), self.assertRaisesRegex(
+                RuntimeError, "offline_standalone_docker_endpoint_configured"
+            ):
+                offline_qwen_runner.require_standalone_offline_environment(
+                    environment={variable: "synthetic-test-value"},
+                    effective_uid=1000,
+                )
+
+    def test_email_database_bundle_keeps_fixtures_separate_and_gates_closed(self):
+        fixture_summaries = {
+            profile_id: {
+                "executionMode": "deterministic_fixture",
+                "proposalOrigin": "controlled_fixture_not_llm",
+                "modelInference": False,
+                "sampleCount": 8,
+                "suiteEvidenceSha256": "a" * 64,
+            }
+            for profile_id in offline_qwen_runner._EMAIL_DATABASE_PROFILE_ORDER
+        }
+        with (
+            patch(
+                "guardian_ai_assessment.offline_process_guard.offline_network_evidence",
+                return_value={"networkMode": "standalone_seccomp_no_socket_syscalls"},
+            ),
+            patch(
+                "guardian_ai_assessment.offline_process_guard.offline_limit_evidence",
+                return_value={"limitsVerified": True},
+            ),
+        ):
+            bundle = offline_qwen_runner._build_bundle(
+                local_manifest={
+                    "model": {
+                        "id": "test-model",
+                        "revision": "test-revision",
+                        "file": "test.gguf",
+                        "sha256": "c" * 64,
+                        "sizeBytes": 1,
+                        "quantization": "TEST",
+                    },
+                    "runtime": {
+                        "name": "test-runtime",
+                        "version": "0",
+                        "wheelSha256": "d" * 64,
+                    },
+                },
+                manifest_hash="b" * 64,
+                verified_wheels=[],
+                process_guard=object(),
+                profiles=[],
+                status="completed",
+                profile_ids=offline_qwen_runner._EMAIL_DATABASE_PROFILE_ORDER,
+                selected_case_ids=offline_qwen_runner._EMAIL_DATABASE_CASE_IDS,
+                selection="fixed_benign_adversarial_email_database_subset",
+                fixture_baselines=fixture_summaries,
+                standalone_process_only=True,
+            )
+
+        self.assertEqual(bundle["scope"]["profileCount"], 2)
+        self.assertEqual(bundle["scope"]["selectedCaseCount"], 4)
+        self.assertFalse(bundle["scope"]["fixturesIncluded"])
+        self.assertEqual(bundle["summary"]["modelCalls"], 0)
+        self.assertEqual(
+            bundle["integrationReadiness"],
+            {
+                "hostBoundaryReady": False,
+                "integratedAssessmentReady": False,
+                "workerAdmission": "disabled",
+                "reason": "standalone_process_lab_does_not_attest_host_boundary",
+            },
+        )
+        self.assertEqual(
+            bundle["comparison"]["fixtureBaseline"]["executionMode"],
+            "deterministic_fixture",
+        )
+        self.assertEqual(
+            bundle["comparison"]["qwenInference"]["executionMode"],
+            "real_local_qwen_inference_offline_process_guard",
+        )
+        self.assertTrue(bundle["comparison"]["categoriesAreSeparate"])
+
     def test_no_configured_endpoint_or_socket_is_acceptable(self):
         offline_qwen_runner.require_offline_no_docker_socket_access(
             environment={},
