@@ -5507,3 +5507,40 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   identificarlo como prueba contractual en memoria, no como persistencia real.
   La acreditación RLS/aprobaciones durable sigue pendiente de DB de laboratorio
   autorizada, y Qwen real sigue bloqueado por falta de atestación independiente.
+
+## Binding offline de aprobaciones para Finanzas/Soporte — 2026-11-11
+
+- Base: `32bc5e14b04a7a9a2de29c39cac3525e82273720`, rama `main`, árbol limpio
+  antes del cambio. Commit de pruebas:
+  `142cbebed9d4c958f1f49a214b7ba43b328976d9`.
+- Solo se añadió `artifacts/api-server/src/lib/ai-assessment-approval-actions.test.ts`;
+  no cambió lógica de producción. Los cuatro tests cubren que la binding v3
+  cambia ante tenant/workspace, job/caso, proposal/action hash, actor/rol,
+  expiración y procedencia; distinguen bindings Finance/Support; prueban
+  estabilidad/sensibilidad del digest de replay y ventana `pending` con
+  expiración estricta.
+- La prueba focalizada API ejecutada fue
+  `pnpm --filter @workspace/api-server exec tsx --test src/lib/ai-assessment-approval-actions.test.ts`:
+  **4 pasaron, 0 fallaron**.
+- Cuatro tests del worker pasaron: `test_remaining_profiles_adapted_markers_are_policy_gated_offline`,
+  `test_adversarial_and_no_proposal_cases_never_receive_approval_binding`,
+  `test_support_refund_tool_has_fixed_arguments_and_approval_only_semantics` y
+  `test_invalid_finance_arguments_cannot_become_an_approval_request`.
+  La primera invocación usó la clase unittest equivocada para tres métodos y
+  falló al cargarlos; se corrigió la selección, no el código.
+- `git diff --check` pasó. No se ejecutaron typecheck ni suites amplias.
+  SHA-256 del test:
+  `9380d0c6d016876bc745bb70bd6224df1ec9529793e7c1810fe9ab400957ef2f`.
+  Informe `reports/finance-support-approval-binding-offline-2026-11-11.md`,
+  SHA-256 `f748d4ecaec9b980512ca45a12fafe1b6c660dabca76fd38518022bbaeb6766c`.
+- Pruebas sintéticas en memoria solamente; no se ejecutó Qwen ni el subprocess
+  del runner, tampoco worker, servidor API, broker, Docker/socket, PostgreSQL,
+  migraciones ni red. Solo se lanzaron runners de tests focalizados (tsx y
+  unittest). No se inspeccionó ni cambió `.replit`, variables, secretos,
+  configuración de despliegue, gates o fixtures.
+- Esto no prueba rechazo transaccional de replay, concurrencia, idempotencia
+  durable, RLS ni aprobación persistente. El código E2E existente no se ejecutó
+  porque requiere PostgreSQL/API. Siguiente evidencia: ejecutar la suite E2E
+  existente solo cuando el propietario proporcione una DB de laboratorio
+  desechable autorizada y roles segregados; no sustituirla con un fake en
+  memoria.
