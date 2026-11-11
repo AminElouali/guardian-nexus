@@ -6,6 +6,7 @@ import { test } from "node:test";
 import {
   ASSESSMENT_EXECUTION_LIMITS,
   POLICY_LAB_PROFILE_IDS,
+  QWEN_POLICY_LAB_PROFILE_IDS,
   QWEN_HOST_BOUNDARY_ATTESTATION_PATH,
   QWEN_HOST_BOUNDARY_PUBLIC_KEY_PATH,
   buildAssessmentDockerRunArgs,
@@ -14,10 +15,17 @@ import {
   parseAssessmentImageLock,
   validateAssessmentImageInspection,
   verifyAssessmentImageLockSources,
+  type AssessmentMountPaths,
   type AssessmentImageLock,
   type DockerImageInspection,
+  type AssessmentProfileId,
 } from "./ai-assessment-sandbox";
 import { classifyDockerImageInspectResult } from "./assessment-docker-inspection";
+import {
+  enqueueLocalAssessmentJob,
+  getLocalWorkerAvailability,
+  isAssessmentProfileAvailable,
+} from "./assessment-worker-api-gate";
 
 const workerRoot = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -72,13 +80,26 @@ test("profile lock is local-only, source-hash checked, and binds exact image IDs
   );
 });
 
-test("email and database Qwen launches pass the signed host attestation read-only", () => {
-  const profiles = [
+test("all eight Qwen profile argument builds retain read-only mounts and fail-closed container settings", () => {
+  const expectedProfiles = [
     "guardian-agent-qwen-lab-email-v1",
     "guardian-agent-qwen-lab-database-v1",
+    "guardian-agent-qwen-lab-finance-v1",
+    "guardian-agent-qwen-lab-programming-v1",
+    "guardian-agent-qwen-lab-customer-service-v1",
+    "guardian-agent-qwen-lab-browser-v1",
+    "guardian-agent-qwen-lab-infrastructure-v1",
+    "guardian-agent-qwen-lab-multiagent-v1",
   ] as const;
+  assert.deepEqual(
+    [...QWEN_POLICY_LAB_PROFILE_IDS].sort(),
+    [...expectedProfiles].sort(),
+  );
+  const gateBefore = getLocalWorkerAvailability();
+  assert.equal(gateBefore.status, "disabled");
+  assert.equal(gateBefore.reasonCode, "assessment_broker_identity_unverified");
 
-  for (const profileId of profiles) {
+  for (const profileId of expectedProfiles) {
     const args = buildAssessmentDockerRunArgs(
       `guardian-ai-lab-${profileId}`,
       profileId,
@@ -94,6 +115,9 @@ test("email and database Qwen launches pass the signed host attestation read-onl
     assert.ok(args.includes(publicKeyMount), `${profileId} public key mount`);
     assert.ok(args.includes("--network=none"));
     assert.ok(args.includes("--user=65532:65532"));
+    assert.ok(args.includes("--read-only"));
+    assert.ok(args.includes("--cap-drop=ALL"));
+    assert.ok(args.includes("--security-opt=no-new-privileges"));
     assert.ok(
       args.some((argument) =>
         argument.includes(
@@ -103,11 +127,83 @@ test("email and database Qwen launches pass the signed host attestation read-onl
       `${profileId} must retain the existing Qwen policy-lab runner`,
     );
     assert.equal(
-      args.some((argument) => argument.includes("docker.sock")),
+      args.some((argument) => /docker\.sock/i.test(argument)),
       false,
-      "the worker must not receive the Docker socket",
+      `${profileId} must not receive or expose the Docker socket`,
     );
+    assert.equal(args.includes("--privileged"), false);
   }
+
+  assert.deepEqual(
+    getLocalWorkerAvailability(),
+    gateBefore,
+    "argument construction must not alter worker readiness",
+  );
+  assert.ok(
+    getLocalWorkerAvailability().profiles.every(
+      (profile) =>
+        profile.status === "disabled" &&
+        profile.reasonCode === "assessment_broker_identity_unverified",
+    ),
+  );
+  assert.equal(
+    isAssessmentProfileAvailable(expectedProfiles[0]),
+    false,
+    "argument tests must not mark an assessment profile available",
+  );
+  assert.equal(
+    enqueueLocalAssessmentJob({
+      jobId: "offline-args-test-only",
+      workspaceId: "offline-workspace",
+      actorUserId: "offline-test-actor",
+    }),
+    false,
+    "the API gate must keep the queue closed",
+  );
+});
+
+test("unknown Qwen profiles and incomplete Qwen mount configuration fail closed", () => {
+  assert.throws(
+    () =>
+      buildAssessmentDockerRunArgs(
+        "guardian-ai-lab-unknown",
+        "guardian-agent-qwen-lab-unknown-v1" as AssessmentProfileId,
+        lock.images.qwen.imageId,
+        mounts,
+      ),
+    /invalid_assessment_profile/,
+  );
+
+  const incompleteMounts = {
+    ...mounts,
+    wheelhousePath: "",
+  };
+  assert.throws(
+    () =>
+      buildAssessmentDockerRunArgs(
+        "guardian-ai-lab-incomplete",
+        QWEN_POLICY_LAB_PROFILE_IDS[0],
+        lock.images.qwen.imageId,
+        incompleteMounts,
+      ),
+    /worker_mount_configuration_invalid/,
+  );
+
+  const missingMounts = { modelPath: mounts.modelPath } as AssessmentMountPaths;
+  assert.throws(
+    () =>
+      buildAssessmentDockerRunArgs(
+        "guardian-ai-lab-missing-mounts",
+        QWEN_POLICY_LAB_PROFILE_IDS[0],
+        lock.images.qwen.imageId,
+        missingMounts,
+      ),
+    /worker_mount_configuration_invalid/,
+  );
+
+  const gate = getLocalWorkerAvailability();
+  assert.equal(gate.status, "disabled");
+  assert.equal(gate.reasonCode, "assessment_broker_identity_unverified");
 });
 
 test("wrong, retagged, and missing image identity or labels fail before Docker run", () => {

@@ -4483,3 +4483,37 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   viva ni finalización de los perfiles. Próxima fase funcional: finanzas y
   aprobación persistente, solo después de confirmar los prerequisitos de
   aislamiento y base desechable.
+
+## Cobertura offline del constructor Qwen para los ocho perfiles — 2026-11-11
+
+- Desde HEAD `7fd7f5afc66c3244d3f6d2d6dbff7456cafa6fee`, se amplió la prueba del
+  constructor de argumentos Qwen a correo, BBDD, finanzas, programación,
+  atención al cliente, navegador, infraestructura y multiagente.
+- Para los ocho perfiles se comprueban mounts de atestación/clave en solo
+  lectura, red deshabilitada, usuario `65532:65532`, filesystem read-only,
+  capacidades eliminadas, `no-new-privileges`, ausencia de modo privilegiado y
+  ausencia de cualquier argumento que exponga `docker.sock`. Solo se construyen
+  arrays de argumentos; no se invoca Docker.
+- Se corrigió un defecto acotado en la configuración: paths Qwen vacíos,
+  ausentes, no absolutos o con separadores/NUL ahora fallan con
+  `worker_mount_configuration_invalid`. Perfil desconocido falla con
+  `invalid_assessment_profile`.
+- La prueba compara disponibilidad de worker antes/después; sigue
+  `disabled` con `assessment_broker_identity_unverified`. El constructor no
+  cambia readiness ni toca `hostBoundaryReady`/`integratedAssessmentReady`.
+  Los ocho fixtures baseline y la procedencia de evidencia no cambiaron.
+- Pruebas offline ejecutadas en serie: `ai-assessment-sandbox.test.ts` **9/9**;
+  typecheck API aprobado; `git diff --check` aprobado. No se ejecutaron Qwen,
+  workers, broker, Docker/socket, PostgreSQL, cola, E2E, servicios externos ni
+  despliegues.
+- SHA-256:
+  - `artifacts/api-server/src/lib/ai-assessment-sandbox.ts`:
+    `b73ba1d09711fb0cbb869ab890569bdcd1e093f2855eab131a4db130ee16db5c`
+  - `artifacts/api-server/src/lib/ai-assessment-sandbox.test.ts`:
+    `16473225e64f31c3365c85ef10e29cbcc24487530bd06310204e0316148b4f3b`
+  - Informe `reports/offline-eight-profile-qwen-sandbox-args-2026-11-11.md`:
+    `dc77876fc36d027d547cf0360390bbb2ddf13411d446f063e65579612f402c07`
+- Este incremento comprueba solo el contrato local de argumentos; no certifica
+  aislamiento real ni habilita el gate. Siguiente paso: obtener atestación
+  independiente actual de host/broker/worker; después, validar inferencia real
+  primero en correo y BBDD.

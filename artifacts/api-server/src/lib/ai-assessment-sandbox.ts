@@ -246,6 +246,29 @@ export function verifyAssessmentImageLockSources(
   }
 }
 
+function assertCompleteQwenMounts(mounts: AssessmentMountPaths): void {
+  if (!isRecord(mounts)) {
+    throw new Error("worker_mount_configuration_invalid");
+  }
+  const paths = [
+    mounts.modelPath,
+    mounts.wheelhousePath,
+    mounts.manifestPath,
+    mounts.sourcePath,
+  ];
+  if (
+    paths.some(
+      (path) =>
+        typeof path !== "string" ||
+        !path.startsWith("/") ||
+        path.includes(",") ||
+        path.includes("\0"),
+    )
+  ) {
+    throw new Error("worker_mount_configuration_invalid");
+  }
+}
+
 export function getAssessmentImageReference(
   profileId: AssessmentProfileId,
   lock: AssessmentImageLock,
@@ -288,6 +311,10 @@ export function buildAssessmentDockerRunArgs(
   if (!SHA256_PATTERN.test(imageId)) {
     throw new Error("worker_image_identity_mismatch");
   }
+  const imageKey = imageKeyForProfile(profileId);
+  if (imageKey === "qwen" && !isPolicyLabProfile(profileId)) {
+    assertCompleteQwenMounts(mounts);
+  }
   const common = [
     "run",
     "--rm",
@@ -302,7 +329,7 @@ export function buildAssessmentDockerRunArgs(
     "--user=65532:65532",
     "--log-driver=none",
   ];
-  if (imageKeyForProfile(profileId) === "garak") {
+  if (imageKey === "garak") {
     return [
       ...common,
       `--cpus=${ASSESSMENT_EXECUTION_LIMITS.garak.cpus}`,
