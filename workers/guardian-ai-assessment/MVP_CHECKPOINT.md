@@ -5063,3 +5063,42 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   seis verticales y, en una fase aparte, inspeccionar solo disponibilidad de
   artefacto/gates. No ejecutar inferencia hasta tener hostBoundaryReady
   acreditado independientemente y sin riesgos del entorno.
+
+## MATRIZ DE SEIS PERFILES y bloqueo de inferencia actual — 2026-11-11
+
+- Commit de la fase FINANZAS/SOPORTE: `e205af40833bc359269d3201b42d402273f85f73`.
+- Prueba focalizada ejecutada:
+  `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=workers/guardian-ai-assessment python -m unittest discover -s workers/guardian-ai-assessment/tests -p 'test_policy_lab.py' -k test_remaining_profiles_adapted_markers_are_policy_gated_offline -v`
+  — **1 test pasó**. Recorre con dobles los perfiles finanzas, atención al
+  cliente, programación, navegador, infraestructura y multiagente. Sus
+  propuestas/respuestas son sintéticas; el baseline se lee como
+  `deterministic_fixture`, separado y sin modificación. No es inferencia real.
+- Inspección estática de gates (no se ejecutó preflight): el API gate en
+  `assessment-worker-api-gate.ts` devuelve `status=disabled` y
+  `assessment_broker_identity_unverified` para perfiles/cola; el enqueue
+  permanece deshabilitado. El verificador de `host_boundary_attestation.py`
+  exige evidencia firmada de un emisor independiente y el preflight de host
+  define readiness a partir de mediciones reales; no se comprobó ni invocó una
+  atestación del host en este ciclo. Por tanto, `hostBoundaryReady` e
+  `integratedAssessmentReady` se mantienen cerrados/no acreditados.
+- Artefacto local: `generated-artifacts/guardian-llm-lab/Qwen3-0.6B-Q8_0.gguf`
+  existe con tamaño de metadatos **639446688 bytes**. No se leyó, cargó ni
+  hasheó el modelo. El SHA-256 `9465e63a...` que figura en `LOCAL_LLM_LAB.md`
+  es declarativo/histórico hasta recalcularlo sobre el archivo actual; el
+  runner offline, que no se ejecutó, además verificaría manifest, hash y
+  wheelhouse.
+- Bloqueo concreto: la presencia del modelo no acredita aislamiento. Sin
+  supervisor externo/trust anchor y medición firmada actual de API/broker/
+  worker (identidades separadas y ausencia de acceso a `docker.sock`), no se
+  puede habilitar runner/worker con seguridad. El workflow API Server sigue
+  fallido en el estado del workspace; no se reinició ni se consultaron logs.
+  Persistencia PostgreSQL/RLS E2E sigue sin probar: no se conectó DB ni se
+  ejecutaron migraciones; la prueba de ruta persistente está condicionada a una
+  base desechable con autorización explícita.
+- No se generó inferencia viva ni nueva evidencia nativa `message.tool_calls`.
+  El bloque concluye con pruebas sintéticas, estáticas e históricas separadas.
+  Siguiente paso seguro requiere acción externa: provisionar y verificar una
+  atestación firmada por supervisor independiente ligada a los hashes actuales
+  y mediciones de identidad/capacidades/socket; en separado, autorizar una DB
+  PostgreSQL desechable para E2E/RLS. Solo después revalidar gates y considerar
+  primero correo, luego BBDD, con inferencia local.
