@@ -9,9 +9,11 @@ from guardian_ai_assessment import llm_lab  # noqa: E402
 from guardian_ai_assessment.qwen_policy_lab import (  # noqa: E402
     DATABASE_TOOLS,
     EMAIL_TOOLS,
+    PROGRAMMING_TOOLS,
 )
 from guardian_ai_assessment.tool_adapter import (  # noqa: E402
     INVOICE_ID,
+    SYNTHETIC_CODE_DIFF_ID,
     SIMULATED_RECIPIENT,
     SYNTHETIC_ACCOUNT_ID,
     SYNTHETIC_DOCUMENT,
@@ -39,6 +41,75 @@ class ScriptedProvider:
 
 
 class LocalLlmToolAdapterTests(unittest.TestCase):
+    def test_programming_catalog_validator_and_simulator_contract(self):
+        self.assertEqual(len(PROGRAMMING_TOOLS), 1)
+        item = PROGRAMMING_TOOLS[0]
+        function = item["function"]
+        tool_name = function["name"]
+        arguments = {"change_id": SYNTHETIC_CODE_DIFF_ID}
+        self.assertEqual(item["type"], "function")
+        self.assertIn(tool_name, TOOL_IDS)
+        self.assertEqual(
+            function["parameters"],
+            {
+                "type": "object",
+                "properties": {
+                    "change_id": {
+                        "type": "string",
+                        "enum": [SYNTHETIC_CODE_DIFF_ID],
+                    },
+                },
+                "required": ["change_id"],
+                "additionalProperties": False,
+            },
+        )
+        self.assertEqual(
+            validate_synthetic_tool_arguments(tool_name, arguments),
+            (True, "synthetic_diff_proposed"),
+        )
+
+        action = {
+            "resourceWorkspaceId": "SYNTHETIC-WORKSPACE",
+            "operation": "diff.propose",
+            "instructionProvenance": "trusted_user_request",
+            "requiredPermissions": ["code.diff.propose"],
+        }
+        order = ["validator"]
+        decision, _reason = evaluate_synthetic_action_policy(
+            "programming", action, {"code.diff.propose"}
+        )
+        order.append("policy_on")
+        self.assertEqual(decision, "allow")
+        simulator_events, result = call_synthetic_tool(
+            tool=tool_name,
+            arguments=arguments,
+            source="offline_programming_catalog_contract_test",
+            tool_call_id="catalog-programming-diff",
+            permitted_tools={tool_name},
+        )
+        order.append("simulator")
+        self.assertEqual(order, ["validator", "policy_on", "simulator"])
+        self.assertEqual(simulator_events[-1]["phase"], "executed")
+        self.assertTrue(simulator_events[-1]["simulatedOnly"])
+        self.assertFalse(simulator_events[-1]["stateChanged"])
+        self.assertFalse(simulator_events[-1]["externalSideEffect"])
+        self.assertEqual(result["execution"], "not_run")
+
+        for invalid_arguments in (
+            {},
+            {"change_id": "SYNTHETIC-OTHER-DIFF"},
+            {
+                "change_id": SYNTHETIC_CODE_DIFF_ID,
+                "command": "synthetic forbidden shell",
+            },
+        ):
+            with self.subTest(invalid=invalid_arguments):
+                self.assertFalse(
+                    validate_synthetic_tool_arguments(
+                        tool_name, invalid_arguments
+                    )[0]
+                )
+
     def test_email_database_catalogs_match_validator_policy_and_simulator(self):
         samples = {
             "read_synthetic_email": {

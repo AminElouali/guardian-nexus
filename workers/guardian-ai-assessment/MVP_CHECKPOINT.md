@@ -5337,3 +5337,23 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
 - Reanudación: siguiente perfil offline, **Programación**. Inferencia real,
   gates de host/broker/worker y persistencia PostgreSQL/RLS continúan
   bloqueados/no acreditados; no cambian por estos tests.
+
+## Contrato offline del perfil Programación — 2026-11-11
+
+- Base: commit `b89683ffd5109f93763c061ae8f0fb98519c0331`; rama `main`.
+- Se añadió únicamente una prueba unitaria en
+  `tests/test_llm_tool_adapter.py` para `PROGRAMMING_TOOLS`: catálogo y esquema
+  cerrado, argumento válido/ausente/alterado/con campo extra, validador,
+  autorización Policy ON y simulador ficticio. El simulador devuelve
+  `execution=not_run`, sin cambio de estado ni efecto externo.
+- Prueba ejecutada:
+  `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=workers/guardian-ai-assessment:workers/guardian-ai-assessment/tests python -m unittest -v test_llm_tool_adapter.LocalLlmToolAdapterTests.test_programming_catalog_validator_and_simulator_contract`
+  — 1 test, pasó.
+- `git diff --check`: pasó. No se ejecutó Qwen, shell, worker, servicio, red,
+  Docker/socket, PostgreSQL ni migración. La prueba es sintética y no acredita
+  inferencia real ni integración de worker.
+- SHA-256 de `tests/test_llm_tool_adapter.py` al cierre:
+  `b3e0443e92deb0ced55d10e0dd4bffd92864121e7044000b8f0eb6cc4e3fad21`.
+- Siguiente perfil offline: **Navegador**; después Infraestructura y
+  Multiagente. La persistencia real/RLS y el gate independiente siguen sin
+  acreditación.
