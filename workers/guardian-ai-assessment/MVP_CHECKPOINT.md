@@ -5443,3 +5443,27 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
 - Se preservan el código y fixtures existentes; no apareció discrepancia de
   producción. Atestación independiente, aislamiento real y persistencia E2E
   siguen bloqueados/no acreditados.
+
+## Auditoría offline de preparación para validación real — 2026-11-11
+
+- Base: `f3beedd562cf0aaf0395b3dc93ee5cf21095ef1c`, `main`, árbol limpio antes
+  del informe. Ese HEAD solo había actualizado este checkpoint; el último
+  cambio de código registrado era `d808d241ac2fd1576c08442854cfffd6499c6d67`.
+- Se añadió `reports/offline-readiness-audit-2026-11-11.md`; su SHA-256 es
+  `19fd13106f445632a7e80063f105eba66df9bce26d5d7820742fcd1bb7349cfd`.
+- Hallazgos: challenge-response, esquema de claims, API fail-closed y SQL/RLS/
+  approvals existen en código, pero no acreditan aislamiento efectivo ni
+  persistencia real. El protocolo y las pruebas `TEST ONLY` mantienen ambos
+  readiness en false y el API worker gate deshabilitado.
+- Bloqueos externos: supervisor independiente y trust anchor provisionados,
+  medición fresca firmada del host/broker/worker, y PostgreSQL desechable
+  autorizado con roles segregados para RLS/aprobaciones E2E. El informe de
+  socket del 2026-11-10 y los resultados de pruebas anteriores son históricos.
+- Esta auditoría no ejecutó pruebas, typecheck, servicios, procesos, Qwen,
+  workers, Docker/socket, PostgreSQL, migraciones ni red; no consultó el Agent
+  remoto, `.replit` ni valores de entorno. El workflow API Server aparece
+  `failed` en el estado del workspace; no se reinició ni se atribuye una causa
+  actual.
+- Pendiente: obtener primero la evidencia independiente del host; después,
+  con autorización separada, validar RLS y ciclo de aprobación en DB
+  desechable. Mantener los gates cerrados hasta entonces.
