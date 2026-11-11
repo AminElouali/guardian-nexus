@@ -250,6 +250,26 @@ export async function assertRlsRuntimeReady(): Promise<void> {
               runtime.oid, 'public.host_boundary_attestation_challenges',
               'updated_at', 'UPDATE'
             )
+            AND NOT EXISTS (
+              SELECT 1
+              FROM pg_attribute AS host_column
+              WHERE host_column.attrelid = 'public.host_boundary_attestation_challenges'::regclass
+                AND host_column.attnum > 0
+                AND NOT host_column.attisdropped
+                AND host_column.attname NOT IN (
+                  'consumed_at',
+                  'status',
+                  'response_sha256',
+                  'supervisor_id',
+                  'updated_at'
+                )
+                AND has_column_privilege(
+                  runtime.oid,
+                  host_column.attrelid,
+                  host_column.attnum,
+                  'UPDATE'
+                )
+            )
           WHEN protected.table_name = 'ai_assessment_approval_requests'
           THEN has_table_privilege(
             runtime.oid,

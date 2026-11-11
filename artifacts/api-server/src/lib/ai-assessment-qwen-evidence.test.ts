@@ -931,6 +931,21 @@ test("offline RLS grants match the runtime privilege preflight", () => {
       `readiness must require the restricted ${column} UPDATE privilege`,
     );
   }
+  assert.match(
+    hostBoundaryGrantBranch,
+    /AND NOT EXISTS\s*\(\s*SELECT 1\s+FROM pg_attribute AS host_column/,
+    "readiness must reject UPDATE grants on columns outside the allowlist",
+  );
+  assert.match(
+    hostBoundaryGrantBranch,
+    /host_column\.attname NOT IN\s*\(\s*'consumed_at',\s*'status',\s*'response_sha256',\s*'supervisor_id',\s*'updated_at'\s*\)/,
+    "the only permitted attestation UPDATE columns are the five lifecycle fields",
+  );
+  assert.match(
+    hostBoundaryGrantBranch,
+    /has_column_privilege\(\s*runtime\.oid,\s*host_column\.attrelid,\s*host_column\.attnum,\s*'UPDATE'\s*\)/,
+    "the preflight must test effective column privileges for every table column",
+  );
   const hostBoundarySqlUpdateGrant = rlsSql.match(
     /GRANT UPDATE \(\s*consumed_at,\s*status,\s*response_sha256,\s*supervisor_id,\s*updated_at\s*\)\s+ON TABLE public\.host_boundary_attestation_challenges TO app_runtime;/,
   )?.[0];

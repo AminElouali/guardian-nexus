@@ -5595,3 +5595,18 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   pruebas existentes cubren estos estados; no se repitieron sin cambios.
 - El workflow API Server sigue visible como `failed`, sin puerto abierto ni
   logs nuevos. No se reinició; ese estado no confirma por sí solo una causa.
+
+## Denegación de UPDATE en columnas no permitidas — 2026-11-11
+
+- Base `760dbbe901c504a84e6eafdbf03dc25d4fd4d83f`. Se endureció el mismo
+  preflight de atestación: además de negar UPDATE de tabla y comprobar las
+  cinco columnas autorizadas, ahora rechaza cualquier UPDATE efectivo sobre
+  otra columna de esa tabla.
+- El test estático focalizado verifica el allowlist exacto y la comprobación
+  por `pg_attribute`/`has_column_privilege`; no consulta la base.
+- El mismo comando focalizado volvió a pasar: 1 test, 0 fallos.
+  `git diff --check` pasó.
+- Informe `reports/rls-attestation-column-allowlist-offline-2026-11-11.md`;
+  SHA-256 `a4576489cdc2c2029d2b03352b564f24b86881d557edb06873d28717d41bf09b`.
+- El resultado sigue siendo evidencia sintética de contrato, no validación
+  PostgreSQL/RLS real; no se ejecutó el workflow API Server.
