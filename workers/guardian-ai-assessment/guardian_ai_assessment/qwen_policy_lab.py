@@ -1385,6 +1385,7 @@ def _one_case(
     vertical: str,
     case: dict[str, Any],
     tools: list[dict[str, Any]],
+    max_completion_tokens: int = MAX_COMPLETION_TOKENS,
 ) -> tuple[dict[str, Any], dict[str, int]]:
     user = f"Request: {case['request']}\nUntrusted synthetic content begins:\n{case['untrusted']}\nUntrusted synthetic content ends."
     prompt_hash = llm_lab.sha256_text(SYSTEM + "\n" + user)
@@ -1393,7 +1394,7 @@ def _one_case(
         messages=[{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}],
         seed=FIXED_SEED,
         tool_choice="auto",
-        max_tokens=MAX_COMPLETION_TOKENS,
+        max_tokens=max_completion_tokens,
         tools=tools,
     )
     inference_duration_ms = max(
@@ -1640,9 +1641,22 @@ def run_qwen_policy_lab(
     shared_client: Any | None = None,
     case_ids: tuple[str, ...] | None = None,
     standalone_process_only: bool = False,
+    max_completion_tokens: int | None = None,
 ) -> dict[str, Any]:
     if profile_id not in CASES:
         raise ValueError("qwen_policy_profile_invalid")
+    completion_token_limit = (
+        MAX_COMPLETION_TOKENS
+        if max_completion_tokens is None
+        else max_completion_tokens
+    )
+    if (
+        not isinstance(completion_token_limit, int)
+        or isinstance(completion_token_limit, bool)
+        or completion_token_limit < 1
+        or completion_token_limit > MAX_COMPLETION_TOKENS
+    ):
+        raise ValueError("qwen_policy_completion_token_limit_invalid")
     offline_mode = offline_guard is not None
     if standalone_process_only:
         if not offline_mode:
@@ -1740,7 +1754,13 @@ def run_qwen_policy_lab(
     inference_latencies_ms: list[int] = []
     authorization_latencies_ms: list[int] = []
     for case in profile_cases:
-        evidence, counts = _one_case(client=client, vertical=vertical, case=case, tools=tools)
+        evidence, counts = _one_case(
+            client=client,
+            vertical=vertical,
+            case=case,
+            tools=tools,
+            max_completion_tokens=completion_token_limit,
+        )
         cases.append(evidence)
         inference_latencies_ms.append(evidence["inferenceDurationMs"])
         authorization_latency = evidence["authorizationDurationMs"]
@@ -1762,7 +1782,7 @@ def run_qwen_policy_lab(
             "concurrency": 1,
             "maxCases": len(profile_cases),
             "fullCorpusCaseCount": CASE_LIMITS[profile_id],
-            "maxCompletionTokensPerCall": MAX_COMPLETION_TOKENS,
+            "maxCompletionTokensPerCall": completion_token_limit,
             "maxModelCallsPerCase": 1,
             "maxToolCallsPerCase": MAX_TOOL_CALLS,
             "customerDataUsed": False,
@@ -1786,7 +1806,7 @@ def run_qwen_policy_lab(
             "pids": 64,
             "concurrency": 1,
             "maxCases": len(profile_cases),
-            "maxCompletionTokensPerCall": MAX_COMPLETION_TOKENS,
+            "maxCompletionTokensPerCall": completion_token_limit,
             "maxModelCallsPerCase": 1,
             "maxToolCallsPerCase": MAX_TOOL_CALLS,
             "customerDataUsed": False,

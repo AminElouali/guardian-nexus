@@ -16,10 +16,12 @@ import platform
 import re
 import signal
 import stat
+import subprocess
 import sys
 import tempfile
 import time
 import zipfile
+from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any, Mapping, Sequence
 
@@ -31,6 +33,13 @@ _WHEELHOUSE_MANIFEST_SHA256 = (
 )
 _MAX_EXTRACTED_WHEEL_BYTES = 512 * 1024 * 1024
 _WALL_TIMEOUT_SECONDS = 900
+_OFFLINE_CASE_TIMEOUT_DEFAULT_SECONDS = 120
+_OFFLINE_CASE_TIMEOUT_MAX_SECONDS = 180
+_OFFLINE_PROFILE_TIMEOUT_DEFAULT_SECONDS = 300
+_OFFLINE_PROFILE_TIMEOUT_MAX_SECONDS = 360
+_OFFLINE_WALL_TIMEOUT_DEFAULT_SECONDS = 660
+_OFFLINE_WALL_TIMEOUT_MAX_SECONDS = 780
+_OFFLINE_MAX_COMPLETION_TOKENS = 48
 _FAILED_FULL_RUN_SHA256 = (
     "abb6fddf9600208d86a2d11bdd6d15aa215a7a22ca41fabaaa7bba0e45bed8f4"
 )
@@ -611,6 +620,88 @@ def _bounded_case_timeout_seconds(
     return min(float(per_case_seconds), remaining)
 
 
+def _validate_offline_timeout_config(
+    *,
+    case_timeout_seconds: int,
+    profile_timeout_seconds: int,
+    wall_timeout_seconds: int,
+) -> dict[str, int]:
+    """Validate configurable local-runner limits without raising manifest caps."""
+    values = (
+        case_timeout_seconds,
+        profile_timeout_seconds,
+        wall_timeout_seconds,
+    )
+    if any(
+        not isinstance(value, int) or isinstance(value, bool)
+        for value in values
+    ):
+        raise ValueError("offline_qwen_timeout_config_invalid")
+    if not (
+        10 <= case_timeout_seconds <= _OFFLINE_CASE_TIMEOUT_MAX_SECONDS
+        and profile_timeout_seconds <= _OFFLINE_PROFILE_TIMEOUT_MAX_SECONDS
+        and profile_timeout_seconds >= case_timeout_seconds
+        and wall_timeout_seconds <= _OFFLINE_WALL_TIMEOUT_MAX_SECONDS
+        and wall_timeout_seconds >= profile_timeout_seconds
+    ):
+        raise ValueError("offline_qwen_timeout_config_out_of_bounds")
+    return {
+        "caseTimeoutSeconds": case_timeout_seconds,
+        "profileTimeoutSeconds": profile_timeout_seconds,
+        "wallTimeoutSeconds": wall_timeout_seconds,
+    }
+
+
+def _stream_capture_record(value: str | bytes | None) -> dict[str, Any]:
+    """Record bounded-process output provenance without persisting raw text."""
+    if value is None:
+        raw = b""
+    elif isinstance(value, bytes):
+        raw = value
+    else:
+        raw = value.encode("utf-8", errors="replace")
+    return {
+        "captured": True,
+        "bytes": len(raw),
+        "sha256": hashlib.sha256(raw).hexdigest(),
+        "rawTextStored": False,
+    }
+
+
+def _progress_checkpoint(
+    *,
+    profile_id: str,
+    status: str,
+    active_case_id: str | None,
+    completed_cases: Sequence[Mapping[str, Any]],
+    error_type: str | None = None,
+) -> dict[str, Any]:
+    checkpoint: dict[str, Any] = {
+        "schemaVersion": 1,
+        "profileId": profile_id,
+        "status": status,
+        "activeCaseId": active_case_id,
+        "completedCaseCount": len(completed_cases),
+        "completedCases": list(completed_cases),
+        "rawPromptsStored": False,
+        "rawResponsesStored": False,
+        "rawToolArgumentsStored": False,
+    }
+    if error_type:
+        checkpoint["errorType"] = error_type
+    checkpoint["checkpointSha256"] = _canonical_sha256(checkpoint)
+    return checkpoint
+
+
+def _write_progress_checkpoint(path: Path, checkpoint: Mapping[str, Any]) -> None:
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(
+        json.dumps(checkpoint, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    os.replace(temporary, path)
+
+
 def _write_bundle(path: Path, bundle: dict[str, Any]) -> None:
     temporary = path.with_suffix(path.suffix + ".tmp")
     temporary.write_text(
@@ -636,6 +727,8 @@ def _build_bundle(
     selection: str | None = None,
     fixture_baselines: Mapping[str, Any] | None = None,
     standalone_process_only: bool = False,
+    profile_progress: Mapping[str, Any] | None = None,
+    timeout_config: Mapping[str, int] | None = None,
 ) -> dict[str, Any]:
     from .offline_process_guard import offline_limit_evidence, offline_network_evidence
 
@@ -675,6 +768,7 @@ def _build_bundle(
     }
     bundle: dict[str, Any] = {
         "schemaVersion": 1,
+        "generatedAt": datetime.now(timezone.utc).isoformat(),
         "status": status,
         "executionMode": "real_local_qwen_inference_offline_process_guard",
         "source": "qwen_local_policy_lab_offline",
@@ -730,6 +824,10 @@ def _build_bundle(
             "The small synthetic corpus does not estimate general model safety.",
         ],
     }
+    if timeout_config is not None:
+        bundle["timeoutConfig"] = dict(timeout_config)
+    if profile_progress is not None:
+        bundle["partialProfileProgress"] = dict(profile_progress)
     if profile_ids is None and selected_case_ids is None:
         bundle["scope"]["previousFullCorpusAttempt"] = {
             "status": "incomplete",
@@ -945,6 +1043,9 @@ def _run_offline_profiles(
     selected_case_ids: Mapping[str, Sequence[str]],
     artifact_name: str,
     standalone_process_only: bool,
+    case_timeout_seconds: int | None = None,
+    profile_timeout_seconds: int | None = None,
+    max_completion_tokens: int | None = None,
 ) -> tuple[dict[str, Any], Path]:
     workspace = workspace.resolve()
     if standalone_process_only:
@@ -956,6 +1057,9 @@ def _run_offline_profiles(
 
     artifact_path = (
         workspace / "generated-artifacts/guardian-qwen-offline" / artifact_name
+    )
+    progress_path = artifact_path.with_name(
+        f"{artifact_path.stem}.progress.json"
     )
     local_manifest, wheel_manifest = _load_verified_manifests(workspace)
     manifest_path = workspace / "workers/guardian-ai-assessment/local-llm-manifest.json"
@@ -979,6 +1083,8 @@ def _run_offline_profiles(
         raise RuntimeError("BLOCKED_MODEL_UNAVAILABLE")
 
     completed_profiles: list[dict[str, Any]] = []
+    profile_progress: dict[str, Any] = {}
+    active_profile_id: str | None = None
     process_guard: object | None = None
     verified_wheels: list[dict[str, Any]] = []
     full_corpus_case_count: int | None = None
@@ -1007,6 +1113,37 @@ def _run_offline_profiles(
             qwen_lab = importlib.import_module(
                 "guardian_ai_assessment.qwen_policy_lab"
             )
+            effective_case_timeout = (
+                qwen_lab.llm_lab.MAX_RUNTIME_SECONDS
+                if case_timeout_seconds is None
+                else min(
+                    case_timeout_seconds,
+                    qwen_lab.llm_lab.MAX_RUNTIME_SECONDS,
+                )
+            )
+            effective_completion_tokens = (
+                None
+                if max_completion_tokens is None
+                else min(
+                    max_completion_tokens,
+                    qwen_lab.llm_lab.MAX_COMPLETION_TOKENS,
+                )
+            )
+            profile_deadline_seconds = (
+                profile_timeout_seconds
+                if profile_timeout_seconds is not None
+                else _WALL_TIMEOUT_SECONDS
+            )
+            timeout_config = {
+                "caseTimeoutSeconds": int(effective_case_timeout),
+                "profileTimeoutSeconds": int(profile_deadline_seconds),
+                "completionTokensPerCall": int(
+                    effective_completion_tokens
+                    if effective_completion_tokens is not None
+                    else qwen_lab.llm_lab.MAX_COMPLETION_TOKENS
+                ),
+                "contextTokens": int(qwen_lab.llm_lab.MAX_CONTEXT_TOKENS),
+            }
             full_corpus_case_count = sum(
                 qwen_lab.CASE_LIMITS[profile_id] for profile_id in profile_ids
             )
@@ -1025,18 +1162,40 @@ def _run_offline_profiles(
 
             signal.signal(signal.SIGALRM, _deadline)
             signal.signal(signal.SIGXCPU, _deadline)
-            wall_deadline = time.monotonic() + _WALL_TIMEOUT_SECONDS
-            signal.setitimer(signal.ITIMER_REAL, _WALL_TIMEOUT_SECONDS)
+            wall_deadline = time.monotonic() + min(
+                float(profile_deadline_seconds), float(_WALL_TIMEOUT_SECONDS)
+            )
+            signal.setitimer(signal.ITIMER_REAL, max(0.0, wall_deadline - time.monotonic()))
             for profile_id in profile_ids:
+                active_profile_id = profile_id
                 case_ids = tuple(selected_case_ids[profile_id])
                 case_runs: list[dict[str, Any]] = []
+                completed_case_summaries: list[dict[str, Any]] = []
+                profile_progress[profile_id] = _progress_checkpoint(
+                    profile_id=profile_id,
+                    status="in_progress",
+                    active_case_id=case_ids[0] if case_ids else None,
+                    completed_cases=completed_case_summaries,
+                )
+                _write_progress_checkpoint(
+                    progress_path, profile_progress[profile_id]
+                )
                 for case_id in case_ids:
                     case_timeout = _bounded_case_timeout_seconds(
                         wall_deadline=wall_deadline,
-                        per_case_seconds=qwen_lab.llm_lab.MAX_RUNTIME_SECONDS,
+                        per_case_seconds=effective_case_timeout,
                     )
                     signal.setitimer(signal.ITIMER_REAL, case_timeout)
                     try:
+                        profile_progress[profile_id] = _progress_checkpoint(
+                            profile_id=profile_id,
+                            status="in_progress",
+                            active_case_id=case_id,
+                            completed_cases=completed_case_summaries,
+                        )
+                        _write_progress_checkpoint(
+                            progress_path, profile_progress[profile_id]
+                        )
                         case_evidence = qwen_lab.run_qwen_policy_lab(
                             profile_id,
                             offline_guard=process_guard,
@@ -1044,6 +1203,7 @@ def _run_offline_profiles(
                             shared_client=model_client,
                             case_ids=(case_id,),
                             standalone_process_only=standalone_process_only,
+                            max_completion_tokens=effective_completion_tokens,
                         )
                     finally:
                         remaining_wall = max(
@@ -1068,6 +1228,30 @@ def _run_offline_profiles(
                     ):
                         raise RuntimeError("offline_qwen_single_case_evidence_invalid")
                     case_runs.append(case_evidence)
+                    case_record = case_evidence["cases"][0]
+                    completed_case_summaries.append(
+                        {
+                            "caseId": case_id,
+                            "status": "completed",
+                            "inferenceDurationMs": case_record.get(
+                                "inferenceDurationMs"
+                            ),
+                            "promptTokens": case_record.get("promptTokens"),
+                            "completionTokens": case_record.get("completionTokens"),
+                            "toolCallOrigin": case_record.get("toolCallOrigin"),
+                            "decision": case_record.get("decision"),
+                            "dispatchStatus": case_record.get("dispatchStatus"),
+                        }
+                    )
+                    profile_progress[profile_id] = _progress_checkpoint(
+                        profile_id=profile_id,
+                        status="in_progress",
+                        active_case_id=None,
+                        completed_cases=completed_case_summaries,
+                    )
+                    _write_progress_checkpoint(
+                        progress_path, profile_progress[profile_id]
+                    )
                 profile_evidence = _combine_single_case_profile_runs(
                     qwen_lab, profile_id, case_ids, case_runs
                 )
@@ -1107,6 +1291,16 @@ def _run_offline_profiles(
                 ):
                     raise RuntimeError("offline_qwen_profile_evidence_invalid")
                 completed_profiles.append(profile_evidence)
+                profile_progress[profile_id] = _progress_checkpoint(
+                    profile_id=profile_id,
+                    status="completed",
+                    active_case_id=None,
+                    completed_cases=completed_case_summaries,
+                )
+                _write_progress_checkpoint(
+                    progress_path, profile_progress[profile_id]
+                )
+                active_profile_id = None
             signal.setitimer(signal.ITIMER_REAL, 0)
             bundle = _build_bundle(
                 local_manifest=local_manifest,
@@ -1128,9 +1322,23 @@ def _run_offline_profiles(
                 ),
                 fixture_baselines=fixture_baselines,
                 standalone_process_only=standalone_process_only,
+                profile_progress=profile_progress,
+                timeout_config=timeout_config,
             )
     except Exception as exc:
         signal.setitimer(signal.ITIMER_REAL, 0)
+        if active_profile_id:
+            existing = profile_progress.get(active_profile_id, {})
+            profile_progress[active_profile_id] = _progress_checkpoint(
+                profile_id=active_profile_id,
+                status="incomplete",
+                active_case_id=existing.get("activeCaseId"),
+                completed_cases=existing.get("completedCases", []),
+                error_type=type(exc).__name__,
+            )
+            _write_progress_checkpoint(
+                progress_path, profile_progress[active_profile_id]
+            )
         if process_guard is None:
             raise RuntimeError("offline_qwen_guard_or_runtime_setup_failed") from None
         bundle = _build_bundle(
@@ -1154,6 +1362,8 @@ def _run_offline_profiles(
             ),
             fixture_baselines=fixture_baselines,
             standalone_process_only=standalone_process_only,
+            profile_progress=profile_progress,
+            timeout_config=locals().get("timeout_config"),
         )
         artifact_path.parent.mkdir(parents=True, exist_ok=True)
         _write_bundle(artifact_path, bundle)
@@ -1220,19 +1430,369 @@ def run_offline_evaluation(workspace: Path) -> tuple[dict[str, Any], Path]:
     )
 
 
+def run_offline_email_database_profile(
+    workspace: Path,
+    profile_id: str,
+    *,
+    case_timeout_seconds: int,
+    profile_timeout_seconds: int,
+) -> tuple[dict[str, Any], Path]:
+    """Run one email/database profile in its own bounded child process."""
+    if profile_id not in _EMAIL_DATABASE_PROFILE_ORDER:
+        raise ValueError("offline_qwen_profile_not_allowlisted")
+    _validate_offline_timeout_config(
+        case_timeout_seconds=case_timeout_seconds,
+        profile_timeout_seconds=profile_timeout_seconds,
+        wall_timeout_seconds=profile_timeout_seconds,
+    )
+    suffix = "email" if profile_id == _PROFILE_ORDER[0] else "database"
+    return _run_offline_profiles(
+        workspace,
+        profile_ids=(profile_id,),
+        selected_case_ids={profile_id: _EMAIL_DATABASE_CASE_IDS[profile_id]},
+        artifact_name=f"qwen-policy-lab-email-database-{suffix}-profile.json",
+        standalone_process_only=True,
+        case_timeout_seconds=case_timeout_seconds,
+        profile_timeout_seconds=profile_timeout_seconds,
+        max_completion_tokens=_OFFLINE_MAX_COMPLETION_TOKENS,
+    )
+
+
 def run_offline_email_database_evaluation(
     workspace: Path,
+    *,
+    case_timeout_seconds: int = _OFFLINE_CASE_TIMEOUT_DEFAULT_SECONDS,
+    profile_timeout_seconds: int = _OFFLINE_PROFILE_TIMEOUT_DEFAULT_SECONDS,
+    wall_timeout_seconds: int = _OFFLINE_WALL_TIMEOUT_DEFAULT_SECONDS,
 ) -> tuple[dict[str, Any], Path]:
-    """Run only email/database in a seccomp-only process, never via API/worker."""
-    try:
-        return _run_offline_profiles(
-            workspace,
-            profile_ids=_EMAIL_DATABASE_PROFILE_ORDER,
-            selected_case_ids=_EMAIL_DATABASE_CASE_IDS,
-            artifact_name="qwen-policy-lab-email-database.json",
-            standalone_process_only=True,
+    """Run email then database serially, hard-stopping and checkpointing each."""
+    timeout_config = _validate_offline_timeout_config(
+        case_timeout_seconds=case_timeout_seconds,
+        profile_timeout_seconds=profile_timeout_seconds,
+        wall_timeout_seconds=wall_timeout_seconds,
+    )
+    workspace = workspace.resolve()
+    require_standalone_offline_environment()
+    artifact_path = (
+        workspace
+        / "generated-artifacts/guardian-qwen-offline/"
+        "qwen-policy-lab-email-database.json"
+    )
+    local_manifest, _wheel_manifest = _load_verified_manifests(workspace)
+    manifest_path = (
+        workspace / "workers/guardian-ai-assessment/local-llm-manifest.json"
+    )
+    model_path = (
+        workspace
+        / "generated-artifacts/guardian-llm-lab"
+        / local_manifest["model"]["file"]
+    )
+    if (
+        not model_path.is_file()
+        or model_path.stat().st_size != local_manifest["model"]["sizeBytes"]
+        or _sha256_file(model_path) != local_manifest["model"]["sha256"]
+    ):
+        raise RuntimeError("BLOCKED_MODEL_UNAVAILABLE")
+
+    worker_root = workspace / "workers/guardian-ai-assessment"
+    fixture_baselines = _fixture_baseline_comparison(
+        workspace, _EMAIL_DATABASE_PROFILE_ORDER
+    )
+    source_hashes = _source_code_hashes(worker_root)
+    model_record = {
+        "id": local_manifest["model"]["id"],
+        "revision": local_manifest["model"]["revision"],
+        "file": local_manifest["model"]["file"],
+        "sha256": local_manifest["model"]["sha256"],
+        "sizeBytes": local_manifest["model"]["sizeBytes"],
+        "quantization": local_manifest["model"]["quantization"],
+        "runtime": local_manifest["runtime"]["name"],
+        "runtimeVersion": local_manifest["runtime"]["version"],
+        "runtimeWheelSha256": local_manifest["runtime"]["wheelSha256"],
+        "manifestSha256": _sha256_file(manifest_path),
+    }
+    profile_records: list[dict[str, Any]] = [
+        {
+            "profileId": profile_id,
+            "status": "pending",
+            "completedCaseCount": 0,
+            "completedInferenceCount": 0,
+            "runtimeMessageToolCalls": None,
+            "adaptedQwenMarkupCalls": None,
+            "noProposal": None,
+            "fixtureBaseline": fixture_baselines[profile_id],
+        }
+        for profile_id in _EMAIL_DATABASE_PROFILE_ORDER
+    ]
+
+    def checkpoint(status: str) -> dict[str, Any]:
+        completed_evidence = [
+            record["evidence"]
+            for record in profile_records
+            if isinstance(record.get("evidence"), dict)
+        ]
+        summary_keys = (
+            "sampleCount",
+            "benignCases",
+            "adversarialCases",
+            "modelCalls",
+            "runtimeMessageToolCalls",
+            "adaptedQwenMarkupCalls",
+            "noToolCalls",
+            "denied",
+            "policyDenials",
+            "adapterValidationBlocks",
+            "simulatedExecutions",
+            "unauthorizedExecutions",
+            "policyOffExecutions",
+            "externalCalls",
         )
-    except RuntimeError as exc:
-        if str(exc) == "BLOCKED_MODEL_UNAVAILABLE":
-            _write_model_unavailable_artifact(workspace.resolve())
-        raise
+        summary = {
+            key: sum(
+                int(evidence.get("summary", {}).get(key, 0))
+                for evidence in completed_evidence
+            )
+            for key in summary_keys
+        }
+        bundle: dict[str, Any] = {
+            "schemaVersion": 1,
+            "generatedAt": datetime.now(timezone.utc).isoformat(),
+            "status": status,
+            "executionMode": "real_local_qwen_inference_offline_process_guard",
+            "source": "qwen_local_policy_lab_offline",
+            "scope": {
+                "profilesInOrder": list(_EMAIL_DATABASE_PROFILE_ORDER),
+                "selectedCasesPerProfile": {
+                    profile_id: list(_EMAIL_DATABASE_CASE_IDS[profile_id])
+                    for profile_id in _EMAIL_DATABASE_PROFILE_ORDER
+                },
+                "fixturesIncluded": False,
+            },
+            "model": model_record,
+            "sourceCodeSha256": source_hashes,
+            "timeoutConfig": {
+                **timeout_config,
+                "completionTokensPerCall": _OFFLINE_MAX_COMPLETION_TOKENS,
+                "contextTokens": 1024,
+                "concurrency": 1,
+            },
+            "profiles": profile_records,
+            "summary": summary,
+            "comparison": {
+                "categoriesAreSeparate": True,
+                "fixtureBaseline": {
+                    "executionMode": "deterministic_fixture",
+                    "proposalOrigin": "controlled_fixture_not_llm",
+                    "profiles": fixture_baselines,
+                },
+                "qwenInference": {
+                    "executionMode": "real_local_qwen_inference_offline_process_guard",
+                    "profiles": [
+                        record["profileId"] for record in profile_records
+                    ],
+                    "summary": summary,
+                },
+                "caseSetsAreIdentical": False,
+            },
+            "policy": {
+                "policyOn": "independent synthetic policy before local simulator",
+                "policyOff": "counterfactual clone only; no dispatch",
+                "externalEffects": False,
+                "apiJobCreated": False,
+                "databasePersistence": False,
+                "approvalInboxPersistence": False,
+            },
+            "integrationReadiness": {
+                "hostBoundaryReady": False,
+                "integratedAssessmentReady": False,
+                "workerAdmission": "disabled",
+                "reason": "standalone_process_lab_does_not_attest_host_boundary",
+            },
+            "evidenceStorage": {
+                "rawPromptsStored": False,
+                "rawResponsesStored": False,
+                "rawToolArgumentsStored": False,
+                "rawProcessOutputStored": False,
+                "syntheticOnly": True,
+            },
+        }
+        bundle["bundleSha256"] = _canonical_sha256(bundle)
+        return bundle
+
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    _write_bundle(artifact_path, checkpoint("in_progress"))
+    wall_deadline = time.monotonic() + wall_timeout_seconds
+    launcher = worker_root / "scripts/run_qwen_email_database_lab_offline.py"
+
+    for record in profile_records:
+        profile_id = record["profileId"]
+        remaining_wall = wall_deadline - time.monotonic()
+        if remaining_wall <= 0:
+            record.update(
+                {
+                    "status": "skipped_overall_timeout",
+                    "errorType": "TimeoutError",
+                    "errorCode": "offline_qwen_overall_timeout",
+                }
+            )
+            _write_bundle(artifact_path, checkpoint("incomplete"))
+            continue
+
+        profile_started = time.monotonic()
+        child_timeout = min(profile_timeout_seconds, max(1, int(remaining_wall)))
+        suffix = "email" if profile_id == _PROFILE_ORDER[0] else "database"
+        child_artifact_path = (
+            workspace
+            / "generated-artifacts/guardian-qwen-offline"
+            / f"qwen-policy-lab-email-database-{suffix}-profile.json"
+        )
+        progress_path = child_artifact_path.with_name(
+            f"{child_artifact_path.stem}.progress.json"
+        )
+        child_env = {
+            "HOME": str(workspace / "generated-artifacts/guardian-qwen-offline"),
+            "TMPDIR": str(workspace / "generated-artifacts/guardian-qwen-offline"),
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "OMP_NUM_THREADS": "1",
+            "OPENBLAS_NUM_THREADS": "1",
+            "MKL_NUM_THREADS": "1",
+            "NUMEXPR_NUM_THREADS": "1",
+            "LANG": "C.UTF-8",
+        }
+        command = [
+            sys.executable,
+            str(launcher),
+            "--profile-child",
+            profile_id,
+            "--case-timeout-seconds",
+            str(case_timeout_seconds),
+            "--profile-timeout-seconds",
+            str(profile_timeout_seconds),
+        ]
+        timed_out: subprocess.TimeoutExpired | None = None
+        completed: subprocess.CompletedProcess[str] | None = None
+        try:
+            completed = subprocess.run(
+                command,
+                cwd=workspace,
+                env=child_env,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=child_timeout,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            timed_out = exc
+
+        stdout_value = (
+            timed_out.stdout
+            if timed_out is not None
+            else completed.stdout if completed is not None else None
+        )
+        stderr_value = (
+            timed_out.stderr
+            if timed_out is not None
+            else completed.stderr if completed is not None else None
+        )
+        record["durationSeconds"] = round(time.monotonic() - profile_started, 3)
+        record["timeoutSeconds"] = child_timeout
+        record["processOutput"] = {
+            "stdout": _stream_capture_record(stdout_value),
+            "stderr": _stream_capture_record(stderr_value),
+            "rawTextStored": False,
+        }
+
+        partial_progress: dict[str, Any] | None = None
+        if progress_path.is_file():
+            try:
+                progress_doc = json.loads(progress_path.read_text(encoding="utf-8"))
+                if (
+                    isinstance(progress_doc, dict)
+                    and progress_doc.get("profileId") == profile_id
+                ):
+                    partial_progress = progress_doc
+            except (OSError, json.JSONDecodeError):
+                partial_progress = None
+        if partial_progress is not None:
+            record["partialCheckpoint"] = partial_progress
+            record["completedCaseCount"] = int(
+                partial_progress.get("completedCaseCount", 0)
+            )
+            record["completedInferenceCount"] = record["completedCaseCount"]
+
+        child_bundle: dict[str, Any] | None = None
+        if child_artifact_path.is_file():
+            try:
+                child_bundle = json.loads(
+                    child_artifact_path.read_text(encoding="utf-8")
+                )
+            except (OSError, json.JSONDecodeError):
+                child_bundle = None
+        if timed_out is not None:
+            record.update(
+                {
+                    "status": "timed_out",
+                    "errorType": "TimeoutExpired",
+                    "errorCode": "offline_qwen_profile_timeout",
+                }
+            )
+        elif (
+            completed is not None
+            and completed.returncode == 0
+            and isinstance(child_bundle, dict)
+            and child_bundle.get("status") == "completed"
+            and len(child_bundle.get("profiles", [])) == 1
+            and child_bundle["profiles"][0].get("profileId") == profile_id
+        ):
+            evidence = child_bundle["profiles"][0]
+            record.update(
+                {
+                    "status": "completed",
+                    "evidence": evidence,
+                    "liveInferenceCount": evidence["summary"]["modelCalls"],
+                    "completedInferenceCount": evidence["summary"]["modelCalls"],
+                    "runtimeMessageToolCalls": evidence["summary"][
+                        "runtimeMessageToolCalls"
+                    ],
+                    "adaptedQwenMarkupCalls": evidence["summary"][
+                        "adaptedQwenMarkupCalls"
+                    ],
+                    "noProposal": evidence["summary"]["noToolCalls"],
+                    "completedCaseCount": evidence["summary"]["sampleCount"],
+                }
+            )
+        else:
+            record.update(
+                {
+                    "status": "incomplete",
+                    "errorType": (
+                        child_bundle.get("errorType")
+                        if isinstance(child_bundle, dict)
+                        else "ProfileProcessError"
+                    ),
+                    "errorCode": (
+                        "offline_qwen_profile_failed"
+                        if completed is None or completed.returncode != 0
+                        else "offline_qwen_profile_evidence_invalid"
+                    ),
+                }
+            )
+        _write_bundle(
+            artifact_path,
+            checkpoint(
+                "completed"
+                if all(item["status"] == "completed" for item in profile_records)
+                else "in_progress"
+            ),
+        )
+
+    final_status = (
+        "completed"
+        if all(record["status"] == "completed" for record in profile_records)
+        else "incomplete"
+    )
+    bundle = checkpoint(final_status)
+    _write_bundle(artifact_path, bundle)
+    return bundle, artifact_path
