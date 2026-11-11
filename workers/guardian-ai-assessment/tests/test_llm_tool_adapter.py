@@ -8,10 +8,18 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from guardian_ai_assessment import llm_lab  # noqa: E402
 from guardian_ai_assessment.qwen_policy_lab import (  # noqa: E402
     BROWSER_TOOLS,
+    CASES as QWEN_CASES,
     DATABASE_TOOLS,
     EMAIL_TOOLS,
+    FINANCE_PROFILE,
+    FINANCE_TOOLS,
     INFRASTRUCTURE_TOOLS,
+    MULTIAGENT_PROFILE,
+    MULTIAGENT_TOOLS,
     PROGRAMMING_TOOLS,
+    SUPPORT_PROFILE,
+    SUPPORT_TOOLS,
+    _action_for,
 )
 from guardian_ai_assessment.tool_adapter import (  # noqa: E402
     INVOICE_ID,
@@ -27,6 +35,8 @@ from guardian_ai_assessment.tool_adapter import (  # noqa: E402
     SYNTHETIC_EMAIL,
     SYNTHETIC_EMAIL_ID,
     SYNTHETIC_IBAN,
+    SYNTHETIC_REFUND_AMOUNT_CENTS,
+    SYNTHETIC_SUPPORT_TICKET_ID,
     TOOL_IDS,
     call_synthetic_tool,
     evaluate_synthetic_action_policy,
@@ -45,6 +55,230 @@ class ScriptedProvider:
 
 
 class LocalLlmToolAdapterTests(unittest.TestCase):
+    def test_finance_support_and_multiagent_catalogs_match_policy_contracts(self):
+        cases = (
+            (
+                "finance",
+                FINANCE_PROFILE,
+                FINANCE_TOOLS,
+                "qwen_finance_benign_quoted_instruction_en",
+                "consult_synthetic_invoice",
+                {"invoice_id": INVOICE_ID},
+                (True, "synthetic_invoice_returned"),
+                "allow",
+            ),
+            (
+                "finance",
+                FINANCE_PROFILE,
+                FINANCE_TOOLS,
+                "qwen_finance_benign_bank_change_request_es",
+                "request_bank_account_change",
+                {
+                    "account_id": SYNTHETIC_ACCOUNT_ID,
+                    "new_iban": SYNTHETIC_IBAN,
+                },
+                (True, "simulated_change_request_pending"),
+                "require_approval",
+            ),
+            (
+                "customer_service",
+                SUPPORT_PROFILE,
+                SUPPORT_TOOLS,
+                "qwen_support_benign_reply_es",
+                "draft_synthetic_support_reply",
+                {
+                    "ticket_id": SYNTHETIC_SUPPORT_TICKET_ID,
+                    "reply": "Synthetic reply for contract validation.",
+                },
+                (True, "synthetic_support_reply_drafted"),
+                "allow",
+            ),
+            (
+                "customer_service",
+                SUPPORT_PROFILE,
+                SUPPORT_TOOLS,
+                "qwen_support_benign_eligible_refund_en",
+                "propose_synthetic_refund",
+                {
+                    "ticket_id": SYNTHETIC_SUPPORT_TICKET_ID,
+                    "amount_cents": SYNTHETIC_REFUND_AMOUNT_CENTS,
+                },
+                (True, "synthetic_refund_request_validated"),
+                "require_approval",
+            ),
+            (
+                "multiagent",
+                MULTIAGENT_PROFILE,
+                MULTIAGENT_TOOLS,
+                "qwen_multiagent_benign_read_only_es",
+                "delegate_synthetic_read_only_task",
+                {
+                    "task_id": SYNTHETIC_DELEGATION_TASK_ID,
+                    "child_agent_id": "guardian-multiagent-specialist-v1",
+                    "permissions": ["database.read.scoped"],
+                },
+                (True, "synthetic_read_only_delegation_created"),
+                "allow",
+            ),
+        )
+        expected_tools = {
+            "finance": {
+                "consult_synthetic_invoice",
+                "request_bank_account_change",
+            },
+            "customer_service": {
+                "draft_synthetic_support_reply",
+                "propose_synthetic_refund",
+            },
+            "multiagent": {"delegate_synthetic_read_only_task"},
+        }
+        observed_tools = {vertical: set() for vertical in expected_tools}
+        for (
+            vertical,
+            profile_id,
+            catalog,
+            case_id,
+            tool_name,
+            arguments,
+            expected_validation,
+            expected_decision,
+        ) in cases:
+            with self.subTest(vertical=vertical, tool=tool_name):
+                item = next(
+                    entry
+                    for entry in catalog
+                    if entry["function"]["name"] == tool_name
+                )
+                function = item["function"]
+                schema = function["parameters"]
+                observed_tools[vertical].add(tool_name)
+                self.assertEqual(item["type"], "function")
+                self.assertIn(tool_name, TOOL_IDS)
+                self.assertEqual(schema["type"], "object")
+                self.assertFalse(schema["additionalProperties"])
+                self.assertEqual(
+                    set(schema["required"]), set(schema["properties"])
+                )
+                self.assertEqual(set(arguments), set(schema["required"]))
+                for field, value in arguments.items():
+                    field_schema = schema["properties"][field]
+                    if field_schema["type"] == "array":
+                        self.assertIsInstance(value, list)
+                        for entry_value in value:
+                            if "enum" in field_schema["items"]:
+                                self.assertIn(
+                                    entry_value, field_schema["items"]["enum"]
+                                )
+                    elif field_schema["type"] == "integer":
+                        self.assertIs(type(value), int)
+                    else:
+                        self.assertEqual(field_schema["type"], "string")
+                        self.assertIsInstance(value, str)
+                    if "enum" in field_schema:
+                        self.assertIn(value, field_schema["enum"])
+                    if "maxLength" in field_schema:
+                        self.assertLessEqual(
+                            len(value), field_schema["maxLength"]
+                        )
+
+                validation = validate_synthetic_tool_arguments(
+                    tool_name, arguments
+                )
+                sequence = ["validation"]
+                self.assertEqual(validation, expected_validation)
+                case = next(
+                    item for item in QWEN_CASES[profile_id]
+                    if item["caseId"] == case_id
+                )
+                action, permissions, _required = _action_for(
+                    vertical, tool_name, arguments, case
+                )
+                decision, _reason = evaluate_synthetic_action_policy(
+                    vertical, action, permissions
+                )
+                sequence.append("policy_on")
+                self.assertEqual(decision, expected_decision)
+
+                simulator_invoked = False
+                if validation[0] and decision == "allow":
+                    simulator_invoked = True
+                    sequence.append("simulator")
+                    events, _result = call_synthetic_tool(
+                        tool=tool_name,
+                        arguments=arguments,
+                        source="offline_approval_catalog_contract_test",
+                        tool_call_id=f"catalog-{tool_name}",
+                        permitted_tools={tool_name},
+                    )
+                    self.assertEqual(events[-1]["phase"], "executed")
+                    self.assertTrue(events[-1]["simulatedOnly"])
+                    self.assertFalse(events[-1]["stateChanged"])
+                    self.assertFalse(events[-1]["externalSideEffect"])
+                self.assertEqual(
+                    sequence,
+                    ["validation", "policy_on", "simulator"]
+                    if expected_decision == "allow"
+                    else ["validation", "policy_on"],
+                )
+                self.assertEqual(
+                    simulator_invoked, expected_decision == "allow"
+                )
+
+        self.assertEqual(observed_tools, expected_tools)
+        for tool_name, invalid_arguments in (
+            (
+                "request_bank_account_change",
+                {
+                    "account_id": ["SYNTHETIC-ACCOUNT-001"],
+                    "new_iban": SYNTHETIC_IBAN,
+                },
+            ),
+            (
+                "request_bank_account_change",
+                {
+                    "account_id": SYNTHETIC_ACCOUNT_ID,
+                    "new_iban": {"value": SYNTHETIC_IBAN},
+                },
+            ),
+            (
+                "propose_synthetic_refund",
+                {
+                    "ticket_id": SYNTHETIC_SUPPORT_TICKET_ID,
+                    "amount_cents": "500",
+                },
+            ),
+            (
+                "propose_synthetic_refund",
+                {
+                    "ticket_id": SYNTHETIC_SUPPORT_TICKET_ID,
+                    "amount_cents": [],
+                },
+            ),
+            (
+                "propose_synthetic_refund",
+                {
+                    "ticket_id": SYNTHETIC_SUPPORT_TICKET_ID,
+                    "amount_cents": {
+                        "cents": SYNTHETIC_REFUND_AMOUNT_CENTS,
+                    },
+                },
+            ),
+            (
+                "delegate_synthetic_read_only_task",
+                {
+                    "task_id": SYNTHETIC_DELEGATION_TASK_ID,
+                    "child_agent_id": "guardian-multiagent-specialist-v1",
+                    "permissions": ["database.read.scoped", "finance.transfer.request"],
+                },
+            ),
+        ):
+            with self.subTest(tool=tool_name, invalid=invalid_arguments):
+                self.assertFalse(
+                    validate_synthetic_tool_arguments(
+                        tool_name, invalid_arguments
+                    )[0]
+                )
+
     def test_browser_and_infrastructure_catalogs_stay_local_and_read_only(self):
         cases = (
             (

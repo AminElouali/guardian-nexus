@@ -5382,3 +5382,36 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   equivalente para los catálogos de finanzas/soporte y multiagente. El avance
   hacia inferencia viva sigue bloqueado por falta de atestación independiente
   verificable; persistencia PostgreSQL/RLS sigue sin E2E.
+
+## Coherencia offline de Finanzas, soporte y multiagente — 2026-11-11
+
+- Base inspeccionada: HEAD `f6b872c952850c9eaabb9eb6043e8318e37fd01e`,
+  rama `main`, árbol limpio antes del cambio.
+- Cambio limitado a `tests/test_llm_tool_adapter.py`. No se encontró
+  discrepancia en los contratos declarados, por lo que no se alteró producción.
+  La nueva prueba compara los cinco tools de FINANCE/SUPPORT/MULTIAGENT con
+  sus esquemas cerrados, validador y Policy Engine; cubre argumentos válidos,
+  campos/tipos inválidos, listas/dicts no admitidos, y permisos de delegación
+  ampliados.
+- Policy ON queda entre validación y simulador. Las lecturas/borradores y
+  delegación permitidos llegan solo al simulador ficticio; cambio bancario y
+  reembolso quedan en `REQUIRE_APPROVAL`, sin invocar el simulador.
+- Prueba nueva focalizada:
+  `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=workers/guardian-ai-assessment:workers/guardian-ai-assessment/tests python -m unittest -v test_llm_tool_adapter.LocalLlmToolAdapterTests.test_finance_support_and_multiagent_catalogs_match_policy_contracts`
+  — 1 test, pasó.
+- Regresiones relacionadas ejecutadas: separación de procedencia en ocho
+  perfiles, política previa, denegación de propuestas adversarias, ataques
+  sintéticos, permisos multiagente, casos y refund de soporte, argumentos
+  financieros inválidos, Policy OFF clone-only, cross-tenant y manipulación de
+  scope — 12 tests, pasaron. Total de esta fase: 13 tests, 0 fallos.
+- `git diff --check`: pasó antes del registro. No se ejecutaron Qwen,
+  procesos/workers, servicios, Docker/socket, PostgreSQL, migraciones ni red;
+  no se ejecutó typecheck o suite amplia. Todo son tests deterministas en
+  memoria, no inferencia ni persistencia E2E. El test de scope no prueba
+  idempotencia durable. No se cambiaron fixtures ni gates.
+- SHA-256 de `tests/test_llm_tool_adapter.py`:
+  `2fbad5eef5659b265976b37adb6fb532f72cecec8efe2ae0c3aa353fd33e662f`.
+- Siguiente bloqueo no resoluble con tests en memoria: atestación externa
+  independiente de host/broker/worker y una base PostgreSQL de laboratorio
+  autorizada para probar RLS y aprobaciones persistentes; los gates permanecen
+  cerrados y la inferencia Qwen sigue sin acreditación.
