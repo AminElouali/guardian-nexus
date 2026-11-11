@@ -6,6 +6,9 @@ import { test } from "node:test";
 import {
   ASSESSMENT_EXECUTION_LIMITS,
   POLICY_LAB_PROFILE_IDS,
+  QWEN_HOST_BOUNDARY_ATTESTATION_PATH,
+  QWEN_HOST_BOUNDARY_PUBLIC_KEY_PATH,
+  buildAssessmentDockerRunArgs,
   getAssessmentImageReference,
   launchWithPinnedAssessmentImage,
   parseAssessmentImageLock,
@@ -67,6 +70,44 @@ test("profile lock is local-only, source-hash checked, and binds exact image IDs
     ).ok,
     true,
   );
+});
+
+test("email and database Qwen launches pass the signed host attestation read-only", () => {
+  const profiles = [
+    "guardian-agent-qwen-lab-email-v1",
+    "guardian-agent-qwen-lab-database-v1",
+  ] as const;
+
+  for (const profileId of profiles) {
+    const args = buildAssessmentDockerRunArgs(
+      `guardian-ai-lab-${profileId}`,
+      profileId,
+      lock.images.qwen.imageId,
+      mounts,
+    );
+    const attestationMount =
+      `--mount=type=bind,src=${QWEN_HOST_BOUNDARY_ATTESTATION_PATH},dst=${QWEN_HOST_BOUNDARY_ATTESTATION_PATH},readonly`;
+    const publicKeyMount =
+      `--mount=type=bind,src=${QWEN_HOST_BOUNDARY_PUBLIC_KEY_PATH},dst=${QWEN_HOST_BOUNDARY_PUBLIC_KEY_PATH},readonly`;
+
+    assert.ok(args.includes(attestationMount), `${profileId} attestation mount`);
+    assert.ok(args.includes(publicKeyMount), `${profileId} public key mount`);
+    assert.ok(args.includes("--network=none"));
+    assert.ok(args.includes("--user=65532:65532"));
+    assert.ok(
+      args.some((argument) =>
+        argument.includes(
+          `python -m guardian_ai_assessment.qwen_policy_lab --profile-id '${profileId}'`,
+        ),
+      ),
+      `${profileId} must retain the existing Qwen policy-lab runner`,
+    );
+    assert.equal(
+      args.some((argument) => argument.includes("docker.sock")),
+      false,
+      "the worker must not receive the Docker socket",
+    );
+  }
 });
 
 test("wrong, retagged, and missing image identity or labels fail before Docker run", () => {

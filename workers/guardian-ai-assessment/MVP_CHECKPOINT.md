@@ -4451,3 +4451,35 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   pasar el gate, integrar y validar el flujo de evidencia del runner de correo
   y BBDD en API v2 con herramientas sintéticas. Este hito es una regresión
   contractual offline, no inferencia viva ni finalización de agentes.
+
+## El contenedor Qwen recibe la atestación firmada en solo lectura — 2026-11-11
+
+- Base: HEAD `7f62cbc62ce19ff30d677330f20546158da11a98`, árbol limpio.
+- Se cerró una brecha de cableado en el comando Docker existente: el runner
+  Qwen requiere la atestación host firmada y su clave pública en rutas fijas,
+  pero el contenedor no recibía esos archivos. Para el camino Qwen se agregan
+  montajes bind `readonly` de ambos archivos. El comando existente para correo
+  y BBDD sigue llamando `guardian_ai_assessment.qwen_policy_lab` por perfil.
+- Prueba de construcción de argumentos para correo/BBDD verifica el comando,
+  rutas de atestación solo lectura, `--network=none`, usuario `65532:65532` y
+  ausencia de montaje `docker.sock`. No invoca el callback que inicia Docker.
+- Pruebas offline ejecutadas en serie: API sandbox **8/8**; API evidencia v2
+  correo/BBDD **1/1**; seis métodos unitarios focales de `test_policy_lab.py`
+  **6/6** (respuestas fijas, no inferencia); typecheck API y
+  `git diff --check` aprobados.
+- No se ejecutaron Qwen, worker vivo, broker, Docker/socket, PostgreSQL,
+  servicios, migraciones, E2E, red ni despliegue. Las pruebas de Policy son
+  sintéticas y no acreditan autorización persistente ni inferencia real.
+- No cambió la condición de disponibilidad: la cola sigue cerrada y
+  `hostBoundaryReady` sigue sin acreditación. No se volvió a ejecutar el
+  preflight. El socket del host no se inspeccionó ni abrió en este incremento.
+- SHA-256:
+  - `artifacts/api-server/src/lib/ai-assessment-sandbox.ts`:
+    `79e5f402293ef6cb3bbbe09e2afb6b243744eaaef04b9622f6fef6c56a311fa7`
+  - `artifacts/api-server/src/lib/ai-assessment-sandbox.test.ts`:
+    `ec0e84636e8cc838d79d46ce9945737dc27c6865ca5c503e5871cba1a0b3fba3`
+- Informe: `reports/email-database-qwen-attestation-mount-2026-11-11.md`.
+  El cambio es preparación de cableado protegida por el gate, no inferencia
+  viva ni finalización de los perfiles. Próxima fase funcional: finanzas y
+  aprobación persistente, solo después de confirmar los prerequisitos de
+  aislamiento y base desechable.

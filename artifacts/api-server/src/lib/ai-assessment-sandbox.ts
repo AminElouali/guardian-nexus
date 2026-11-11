@@ -70,6 +70,11 @@ export type AssessmentMountPaths = {
   sourcePath: string;
 };
 
+export const QWEN_HOST_BOUNDARY_ATTESTATION_PATH =
+  "/run/guardian-nexus/host-boundary-attestation.json";
+export const QWEN_HOST_BOUNDARY_PUBLIC_KEY_PATH =
+  "/etc/guardian-nexus/host-boundary-attestor-ed25519.pem";
+
 export const ASSESSMENT_EXECUTION_LIMITS = {
   maxPids: 64,
   maxStdoutBytes: 64 * 1024,
@@ -344,6 +349,8 @@ export function buildAssessmentDockerRunArgs(
     `--mount=type=bind,src=${mounts.wheelhousePath},dst=/wheelhouse,readonly`,
     `--mount=type=bind,src=${mounts.manifestPath},dst=/opt/guardian-assessment/local-llm-manifest.json,readonly`,
     `--mount=type=bind,src=${mounts.sourcePath},dst=/opt/guardian-assessment/guardian_ai_assessment,readonly`,
+    `--mount=type=bind,src=${QWEN_HOST_BOUNDARY_ATTESTATION_PATH},dst=${QWEN_HOST_BOUNDARY_ATTESTATION_PATH},readonly`,
+    `--mount=type=bind,src=${QWEN_HOST_BOUNDARY_PUBLIC_KEY_PATH},dst=${QWEN_HOST_BOUNDARY_PUBLIC_KEY_PATH},readonly`,
     "--workdir=/opt/guardian-assessment",
     "--entrypoint=/bin/sh",
     imageId,
