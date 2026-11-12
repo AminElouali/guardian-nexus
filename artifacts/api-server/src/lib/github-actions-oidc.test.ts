@@ -137,6 +137,45 @@ function makeDependencies(token: string): OidcFetchDependencies {
   };
 }
 
+type SyntheticOidcFailure =
+  | "request-failed"
+  | "response-invalid"
+  | "jwks-failed";
+
+function makeDiagnosticFetch(
+  token: string,
+  failure?: SyntheticOidcFailure,
+): typeof fetch {
+  return async (input) => {
+    const url = new URL(input.toString());
+    if (url.hostname === "pipelines.actions.githubusercontent.com") {
+      if (failure === "request-failed") {
+        throw new Error("TEST ONLY request failure");
+      }
+      if (failure === "response-invalid") {
+        return new Response("TEST ONLY invalid response", { status: 200 });
+      }
+      return new Response(JSON.stringify({ value: token }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    if (
+      url.href ===
+      "https://token.actions.githubusercontent.com/.well-known/jwks"
+    ) {
+      if (failure === "jwks-failed") {
+        return new Response("TEST ONLY unavailable JWKS", { status: 503 });
+      }
+      return new Response(JSON.stringify({ keys: [primaryPublicJwk] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    throw new Error("Unexpected TEST ONLY URL");
+  };
+}
+
 function actionsEnvironment(
   token: string,
   overrides: Record<string, string | undefined> = {},
@@ -439,11 +478,156 @@ test("TEST ONLY CI target diagnostics expose safe rejection categories and remai
   );
   assert.deepEqual(unavailableOidc, {
     accepted: false,
-    category: "oidc_unavailable_or_invalid",
+    category: "oidc_request_credentials_invalid",
+    stage: "bootstrap",
+  });
+  const oversizedCredential = await diagnoseGitHubActionsApprovalLabTarget(
+    approvalLabEnvironment("bootstrap", {
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: "TEST ONLY".repeat(2_000),
+    }),
+    "bootstrap",
+  );
+  assert.deepEqual(oversizedCredential, {
+    accepted: false,
+    category: "oidc_request_credentials_invalid",
+    stage: "bootstrap",
+  });
+
+  const endpointRejected = await diagnoseGitHubActionsApprovalLabTarget(
+    approvalLabEnvironment("bootstrap", {
+      ACTIONS_ID_TOKEN_REQUEST_URL: "https://test-only.invalid/idtoken",
+    }),
+    "bootstrap",
+  );
+  assert.deepEqual(endpointRejected, {
+    accepted: false,
+    category: "oidc_request_endpoint_rejected",
     stage: "bootstrap",
   });
 
   const actualNow = Math.floor(Date.now() / 1000);
+  const validToken = signToken(
+    defaultClaims({
+      iat: actualNow - 10,
+      nbf: actualNow - 10,
+      exp: actualNow + 240,
+    }),
+  );
+  const requestFailed = await withMockedGlobalFetch(
+    makeDiagnosticFetch(validToken, "request-failed"),
+    () =>
+      diagnoseGitHubActionsApprovalLabTarget(
+        approvalLabEnvironment(),
+        "bootstrap",
+      ),
+  );
+  assert.deepEqual(requestFailed, {
+    accepted: false,
+    category: "oidc_request_failed_or_timeout",
+    stage: "bootstrap",
+  });
+
+  const responseInvalid = await withMockedGlobalFetch(
+    makeDiagnosticFetch(validToken, "response-invalid"),
+    () =>
+      diagnoseGitHubActionsApprovalLabTarget(
+        approvalLabEnvironment(),
+        "bootstrap",
+      ),
+  );
+  assert.deepEqual(responseInvalid, {
+    accepted: false,
+    category: "oidc_response_invalid",
+    stage: "bootstrap",
+  });
+
+  const jwksFailed = await withMockedGlobalFetch(
+    makeDiagnosticFetch(validToken, "jwks-failed"),
+    () =>
+      diagnoseGitHubActionsApprovalLabTarget(
+        approvalLabEnvironment(),
+        "bootstrap",
+      ),
+  );
+  assert.deepEqual(jwksFailed, {
+    accepted: false,
+    category: "oidc_jwks_failed",
+    stage: "bootstrap",
+  });
+
+  const jwtInvalid = await withMockedGlobalFetch(
+    makeDiagnosticFetch("TEST ONLY malformed JWT"),
+    () =>
+      diagnoseGitHubActionsApprovalLabTarget(
+        approvalLabEnvironment(),
+        "bootstrap",
+      ),
+  );
+  assert.deepEqual(jwtInvalid, {
+    accepted: false,
+    category: "oidc_jwt_header_key_signature_invalid",
+    stage: "bootstrap",
+  });
+
+  const badSignatureToken = signToken(
+    defaultClaims({
+      iat: actualNow - 10,
+      nbf: actualNow - 10,
+      exp: actualNow + 240,
+    }),
+    alternateKey,
+  );
+  const badSignature = await withMockedGlobalFetch(
+    makeDiagnosticFetch(badSignatureToken),
+    () =>
+      diagnoseGitHubActionsApprovalLabTarget(
+        approvalLabEnvironment(),
+        "bootstrap",
+      ),
+  );
+  assert.deepEqual(badSignature, {
+    accepted: false,
+    category: "oidc_jwt_header_key_signature_invalid",
+    stage: "bootstrap",
+  });
+
+  const throwingExpected = new Proxy(expected, {
+    get() {
+      throw new Error("TEST ONLY unexpected verification exception");
+    },
+  }) as ExpectedGitHubActionsOidcContext;
+  const unexpectedException =
+    await requestVerifiedGitHubActionsClaimsDetailed(
+      actionsEnvironment(validToken),
+      throwingExpected,
+      {
+        nowEpochSeconds: actualNow,
+        fetchImpl: makeDiagnosticFetch(validToken),
+      },
+    );
+  assert.deepEqual(unexpectedException, {
+    ok: false,
+    category: "oidc_verification_unexpected_exception",
+  });
+  const unexpectedGuardEnvironment = new Proxy(approvalLabEnvironment(), {
+    get(target, key, receiver) {
+      if (key === "ACTIONS_ID_TOKEN_REQUEST_TOKEN") {
+        throw new Error("TEST ONLY unexpected guard exception");
+      }
+      return Reflect.get(target, key, receiver);
+    },
+  });
+  const unexpectedGuardException =
+    await diagnoseGitHubActionsApprovalLabTarget(
+      unexpectedGuardEnvironment,
+      "bootstrap",
+    );
+  assert.deepEqual(unexpectedGuardException, {
+    accepted: false,
+    category: "oidc_verification_unexpected_exception",
+    stage: "bootstrap",
+  });
+
   const claimsMismatchToken = signToken(
     defaultClaims({
       repository: "untrusted/fork",
@@ -468,13 +652,6 @@ test("TEST ONLY CI target diagnostics expose safe rejection categories and remai
     stage: "bootstrap",
   });
 
-  const validToken = signToken(
-    defaultClaims({
-      iat: actualNow - 10,
-      nbf: actualNow - 10,
-      exp: actualNow + 240,
-    }),
-  );
   const validFetch = makeDependencies(validToken).fetchImpl;
   assert.ok(validFetch);
   const validTarget = await withMockedGlobalFetch(validFetch, () =>
@@ -510,12 +687,20 @@ test("TEST ONLY CI target diagnostics expose safe rejection categories and remai
   );
   assert.deepEqual(malformedTokenResult, {
     ok: false,
-    category: "oidc_unavailable_or_invalid",
+    category: "oidc_jwt_header_key_signature_invalid",
   });
   for (const result of [
     missingContext,
     incompatibleContext,
     unavailableOidc,
+    oversizedCredential,
+    endpointRejected,
+    requestFailed,
+    responseInvalid,
+    jwksFailed,
+    jwtInvalid,
+    badSignature,
+    unexpectedGuardException,
     claimsMismatch,
     databaseUrlMismatch,
   ]) {
@@ -526,6 +711,10 @@ test("TEST ONLY CI target diagnostics expose safe rejection categories and remai
       /postgresql|test-only-request-bearer|test-only-jti|guardian-ci-/,
     );
   }
+  assert.doesNotMatch(
+    JSON.stringify(unexpectedException),
+    /postgresql|test-only-request-bearer|test-only-jti|guardian-ci-/,
+  );
 });
 
 test("CI target guard refuses environment-only context and forged markers", async () => {

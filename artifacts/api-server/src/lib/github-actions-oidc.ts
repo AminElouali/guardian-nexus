@@ -71,12 +71,19 @@ export interface OidcFetchDependencies {
   nowEpochSeconds?: number;
 }
 
+export type GitHubActionsOidcFailureCategory =
+  | "oidc_request_credentials_invalid"
+  | "oidc_request_endpoint_rejected"
+  | "oidc_request_failed_or_timeout"
+  | "oidc_response_invalid"
+  | "oidc_jwks_failed"
+  | "oidc_jwt_header_key_signature_invalid"
+  | "oidc_verification_unexpected_exception"
+  | "claims_mismatch";
+
 export type GitHubActionsOidcResult =
   | { ok: true; claims: GitHubActionsOidcClaims }
-  | {
-      ok: false;
-      category: "oidc_unavailable_or_invalid" | "claims_mismatch";
-    };
+  | { ok: false; category: GitHubActionsOidcFailureCategory };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -183,7 +190,7 @@ function validateClaims(
  * pure apart from cryptographic verification; tests may use generated TEST ONLY
  * keys and can never alter production readiness.
  */
-export function verifyGitHubActionsOidcTokenDetailed(
+function verifyGitHubActionsOidcTokenUnchecked(
   token: string,
   jwks: JsonWebKeySet,
   expected: ExpectedGitHubActionsOidcContext,
@@ -194,18 +201,27 @@ export function verifyGitHubActionsOidcTokenDetailed(
     token.length === 0 ||
     Buffer.byteLength(token, "utf8") > MAX_TOKEN_BYTES
   ) {
-    return { ok: false, category: "oidc_unavailable_or_invalid" };
+    return {
+      ok: false,
+      category: "oidc_jwt_header_key_signature_invalid",
+    };
   }
   const segments = token.split(".");
   if (segments.length !== 3) {
-    return { ok: false, category: "oidc_unavailable_or_invalid" };
+    return {
+      ok: false,
+      category: "oidc_jwt_header_key_signature_invalid",
+    };
   }
 
   const [encodedHeader, encodedPayload, encodedSignature] = segments;
   const header = decodeJsonSegment(encodedHeader);
   const payload = decodeJsonSegment(encodedPayload);
   if (!header || !payload || !/^[A-Za-z0-9_-]+$/.test(encodedSignature)) {
-    return { ok: false, category: "oidc_unavailable_or_invalid" };
+    return {
+      ok: false,
+      category: "oidc_jwt_header_key_signature_invalid",
+    };
   }
   if (
     header.alg !== "RS256" ||
@@ -215,19 +231,22 @@ export function verifyGitHubActionsOidcTokenDetailed(
       (key) => !["alg", "kid", "typ"].includes(key),
     )
   ) {
-    return { ok: false, category: "oidc_unavailable_or_invalid" };
+    return {
+      ok: false,
+      category: "oidc_jwt_header_key_signature_invalid",
+    };
   }
 
   const keys = jwks.keys;
   if (!Array.isArray(keys) || keys.length === 0 || keys.length > MAX_JWKS_KEYS) {
-    return { ok: false, category: "oidc_unavailable_or_invalid" };
+    return { ok: false, category: "oidc_jwks_failed" };
   }
   const matchingKeys = keys.filter(
     (key): key is RsaSigningJwk =>
       isRecord(key) && key.kid === header.kid,
   );
   if (matchingKeys.length !== 1) {
-    return { ok: false, category: "oidc_unavailable_or_invalid" };
+    return { ok: false, category: "oidc_jwks_failed" };
   }
 
   const jwk = matchingKeys[0];
@@ -240,7 +259,10 @@ export function verifyGitHubActionsOidcTokenDetailed(
     (jwk.key_ops !== undefined &&
       (!Array.isArray(jwk.key_ops) || !jwk.key_ops.includes("verify")))
   ) {
-    return { ok: false, category: "oidc_unavailable_or_invalid" };
+    return {
+      ok: false,
+      category: "oidc_jwt_header_key_signature_invalid",
+    };
   }
 
   try {
@@ -252,7 +274,10 @@ export function verifyGitHubActionsOidcTokenDetailed(
       publicKey.asymmetricKeyType !== "rsa" ||
       (publicKey.asymmetricKeyDetails?.modulusLength ?? 0) < 2048
     ) {
-      return { ok: false, category: "oidc_unavailable_or_invalid" };
+      return {
+        ok: false,
+        category: "oidc_jwt_header_key_signature_invalid",
+      };
     }
     const signature = Buffer.from(encodedSignature, "base64url");
     if (
@@ -265,16 +290,43 @@ export function verifyGitHubActionsOidcTokenDetailed(
         signature,
       )
     ) {
-      return { ok: false, category: "oidc_unavailable_or_invalid" };
+      return {
+        ok: false,
+        category: "oidc_jwt_header_key_signature_invalid",
+      };
     }
   } catch {
-    return { ok: false, category: "oidc_unavailable_or_invalid" };
+    return {
+      ok: false,
+      category: "oidc_jwt_header_key_signature_invalid",
+    };
   }
 
   const claims = validateClaims(payload, expected, nowEpochSeconds);
   return claims
     ? { ok: true, claims }
     : { ok: false, category: "claims_mismatch" };
+}
+
+export function verifyGitHubActionsOidcTokenDetailed(
+  token: string,
+  jwks: JsonWebKeySet,
+  expected: ExpectedGitHubActionsOidcContext,
+  nowEpochSeconds = Math.floor(Date.now() / 1000),
+): GitHubActionsOidcResult {
+  try {
+    return verifyGitHubActionsOidcTokenUnchecked(
+      token,
+      jwks,
+      expected,
+      nowEpochSeconds,
+    );
+  } catch {
+    return {
+      ok: false,
+      category: "oidc_verification_unexpected_exception",
+    };
+  }
 }
 
 export function verifyGitHubActionsOidcToken(
@@ -375,29 +427,33 @@ async function readJsonResponse(
  * it using the fixed official GitHub JWKS URL. Neither the token nor either
  * request URL is returned, logged, or persisted.
  */
-export async function requestVerifiedGitHubActionsClaimsDetailed(
+async function requestVerifiedGitHubActionsClaimsUnchecked(
   env: Readonly<Record<string, string | undefined>>,
   expected: ExpectedGitHubActionsOidcContext,
   dependencies: OidcFetchDependencies = {},
 ): Promise<GitHubActionsOidcResult> {
   const requestToken = env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
+  if (!requestToken || requestToken.length > MAX_TOKEN_BYTES) {
+    return { ok: false, category: "oidc_request_credentials_invalid" };
+  }
+
   const requestUrl = validatedActionsRequestUrl(
     env.ACTIONS_ID_TOKEN_REQUEST_URL,
   );
-  if (
-    !requestToken ||
-    requestToken.length > MAX_TOKEN_BYTES ||
-    !requestUrl
-  ) {
-    return { ok: false, category: "oidc_unavailable_or_invalid" };
+  if (!requestUrl) {
+    return { ok: false, category: "oidc_request_endpoint_rejected" };
   }
 
-  const fetchImpl = dependencies.fetchImpl ?? fetch;
+  const fetchImpl = dependencies.fetchImpl ?? globalThis.fetch;
+  if (typeof fetchImpl !== "function") {
+    return { ok: false, category: "oidc_request_failed_or_timeout" };
+  }
   const nowEpochSeconds =
     dependencies.nowEpochSeconds ?? Math.floor(Date.now() / 1000);
 
+  let tokenResponse: Response;
   try {
-    const tokenResponse = await fetchImpl(requestUrl, {
+    tokenResponse = await fetchImpl(requestUrl, {
       method: "GET",
       headers: {
         Accept: "application/json",
@@ -407,31 +463,68 @@ export async function requestVerifiedGitHubActionsClaimsDetailed(
       cache: "no-store",
       signal: AbortSignal.timeout(5000),
     });
-    const tokenBody = await readJsonResponse(tokenResponse);
-    const token = tokenBody?.value;
-    if (typeof token !== "string" || token.length === 0) {
-      return { ok: false, category: "oidc_unavailable_or_invalid" };
-    }
+  } catch {
+    return { ok: false, category: "oidc_request_failed_or_timeout" };
+  }
 
-    const jwksResponse = await fetchImpl(GITHUB_ACTIONS_OIDC_JWKS_URL, {
+  let tokenBody: Record<string, unknown> | undefined;
+  try {
+    tokenBody = await readJsonResponse(tokenResponse);
+  } catch {
+    return { ok: false, category: "oidc_response_invalid" };
+  }
+  const token = tokenBody?.value;
+  if (typeof token !== "string" || token.length === 0) {
+    return { ok: false, category: "oidc_response_invalid" };
+  }
+
+  let jwksResponse: Response;
+  try {
+    jwksResponse = await fetchImpl(GITHUB_ACTIONS_OIDC_JWKS_URL, {
       method: "GET",
       headers: { Accept: "application/json" },
       redirect: "error",
       cache: "no-store",
       signal: AbortSignal.timeout(5000),
     });
-    const jwks = await readJsonResponse(jwksResponse);
-    if (!jwks) {
-      return { ok: false, category: "oidc_unavailable_or_invalid" };
-    }
-    return verifyGitHubActionsOidcTokenDetailed(
-      token,
-      jwks,
+  } catch {
+    return { ok: false, category: "oidc_jwks_failed" };
+  }
+
+  let jwks: Record<string, unknown> | undefined;
+  try {
+    jwks = await readJsonResponse(jwksResponse);
+  } catch {
+    return { ok: false, category: "oidc_jwks_failed" };
+  }
+  if (!jwks) {
+    return { ok: false, category: "oidc_jwks_failed" };
+  }
+
+  return verifyGitHubActionsOidcTokenDetailed(
+    token,
+    jwks,
+    expected,
+    nowEpochSeconds,
+  );
+}
+
+export async function requestVerifiedGitHubActionsClaimsDetailed(
+  env: Readonly<Record<string, string | undefined>>,
+  expected: ExpectedGitHubActionsOidcContext,
+  dependencies: OidcFetchDependencies = {},
+): Promise<GitHubActionsOidcResult> {
+  try {
+    return await requestVerifiedGitHubActionsClaimsUnchecked(
+      env,
       expected,
-      nowEpochSeconds,
+      dependencies,
     );
   } catch {
-    return { ok: false, category: "oidc_unavailable_or_invalid" };
+    return {
+      ok: false,
+      category: "oidc_verification_unexpected_exception",
+    };
   }
 }
 

@@ -1,4 +1,7 @@
-import { requestVerifiedGitHubActionsClaimsDetailed } from "./github-actions-oidc";
+import {
+  requestVerifiedGitHubActionsClaimsDetailed,
+  type GitHubActionsOidcFailureCategory,
+} from "./github-actions-oidc";
 
 // Do not rely on resolving "localhost": a disposable-target gate should only
 // admit an IP literal whose loopback destination is explicit in the URL.
@@ -17,8 +20,7 @@ export type ApprovalLabCiStage = "bootstrap" | "provision" | "approval-e2e";
 export type ApprovalLabRejectionCategory =
   | "github_context_missing"
   | "github_context_incompatible"
-  | "oidc_unavailable_or_invalid"
-  | "claims_mismatch"
+  | GitHubActionsOidcFailureCategory
   | "database_url_mismatch";
 export type ApprovalLabTargetDecision =
   | { accepted: true; stage: ApprovalLabCiStage }
@@ -194,7 +196,7 @@ export async function diagnoseGitHubActionsApprovalLabTarget(
       runAttempt,
     });
   } catch {
-    return reject("oidc_unavailable_or_invalid");
+    return reject("oidc_verification_unexpected_exception");
   }
   if (!oidcResult.ok) return reject(oidcResult.category);
   const claims = oidcResult.claims;
