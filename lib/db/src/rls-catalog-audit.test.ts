@@ -335,6 +335,12 @@ test("complete synthetic PostgreSQL catalog snapshot satisfies the contract", ()
 test("catalog audit fails closed for missing RLS, policy drift, role grants and column updates", () => {
   const cases: Array<[string, (snapshot: RlsCatalogSnapshot) => void]> = [
     [
+      "unexpected table owner",
+      (snapshot) => {
+        snapshot.tables[0]!.owner = "unrecognized_owner";
+      },
+    ],
+    [
       "RLS disabled",
       (snapshot) => {
         snapshot.tables[0]!.rlsEnabled = false;

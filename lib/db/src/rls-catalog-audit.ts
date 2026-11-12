@@ -1,4 +1,7 @@
-import { expectedRlsPolicyCounts } from "./rls-catalog-contract";
+import {
+  expectedDisposableRlsTableOwner,
+  expectedRlsPolicyCounts,
+} from "./rls-catalog-contract";
 
 const tablePrivileges = ["SELECT", "INSERT", "UPDATE", "DELETE"] as const;
 const specialUpdateTables = [
@@ -436,11 +439,11 @@ export function auditRlsCatalog(
     );
     if (!table) continue;
     if (
-      !table.owner ||
+      table.owner !== expectedDisposableRlsTableOwner ||
       appRoleNames.has(table.owner) ||
       applicationRoles.has(table.owner)
     ) {
-      violations.push(`protected_table_owner_invalid:${tableName}`);
+      violations.push(`protected_table_owner_mismatch:${tableName}`);
     }
     if (!table.rlsEnabled || !table.rlsForced) {
       violations.push(`rls_not_enabled_and_forced:${tableName}`);

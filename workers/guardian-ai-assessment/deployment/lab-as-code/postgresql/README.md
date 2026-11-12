@@ -71,10 +71,11 @@ esquema Drizzle y de `rls-policies.sql`; deriva grants y membresías del SQL de
 provisionamiento existente. Comparte con `assertRlsRuntimeReady()` el contrato
 de tablas y recuentos, y registra el hash de los archivos fuente. Falla si no
 existen exactamente las 12 tablas/34 políticas esperadas, si owner/RLS
-`ENABLE`/`FORCE`, identidad de política, comando, modo permisivo, rol destino,
-forma de `qual`/`with_check`, atributos de roles, membresías/`pg_has_role`,
-matriz de privilegios de tabla o cualquier `UPDATE` por columna en las tres
-tablas especiales no coincide. No invoca `assertRlsRuntimeReady()` durante la
+`ENABLE`/`FORCE`, owner distinto de `postgres` (el usuario que provisiona el
+job), identidad de política, comando, modo permisivo, rol destino, forma de
+`qual`/`with_check`, atributos de roles, membresías/`pg_has_role`, matriz de
+privilegios de tabla o cualquier `UPDATE` por columna en las tres tablas
+especiales no coincide. No invoca `assertRlsRuntimeReady()` durante la
 auditoría: ese preflight intenta leer `result` de `ai_assessment_jobs` para
 probar la restricción del worker, y el informe se limita deliberadamente a
 catálogos sin filas de aplicación. El E2E separado del workflow continúa siendo
@@ -85,8 +86,9 @@ El informe incluye las expresiones `qual` y `with_check` que devuelve
 deparseada por PostgreSQL y el SQL/Drizzle: no hay un AST canónico compartido
 que permita compararlas de forma fiable. Por ello, una discrepancia semántica
 requiere revisar esas expresiones o una validación de comportamiento adicional.
-La salida contiene solo metadatos de catálogo y definiciones de políticas:
-no incluye URLs, hosts, credenciales ni filas de aplicación.
+La salida contiene solo metadatos de catálogo y definiciones de políticas, y
+hashes SHA-256 de esquema, SQL RLS, bootstrap y contrato de recuentos: no incluye
+URLs, hosts, credenciales ni filas de aplicación.
 
 ## Barrera de seguridad
 

@@ -21,3 +21,5 @@ export const expectedRlsPolicyCounts = {
 export const expectedRlsTableNames = Object.keys(
   expectedRlsPolicyCounts,
 ) as Array<keyof typeof expectedRlsPolicyCounts>;
+
+export const expectedDisposableRlsTableOwner = "postgres";

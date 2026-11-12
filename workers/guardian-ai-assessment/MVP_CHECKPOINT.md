@@ -5801,3 +5801,53 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   en una instancia desechable autorizada para identificar la subcondición RLS
   fallida; mantener la DB de desarrollo intacta. La validación de host requiere
   además supervisor independiente y trust anchor.
+
+## Informe de catálogo RLS del workflow efímero — PREPARADO_NO_EJECUTADO 2026-11-12
+
+- Estado inicial verificado: `main`, HEAD
+  `f5796d30e38723cae32bb896cd3b835f62de801c`, árbol limpio. HEAD al cierre:
+  `8ab21374f4260c6d99c2c49fd58171f5485b6059`. El workspace registró ese commit
+  local durante el trabajo; las últimas correcciones de seguridad/documentación
+  siguen como cambios locales sin commit, no hubo push.
+- Se amplió `.github/workflows/postgres-approval-lab.yml` para ejecutar la
+  comparación sintética antes de crear la DB, auditar el catálogo después de
+  aprovisionar el servicio efímero y guardar el JSON sanitizado del catálogo
+  como artefacto de Actions con retención de 14 días.
+- El comparador deriva los 12 nombres/recuentos del contrato compartido con el
+  preflight; coteja 34 políticas contra Drizzle y `rls-policies.sql`; roles,
+  membresías, `pg_has_role`, owner esperado `postgres`, RLS ENABLE/FORCE,
+  privilegios efectivos de tabla y UPDATE por columna en las tres tablas
+  especiales. Un test de guard impide que el informe invoque
+  `assertRlsRuntimeReady()`, porque ese código lee `ai_assessment_jobs.result`;
+  el artefacto de catálogo no consulta filas de aplicación.
+- El informe incluye `qual`/`with_check` y valida identidad/comando/rol/modo y
+  presencia según comando. No compara equivalencia semántica de las expresiones
+  deparseadas por PostgreSQL; esa limitación queda explícita.
+- Pruebas focalizadas finales, ejecutadas en serie:
+  - `pnpm --filter @workspace/api-server exec tsx --test ../../lib/db/src/rls-catalog-audit.test.ts`
+    — 3/3 pasaron; snapshots sintéticos, 12 tablas/34 políticas y mutaciones
+    negativas.
+  - `pnpm --filter @workspace/api-server exec tsx --test src/lib/approval-e2e-db-guard.test.ts`
+    — 2/2 pasaron; orden del job, guard antes de conexiones y artefacto.
+  - `pnpm --filter @workspace/db exec tsc --build tsconfig.json` — pasó.
+  - `pnpm --filter @workspace/api-server run typecheck` — pasó.
+  - `git diff --check` — pasó.
+  - Prettier pasó para los archivos del cambio salvo el archivo completo
+    `lib/db/src/index.ts`, excluido por advertencias preexistentes en líneas no
+    relacionadas; el formato de las líneas modificadas está correcto.
+- No se ejecutaron el workflow, GitHub Actions, PostgreSQL/psql, migraciones,
+  API/broker, workers, Qwen, Docker, sockets, red ni E2E real. Por tanto, el
+  laboratorio queda preparado pero no hay evidencia PostgreSQL actual ni RLS
+  persistente validado. El workflow requiere que el commit esté en GitHub y
+  Actions habilitado.
+- No se cambiaron ni verificaron gates de host/worker. No se leyó ni modificó
+  `.replit`, secretos ni valores de entorno.
+- SHA-256 del informe:
+  `7e58d0d4fa3f26b9aa84659c566a98f4fcb23685ba0fdee063cf1cda4e255a55`.
+- SHA-256 de archivos clave:
+  - workflow: `f2d577929cc7ae2840334339b52ccb1ad6be1cd440b54b618303be1e9f549892`
+  - verificador CI: `30c5469e1b2eba4f5f46b4a5e6ed4e6911bef72ce23a5ed8b7bd01cda9d2dd2c`
+  - auditoría pura: `318d412b36e58c3d5a69d30cfda4026fd94b4bca524d17694f53858c6b3c639b`
+- Reanudación segura: publicar este cambio en un GitHub con Actions habilitado
+  y revisar el artefacto del job; no interpretar una prueba sintética como RLS
+  real ni abrir gates por este resultado.

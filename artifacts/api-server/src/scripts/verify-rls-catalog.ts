@@ -36,17 +36,20 @@ async function loadContractSources() {
   );
   const [rolesSource, bootstrapSource, policiesSql, rlsContractSource] =
     await Promise.all([
-    readFile(path.join(schemaDirectory, "roles.ts"), "utf8"),
-    readFile(
-      path.join(repositoryRoot, "lib/db/scripts/bootstrap-runtime-role.mjs"),
-      "utf8",
-    ),
-    readFile(path.join(repositoryRoot, "lib/db/sql/rls-policies.sql"), "utf8"),
-    readFile(
-      path.join(repositoryRoot, "lib/db/src/rls-catalog-contract.ts"),
-      "utf8",
-    ),
-  ]);
+      readFile(path.join(schemaDirectory, "roles.ts"), "utf8"),
+      readFile(
+        path.join(repositoryRoot, "lib/db/scripts/bootstrap-runtime-role.mjs"),
+        "utf8",
+      ),
+      readFile(
+        path.join(repositoryRoot, "lib/db/sql/rls-policies.sql"),
+        "utf8",
+      ),
+      readFile(
+        path.join(repositoryRoot, "lib/db/src/rls-catalog-contract.ts"),
+        "utf8",
+      ),
+    ]);
   return {
     schemaFiles,
     rolesSource,
