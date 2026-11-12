@@ -74,6 +74,9 @@ jobs:
       - name: Test the disposable-target guard offline
         run: pnpm --filter @workspace/api-server exec tsx --test src/lib/approval-e2e-db-guard.test.ts
 
+      - name: Test RLS catalog comparator offline
+        run: pnpm --filter @workspace/api-server exec tsx --test ../../lib/db/src/rls-catalog-audit.test.ts
+
       - name: Create the uniquely named lab database
         env:
           GUARDIAN_APPROVAL_E2E_CI_STAGE: bootstrap
@@ -97,6 +100,13 @@ jobs:
           pnpm --filter @workspace/db run configure-runtime-login:dev
           pnpm --filter @workspace/db run verify-runtime-role:dev
 
+      - name: Audit complete disposable RLS catalog contract
+        env:
+          GUARDIAN_APPROVAL_E2E_CI_STAGE: approval-e2e
+          DATABASE_URL: postgresql://postgres:${{ format('guardian-ci-{0}-{1}-{2}', github.run_id, github.run_attempt, github.sha) }}@127.0.0.1:5432/guardian_approval_lab_ci
+          APP_RUNTIME_DATABASE_URL: postgresql://app_runtime_login:${{ format('guardian-runtime-{0}-{1}-{2}', github.run_id, github.run_attempt, github.sha) }}@127.0.0.1:5432/guardian_approval_lab_ci
+        run: pnpm --filter @workspace/api-server exec tsx src/scripts/verify-rls-catalog.ts
+
       - name: Run persistent synthetic approval E2E
         env:
           GUARDIAN_APPROVAL_E2E_CI_STAGE: approval-e2e
@@ -106,3 +116,12 @@ jobs:
           TARGET_MARKER="$(pnpm --filter @workspace/api-server exec tsx src/scripts/verify-approval-lab-ci-target.ts --emit-verification-marker)"
           export GUARDIAN_APPROVAL_E2E_CI_TARGET_VERIFIED="$TARGET_MARKER"
           pnpm --filter @workspace/api-server exec tsx --test src/ai-assessment-synthetic-approval-e2e.test.ts
+
+      - name: Upload sanitized RLS catalog report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: guardian-postgres-rls-catalog-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/guardian-postgres-rls-catalog-report.json
+          if-no-files-found: ignore
+          retention-days: 14

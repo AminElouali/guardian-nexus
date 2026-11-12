@@ -1,6 +1,6 @@
 # PostgreSQL/RLS y aprobaciones: laboratorio desechable
 
-**Estado en 2026-11-11: PREPARADO, NO EJECUTADO.** No se ha acreditado una
+**Estado en 2026-11-12: PREPARADO, NO EJECUTADO.** No se ha acreditado una
 instancia PostgreSQL vacía y aislada para esta sesión; no se intentó conectar
 ni detectar un servidor. En los workflows visibles no hay un servicio
 PostgreSQL.
@@ -50,11 +50,43 @@ efectivos y RLS siguen sin validación real.
 El orden dentro del job es: guard contra la DB administrativa `postgres`,
 creación de la DB dedicada, guard contra la DB dedicada, Drizzle `push`,
 `harden`, aplicación del SQL RLS, grants, configuración del login de runtime,
-verificación de roles y, por último, el E2E gated. Las contraseñas de
-servicio/runtime se derivan del ID, intento y SHA del run; no provienen de
-variables de repo ni se imprimen. El guard requiere exactamente esas
-credenciales, y durante el E2E ambas URLs deben apuntar a
+verificación de roles, auditoría del catálogo RLS y, por último, el E2E gated.
+Las contraseñas de servicio/runtime se derivan del ID, intento y SHA del run;
+no provienen de variables de repo ni se imprimen. El guard requiere exactamente
+esas credenciales, y durante la auditoría/E2E ambas URLs deben apuntar a
 `127.0.0.1:5432/guardian_approval_lab_ci`.
+
+### Informe del catálogo RLS
+
+`artifacts/api-server/src/scripts/verify-rls-catalog.ts` ejecuta solo después
+del guard CI exacto. Consulta únicamente catálogos PostgreSQL (`pg_class`,
+`pg_policies`, `pg_roles`, `pg_auth_members`, `pg_has_role` y funciones de
+privilegios); no selecciona filas de las tablas de aplicación. Produce
+`guardian-postgres-rls-catalog-report.json` en el directorio temporal del
+runner y el workflow lo sube como artefacto con retención de 14 días, incluso
+si el chequeo falla.
+
+La comparación deriva los nombres/tablas/comandos/roles de políticas del
+esquema Drizzle y de `rls-policies.sql`; deriva grants y membresías del SQL de
+provisionamiento existente. Comparte con `assertRlsRuntimeReady()` el contrato
+de tablas y recuentos, y registra el hash de los archivos fuente. Falla si no
+existen exactamente las 12 tablas/34 políticas esperadas, si owner/RLS
+`ENABLE`/`FORCE`, identidad de política, comando, modo permisivo, rol destino,
+forma de `qual`/`with_check`, atributos de roles, membresías/`pg_has_role`,
+matriz de privilegios de tabla o cualquier `UPDATE` por columna en las tres
+tablas especiales no coincide. No invoca `assertRlsRuntimeReady()` durante la
+auditoría: ese preflight intenta leer `result` de `ai_assessment_jobs` para
+probar la restricción del worker, y el informe se limita deliberadamente a
+catálogos sin filas de aplicación. El E2E separado del workflow continúa siendo
+la validación de comportamiento.
+
+El informe incluye las expresiones `qual` y `with_check` que devuelve
+`pg_policies`, pero no afirma equivalencia semántica entre la expresión
+deparseada por PostgreSQL y el SQL/Drizzle: no hay un AST canónico compartido
+que permita compararlas de forma fiable. Por ello, una discrepancia semántica
+requiere revisar esas expresiones o una validación de comportamiento adicional.
+La salida contiene solo metadatos de catálogo y definiciones de políticas:
+no incluye URLs, hosts, credenciales ni filas de aplicación.
 
 ## Barrera de seguridad
 
@@ -131,6 +163,9 @@ persona administradora.
 - Conteo de las 12 tablas protegidas; `ENABLE` y `FORCE ROW LEVEL SECURITY`;
   predicados/policies efectivos y conteos esperados, no solo presencia de
   nombres.
+- Informe de catálogo RLS del job temporal, con 12 tablas/34 políticas,
+  propietarios, roles/membresías, privilegios efectivos y columnas actualizables;
+  sus expresiones se revisan conforme a la limitación semántica indicada arriba.
 - Roles `app_runtime`, `app_runtime_login`, `app_ai_assessment_worker` y login
   de worker segregados, sin `SUPERUSER`, `BYPASSRLS`, propiedad de tablas ni
   grants directos que eludan RLS.

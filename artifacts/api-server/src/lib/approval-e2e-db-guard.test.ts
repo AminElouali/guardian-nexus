@@ -204,8 +204,45 @@ test("GitHub Actions lab workflow guards its isolated service before DB writes",
   );
   assert.match(
     workflow,
-    /verify-approval-lab-ci-target\.ts[\s\S]*?ai-assessment-synthetic-approval-e2e\.test\.ts/,
-    "the target guard precedes the persistent approval test",
+    /Test the disposable-target guard offline[\s\S]*?Test RLS catalog comparator offline[\s\S]*?Create the uniquely named lab database/,
+    "offline target and catalog guards run before database creation",
+  );
+  assert.match(
+    workflow,
+    /verify-runtime-role:dev[\s\S]*?Audit complete disposable RLS catalog contract[\s\S]*?verify-rls-catalog\.ts[\s\S]*?Run persistent synthetic approval E2E/,
+    "the catalog audit runs after provisioning and before the approval E2E",
+  );
+  assert.match(
+    workflow,
+    /Upload sanitized RLS catalog report[\s\S]*?actions\/upload-artifact@v4[\s\S]*?path:\s*\$\{\{\s*runner\.temp\s*\}\}\/guardian-postgres-rls-catalog-report\.json[\s\S]*?retention-days:\s*14/,
+    "the sanitized catalog report is retained as a bounded job artifact",
+  );
+  const catalogAudit = readFileSync(
+    new URL(
+      "../../../../artifacts/api-server/src/scripts/verify-rls-catalog.ts",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  assert.match(
+    catalogAudit,
+    /isGitHubActionsApprovalLabTarget\(process\.env,\s*"approval-e2e"\)[\s\S]*?new Pool/,
+    "the catalog script enforces the exact CI target before opening a connection",
+  );
+  assert.match(
+    catalogAudit,
+    /with_check AS "withCheck"[\s\S]*?FROM pg_policies/,
+    "the report reads policy definitions without reading application rows",
+  );
+  assert.doesNotMatch(
+    catalogAudit,
+    /console\.(?:log|error)\([^)]*(?:databaseUrl|connectionString|process\.env)/i,
+    "the script does not print connection data",
+  );
+  assert.doesNotMatch(
+    catalogAudit,
+    /assertRlsRuntimeReady|SELECT\s+result\s+FROM\s+public\.ai_assessment_jobs/i,
+    "the catalog report does not invoke the application-row startup probe",
   );
   assert.match(
     workflow,

@@ -5,7 +5,9 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./schema": "./src/schema/index.ts"
+    "./schema": "./src/schema/index.ts",
+    "./rls-catalog-audit": "./src/rls-catalog-audit.ts",
+    "./rls-catalog-contract": "./src/rls-catalog-contract.ts"
   },
   "scripts": {
     "push": "drizzle-kit push --config ./drizzle.config.ts",

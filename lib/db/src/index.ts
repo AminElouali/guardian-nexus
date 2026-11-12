@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import pg from "pg";
 import * as schema from "./schema";
 import { appRuntimeLoginRoleName } from "./schema/roles";
+import { expectedRlsPolicyCounts } from "./rls-catalog-contract";
 
 const { Pool } = pg;
 
@@ -105,24 +106,13 @@ export async function assertRlsRuntimeReady(): Promise<void> {
       )
     GROUP BY c.relname, c.relrowsecurity, c.relforcerowsecurity
   `);
-  const expectedPolicyCounts: Record<string, number> = {
-    workspaces: 2,
-    workspace_memberships: 3,
-    assets: 1,
-    workspace_monthly_usage: 1,
-    workspace_audit_events: 2,
-    workspace_integrations: 3,
-    provider_connections: 4,
-    connector_oauth_states: 3,
-    connector_jobs: 4,
-    ai_assessment_jobs: 5,
-    host_boundary_attestation_challenges: 3,
-    ai_assessment_approval_requests: 3,
-  };
   if (
-    rows.length !== Object.keys(expectedPolicyCounts).length ||
+    rows.length !== Object.keys(expectedRlsPolicyCounts).length ||
     rows.some((row) => {
-      const expectedCount = expectedPolicyCounts[String(row.relname)];
+      const expectedCount =
+        expectedRlsPolicyCounts[
+          String(row.relname) as keyof typeof expectedRlsPolicyCounts
+        ];
       return (
         expectedCount === undefined ||
         row.relrowsecurity !== true ||
