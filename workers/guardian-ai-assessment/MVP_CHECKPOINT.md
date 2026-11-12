@@ -5763,3 +5763,41 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   `integratedAssessmentReady=false`, `workerAdmission=disabled`.
 - Informe: `reports/public-history-sanitization-2026-11-12.md`, SHA-256
   `53371b1b583e7736159c373bbec6e664df1a2dc47917771dce0edb5cfc23a504`.
+
+## Diagnóstico API/RLS y continuidad offline — 2026-11-12
+
+- Estado inicial: `main`, HEAD `b583d5576c15bcc089aea9e7c1a72b528e3a77d6`,
+  árbol limpio. SHA-256 inicial de este checkpoint:
+  `5f746c9766cd4334222fb26491115c795ddec82305b4f184242c62f656d178f7`.
+- Los logs disponibles muestran que el build del API pasó, pero el arranque
+  salió antes de `app.listen()` porque `assertRlsRuntimeReady()` rechazó el
+  catálogo con `Tenant RLS policies are missing, unqualified, or not forced`.
+  No se reinició el API ni se consultó PostgreSQL. El error no identifica cuál
+  condición falló.
+- Revisión estática: 34 nombres de políticas Drizzle coinciden con 34
+  declaraciones `CREATE/ALTER POLICY` de `lib/db/sql/rls-policies.sql`; los
+  conteos por tabla y las 12 declaraciones de `ENABLE`/`FORCE` coinciden con el
+  preflight. Esto no demuestra el estado del catálogo real y no justifica
+  cambiar SQL ni debilitar el gate.
+- Pruebas focalizadas ejecutadas en serie:
+  - UX API 502/reintento: 1/1 pasó.
+  - Presentación de estados del laboratorio: 1/1 pasó.
+  - admisión cerrada de correo/BBDD, cero lecturas/inserciones/cuota/enqueue:
+    1/1 pasó.
+  - binding de aprobación v3: 1/1 pasó.
+  - guard CI/local de destino y workflow: 2/2 pasaron.
+  - contratos de aprobación/procedencia/RLS offline seleccionados: 6/6 y
+    3/3 pasaron.
+  - Total: 15 pasaron, 0 fallaron. No se ejecutó typecheck ni suite amplia;
+    no hubo cambios de producción.
+- Informe detallado: `reports/offline-continuation-2026-11-12.md`, SHA-256
+  `757f86426aa15970b95964e51d8445269914b05d8d9693e38082ce7e9ee66fa6`.
+- Límites: no hubo PostgreSQL, CI/GitHub Actions, API reiniciada, E2E durable,
+  host supervisor, atestación independiente, Qwen ni worker. Las pruebas son
+  unitarias/sintéticas. Gates sin cambio:
+  `hostBoundaryReady=false`, `integratedAssessmentReady=false`,
+  `workerAdmission=disabled`.
+- Reanudación: obtener evidencia de solo lectura de los catálogos PostgreSQL
+  en una instancia desechable autorizada para identificar la subcondición RLS
+  fallida; mantener la DB de desarrollo intacta. La validación de host requiere
+  además supervisor independiente y trust anchor.
