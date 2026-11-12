@@ -5722,3 +5722,4 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   `36b94cd82e0aef9581fa3e220f02d487a235cb660bf8b088585348688bc901a7`.
 - SHA-256 del runbook:
   `e4071c3936050cbfd7cf97c114764bdac72832b702389dbe0d246e57d4e2cf5a`.
+- Commit de preparación CI: `ea4fbe08627a219e7f0cfae0a1164a2e4c276bbe`.
