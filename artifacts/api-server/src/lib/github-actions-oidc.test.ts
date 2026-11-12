@@ -258,6 +258,7 @@ test("TEST ONLY GitHub OIDC rejects claim mismatches, expiry, and stale tokens",
 });
 
 test("TEST ONLY GitHub OIDC pins the immutable canonical repository ID", () => {
+  assert.equal(GITHUB_ACTIONS_TRUSTED_REPOSITORY_ID, "1455418736");
   const cases: Array<[string, Record<string, unknown>]> = [
     ["correct string ID", { repository_id: GITHUB_ACTIONS_TRUSTED_REPOSITORY_ID }],
     ["different ID", { repository_id: "1455418737" }],
