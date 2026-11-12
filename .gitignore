@@ -56,3 +56,27 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Local environment files and credentials
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+id_rsa
+id_ed25519
+id_ecdsa
+.pgpass
+pgpass.conf
+
+# Local database files and dumps (SQL migrations remain tracked)
+*.sqlite
+*.sqlite3
+*.db
+*.dump
+*.backup
+*.bak
