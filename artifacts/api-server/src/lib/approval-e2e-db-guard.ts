@@ -1,4 +1,4 @@
-import { requestVerifiedGitHubActionsClaims } from "./github-actions-oidc";
+import { requestVerifiedGitHubActionsClaimsDetailed } from "./github-actions-oidc";
 
 // Do not rely on resolving "localhost": a disposable-target gate should only
 // admit an IP literal whose loopback destination is explicit in the URL.
@@ -13,7 +13,26 @@ const CI_JOB_ID = "postgres-approval-lab";
 const CI_WORKFLOW_REF =
   `${CI_REPOSITORY}/.github/workflows/postgres-approval-lab.yml@${CI_MAIN_REF}`;
 
-type ApprovalLabCiStage = "bootstrap" | "provision" | "approval-e2e";
+export type ApprovalLabCiStage = "bootstrap" | "provision" | "approval-e2e";
+export type ApprovalLabRejectionCategory =
+  | "github_context_missing"
+  | "github_context_incompatible"
+  | "oidc_unavailable_or_invalid"
+  | "claims_mismatch"
+  | "database_url_mismatch";
+export type ApprovalLabTargetDecision =
+  | { accepted: true; stage: ApprovalLabCiStage }
+  | {
+      accepted: false;
+      category: ApprovalLabRejectionCategory;
+      stage: ApprovalLabCiStage | "unknown";
+    };
+
+function isApprovalLabCiStage(value: unknown): value is ApprovalLabCiStage {
+  return ["bootstrap", "provision", "approval-e2e"].includes(
+    value as string,
+  );
+}
 
 function hasGitHubActionsContext(
   env: Readonly<Record<string, string | undefined>>,
@@ -93,14 +112,45 @@ function matchesLocalRuntimeUrl(
  * GitHub Actions job. A fresh OIDC token is verified before target coordinates
  * are accepted; plain environment markers are never treated as proof.
  */
-export async function isGitHubActionsApprovalLabTarget(
+export async function diagnoseGitHubActionsApprovalLabTarget(
   env: Readonly<Record<string, string | undefined>>,
-  stage: ApprovalLabCiStage | undefined = env.GUARDIAN_APPROVAL_E2E_CI_STAGE as
-    ApprovalLabCiStage | undefined,
-): Promise<boolean> {
+  stage: string | undefined = env.GUARDIAN_APPROVAL_E2E_CI_STAGE,
+): Promise<ApprovalLabTargetDecision> {
+  const stageId = isApprovalLabCiStage(stage) ? stage : "unknown";
   const runId = env.GITHUB_RUN_ID;
   const runAttempt = env.GITHUB_RUN_ATTEMPT;
   const commitSha = env.GITHUB_SHA;
+  const requiredContext = [
+    env.NODE_ENV,
+    env.CI,
+    env.GITHUB_ACTIONS,
+    env.GITHUB_WORKFLOW,
+    env.GITHUB_WORKFLOW_REF,
+    env.GITHUB_JOB,
+    env.GITHUB_EVENT_NAME,
+    env.GITHUB_REPOSITORY,
+    env.GITHUB_REF,
+    env.GITHUB_REF_TYPE,
+    runId,
+    runAttempt,
+    commitSha,
+    env.GUARDIAN_APPROVAL_E2E_CI_SERVICE,
+    env.GUARDIAN_APPROVAL_E2E_DISPOSABLE,
+    env.GUARDIAN_APPROVAL_E2E_CI_STAGE,
+    stage,
+  ];
+  const reject = (
+    category: ApprovalLabRejectionCategory,
+  ): ApprovalLabTargetDecision => ({
+    accepted: false,
+    category,
+    stage: stageId,
+  });
+
+  if (requiredContext.some((value) => value === undefined || value === "")) {
+    return reject("github_context_missing");
+  }
+
   if (
     env.NODE_ENV !== "development" ||
     env.REPLIT_DEPLOYMENT ||
@@ -122,16 +172,17 @@ export async function isGitHubActionsApprovalLabTarget(
     !/^[a-f0-9]{40}$/i.test(commitSha) ||
     env.GUARDIAN_APPROVAL_E2E_CI_SERVICE !== "postgres" ||
     env.GUARDIAN_APPROVAL_E2E_DISPOSABLE !== "1" ||
-    !stage ||
-    env.GUARDIAN_APPROVAL_E2E_CI_STAGE !== stage ||
-    !["bootstrap", "provision", "approval-e2e"].includes(stage)
+    !isApprovalLabCiStage(stage) ||
+    env.GUARDIAN_APPROVAL_E2E_CI_STAGE !== stage
   ) {
-    return false;
+    return reject("github_context_incompatible");
   }
 
-  const claims = await requestVerifiedGitHubActionsClaims(
-    env,
-    {
+  let oidcResult: Awaited<
+    ReturnType<typeof requestVerifiedGitHubActionsClaimsDetailed>
+  >;
+  try {
+    oidcResult = await requestVerifiedGitHubActionsClaimsDetailed(env, {
       repository: CI_REPOSITORY,
       repositoryOwner: "AminElouali",
       workflow: CI_WORKFLOW_NAME,
@@ -141,9 +192,12 @@ export async function isGitHubActionsApprovalLabTarget(
       sha: commitSha,
       runId,
       runAttempt,
-    },
-  );
-  if (!claims) return false;
+    });
+  } catch {
+    return reject("oidc_unavailable_or_invalid");
+  }
+  if (!oidcResult.ok) return reject(oidcResult.category);
+  const claims = oidcResult.claims;
 
   // Derive expected connection values from signed claims, not caller supplied
   // run metadata. The environment URL must still match this exact destination.
@@ -156,27 +210,39 @@ export async function isGitHubActionsApprovalLabTarget(
       password: adminPassword,
     })
   ) {
-    return false;
+    return reject("database_url_mismatch");
   }
 
   if (stage !== "approval-e2e") {
     const runtimePassword = `guardian-runtime-${claims.run_id}-${claims.run_attempt}-${claims.sha}`;
-    return (
+    const runtimeConfigurationMatches =
       env.APP_RUNTIME_DATABASE_URL === undefined &&
       (env.APP_RUNTIME_DB_PASSWORD === undefined ||
-        env.APP_RUNTIME_DB_PASSWORD === runtimePassword)
-    );
+        env.APP_RUNTIME_DB_PASSWORD === runtimePassword);
+    return runtimeConfigurationMatches
+      ? { accepted: true, stage }
+      : reject("database_url_mismatch");
   }
 
   const runtimePassword = `guardian-runtime-${claims.run_id}-${claims.run_attempt}-${claims.sha}`;
-  return (
+  const runtimeUrlMatches =
     env.APP_RUNTIME_DATABASE_URL !== undefined &&
     matchesPostgresUrl(env.APP_RUNTIME_DATABASE_URL, {
       database: CI_DATABASE_NAME,
       username: "app_runtime_login",
       password: runtimePassword,
-    })
-  );
+    });
+  return runtimeUrlMatches
+    ? { accepted: true, stage }
+    : reject("database_url_mismatch");
+}
+
+export async function isGitHubActionsApprovalLabTarget(
+  env: Readonly<Record<string, string | undefined>>,
+  stage?: ApprovalLabCiStage,
+): Promise<boolean> {
+  const decision = await diagnoseGitHubActionsApprovalLabTarget(env, stage);
+  return decision.accepted;
 }
 
 /**

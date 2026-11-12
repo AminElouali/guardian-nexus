@@ -151,8 +151,23 @@ test("GitHub Actions lab workflow guards its isolated service before DB writes",
   );
   assert.match(
     targetGuard,
-    /await isGitHubActionsApprovalLabTarget\(process\.env\)/,
-    "the target guard awaits authenticated OIDC verification",
+    /await diagnoseGitHubActionsApprovalLabTarget\(process\.env\)/,
+    "the target guard awaits authenticated OIDC verification and safe diagnostics",
+  );
+  assert.match(
+    targetGuard,
+    /console\.error\(\s*JSON\.stringify\(\{\s*category:\s*decision\.category,\s*stage:\s*decision\.stage\s*\}\)\s*\)/,
+    "a rejected target prints only the safe category and stage identifier",
+  );
+  assert.match(
+    targetGuard,
+    /if \(!decision\.accepted\)[\s\S]*?process\.exitCode\s*=\s*1/,
+    "a diagnostic rejection preserves a non-zero exit status",
+  );
+  assert.doesNotMatch(
+    targetGuard,
+    /console\.(?:log|error)\([^)]*(?:process\.env|DATABASE_URL|ACTIONS_ID_TOKEN_REQUEST_TOKEN|claims|requestUrl)/i,
+    "the verifier never logs environment, token, claims, or connection data",
   );
   assert.doesNotMatch(
     targetGuard,

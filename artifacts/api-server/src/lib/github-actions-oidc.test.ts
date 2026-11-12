@@ -5,6 +5,7 @@ import {
 } from "node:crypto";
 import { test } from "node:test";
 import {
+  diagnoseGitHubActionsApprovalLabTarget,
   isExplicitDisposableApprovalDatabase,
   isGitHubActionsApprovalLabTarget,
 } from "./approval-e2e-db-guard";
@@ -13,6 +14,7 @@ import {
   GITHUB_ACTIONS_RLS_AUDIENCE,
   GITHUB_ACTIONS_TRUSTED_REPOSITORY_ID,
   requestVerifiedGitHubActionsClaims,
+  requestVerifiedGitHubActionsClaimsDetailed,
   verifyGitHubActionsOidcToken,
   type ExpectedGitHubActionsOidcContext,
   type OidcFetchDependencies,
@@ -145,6 +147,49 @@ function actionsEnvironment(
     ACTIONS_ID_TOKEN_REQUEST_TOKEN: "test-only-request-bearer",
     ...overrides,
   };
+}
+
+function approvalLabEnvironment(
+  stage: "bootstrap" | "provision" | "approval-e2e" = "bootstrap",
+  overrides: Record<string, string | undefined> = {},
+) {
+  const adminPassword = `guardian-ci-${runId}-${runAttempt}-${sha}`;
+  return {
+    NODE_ENV: "development",
+    CI: "true",
+    GITHUB_ACTIONS: "true",
+    GITHUB_WORKFLOW: workflow,
+    GITHUB_WORKFLOW_REF: workflowRef,
+    GITHUB_JOB: "postgres-approval-lab",
+    GITHUB_EVENT_NAME: "workflow_dispatch",
+    GITHUB_REPOSITORY: repository,
+    GITHUB_REF_TYPE: "branch",
+    GITHUB_REF: "refs/heads/main",
+    GITHUB_SHA: sha,
+    GITHUB_RUN_ID: runId,
+    GITHUB_RUN_ATTEMPT: runAttempt,
+    GUARDIAN_APPROVAL_E2E_CI_SERVICE: "postgres",
+    GUARDIAN_APPROVAL_E2E_DISPOSABLE: "1",
+    GUARDIAN_APPROVAL_E2E_CI_STAGE: stage,
+    ACTIONS_ID_TOKEN_REQUEST_URL:
+      "https://pipelines.actions.githubusercontent.com/test-guid/_apis/actions/runners/runner-123/jobs/job-456/idtoken?api-version=2.0",
+    ACTIONS_ID_TOKEN_REQUEST_TOKEN: "test-only-request-bearer",
+    DATABASE_URL: `postgresql://postgres:${adminPassword}@127.0.0.1:5432/${stage === "bootstrap" ? "postgres" : "guardian_approval_lab_ci"}`,
+    ...overrides,
+  };
+}
+
+async function withMockedGlobalFetch<T>(
+  fetchImpl: typeof fetch,
+  run: () => Promise<T>,
+): Promise<T> {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = fetchImpl;
+  try {
+    return await run();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 }
 
 test("TEST ONLY GitHub OIDC token verifies signature and exact trusted claims", () => {
@@ -361,6 +406,126 @@ test("TEST ONLY token request requires Actions credentials and fixed official en
   );
   assert.equal(pathTraversal, undefined);
   assert.equal(calls, 0);
+});
+
+test("TEST ONLY CI target diagnostics expose safe rejection categories and remain fail-closed", async () => {
+  const missingContext = await diagnoseGitHubActionsApprovalLabTarget(
+    {},
+    undefined,
+  );
+  assert.deepEqual(missingContext, {
+    accepted: false,
+    category: "github_context_missing",
+    stage: "unknown",
+  });
+
+  const incompatibleContext = await diagnoseGitHubActionsApprovalLabTarget(
+    approvalLabEnvironment("bootstrap", {
+      GITHUB_REF: "refs/heads/untrusted",
+    }),
+    "bootstrap",
+  );
+  assert.deepEqual(incompatibleContext, {
+    accepted: false,
+    category: "github_context_incompatible",
+    stage: "bootstrap",
+  });
+
+  const unavailableOidc = await diagnoseGitHubActionsApprovalLabTarget(
+    approvalLabEnvironment("bootstrap", {
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: undefined,
+    }),
+    "bootstrap",
+  );
+  assert.deepEqual(unavailableOidc, {
+    accepted: false,
+    category: "oidc_unavailable_or_invalid",
+    stage: "bootstrap",
+  });
+
+  const actualNow = Math.floor(Date.now() / 1000);
+  const claimsMismatchToken = signToken(
+    defaultClaims({
+      repository: "untrusted/fork",
+      iat: actualNow - 10,
+      nbf: actualNow - 10,
+      exp: actualNow + 240,
+    }),
+  );
+  const claimsMismatchFetch = makeDependencies(claimsMismatchToken).fetchImpl;
+  assert.ok(claimsMismatchFetch);
+  const claimsMismatch = await withMockedGlobalFetch(
+    claimsMismatchFetch,
+    () =>
+      diagnoseGitHubActionsApprovalLabTarget(
+        approvalLabEnvironment(),
+        "bootstrap",
+      ),
+  );
+  assert.deepEqual(claimsMismatch, {
+    accepted: false,
+    category: "claims_mismatch",
+    stage: "bootstrap",
+  });
+
+  const validToken = signToken(
+    defaultClaims({
+      iat: actualNow - 10,
+      nbf: actualNow - 10,
+      exp: actualNow + 240,
+    }),
+  );
+  const validFetch = makeDependencies(validToken).fetchImpl;
+  assert.ok(validFetch);
+  const validTarget = await withMockedGlobalFetch(validFetch, () =>
+    diagnoseGitHubActionsApprovalLabTarget(
+      approvalLabEnvironment(),
+      "bootstrap",
+    ),
+  );
+  assert.deepEqual(validTarget, { accepted: true, stage: "bootstrap" });
+
+  const databaseUrlMismatch = await withMockedGlobalFetch(validFetch, () =>
+    diagnoseGitHubActionsApprovalLabTarget(
+      approvalLabEnvironment("bootstrap", {
+        DATABASE_URL:
+          "postgresql://postgres:test-only-password@127.0.0.1:5432/not-postgres",
+      }),
+      "bootstrap",
+    ),
+  );
+  assert.deepEqual(databaseUrlMismatch, {
+    accepted: false,
+    category: "database_url_mismatch",
+    stage: "bootstrap",
+  });
+
+  const malformedTokenResult = await requestVerifiedGitHubActionsClaimsDetailed(
+    actionsEnvironment("not-a-test-only-jwt"),
+    expected,
+    {
+      nowEpochSeconds: actualNow,
+      fetchImpl: makeDependencies("not-a-test-only-jwt").fetchImpl,
+    },
+  );
+  assert.deepEqual(malformedTokenResult, {
+    ok: false,
+    category: "oidc_unavailable_or_invalid",
+  });
+  for (const result of [
+    missingContext,
+    incompatibleContext,
+    unavailableOidc,
+    claimsMismatch,
+    databaseUrlMismatch,
+  ]) {
+    assert.equal(result.accepted, false);
+    const serialized = JSON.stringify(result);
+    assert.doesNotMatch(
+      serialized,
+      /postgresql|test-only-request-bearer|test-only-jti|guardian-ci-/,
+    );
+  }
 });
 
 test("CI target guard refuses environment-only context and forged markers", async () => {
