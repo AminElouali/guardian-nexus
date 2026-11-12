@@ -3,8 +3,12 @@
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "::1", "[::1]"]);
 const DISPOSABLE_DATABASE_NAME = /^guardian_approval_lab_[a-z0-9_]+$/;
 const CI_DATABASE_NAME = "guardian_approval_lab_ci";
+const CI_REPOSITORY = "AminElouali/guardian-nexus";
+const CI_MAIN_REF = "refs/heads/main";
 const CI_WORKFLOW_NAME = "Guardian Nexus PostgreSQL Approval Lab";
 const CI_JOB_ID = "postgres-approval-lab";
+const CI_WORKFLOW_REF =
+  `${CI_REPOSITORY}/.github/workflows/postgres-approval-lab.yml@${CI_MAIN_REF}`;
 
 type ApprovalLabCiStage = "bootstrap" | "provision" | "approval-e2e";
 
@@ -15,7 +19,12 @@ function hasGitHubActionsContext(
     env.CI,
     env.GITHUB_ACTIONS,
     env.GITHUB_WORKFLOW,
+    env.GITHUB_WORKFLOW_REF,
     env.GITHUB_JOB,
+    env.GITHUB_EVENT_NAME,
+    env.GITHUB_REPOSITORY,
+    env.GITHUB_REF,
+    env.GITHUB_REF_TYPE,
     env.GITHUB_RUN_ID,
     env.GITHUB_RUN_ATTEMPT,
     env.GITHUB_SHA,
@@ -77,7 +86,13 @@ export function isGitHubActionsApprovalLabTarget(
     env.CI !== "true" ||
     env.GITHUB_ACTIONS !== "true" ||
     env.GITHUB_WORKFLOW !== CI_WORKFLOW_NAME ||
+    env.GITHUB_WORKFLOW_REF?.toLowerCase() !==
+      CI_WORKFLOW_REF.toLowerCase() ||
     env.GITHUB_JOB !== CI_JOB_ID ||
+    env.GITHUB_EVENT_NAME !== "workflow_dispatch" ||
+    env.GITHUB_REPOSITORY?.toLowerCase() !== CI_REPOSITORY.toLowerCase() ||
+    env.GITHUB_REF_TYPE !== "branch" ||
+    env.GITHUB_REF !== CI_MAIN_REF ||
     !runId ||
     !/^\d+$/.test(runId) ||
     !runAttempt ||

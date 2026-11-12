@@ -5851,3 +5851,45 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
 - Reanudación segura: publicar este cambio en un GitHub con Actions habilitado
   y revisar el artefacto del job; no interpretar una prueba sintética como RLS
   real ni abrir gates por este resultado.
+
+## Frontera de confianza del laboratorio PostgreSQL CI — PREPARADO_NO_EJECUTADO 2026-11-12
+
+- Estado inicial: `main`, HEAD
+  `d7b6528c0c96c6a948a19b268e88e1995d43b3f6`, árbol limpio. No se consultó
+  GitHub ni se ejecutó el workflow.
+- El workflow queda solo con `workflow_dispatch`; se eliminaron `push` y
+  `pull_request`. Una condición a nivel del job exige evento manual, el repo
+  canónico `AminElouali/guardian-nexus`, `refs/heads/main` y tipo `branch`.
+  La condición precede a la creación del job y su servicio PostgreSQL.
+- El guard de destino exige además evento, repo, ref, tipo, `workflow_ref`,
+  SHA de 40 hex, workflow/job, run ID/intento, etapa y URLs/run-derived
+  valores ya fijados al servicio efímero. Rechaza PR, fork, rama/tag no main y
+  contexto incompleto; el marcador de verificación continúa ligado a run ID,
+  intento y SHA. Esos valores derivan de metadatos públicos del run, no son
+  secretos criptográficos y no deben reutilizarse; la protección depende de su
+  alcance efímero.
+- Archivos cambiados: workflow, guard compartido, sus pruebas, runbook y adenda
+  del informe. No se tocaron catálogos, grants, Policy Engine, base de
+  aplicación, `.replit`, secretos ni variables de entorno.
+- Prueba focalizada ejecutada:
+  `pnpm --filter @workspace/api-server exec tsx --test src/lib/approval-e2e-db-guard.test.ts`
+  — 3/3 pasaron, incluyendo contextos sintéticos válidos e inválidos y la
+  verificación estática de que el workflow no tiene triggers automáticos.
+  `git diff --check` pasó.
+- Sin ejecución de GitHub Actions, PostgreSQL, migraciones, servicios, red,
+  Qwen, worker ni E2E. Las pruebas sintéticas solo prueban el contrato del
+  guard. La aplicación depende de que GitHub proporcione contexto auténtico y
+  de permisos/políticas del repositorio; no acredita protección de ramas,
+  identidad independiente, aislamiento efectivo del runner ni RLS real.
+  Estado: `PREPARADO_NO_EJECUTADO`; gates sin cambio.
+- SHA-256:
+  - guard: `5d7785c98c2178fdb8ca3710cf3839aa495a947a321c3a6539d7fe09b9818b8c`
+  - tests: `b0c173af7f7732e6f0e3cd61f943971729852299c819a2818f69b7daf9e6699b`
+  - workflow: `3a7758da144077093b673d732d2966dc42103f6b46f6f8218ca7a40f943c94ca`
+  - runbook: `5c4bb835d0618a192eae444b3372fd79045a252696032aef49003bec863e9ea6`
+  - informe con esta adenda: `0c6ea3d510a4dce4e46753d7a5e18ee0644441a79205e2feecfde1c10da80a1c`
+  - SHA-256 final de este checkpoint: se reporta al cerrar esta edición para
+    evitar incluir un hash autorreferente.
+- Reanudación: publicar el commit revisado en el repo canónico, comprobar que
+  Actions está habilitado y ejecutar manualmente en `main`; inspeccionar el
+  artefacto del job. No aceptar artefactos de PR como evidencia.

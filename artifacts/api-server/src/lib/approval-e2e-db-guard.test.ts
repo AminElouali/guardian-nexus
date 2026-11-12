@@ -11,6 +11,12 @@ function githubRunEnvironment(stage: string) {
     GITHUB_RUN_ID: "123456789",
     GITHUB_RUN_ATTEMPT: "2",
     GITHUB_SHA: "a".repeat(40),
+    GITHUB_EVENT_NAME: "workflow_dispatch",
+    GITHUB_REPOSITORY: "AminElouali/guardian-nexus",
+    GITHUB_REF: "refs/heads/main",
+    GITHUB_REF_TYPE: "branch",
+    GITHUB_WORKFLOW_REF:
+      "AminElouali/guardian-nexus/.github/workflows/postgres-approval-lab.yml@refs/heads/main",
   };
   const adminPassword = `guardian-ci-${run.GITHUB_RUN_ID}-${run.GITHUB_RUN_ATTEMPT}-${run.GITHUB_SHA}`;
   const runtimePassword = `guardian-runtime-${run.GITHUB_RUN_ID}-${run.GITHUB_RUN_ATTEMPT}-${run.GITHUB_SHA}`;
@@ -167,6 +173,48 @@ test("GitHub Actions guard accepts only run-bound PostgreSQL lab targets", () =>
   );
 });
 
+test("GitHub Actions guard rejects pull requests, forks, non-main refs, and incomplete run context", () => {
+  const { common, adminPassword, runtimePassword } =
+    githubRunEnvironment("approval-e2e");
+  const valid = {
+    ...common,
+    DATABASE_URL: `postgresql://postgres:${adminPassword}@127.0.0.1:5432/guardian_approval_lab_ci`,
+    APP_RUNTIME_DATABASE_URL: `postgresql://app_runtime_login:${runtimePassword}@127.0.0.1:5432/guardian_approval_lab_ci`,
+  };
+  assert.equal(isGitHubActionsApprovalLabTarget(valid), true);
+  assert.equal(isExplicitDisposableApprovalDatabase(valid), true);
+  const unsafeContexts = [
+    { GITHUB_EVENT_NAME: "pull_request" },
+    { GITHUB_EVENT_NAME: "push" },
+    { GITHUB_REPOSITORY: "contributor/guardian-nexus" },
+    { GITHUB_REF: "refs/heads/feature/test" },
+    { GITHUB_REF_TYPE: "tag", GITHUB_REF: "refs/tags/main" },
+    {
+      GITHUB_WORKFLOW_REF:
+        "AminElouali/guardian-nexus/.github/workflows/postgres-approval-lab.yml@refs/heads/feature/test",
+    },
+    { GITHUB_SHA: "b".repeat(40) },
+    { GITHUB_EVENT_NAME: undefined },
+    { GITHUB_REPOSITORY: undefined },
+    { GITHUB_REF: undefined },
+    { GITHUB_REF_TYPE: undefined },
+    { GITHUB_WORKFLOW_REF: undefined },
+    { GITHUB_RUN_ID: undefined },
+    { GITHUB_RUN_ATTEMPT: undefined },
+    { GITHUB_SHA: undefined },
+  ];
+
+  for (const context of unsafeContexts) {
+    const unsafeTarget = { ...valid, ...context };
+    assert.equal(
+      isGitHubActionsApprovalLabTarget(unsafeTarget),
+      false,
+      `untrusted or incomplete run context must fail closed: ${JSON.stringify(context)}`,
+    );
+    assert.equal(isExplicitDisposableApprovalDatabase(unsafeTarget), false);
+  }
+});
+
 test("GitHub Actions lab workflow guards its isolated service before DB writes", () => {
   const workflow = readFileSync(
     new URL(
@@ -181,7 +229,17 @@ test("GitHub Actions lab workflow guards its isolated service before DB writes",
   assert.match(workflow, /image: postgres:16/);
   assert.match(workflow, /5432:5432/);
   assert.match(workflow, /permissions:\s+contents:\s+read/);
-  assert.match(workflow, /workflow_dispatch:/);
+  assert.match(workflow, /on:\s+workflow_dispatch:/);
+  assert.doesNotMatch(
+    workflow,
+    /^\s*(?:push|pull_request):/m,
+    "the privileged database job has no push or pull-request trigger",
+  );
+  assert.match(
+    workflow,
+    /github\.event_name == 'workflow_dispatch'[\s\S]*?github\.repository == 'AminElouali\/guardian-nexus'[\s\S]*?github\.ref_type == 'branch'[\s\S]*?github\.ref == 'refs\/heads\/main'/,
+    "the job-level condition limits service creation to manual dispatch on trusted main",
+  );
   assert.match(
     workflow,
     /Test the disposable-target guard offline[\s\S]*?approval-e2e-db-guard\.test\.ts[\s\S]*?Create the uniquely named lab database/,

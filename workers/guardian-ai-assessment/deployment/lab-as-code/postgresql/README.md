@@ -17,12 +17,14 @@ workflows/desarrollo. Referencias:
 Esta documentación y esos enlaces no son evidencia de RLS ni de persistencia
 real.
 
-## Workflow portable de GitHub Actions
+## Workflow manual de GitHub Actions, limitado a `main`
 
-Se añadió `.github/workflows/postgres-approval-lab.yml` como job aislado y
-reproducible. Este repositorio no tenía workflows de CI visibles al prepararlo;
-no se ha comprobado si está conectado a GitHub ni si Actions está habilitado.
-El workflow aún no se ha ejecutado.
+`.github/workflows/postgres-approval-lab.yml` es un job aislado y reproducible,
+pero solo se inicia mediante `workflow_dispatch`. No tiene disparadores `push`
+ni `pull_request`. La condición del job requiere el repositorio canónico
+`AminElouali/guardian-nexus`, `refs/heads/main` y una referencia de rama; si la
+condición falla, el job —incluido su servicio PostgreSQL— no se crea. El
+workflow aún no se ha ejecutado.
 
 Al ejecutarse en un runner GitHub-hosted, el job declara su propio servicio
 PostgreSQL `postgres:16`, crea `guardian_approval_lab_ci`, aplica Drizzle, crea
@@ -32,29 +34,34 @@ job. No usa la DB de Replit, URLs de secrets ni servicios externos de base de
 datos. El test sigue usando únicamente identidades/datos ficticios y su worker
 Python determinista; no ejecuta Qwen ni el broker/worker de producción.
 
-Antes de cada conexión, `verify-approval-lab-ci-target.ts` valida el workflow,
-job, ID/intento/commit de ejecución, etapa, servicio, nombre de DB, usuario,
-puerto y credencial derivada de esa ejecución. El E2E exige además que la URL
-administrativa y la URL de `app_runtime_login` apunten al mismo destino exacto.
-En contexto GitHub Actions, cualquier URL compartida, remota, con overrides o
-que no coincida con el contrato del job falla cerrada; no hay fallback al guard
-local de loopback. Las credenciales se derivan por ejecución, no se imprimen y
-no se almacenan como secrets. La comprobación es un guard de configuración, no
-una atestación criptográfica del proveedor de CI.
+Antes de cada conexión, `verify-approval-lab-ci-target.ts` valida el evento
+`workflow_dispatch`, repositorio, workflow/ref de `main`, rama, ID/intento/SHA
+del run, etapa, servicio, nombre de DB, usuario y destino esperado. El E2E exige
+además que la URL administrativa y la de `app_runtime_login` apunten al mismo
+destino exacto. PR, forks, refs que no sean `main` y contexto incompleto fallan
+cerrados; no hay fallback al guard local de loopback. Los valores de conexión
+son efímeros y derivados por run; no se imprimen ni se guardan como secrets y no
+deben reutilizarse fuera de ese job. El guard verifica el contexto que GitHub
+expone al proceso; no es una atestación criptográfica ni demuestra la política
+de protección de ramas o la identidad independiente de quien despacha.
 
-Para activarlo hace falta que el responsable suba el commit a un repositorio
-GitHub con Actions habilitado (o dispare `workflow_dispatch`). No hay evidencia
-de ejecución CI/PostgreSQL todavía; hasta que el job pase, persistencia, roles
-efectivos y RLS siguen sin validación real.
+Para activarlo hace falta que el commit esté en el repositorio GitHub canónico,
+Actions esté habilitado y una persona autorizada inicie manualmente el
+`workflow_dispatch` seleccionando `main`. Los artefactos de otras fuentes no
+son aceptados por este workflow. No hay evidencia de ejecución CI/PostgreSQL
+todavía; hasta que el job pase, persistencia, roles efectivos y RLS siguen sin
+validación real.
 
 El orden dentro del job es: guard contra la DB administrativa `postgres`,
 creación de la DB dedicada, guard contra la DB dedicada, Drizzle `push`,
 `harden`, aplicación del SQL RLS, grants, configuración del login de runtime,
 verificación de roles, auditoría del catálogo RLS y, por último, el E2E gated.
-Las contraseñas de servicio/runtime se derivan del ID, intento y SHA del run;
-no provienen de variables de repo ni se imprimen. El guard requiere exactamente
-esas credenciales, y durante la auditoría/E2E ambas URLs deben apuntar a
-`127.0.0.1:5432/guardian_approval_lab_ci`.
+Los valores de conexión de servicio/runtime se derivan del ID, intento y SHA
+públicos del run; no son secretos criptográficamente aleatorios, no provienen
+de variables de repo ni se imprimen, y no deben reutilizarse. La seguridad de
+esos valores depende de que solo existan dentro del servicio efímero del job. El
+guard requiere exactamente esos valores, y durante la auditoría/E2E ambas URLs
+deben apuntar a `127.0.0.1:5432/guardian_approval_lab_ci`.
 
 ### Informe del catálogo RLS
 

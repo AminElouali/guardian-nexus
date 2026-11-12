@@ -118,3 +118,39 @@ Calculados sobre el estado de trabajo descrito por este informe:
 | `lib/db/src/rls-catalog-audit.test.ts`                                       | `6e69a97e96f06faa31df23a0c944efc45c78ce8ab108a5adf2ef9bb139e1d246` |
 | `lib/db/src/rls-catalog-contract.ts`                                         | `c159aa282f94dbb3aee9d6ec18de392d24001c0e0e4f273dc1f48efdb7c93b0e` |
 | `workers/guardian-ai-assessment/deployment/lab-as-code/postgresql/README.md` | `280ce0b329bccaf7a644b4bf21ad82786102279335aadf21a8171cbfc7a4ddb4` |
+
+## Adenda: límite de confianza del disparador manual — PREPARADO_NO_EJECUTADO
+
+Esta adenda supersede solo el alcance de activación del workflow descrito arriba;
+no cambia ni reinterpreta el resultado histórico del informe original. El
+SHA-256 del informe antes de esta adenda era
+`7e58d0d4fa3f26b9aa84659c566a98f4fcb23685ba0fdee063cf1cda4e255a55`.
+
+- Se retiraron los disparadores automáticos `push` y `pull_request`. El único
+  disparador declarado es `workflow_dispatch`.
+- La condición del job exige el repositorio canónico
+  `AminElouali/guardian-nexus`, una rama `main` y el evento manual esperado. Al
+  quedar en el nivel del job, una condición falsa impide iniciar el servicio
+  PostgreSQL del job.
+- El guard compartido valida además `GITHUB_EVENT_NAME`, `GITHUB_REPOSITORY`,
+  `GITHUB_REF_TYPE`, `GITHUB_REF`, `GITHUB_WORKFLOW_REF`, `GITHUB_SHA`, el
+  workflow/job, el ID/intento del run y el destino de DB ya acotado. PR, fork,
+  tags, ramas distintas, campos ausentes y SHA que no corresponda a las
+  credenciales derivadas del mismo run se rechazan. La prueba sintética cubre
+  esos casos y el contexto manual válido.
+- Los valores de conexión derivan de ID/intento/SHA públicos del run; no son
+  secretos criptográficamente aleatorios ni se deben reutilizar. La protección
+  depende de que solo vivan dentro del job y su servicio efímero.
+- Prueba ejecutada ahora, sin conexión a servicios:
+  `pnpm --filter @workspace/api-server exec tsx --test src/lib/approval-e2e-db-guard.test.ts`
+  — 3/3 pasaron; incluye rechazos de evento/ref/repositorio/contexto y verifica
+  estáticamente que el workflow no conserva triggers automáticos.
+- La protección depende de que GitHub proporcione correctamente su contexto y
+  de las reglas/permisos del repositorio. El guard y los tests no son una
+  atestación criptográfica ni prueban quién puede despachar, protección de
+  `main`, aislamiento efectivo del runner o el servicio PostgreSQL real.
+- No se ejecutó GitHub Actions, PostgreSQL, migraciones ni E2E; no se leyeron
+  secretos ni valores de entorno. Estado: `PREPARADO_NO_EJECUTADO`.
+- Los hashes actuales de este código y del runbook se registran en la adenda
+  del checkpoint. El hash del informe final se registra allí para evitar un
+  hash autorreferente.

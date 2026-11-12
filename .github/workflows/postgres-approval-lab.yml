@@ -2,22 +2,6 @@ name: Guardian Nexus PostgreSQL Approval Lab
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - ".github/workflows/postgres-approval-lab.yml"
-      - "artifacts/api-server/src/**"
-      - "lib/db/**"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
-      - "workers/guardian-ai-assessment/deployment/lab-as-code/postgresql/**"
-  pull_request:
-    paths:
-      - ".github/workflows/postgres-approval-lab.yml"
-      - "artifacts/api-server/src/**"
-      - "lib/db/**"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
-      - "workers/guardian-ai-assessment/deployment/lab-as-code/postgresql/**"
 
 permissions:
   contents: read
@@ -29,6 +13,11 @@ concurrency:
 jobs:
   postgres-approval-lab:
     name: Disposable PostgreSQL approval E2E
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.repository == 'AminElouali/guardian-nexus' &&
+      github.ref_type == 'branch' &&
+      github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     env:
