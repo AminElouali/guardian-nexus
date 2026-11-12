@@ -4,6 +4,7 @@ export const GITHUB_ACTIONS_RLS_AUDIENCE =
   "guardian-nexus-postgres-rls-catalog";
 export const GITHUB_ACTIONS_OIDC_ISSUER =
   "https://token.actions.githubusercontent.com";
+export const GITHUB_ACTIONS_TRUSTED_REPOSITORY_ID = "1455418736";
 const GITHUB_ACTIONS_OIDC_JWKS_URL =
   "https://token.actions.githubusercontent.com/.well-known/jwks";
 const GITHUB_ACTIONS_OIDC_REQUEST_HOST =
@@ -136,6 +137,7 @@ function validateClaims(
     typeof repository_owner !== "string" ||
     repository_owner.toLowerCase() !== expected.repositoryOwner.toLowerCase() ||
     !isPositiveDecimalString(repository_id) ||
+    repository_id !== GITHUB_ACTIONS_TRUSTED_REPOSITORY_ID ||
     !isPositiveDecimalString(repository_owner_id) ||
     event_name !== expected.eventName ||
     ref !== expected.ref ||

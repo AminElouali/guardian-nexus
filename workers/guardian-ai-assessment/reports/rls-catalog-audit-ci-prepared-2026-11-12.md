@@ -209,3 +209,27 @@ ningún workflow de Actions ni PostgreSQL se ejecutó en este cambio.
 - Estado: **PREPARADO_NO_EJECUTADO**. `hostBoundaryReady`,
   `integratedAssessmentReady` y `workerAdmission` no se cambian. No aceptar
   estas pruebas como una atestación real ni como evidencia PostgreSQL/RLS.
+
+## Adenda: ID inmutable del repositorio fijado — PREPARADO_NO_EJECUTADO
+
+La adenda OIDC anterior indicaba que el ID solo se validaba por formato. Se
+actualizó la constante de confianza con el dato proporcionado por el
+administrador: `AminElouali/guardian-nexus` tiene `repository_id` `1455418736`,
+obtenido mediante consulta autenticada de solo lectura a metadatos de GitHub el
+12-11-2026. El verificador exige coincidencia exacta del claim OIDC firmado; no
+lee variables de entorno para decidir el ID esperado. El ID es inmutable para
+ese repositorio y distingue un repositorio homónimo recreado con otro ID, pero
+este cambio no acredita una ejecución real de Actions, aislamiento del host,
+semántica RLS ni aprobación humana.
+
+Se añadieron casos TEST ONLY para ID correcto, distinto, ausente, número JSON,
+representación con ceros iniciales y con espacios. Se conserva el issuer/JWKS
+oficial fijo, RS256 y audiencia dedicada. El token, bearer y URL de solicitud no
+se registran ni se incluyen en el artefacto. Esta iteración no hizo llamadas de
+red ni ejecutó Actions o PostgreSQL. Estado: **PREPARADO_NO_EJECUTADO**.
+
+Verificación local focalizada ejecutada el 2026-11-12:
+`pnpm --filter @workspace/api-server exec tsx --test src/lib/github-actions-oidc.test.ts`
+— 6/6 pasaron. También pasó
+`pnpm --filter @workspace/api-server typecheck` y `git diff --check`. Son
+pruebas sintéticas; no ejercitan GitHub OIDC real ni acceso a base de datos.

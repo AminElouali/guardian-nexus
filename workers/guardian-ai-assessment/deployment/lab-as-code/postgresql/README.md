@@ -40,26 +40,27 @@ E2E invocan el mismo guard justo antes de crear su pool. El verificador usa
 únicamente el issuer y JWKS oficiales fijos de GitHub, exige
 `RS256`, valida la firma y comprueba audiencia exclusiva, repositorio canónico,
 evento `workflow_dispatch`, rama/ref `main`, `workflow_ref` exacto, workflow,
-SHA del código, run ID/intento y vigencia. También exige `repository_id` y
-`repository_owner_id` numéricos dentro del token firmado. Las URLs administrativas
-y de `app_runtime_login` deben seguir apuntando al servicio PostgreSQL efímero
-esperado. Marcadores derivados de variables de entorno ya no se aceptan como
-prueba. El token, la URL de solicitud y las respuestas no se imprimen ni se
-persisten. El job requiere `id-token: write`.
+SHA del código, run ID/intento y vigencia. Exige que el `repository_id` firmado
+sea exactamente `1455418736`, y que `repository_owner_id` sea una cadena decimal
+positiva. El ID esperado procede de metadatos del repositorio consultados por la
+integración GitHub de solo lectura el 12-11-2026, según el dato proporcionado
+por el administrador; no se deriva de variables de entorno. Las URLs
+administrativas y de `app_runtime_login` deben seguir apuntando al servicio
+PostgreSQL efímero esperado. Marcadores derivados de variables de entorno ya no
+se aceptan como prueba. El token, la URL de solicitud y las respuestas no se
+imprimen ni se persisten. El job requiere `id-token: write`.
 
 El auditor verifica OIDC antes de construir su `Pool`. El E2E verifica antes de
 importar `@workspace/db`, que crea el pool de runtime al cargarse. Los tests
 sintéticos usan claves TEST ONLY en memoria y un `fetch` simulado; ese seam no se
 inyecta en los guards de producción y no puede abrir el gate por sí solo.
 
-No hay un `repository_id` numérico fijado en una fuente local de confianza; por
-ello se valida que el claim firmado exista y tenga formato numérico, pero el
-valor no se compara con un ID inmutable previamente aprobado. El OIDC acredita
-que GitHub firmó esos claims para el job, no que el host esté aislado, que RLS
-sea semánticamente correcta, que las reglas de protección de `main` sean
-suficientes ni que una persona concreta sea quien autorizó la ejecución. Esta
-implementación no es una atestación del host ni una autorización para abrir los
-gates de runtime.
+El ID inmutable permite distinguir un repositorio homónimo recreado con otro ID,
+pero fijarlo no demuestra que el workflow se haya ejecutado. OIDC acredita que
+GitHub firmó los claims del job, no que el host esté aislado, RLS sea
+semánticamente correcta, las protecciones de `main` sean suficientes ni quién
+autorizó la ejecución. No es una atestación del host ni una autorización para
+abrir los gates de runtime.
 
 Para activarlo hace falta que el commit esté en el repositorio GitHub canónico,
 Actions esté habilitado y una persona autorizada inicie manualmente el

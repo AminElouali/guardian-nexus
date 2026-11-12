@@ -11,6 +11,7 @@ import {
 import {
   GITHUB_ACTIONS_OIDC_ISSUER,
   GITHUB_ACTIONS_RLS_AUDIENCE,
+  GITHUB_ACTIONS_TRUSTED_REPOSITORY_ID,
   requestVerifiedGitHubActionsClaims,
   verifyGitHubActionsOidcToken,
   type ExpectedGitHubActionsOidcContext,
@@ -57,7 +58,7 @@ function defaultClaims(overrides: Record<string, unknown> = {}) {
     aud: GITHUB_ACTIONS_RLS_AUDIENCE,
     sub: `repo:${repository}:ref:refs/heads/main`,
     repository,
-    repository_id: "1234567890",
+    repository_id: GITHUB_ACTIONS_TRUSTED_REPOSITORY_ID,
     repository_owner: "AminElouali",
     repository_owner_id: "987654321",
     event_name: "workflow_dispatch",
@@ -156,7 +157,7 @@ test("TEST ONLY GitHub OIDC token verifies signature and exact trusted claims", 
     now,
   );
   assert.equal(verified?.repository, repository);
-  assert.equal(verified?.repository_id, "1234567890");
+  assert.equal(verified?.repository_id, GITHUB_ACTIONS_TRUSTED_REPOSITORY_ID);
   assert.equal(verified?.run_id, runId);
 });
 
@@ -252,6 +253,33 @@ test("TEST ONLY GitHub OIDC rejects claim mismatches, expiry, and stale tokens",
       ),
       undefined,
       `invalid time claims rejected: ${Object.keys(timestamps).join(",")}`,
+    );
+  }
+});
+
+test("TEST ONLY GitHub OIDC pins the immutable canonical repository ID", () => {
+  const cases: Array<[string, Record<string, unknown>]> = [
+    ["correct string ID", { repository_id: GITHUB_ACTIONS_TRUSTED_REPOSITORY_ID }],
+    ["different ID", { repository_id: "1455418737" }],
+    ["missing ID", { repository_id: undefined }],
+    ["numeric JSON ID", { repository_id: 1455418736 }],
+    ["leading-zero representation", { repository_id: "01455418736" }],
+    ["whitespace representation", { repository_id: " 1455418736" }],
+  ];
+
+  for (const [label, override] of cases) {
+    const claims = verifyGitHubActionsOidcToken(
+      signToken(defaultClaims(override)),
+      { keys: [primaryPublicJwk] },
+      expected,
+      now,
+    );
+    assert.equal(
+      claims?.repository_id,
+      label === "correct string ID"
+        ? GITHUB_ACTIONS_TRUSTED_REPOSITORY_ID
+        : undefined,
+      `repository ID case: ${label}`,
     );
   }
 });

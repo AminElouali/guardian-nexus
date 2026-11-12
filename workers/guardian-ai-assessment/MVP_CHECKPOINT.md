@@ -5961,3 +5961,43 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   solo cuando se autorice, revisar las reglas/permisos de Actions y ejecutar
   manualmente en `main`. Revisar el resultado y artefacto reales. No tratar las
   pruebas sintéticas como ejecución OIDC/PostgreSQL.
+
+## Fijación del ID inmutable del repositorio CI — PREPARADO_NO_EJECUTADO 2026-11-12
+
+- Estado real antes de editar: `main`, HEAD
+  `75bffa3521e30c2ae5db96fbcd3afad70383d1b0`, árbol limpio. Este HEAD difería
+  de la referencia del informe anterior (`04727f9...`); se preservó el estado
+  vigente. No se hizo commit ni push.
+- Fuente autorizada suministrada por el administrador: consulta autenticada de
+  solo lectura a metadatos de GitHub el 12-11-2026: `AminElouali/guardian-nexus`
+  tiene `repository_id=1455418736`. El verificador fija este ID en código y
+  exige igualdad exacta con el claim OIDC firmado; no consulta entorno para el
+  valor esperado. También conserva comprobación del nombre de owner/repositorio,
+  issuer, audience, evento, ref/ref_type, workflow/workflow_ref, SHA, run ID,
+  intento y vigencia.
+- Pruebas añadidas: ID correcto, ID distinto, claim ausente, tipo numérico JSON,
+  representación con ceros iniciales y con espacios. Se mantiene el JWKS oficial
+  fijo y no se registran ni guardan token OIDC, bearer ni URL de solicitud; el
+  artefacto de auditoría no contiene estos valores.
+- El origen del ID no es una atestación de ejecución: no demuestra que Actions
+  haya corrido, aislamiento del host, RLS semántica ni aprobación humana. Estado
+  continúa **PREPARADO_NO_EJECUTADO**. No se ejecutaron GitHub Actions,
+  PostgreSQL, migraciones, API, workers, Qwen, Docker, sockets ni red; no se
+  consultaron variables/secretos ni se tocó `.replit` o despliegue.
+- Pruebas ejecutadas el 2026-11-12:
+  `pnpm --filter @workspace/api-server exec tsx --test src/lib/github-actions-oidc.test.ts`
+  — 6/6 pasaron, incluyendo firma, endpoint/JWKS fijados, ID correcto/incorrecto,
+  ausente, tipo inesperado y representaciones no canónicas.
+  `pnpm --filter @workspace/api-server typecheck` — pasó.
+  `git diff --check` — pasó. Sin commit/push.
+- SHA-256 de esta iteración:
+  - verificador OIDC:
+    `f4a6631f416f9e10521a623fd3361d1697e618a641be77ff9b1a88ebecc0f3fa`
+  - tests OIDC:
+    `c73719cc2f3fb593410cebef0799316db1dda6ef68b6e6d066e04f77a7acb9d3`
+  - runbook:
+    `f7e861a4befaf5cd9b0722f2d2e719339268c99a3341528afbd6aaacab5f4c60`
+  - informe:
+    `09b1a0161f1ad12d6fc7534c8b22fab1d54c76b65b713e056cfc914b9dac4924`
+  - SHA-256 final de este checkpoint: se informa al usuario para evitar
+    autorreferencia.
