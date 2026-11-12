@@ -34,23 +34,39 @@ job. No usa la DB de Replit, URLs de secrets ni servicios externos de base de
 datos. El test sigue usando únicamente identidades/datos ficticios y su worker
 Python determinista; no ejecuta Qwen ni el broker/worker de producción.
 
-Antes de cada conexión, `verify-approval-lab-ci-target.ts` valida el evento
-`workflow_dispatch`, repositorio, workflow/ref de `main`, rama, ID/intento/SHA
-del run, etapa, servicio, nombre de DB, usuario y destino esperado. El E2E exige
-además que la URL administrativa y la de `app_runtime_login` apunten al mismo
-destino exacto. PR, forks, refs que no sean `main` y contexto incompleto fallan
-cerrados; no hay fallback al guard local de loopback. Los valores de conexión
-son efímeros y derivados por run; no se imprimen ni se guardan como secrets y no
-deben reutilizarse fuera de ese job. El guard verifica el contexto que GitHub
-expone al proceso; no es una atestación criptográfica ni demuestra la política
-de protección de ramas o la identidad independiente de quien despacha.
+Antes de las etapas de provisión, `verify-approval-lab-ci-target.ts` solicita un
+token OIDC breve al endpoint que Actions proporciona al job. El auditor y el
+E2E invocan el mismo guard justo antes de crear su pool. El verificador usa
+únicamente el issuer y JWKS oficiales fijos de GitHub, exige
+`RS256`, valida la firma y comprueba audiencia exclusiva, repositorio canónico,
+evento `workflow_dispatch`, rama/ref `main`, `workflow_ref` exacto, workflow,
+SHA del código, run ID/intento y vigencia. También exige `repository_id` y
+`repository_owner_id` numéricos dentro del token firmado. Las URLs administrativas
+y de `app_runtime_login` deben seguir apuntando al servicio PostgreSQL efímero
+esperado. Marcadores derivados de variables de entorno ya no se aceptan como
+prueba. El token, la URL de solicitud y las respuestas no se imprimen ni se
+persisten. El job requiere `id-token: write`.
+
+El auditor verifica OIDC antes de construir su `Pool`. El E2E verifica antes de
+importar `@workspace/db`, que crea el pool de runtime al cargarse. Los tests
+sintéticos usan claves TEST ONLY en memoria y un `fetch` simulado; ese seam no se
+inyecta en los guards de producción y no puede abrir el gate por sí solo.
+
+No hay un `repository_id` numérico fijado en una fuente local de confianza; por
+ello se valida que el claim firmado exista y tenga formato numérico, pero el
+valor no se compara con un ID inmutable previamente aprobado. El OIDC acredita
+que GitHub firmó esos claims para el job, no que el host esté aislado, que RLS
+sea semánticamente correcta, que las reglas de protección de `main` sean
+suficientes ni que una persona concreta sea quien autorizó la ejecución. Esta
+implementación no es una atestación del host ni una autorización para abrir los
+gates de runtime.
 
 Para activarlo hace falta que el commit esté en el repositorio GitHub canónico,
 Actions esté habilitado y una persona autorizada inicie manualmente el
 `workflow_dispatch` seleccionando `main`. Los artefactos de otras fuentes no
-son aceptados por este workflow. No hay evidencia de ejecución CI/PostgreSQL
-todavía; hasta que el job pase, persistencia, roles efectivos y RLS siguen sin
-validación real.
+son aceptados por este workflow. El workflow sigue **PREPARADO_NO_EJECUTADO**:
+no hay evidencia de ejecución CI/PostgreSQL; persistencia, roles efectivos y
+RLS siguen sin validación real.
 
 El orden dentro del job es: guard contra la DB administrativa `postgres`,
 creación de la DB dedicada, guard contra la DB dedicada, Drizzle `push`,
@@ -111,14 +127,16 @@ persona responsable del laboratorio confirme que:
 - El nombre es `guardian_approval_lab_<sufijo>` y la autoridad de la base permite
   crear y restringir los roles descritos abajo.
 
-El guard `isExplicitDisposableApprovalDatabase()` exige opt-in explícito,
-`NODE_ENV=development`, no estar en despliegue, una URL PostgreSQL con host
-literal `127.0.0.1` o `::1`, sin parámetros ni fragmento, y que el nombre
-coincida exactamente con el nombre de laboratorio esperado. Eso evita destinos
-remotos comunes, pero **no demuestra** que un puerto local no sea un túnel ni
-que la instancia sea distinta de la DB compartida. Esa prueba depende de la
-persona administradora del host. No se deben imprimir URLs, credenciales ni
-valores de entorno.
+El guard local `isExplicitDisposableApprovalDatabase()` exige opt-in explícito,
+`NODE_ENV=development`, no estar en despliegue, `DATABASE_URL` y
+`APP_RUNTIME_DATABASE_URL` con el mismo host literal loopback, puerto, base
+esperada y sin parámetros/fragmento. La URL runtime debe usar
+`app_runtime_login`; se rechazan configuraciones fallback `PGHOST`/`PGPORT`/
+`PGUSER`/`PGPASSWORD`/`PGDATABASE` y `APP_RUNTIME_DB_PASSWORD`. Esto evita
+destinos remotos comunes o URLs admin/runtime divergentes, pero **no demuestra**
+que un puerto local no sea un túnel ni que la instancia sea distinta de la DB
+compartida. Esa prueba depende de la persona administradora del host. No se
+deben imprimir URLs, credenciales ni valores de entorno.
 
 ## Preparación reproducible (no ejecutar hasta acreditar el destino)
 

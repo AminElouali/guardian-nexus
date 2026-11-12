@@ -1,8 +1,11 @@
+import { requestVerifiedGitHubActionsClaims } from "./github-actions-oidc";
+
 // Do not rely on resolving "localhost": a disposable-target gate should only
 // admit an IP literal whose loopback destination is explicit in the URL.
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "::1", "[::1]"]);
 const DISPOSABLE_DATABASE_NAME = /^guardian_approval_lab_[a-z0-9_]+$/;
 const CI_DATABASE_NAME = "guardian_approval_lab_ci";
+const APP_RUNTIME_LOGIN = "app_runtime_login";
 const CI_REPOSITORY = "AminElouali/guardian-nexus";
 const CI_MAIN_REF = "refs/heads/main";
 const CI_WORKFLOW_NAME = "Guardian Nexus PostgreSQL Approval Lab";
@@ -28,6 +31,8 @@ function hasGitHubActionsContext(
     env.GITHUB_RUN_ID,
     env.GITHUB_RUN_ATTEMPT,
     env.GITHUB_SHA,
+    env.ACTIONS_ID_TOKEN_REQUEST_URL,
+    env.ACTIONS_ID_TOKEN_REQUEST_TOKEN,
   ].some((value) => value !== undefined);
 }
 
@@ -57,26 +62,42 @@ function matchesPostgresUrl(
   }
 }
 
-function githubTargetVerificationMarker(
-  env: Readonly<Record<string, string | undefined>>,
-): string | undefined {
-  const runId = env.GITHUB_RUN_ID;
-  const runAttempt = env.GITHUB_RUN_ATTEMPT;
-  const commitSha = env.GITHUB_SHA;
-  if (!runId || !runAttempt || !commitSha) return undefined;
-  return `guardian-approval-lab:${runId}:${runAttempt}:${commitSha}`;
+function matchesLocalRuntimeUrl(
+  value: string | undefined,
+  expectedDatabase: string,
+  expectedHost: string,
+): boolean {
+  if (!value) return false;
+  try {
+    const parsed = new URL(value);
+    const password = decodeURIComponent(parsed.password);
+    return (
+      ["postgres:", "postgresql:"].includes(parsed.protocol) &&
+      LOOPBACK_HOSTS.has(parsed.hostname.toLowerCase()) &&
+      parsed.hostname.toLowerCase() === expectedHost.toLowerCase() &&
+      parsed.port === "5432" &&
+      decodeURIComponent(parsed.username) === APP_RUNTIME_LOGIN &&
+      password.length >= 32 &&
+      decodeURIComponent(parsed.pathname.replace(/^\/+/, "")) ===
+        expectedDatabase &&
+      parsed.search === "" &&
+      parsed.hash === ""
+    );
+  } catch {
+    return false;
+  }
 }
 
 /**
  * CI-only target contract for the PostgreSQL service declared by the dedicated
- * GitHub Actions job. This validates the workflow's fixed service coordinates
- * and run-bound credentials before any setup command connects.
+ * GitHub Actions job. A fresh OIDC token is verified before target coordinates
+ * are accepted; plain environment markers are never treated as proof.
  */
-export function isGitHubActionsApprovalLabTarget(
+export async function isGitHubActionsApprovalLabTarget(
   env: Readonly<Record<string, string | undefined>>,
   stage: ApprovalLabCiStage | undefined = env.GUARDIAN_APPROVAL_E2E_CI_STAGE as
     ApprovalLabCiStage | undefined,
-): boolean {
+): Promise<boolean> {
   const runId = env.GITHUB_RUN_ID;
   const runAttempt = env.GITHUB_RUN_ATTEMPT;
   const commitSha = env.GITHUB_SHA;
@@ -108,7 +129,25 @@ export function isGitHubActionsApprovalLabTarget(
     return false;
   }
 
-  const adminPassword = `guardian-ci-${runId}-${runAttempt}-${commitSha}`;
+  const claims = await requestVerifiedGitHubActionsClaims(
+    env,
+    {
+      repository: CI_REPOSITORY,
+      repositoryOwner: "AminElouali",
+      workflow: CI_WORKFLOW_NAME,
+      workflowRef: CI_WORKFLOW_REF,
+      ref: CI_MAIN_REF,
+      eventName: "workflow_dispatch",
+      sha: commitSha,
+      runId,
+      runAttempt,
+    },
+  );
+  if (!claims) return false;
+
+  // Derive expected connection values from signed claims, not caller supplied
+  // run metadata. The environment URL must still match this exact destination.
+  const adminPassword = `guardian-ci-${claims.run_id}-${claims.run_attempt}-${claims.sha}`;
   const database = stage === "bootstrap" ? "postgres" : CI_DATABASE_NAME;
   if (
     !matchesPostgresUrl(env.DATABASE_URL, {
@@ -121,7 +160,7 @@ export function isGitHubActionsApprovalLabTarget(
   }
 
   if (stage !== "approval-e2e") {
-    const runtimePassword = `guardian-runtime-${runId}-${runAttempt}-${commitSha}`;
+    const runtimePassword = `guardian-runtime-${claims.run_id}-${claims.run_attempt}-${claims.sha}`;
     return (
       env.APP_RUNTIME_DATABASE_URL === undefined &&
       (env.APP_RUNTIME_DB_PASSWORD === undefined ||
@@ -129,28 +168,14 @@ export function isGitHubActionsApprovalLabTarget(
     );
   }
 
-  const runtimePassword = `guardian-runtime-${runId}-${runAttempt}-${commitSha}`;
-  if (env.APP_RUNTIME_DATABASE_URL !== undefined) {
-    return matchesPostgresUrl(env.APP_RUNTIME_DATABASE_URL, {
+  const runtimePassword = `guardian-runtime-${claims.run_id}-${claims.run_attempt}-${claims.sha}`;
+  return (
+    env.APP_RUNTIME_DATABASE_URL !== undefined &&
+    matchesPostgresUrl(env.APP_RUNTIME_DATABASE_URL, {
       database: CI_DATABASE_NAME,
       username: "app_runtime_login",
       password: runtimePassword,
-    });
-  }
-
-  // @workspace/db consumes and deletes APP_RUNTIME_DATABASE_URL during module
-  // initialization. The workflow's immediately preceding guard emits this
-  // run-bound, non-secret marker only after validating both URLs.
-  return (
-    stage === "approval-e2e" &&
-    env.GUARDIAN_APPROVAL_E2E_CI_TARGET_VERIFIED ===
-      githubTargetVerificationMarker(env) &&
-    env.APP_RUNTIME_DB_PASSWORD === undefined &&
-    env.PGHOST === undefined &&
-    env.PGPORT === undefined &&
-    env.PGUSER === undefined &&
-    env.PGPASSWORD === undefined &&
-    env.PGDATABASE === undefined
+    })
   );
 }
 
@@ -165,9 +190,9 @@ export function isGitHubActionsApprovalLabTarget(
 export function isExplicitDisposableApprovalDatabase(
   env: Readonly<Record<string, string | undefined>>,
 ): boolean {
-  if (hasGitHubActionsContext(env)) {
-    return isGitHubActionsApprovalLabTarget(env, "approval-e2e");
-  }
+  // Synchronous opt-in is restricted to local development. CI must use the
+  // asynchronous OIDC-verifying helper before importing the DB package.
+  if (hasGitHubActionsContext(env)) return false;
 
   if (
     env.NODE_ENV !== "development" ||
@@ -186,6 +211,16 @@ export function isExplicitDisposableApprovalDatabase(
   ) {
     return false;
   }
+  if (
+    env.APP_RUNTIME_DB_PASSWORD !== undefined ||
+    env.PGHOST !== undefined ||
+    env.PGPORT !== undefined ||
+    env.PGUSER !== undefined ||
+    env.PGPASSWORD !== undefined ||
+    env.PGDATABASE !== undefined
+  ) {
+    return false;
+  }
 
   try {
     const parsed = new URL(databaseUrl);
@@ -198,6 +233,7 @@ export function isExplicitDisposableApprovalDatabase(
     if (
       !["postgres:", "postgresql:"].includes(parsed.protocol) ||
       !LOOPBACK_HOSTS.has(parsed.hostname.toLowerCase()) ||
+      parsed.port !== "5432" ||
       hasConnectionOverrides
     ) {
       return false;
@@ -206,8 +242,27 @@ export function isExplicitDisposableApprovalDatabase(
     const databaseName = decodeURIComponent(
       parsed.pathname.replace(/^\/+/, ""),
     );
-    return databaseName === expectedDatabaseName;
+    return (
+      databaseName === expectedDatabaseName &&
+      matchesLocalRuntimeUrl(
+        env.APP_RUNTIME_DATABASE_URL,
+        expectedDatabaseName,
+        parsed.hostname,
+      )
+    );
   } catch {
     return false;
   }
+}
+
+export async function verifyExplicitDisposableApprovalDatabase(
+  env: Readonly<Record<string, string | undefined>>,
+): Promise<boolean> {
+  if (hasGitHubActionsContext(env)) {
+    return isGitHubActionsApprovalLabTarget(
+      env,
+      "approval-e2e",
+    );
+  }
+  return isExplicitDisposableApprovalDatabase(env);
 }

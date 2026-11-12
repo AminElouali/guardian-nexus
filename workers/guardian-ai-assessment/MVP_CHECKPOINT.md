@@ -5893,3 +5893,71 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
 - Reanudación: publicar el commit revisado en el repo canónico, comprobar que
   Actions está habilitado y ejecutar manualmente en `main`; inspeccionar el
   artefacto del job. No aceptar artefactos de PR como evidencia.
+
+## Autenticación OIDC del laboratorio RLS — PREPARADO_NO_EJECUTADO 2026-11-12
+
+- Estado inicial de esta iteración: `main`, HEAD
+  `04727f9feb8d727373d051ff5eb4ab6c653e39e5`, árbol limpio. Se preservó el
+  historial y no se creó commit ni se hizo push.
+- Se sustituyó el marcador derivado de `process.env` por verificación OIDC
+  criptográfica para el laboratorio GitHub Actions. El workflow solicita
+  `id-token: write`; el guard pide un JWT con audiencia fija, usa el JWKS oficial
+  fijo de GitHub, valida firma RS256/clave RSA y comprueba issuer, subject,
+  repo/owner, IDs numéricos firmados, evento manual, ref de `main`, workflow y
+  `workflow_ref` exactos, SHA de ejecución, run ID/intento, `jti` y vigencia.
+  El endpoint de solicitud se valida contra host/ruta/version esperados; la URL
+  de JWKS no se lee de entorno.
+- Orden de admisión: el script de catálogo espera OIDC antes de `new Pool`; el
+  test E2E lo espera antes del `import("@workspace/db")` que crea el pool. El
+  guard CI ya no admite ni emite `GUARDIAN_APPROVAL_E2E_CI_TARGET_VERIFIED`.
+  El guard de producción no acepta dependencias de fetch inyectadas. El test
+  sintético del verificador usa claves RSA TEST ONLY y `fetch` simulado, sin
+  tocar readiness.
+- El claim `repository_id` firmado se exige numérico, pero no se fija contra un
+  ID externo previamente aprobado porque no hay un valor de confianza en el
+  repositorio. `workflow_sha` se valida como SHA de 40 hexágonos y no se fuerza
+  a coincidir con el SHA de ejecución; GitHub puede tener commits distintos
+  para el archivo de workflow y el código. `GITHUB_JOB` se contrasta con el
+  nombre configurado, pero no se considera un claim OIDC firmado.
+- Pruebas ejecutadas localmente, todas sintéticas:
+  `pnpm --filter @workspace/api-server exec tsx --test src/lib/github-actions-oidc.test.ts src/lib/approval-e2e-db-guard.test.ts`
+  — 7/7 pasaron (claves TEST ONLY, claims, firma, expiración, ausencia de token,
+  endpoints y guard de destino).
+  `pnpm --filter @workspace/api-server exec tsx --test --test-name-pattern='persistent approval E2E requires explicit' src/lib/ai-assessment-qwen-evidence.test.ts`
+  — 1/1 pasó; limita la ruta local para exigir URLs admin/runtime coherentes
+  antes de cargar el pool.
+  `pnpm --filter @workspace/api-server typecheck` — pasó.
+  `git diff --check` — pasó tras la última edición documental.
+- Sin llamadas de red: todos los fetch de tests son dobles en memoria. No se
+  ejecutaron Actions, PostgreSQL, migraciones, API, workers, Docker, Qwen ni
+  E2E. OIDC no demuestra aislamiento del host, protección de rama, aprobación
+  humana, semántica RLS, persistencia real ni ausencia de replay entre
+  procesos. `hostBoundaryReady=false`, `integratedAssessmentReady=false` y
+  `workerAdmission=disabled` permanecen sin cambio. Estado:
+  **PREPARADO_NO_EJECUTADO**.
+- Archivos modificados: workflow CI, verificador OIDC, guard CI, scripts de
+  destino/auditoría, regresiones unitarias, prueba E2E (importación diferida),
+  runbook y este checkpoint. No se modificaron `.replit`, secretos, variables,
+  configuración de despliegue, políticas/grants de la DB de aplicación ni gates.
+- SHA-256:
+  - verificador OIDC:
+    `5bce3a1152d529ed23c705d68c123ef4076082bc11fb124f8aa7683425f2c47a`
+  - tests OIDC:
+    `cde7790f70b0761cc565ab3f3ea2094c9a85c4fdc9d385dffa662a6a73e59492`
+  - guard de DB CI:
+    `bcdeef9cbbc5455747138bb05687185f288ecc85d834d15979761d1868886cab`
+  - tests del guard:
+    `8c16e61ffc38897190e59e45d80b35a6d1f3f0917ffbdd68753ed14088916b10`
+  - workflow:
+    `89a3a1eda2508f29c01e0483ee810e96de8c49857f1b836c8793ae90fbf7b3cd`
+  - informe:
+    `e7518071536bd7f4e8672e8c8ad48376a6967d900bb4f23e97a7837e24eeeceb`
+  - runbook:
+    `76fab95ed7494d4b4d728c0ad7c3ed219be40b5204a492360b391cd0c0359a9f`
+  - SHA-256 final de este checkpoint: se reporta en la respuesta para evitar
+    autorreferencia.
+- Reanudación segura: antes de ejecutar el workflow, obtener de una fuente
+  autorizada el `repository_id` inmutable que se desea fijar; publicar el cambio
+  solo cuando se autorice, revisar las reglas/permisos de Actions y ejecutar
+  manualmente en `main`. Revisar el resultado y artefacto reales. No tratar las
+  pruebas sintéticas como ejecución OIDC/PostgreSQL.

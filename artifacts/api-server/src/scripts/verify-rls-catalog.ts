@@ -279,7 +279,7 @@ async function writeReport(report: Record<string, unknown>): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  if (!isGitHubActionsApprovalLabTarget(process.env, "approval-e2e")) {
+  if (!(await isGitHubActionsApprovalLabTarget(process.env, "approval-e2e"))) {
     console.error(
       "RLS catalog audit refused: CI disposable-target contract not met.",
     );

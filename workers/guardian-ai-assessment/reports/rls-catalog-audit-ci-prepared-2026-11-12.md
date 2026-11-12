@@ -154,3 +154,58 @@ SHA-256 del informe antes de esta adenda era
 - Los hashes actuales de este código y del runbook se registran en la adenda
   del checkpoint. El hash del informe final se registra allí para evitar un
   hash autorreferente.
+
+## Adenda: autenticación OIDC del laboratorio — PREPARADO_NO_EJECUTADO
+
+Esta adenda reemplaza la afirmación histórica de que el guard solo confiaba en
+el contexto de proceso. No altera el informe de catálogo ni sus resultados:
+ningún workflow de Actions ni PostgreSQL se ejecutó en este cambio.
+
+- El job concede únicamente `id-token: write` además de `contents: read`.
+  `verify-approval-lab-ci-target.ts` solicita un token breve desde el endpoint
+  de OIDC provisto por Actions, con audiencia fija
+  `guardian-nexus-postgres-rls-catalog`. El verificador rechaza endpoints de
+  solicitud que no sean HTTPS en el host oficial de Actions, no tengan la ruta
+  esperada o usen parámetros/audiencias no permitidos.
+- El JWKS se obtiene solo de la URL oficial fija
+  `https://token.actions.githubusercontent.com/.well-known/jwks`; no hay URL de
+  claves configurable por entorno. Solo se admite `RS256`, un `kid` único y una
+  clave RSA de al menos 2048 bits. Se valida firma, issuer, audiencia, subject,
+  repo/nombre de owner, IDs numéricos del repositorio/owner, evento,
+  `refs/heads/main`, tipo de ref, workflow, `workflow_ref`, SHA de ejecución,
+  run ID/intento, `jti`, vigencia y antigüedad.
+- El guard del destino ya no acepta un marcador derivado de variables de
+  entorno. El auditor espera el resultado OIDC antes de construir `Pool`; el
+  E2E espera autenticación antes de importar `@workspace/db` y su pool. El guard
+  de producción no permite inyectar un fetch/JWKS de test. El seam sintético
+  vive en el verificador puro y en pruebas, sin modificar readiness.
+- `workflow_sha` se valida como digest hexadecimal de 40 caracteres, pero no se
+  iguala a `GITHUB_SHA`: GitHub puede ejecutar código más nuevo que el commit
+  que contiene el archivo del workflow. El commit de ejecución `sha` sí se
+  compara exactamente con el contexto esperado. El ID numérico firmado del repo
+  se exige, pero no existe una referencia local confiable para fijarlo a un
+  valor aprobado; queda pendiente obtener ese ID de una fuente autorizada.
+- Pruebas sintéticas ejecutadas el 2026-11-12:
+  `pnpm --filter @workspace/api-server exec tsx --test src/lib/github-actions-oidc.test.ts src/lib/approval-e2e-db-guard.test.ts`
+  — 7/7 pasaron. Incluyen RSA TEST ONLY en memoria, firma incorrecta, algoritmo
+  y clave no confiables, claims discrepantes, expiración/frescura, ausencia de
+  token, endpoints/audiencia no admitidos, guard sin token y comprobaciones
+  estáticas de orden de importación. El fetch fue simulado; no hubo red.
+- Typecheck estático:
+  `pnpm --filter @workspace/api-server typecheck` — pasó. No se inició API,
+  PostgreSQL, migraciones, workers, Docker, Qwen ni GitHub Actions.
+  `git diff --check` pasó después de la última edición.
+- También se ejecutó únicamente la regresión preexistente del guard local:
+  `pnpm --filter @workspace/api-server exec tsx --test --test-name-pattern='persistent approval E2E requires explicit' src/lib/ai-assessment-qwen-evidence.test.ts`
+  — 1/1 pasó. Comprueba que la URL runtime no puede divergir a host/base
+  remotos ni usar fallback `PG*` antes de importar el pool; no abre conexiones.
+- OIDC acredita que GitHub firmó los claims aceptados y que el token no estaba
+  vencido al verificarlo. No acredita identidad de host/supervisor, aislamiento
+  de API/broker/worker, protección de `main`, quién autorizó el run, semántica
+  de RLS, persistencia durable, no-replay entre procesos ni la ejecución real
+  del job. No se afirma equivalencia de la identidad del job como claim firmado:
+  `GITHUB_JOB` se contrasta con el nombre fijo del workflow, pero GitHub no
+  incluye un claim estándar `job_id` que se valide aquí.
+- Estado: **PREPARADO_NO_EJECUTADO**. `hostBoundaryReady`,
+  `integratedAssessmentReady` y `workerAdmission` no se cambian. No aceptar
+  estas pruebas como una atestación real ni como evidencia PostgreSQL/RLS.

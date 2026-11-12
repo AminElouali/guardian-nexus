@@ -15,20 +15,15 @@ import {
   PreviewWorkspaceAiAssessmentPolicyLabResponse,
 } from "@workspace/api-zod";
 import {
-  assertRlsRuntimeReady,
-  pool as appPool,
-} from "@workspace/db";
-import {
   canonicalApprovalJson,
   computeApprovalProposalBindingV3,
   getAllowlistedSyntheticApprovalAction,
 } from "./lib/ai-assessment-approval-actions";
-import { isExplicitDisposableApprovalDatabase } from "./lib/approval-e2e-db-guard";
+import { verifyExplicitDisposableApprovalDatabase } from "./lib/approval-e2e-db-guard";
 import {
   POLICY_LAB_PROFILE_IDS,
   QWEN_POLICY_LAB_PROFILE_IDS,
 } from "./lib/ai-assessment-sandbox";
-import { createAiAssessmentLabRouter } from "./routes/ai-assessment-lab";
 
 /*
  * This is an explicitly fixture-only integration harness. It executes the
@@ -329,12 +324,16 @@ test(
   "deterministic fixtures verify persistent approval state from a fresh database pool",
   { timeout: 60_000 },
   async (t) => {
-    if (!isExplicitDisposableApprovalDatabase(process.env)) {
+    if (!(await verifyExplicitDisposableApprovalDatabase(process.env))) {
       t.skip(
-        "requires explicit opt-in to a named loopback disposable PostgreSQL database",
+        "requires an authenticated GitHub Actions OIDC target or explicit local disposable opt-in",
       );
       return;
     }
+    const { assertRlsRuntimeReady, pool: appPool } =
+      await import("@workspace/db");
+    const { createAiAssessmentLabRouter } =
+      await import("./routes/ai-assessment-lab");
     const databaseUrl = process.env.DATABASE_URL;
     assert.ok(databaseUrl);
     await assertRlsRuntimeReady();
