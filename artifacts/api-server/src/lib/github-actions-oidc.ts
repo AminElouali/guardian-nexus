@@ -378,10 +378,8 @@ function validatedActionsRequestUrl(
     }
     const queryKeys = [...url.searchParams.keys()];
     if (
-      queryKeys.some((key) => !["api-version", "audience"].includes(key)) ||
-      url.searchParams.getAll("api-version").length > 1 ||
-      url.searchParams.getAll("audience").length > 1 ||
-      url.searchParams.get("api-version") !== "2.0"
+      queryKeys.some((key) => key !== "audience") ||
+      url.searchParams.getAll("audience").length > 1
     ) {
       return undefined;
     }
@@ -392,7 +390,9 @@ function validatedActionsRequestUrl(
     ) {
       return undefined;
     }
-    url.searchParams.set("audience", GITHUB_ACTIONS_RLS_AUDIENCE);
+    if (suppliedAudience === null) {
+      url.searchParams.set("audience", GITHUB_ACTIONS_RLS_AUDIENCE);
+    }
     return url;
   } catch {
     return undefined;
@@ -456,7 +456,7 @@ async function requestVerifiedGitHubActionsClaimsUnchecked(
     tokenResponse = await fetchImpl(requestUrl, {
       method: "GET",
       headers: {
-        Accept: "application/json",
+        Accept: "application/json; api-version=2.0",
         Authorization: `Bearer ${requestToken}`,
       },
       redirect: "error",

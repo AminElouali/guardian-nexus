@@ -113,6 +113,11 @@ function makeDependencies(token: string): OidcFetchDependencies {
           url.searchParams.get("audience"),
           GITHUB_ACTIONS_RLS_AUDIENCE,
         );
+        assert.deepEqual([...url.searchParams.keys()], ["audience"]);
+        assert.equal(
+          new Headers(init?.headers).get("accept"),
+          "application/json; api-version=2.0",
+        );
         assert.equal(init?.redirect, "error");
         assert.match(
           new Headers(init?.headers).get("authorization") ?? "",
@@ -182,7 +187,7 @@ function actionsEnvironment(
 ) {
   return {
     ACTIONS_ID_TOKEN_REQUEST_URL:
-        "https://pipelines.actions.githubusercontent.com/test-guid/_apis/actions/runners/runner-123/jobs/job-456/idtoken?api-version=2.0",
+      "https://pipelines.actions.githubusercontent.com/test-guid/_apis/actions/runners/runner-123/jobs/job-456/idtoken",
     ACTIONS_ID_TOKEN_REQUEST_TOKEN: "test-only-request-bearer",
     ...overrides,
   };
@@ -211,7 +216,7 @@ function approvalLabEnvironment(
     GUARDIAN_APPROVAL_E2E_DISPOSABLE: "1",
     GUARDIAN_APPROVAL_E2E_CI_STAGE: stage,
     ACTIONS_ID_TOKEN_REQUEST_URL:
-      "https://pipelines.actions.githubusercontent.com/test-guid/_apis/actions/runners/runner-123/jobs/job-456/idtoken?api-version=2.0",
+      "https://pipelines.actions.githubusercontent.com/test-guid/_apis/actions/runners/runner-123/jobs/job-456/idtoken",
     ACTIONS_ID_TOKEN_REQUEST_TOKEN: "test-only-request-bearer",
     DATABASE_URL: `postgresql://postgres:${adminPassword}@127.0.0.1:5432/${stage === "bootstrap" ? "postgres" : "guardian_approval_lab_ci"}`,
     ...overrides,
@@ -381,6 +386,16 @@ test("TEST ONLY token request requires Actions credentials and fixed official en
   );
   assert.equal(claims?.event_name, "workflow_dispatch");
 
+  const matchingAudience = await requestVerifiedGitHubActionsClaims(
+    actionsEnvironment(token, {
+      ACTIONS_ID_TOKEN_REQUEST_URL:
+        `https://pipelines.actions.githubusercontent.com/test-guid/_apis/actions/runners/runner-123/jobs/job-456/idtoken?audience=${encodeURIComponent(GITHUB_ACTIONS_RLS_AUDIENCE)}`,
+    }),
+    expected,
+    dependencies,
+  );
+  assert.equal(matchingAudience?.event_name, "workflow_dispatch");
+
   const noToken = await requestVerifiedGitHubActionsClaims(
     { ACTIONS_ID_TOKEN_REQUEST_URL: validEnv.ACTIONS_ID_TOKEN_REQUEST_URL },
     expected,
@@ -412,10 +427,10 @@ test("TEST ONLY token request requires Actions credentials and fixed official en
   assert.equal(untrustedEndpoint, undefined);
   assert.equal(calls, 0);
 
-  const wrongApiVersion = await requestVerifiedGitHubActionsClaims(
+  const queryApiVersion = await requestVerifiedGitHubActionsClaims(
     actionsEnvironment(token, {
       ACTIONS_ID_TOKEN_REQUEST_URL:
-        "https://pipelines.actions.githubusercontent.com/test-guid/_apis/actions/idtoken?api-version=1.0",
+        "https://pipelines.actions.githubusercontent.com/test-guid/_apis/actions/idtoken?api-version=2.0",
     }),
     expected,
     {
@@ -426,13 +441,36 @@ test("TEST ONLY token request requires Actions credentials and fixed official en
       },
     },
   );
-  assert.equal(wrongApiVersion, undefined);
+  assert.equal(queryApiVersion, undefined);
+  assert.equal(calls, 0);
+
+  for (const query of [
+    "unexpected=value",
+    `audience=${encodeURIComponent(GITHUB_ACTIONS_RLS_AUDIENCE)}&audience=${encodeURIComponent(GITHUB_ACTIONS_RLS_AUDIENCE)}`,
+    "audience=untrusted-audience",
+  ]) {
+    const rejectedQuery = await requestVerifiedGitHubActionsClaims(
+      actionsEnvironment(token, {
+        ACTIONS_ID_TOKEN_REQUEST_URL:
+          `https://pipelines.actions.githubusercontent.com/test-guid/_apis/actions/idtoken?${query}`,
+      }),
+      expected,
+      {
+        ...dependencies,
+        fetchImpl: async () => {
+          calls += 1;
+          throw new Error("Must not fetch an untrusted query");
+        },
+      },
+    );
+    assert.equal(rejectedQuery, undefined);
+  }
   assert.equal(calls, 0);
 
   const pathTraversal = await requestVerifiedGitHubActionsClaims(
     actionsEnvironment(token, {
       ACTIONS_ID_TOKEN_REQUEST_URL:
-        "https://pipelines.actions.githubusercontent.com/test-guid/_apis/actions/../idtoken?api-version=2.0",
+        "https://pipelines.actions.githubusercontent.com/test-guid/_apis/actions/../idtoken",
     }),
     expected,
     {
