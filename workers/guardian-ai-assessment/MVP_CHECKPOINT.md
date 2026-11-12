@@ -5723,3 +5723,43 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
 - SHA-256 del runbook:
   `e4071c3936050cbfd7cf97c114764bdac72832b702389dbe0d246e57d4e2cf5a`.
 - Commit de preparación CI: `ea4fbe08627a219e7f0cfae0a1164a2e4c276bbe`.
+
+## Saneamiento del historial para publicación — no publicado 2026-11-12
+
+- Inicio: `main` en `4e5bdcb5658ac9683e60ce22b72842cb08bbd6c8`, limpio. Se
+  creó y verificó una copia privada del historial antes de reescribir.
+- Se reescribieron las ramas locales `main` y `replit-agent`; `subrepl-6j0z1fhu`
+  no necesitó cambio porque no contenía los elementos retirados. Se procesaron
+  286 commits únicos; los historiales quedaron en 209/273/8 commits antes del
+  nuevo commit de informe/checkpoint. No había tags.
+- Elementos retirados de todos los commits de las ramas publicables: dos
+  capturas WebP de terceros en `.canvas/assets/`, `.agents/agent_assets_metadata.toml`
+  con localizador interno e identificador opaco, y `.codex/hooks.json` con rutas
+  absolutas de desarrollo. La búsqueda de duplicados por blob no encontró otras
+  rutas. Las búsquedas posteriores no encontraron referencias internas textuales
+  en los blobs de ramas publicables.
+- El equivalente saneado de
+  `f1d5b467b861e72a0e5ba8ec91fa69d75ea3588e` es
+  `0ee7637c6f3e001022939f6172374b1d7b0229be`. La comparación de árboles fuera
+  de los elementos retirados no encontró diferencias. El identificador original
+  se conserva solo en la copia local de recuperación, no en las ramas saneadas.
+- Escaneo final de 2.291 blobs alcanzables desde las ramas publicables:
+  sin claves privadas, certificados, JWT ni tokens comunes reconocibles. Las
+  URIs con formato de credenciales que permanecen están en dos tests y tienen
+  marcadores de prueba/ejemplo/loopback. Los correos detectados usan dominios
+  internos o de ejemplo; no se detectaron SSN ni patrones telefónicos con
+  contexto telefónico. No se detectaron volcados ni bases locales.
+- `.gitignore` en `main` conserva las exclusiones para `.env` reales,
+  certificados/claves y archivos DB/dump; `.env.example` y SQL de migraciones
+  siguen visibles. SHA-256 de `.gitignore`:
+  `df982672b06c1845a31e9baf58b14b26d61d9cbcfb1951043886b6ad60a59ca4`.
+- El repositorio GitHub consultado está público y vacío: rama predeterminada
+  `main`, 0 ramas, 0 tags y API de commits indicó repositorio vacío. No hay
+  remote GitHub local. El conector GitHub continuó en `connect`; no hubo push
+  ni CI. No se sobrescribió contenido ajeno.
+- Los refs internos de Replit y el remote-tracking `gitsafe-backup/main` no se
+  publicarán; el envío deberá limitarse a ramas locales y tags, nunca `--mirror`.
+- Gates sin cambios: `hostBoundaryReady=false`,
+  `integratedAssessmentReady=false`, `workerAdmission=disabled`.
+- Informe: `reports/public-history-sanitization-2026-11-12.md`, SHA-256
+  `53371b1b583e7736159c373bbec6e664df1a2dc47917771dce0edb5cfc23a504`.
