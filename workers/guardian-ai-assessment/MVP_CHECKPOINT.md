@@ -5673,3 +5673,52 @@ y exportación. No se publicó, desplegó ni conectó ningún servicio externo.
   `75301248eeabd123b7802450de44956984cccb5c1b7594c4baa032359e749ef9`.
 - SHA-256 actualizado del informe:
   `4efee6d2bef0c4b79ac2053cac157f46e2450f46da8370535cbf27688dd2de23`.
+
+## Laboratorio PostgreSQL efímero en CI — preparado, no ejecutado 2026-11-12
+
+- Inicio inspeccionado: `main`, HEAD
+  `20ad2ce30940bc56bc2d8cb4033c34e57059fcd3`, árbol limpio. No había archivos
+  CI en `.github`; no se verificó conexión del repositorio a GitHub ni si
+  Actions está habilitado.
+- Añadido `.github/workflows/postgres-approval-lab.yml`: servicio PostgreSQL
+  16 por job en runner `ubuntu-24.04`, permisos `contents: read`, creación de
+  `guardian_approval_lab_ci`, Drizzle push, harden, SQL RLS, grants, login
+  runtime, verificación de rol y E2E sintético. El servicio se destruye con el
+  job. No hay URL de DB en secrets de repositorio.
+- Añadido guard CI fail-closed y comando previo a conexión. Valida workflow,
+  job, run/attempt/SHA, etapa, service ID, database, host `127.0.0.1`, puerto
+  `5432` y credenciales derivadas del run. En E2E comprueba también que URLs
+  administrativa y runtime apunten a la misma DB. El URL runtime se consume al
+  inicializar `@workspace/db`; el preflight emite un marcador no secreto
+  vinculado al run, y el E2E lo comprueba sin retener la URL.
+- Añadida prueba unitaria de rechazo de URL remota/compartida, puerto y DB
+  incorrectos, overrides, etapa/identidad erróneas y marcador inválido; prueba
+  estática del orden/configuración del workflow. Se detectó y corrigió una
+  comparación omitida de etapa esperada vs declarada.
+- Validaciones focalizadas: la prueba nueva del guard pasó 2/2; la regresión
+  previa del guard loopback local pasó 1/1; typecheck de `@workspace/api-server`
+  pasó; Prettier de workflow/código/runbook pasó. El E2E PostgreSQL no se ejecutó.
+- No se ha ejecutado GitHub Actions, PostgreSQL, `psql`, `drizzle-kit push`,
+  roles, SQL RLS, migraciones, worker, Qwen, Docker, red ni servicios. La
+  configuración es preparación, no evidencia de RLS o persistencia real.
+- No se implementó comparación semántica de 34 predicados: no hay referencia
+  canónica/AST compartida y una tabla paralela duplicaría reglas Drizzle/SQL.
+  `assertRlsRuntimeReady()` comprueba conteos, ENABLE/FORCE, presencia de
+  expresiones y roles; el E2E existente cubre solo rutas seleccionadas, no todas
+  las policies/tablas.
+- Siguiente dependencia externa: subir el commit a GitHub con Actions habilitado
+  o ejecutar `workflow_dispatch`. La conexión del repo no se comprobó.
+  `hostBoundaryReady=false`, `integratedAssessmentReady=false` y
+  `workerAdmission=disabled` se mantienen.
+- Informe: `reports/postgres-approval-lab-ci-prepared-2026-11-12.md`, SHA-256
+  `f32edeb7b67c310236768d52232c499d77a002adf6e6a5a7210fd46d199941e3`.
+- SHA-256 del workflow:
+  `cc761aad34afc2ce60b8b5f2797c7634cb100b25e167408574fcf405c3cec3dc`.
+- SHA-256 del guard:
+  `847f2447c3a11e7627ecd3d94543c41d31a6f5b940b96fb6d6a2a4f01e95e7a0`.
+- SHA-256 del test focalizado:
+  `e6f61a30116d6067fb3fb5bab7dac1372ab80fa4748b850e98bb1455c082f846`.
+- SHA-256 del verificador CI:
+  `36b94cd82e0aef9581fa3e220f02d487a235cb660bf8b088585348688bc901a7`.
+- SHA-256 del runbook:
+  `e4071c3936050cbfd7cf97c114764bdac72832b702389dbe0d246e57d4e2cf5a`.

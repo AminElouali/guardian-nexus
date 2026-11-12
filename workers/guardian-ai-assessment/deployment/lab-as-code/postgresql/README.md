@@ -17,6 +17,45 @@ workflows/desarrollo. Referencias:
 Esta documentación y esos enlaces no son evidencia de RLS ni de persistencia
 real.
 
+## Workflow portable de GitHub Actions
+
+Se añadió `.github/workflows/postgres-approval-lab.yml` como job aislado y
+reproducible. Este repositorio no tenía workflows de CI visibles al prepararlo;
+no se ha comprobado si está conectado a GitHub ni si Actions está habilitado.
+El workflow aún no se ha ejecutado.
+
+Al ejecutarse en un runner GitHub-hosted, el job declara su propio servicio
+PostgreSQL `postgres:16`, crea `guardian_approval_lab_ci`, aplica Drizzle, crea
+los roles restringidos, aplica el SQL RLS, verifica los roles/grants y ejecuta
+el E2E de aprobaciones persistentes. GitHub destruye el servicio al acabar el
+job. No usa la DB de Replit, URLs de secrets ni servicios externos de base de
+datos. El test sigue usando únicamente identidades/datos ficticios y su worker
+Python determinista; no ejecuta Qwen ni el broker/worker de producción.
+
+Antes de cada conexión, `verify-approval-lab-ci-target.ts` valida el workflow,
+job, ID/intento/commit de ejecución, etapa, servicio, nombre de DB, usuario,
+puerto y credencial derivada de esa ejecución. El E2E exige además que la URL
+administrativa y la URL de `app_runtime_login` apunten al mismo destino exacto.
+En contexto GitHub Actions, cualquier URL compartida, remota, con overrides o
+que no coincida con el contrato del job falla cerrada; no hay fallback al guard
+local de loopback. Las credenciales se derivan por ejecución, no se imprimen y
+no se almacenan como secrets. La comprobación es un guard de configuración, no
+una atestación criptográfica del proveedor de CI.
+
+Para activarlo hace falta que el responsable suba el commit a un repositorio
+GitHub con Actions habilitado (o dispare `workflow_dispatch`). No hay evidencia
+de ejecución CI/PostgreSQL todavía; hasta que el job pase, persistencia, roles
+efectivos y RLS siguen sin validación real.
+
+El orden dentro del job es: guard contra la DB administrativa `postgres`,
+creación de la DB dedicada, guard contra la DB dedicada, Drizzle `push`,
+`harden`, aplicación del SQL RLS, grants, configuración del login de runtime,
+verificación de roles y, por último, el E2E gated. Las contraseñas de
+servicio/runtime se derivan del ID, intento y SHA del run; no provienen de
+variables de repo ni se imprimen. El guard requiere exactamente esas
+credenciales, y durante el E2E ambas URLs deben apuntar a
+`127.0.0.1:5432/guardian_approval_lab_ci`.
+
 ## Barrera de seguridad
 
 El test `artifacts/api-server/src/ai-assessment-synthetic-approval-e2e.test.ts`

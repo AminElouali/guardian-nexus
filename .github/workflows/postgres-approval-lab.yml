@@ -1,0 +1,108 @@
+name: Guardian Nexus PostgreSQL Approval Lab
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/postgres-approval-lab.yml"
+      - "artifacts/api-server/src/**"
+      - "lib/db/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "workers/guardian-ai-assessment/deployment/lab-as-code/postgresql/**"
+  pull_request:
+    paths:
+      - ".github/workflows/postgres-approval-lab.yml"
+      - "artifacts/api-server/src/**"
+      - "lib/db/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "workers/guardian-ai-assessment/deployment/lab-as-code/postgresql/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: guardian-postgres-approval-lab-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  postgres-approval-lab:
+    name: Disposable PostgreSQL approval E2E
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CI: "true"
+      NODE_ENV: development
+      GUARDIAN_APPROVAL_E2E_DISPOSABLE: "1"
+      GUARDIAN_APPROVAL_E2E_CI_SERVICE: postgres
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ${{ format('guardian-ci-{0}-{1}-{2}', github.run_id, github.run_attempt, github.sha) }}
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install locked workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Test the disposable-target guard offline
+        run: pnpm --filter @workspace/api-server exec tsx --test src/lib/approval-e2e-db-guard.test.ts
+
+      - name: Create the uniquely named lab database
+        env:
+          GUARDIAN_APPROVAL_E2E_CI_STAGE: bootstrap
+          DATABASE_URL: postgresql://postgres:${{ format('guardian-ci-{0}-{1}-{2}', github.run_id, github.run_attempt, github.sha) }}@127.0.0.1:5432/postgres
+        run: |
+          pnpm --filter @workspace/api-server exec tsx src/scripts/verify-approval-lab-ci-target.ts
+          psql "$DATABASE_URL" --set=ON_ERROR_STOP=1 --command "CREATE DATABASE guardian_approval_lab_ci;"
+
+      - name: Apply Drizzle schema and least-privilege RLS roles
+        env:
+          GUARDIAN_APPROVAL_E2E_CI_STAGE: provision
+          ALLOW_DEV_DB_ROLE_BOOTSTRAP: "true"
+          DATABASE_URL: postgresql://postgres:${{ format('guardian-ci-{0}-{1}-{2}', github.run_id, github.run_attempt, github.sha) }}@127.0.0.1:5432/guardian_approval_lab_ci
+          APP_RUNTIME_DB_PASSWORD: ${{ format('guardian-runtime-{0}-{1}-{2}', github.run_id, github.run_attempt, github.sha) }}
+        run: |
+          pnpm --filter @workspace/api-server exec tsx src/scripts/verify-approval-lab-ci-target.ts
+          pnpm --filter @workspace/db run push
+          pnpm --filter @workspace/db run harden-runtime-role:dev
+          pnpm --filter @workspace/db run apply-rls-policies:dev
+          pnpm --filter @workspace/db run grant-runtime-role:dev
+          pnpm --filter @workspace/db run configure-runtime-login:dev
+          pnpm --filter @workspace/db run verify-runtime-role:dev
+
+      - name: Run persistent synthetic approval E2E
+        env:
+          GUARDIAN_APPROVAL_E2E_CI_STAGE: approval-e2e
+          DATABASE_URL: postgresql://postgres:${{ format('guardian-ci-{0}-{1}-{2}', github.run_id, github.run_attempt, github.sha) }}@127.0.0.1:5432/guardian_approval_lab_ci
+          APP_RUNTIME_DATABASE_URL: postgresql://app_runtime_login:${{ format('guardian-runtime-{0}-{1}-{2}', github.run_id, github.run_attempt, github.sha) }}@127.0.0.1:5432/guardian_approval_lab_ci
+        run: |
+          TARGET_MARKER="$(pnpm --filter @workspace/api-server exec tsx src/scripts/verify-approval-lab-ci-target.ts --emit-verification-marker)"
+          export GUARDIAN_APPROVAL_E2E_CI_TARGET_VERIFIED="$TARGET_MARKER"
+          pnpm --filter @workspace/api-server exec tsx --test src/ai-assessment-synthetic-approval-e2e.test.ts
