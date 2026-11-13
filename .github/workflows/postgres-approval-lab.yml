@@ -83,8 +83,8 @@ jobs:
           APP_RUNTIME_DB_PASSWORD: ${{ format('guardian-runtime-{0}-{1}-{2}', github.run_id, github.run_attempt, github.sha) }}
         run: |
           pnpm --filter @workspace/api-server exec tsx src/scripts/verify-approval-lab-ci-target.ts
-          pnpm --filter @workspace/db run push
           pnpm --filter @workspace/db run harden-runtime-role:dev
+          pnpm --filter @workspace/db run push
           pnpm --filter @workspace/db run apply-rls-policies:dev
           pnpm --filter @workspace/db run grant-runtime-role:dev
           pnpm --filter @workspace/db run configure-runtime-login:dev
