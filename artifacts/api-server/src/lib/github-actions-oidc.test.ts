@@ -833,6 +833,28 @@ test("TEST ONLY claims diagnostics expose only fixed allowlisted subcategories",
     });
     assert.equal(JSON.stringify(result).includes(sensitiveMarker), false);
   }
+
+  const simultaneousRepositoryMismatches = verifyGitHubActionsOidcTokenDetailed(
+    signToken(
+      defaultClaims({
+        diagnostic_private_marker: sensitiveMarker,
+        repository_owner: sensitiveMarker,
+        repository_id: sensitiveMarker,
+      }),
+    ),
+    { keys: [primaryPublicJwk] },
+    expected,
+    now,
+  );
+  assert.deepEqual(simultaneousRepositoryMismatches, {
+    ok: false,
+    category: "claims_mismatch",
+    subcategory: "claims_repository_owner_mismatch",
+  });
+  assert.equal(
+    JSON.stringify(simultaneousRepositoryMismatches).includes(sensitiveMarker),
+    false,
+  );
 });
 
 test("TEST ONLY GitHub OIDC pins the immutable canonical repository ID", () => {

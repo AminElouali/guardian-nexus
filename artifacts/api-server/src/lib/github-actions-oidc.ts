@@ -340,16 +340,16 @@ function validateClaims(
     return { ok: false, subcategory: "claims_repository_mismatch" };
   }
   if (
-    !isPositiveDecimalString(repository_id) ||
-    repository_id !== GITHUB_ACTIONS_TRUSTED_REPOSITORY_ID
-  ) {
-    return { ok: false, subcategory: "claims_repository_id_mismatch" };
-  }
-  if (
     typeof repository_owner !== "string" ||
     repository_owner.toLowerCase() !== expected.repositoryOwner.toLowerCase()
   ) {
     return { ok: false, subcategory: "claims_repository_owner_mismatch" };
+  }
+  if (
+    !isPositiveDecimalString(repository_id) ||
+    repository_id !== GITHUB_ACTIONS_TRUSTED_REPOSITORY_ID
+  ) {
+    return { ok: false, subcategory: "claims_repository_id_mismatch" };
   }
   if (!isPositiveDecimalString(repository_owner_id)) {
     return { ok: false, subcategory: "claims_repository_owner_id_invalid" };
