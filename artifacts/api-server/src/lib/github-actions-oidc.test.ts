@@ -292,13 +292,38 @@ test("TEST ONLY OIDC verifier returns fixed safe JWT subcategories", () => {
   );
   const invalidSignatureEncodingToken = rawToken(header, payload, "!");
   const nonCanonicalSignatureToken = rawToken(header, payload, "AB");
+  const validX5t = Buffer.alloc(20, 0x31).toString("base64url");
+  const validX5tS256 = Buffer.alloc(32, 0x32).toString("base64url");
+  const invalidX5tToken = signToken(claims, primaryKey, { x5t: "bad=" });
+  const shortX5tToken = signToken(claims, primaryKey, {
+    x5t: Buffer.alloc(19, 0x33).toString("base64url"),
+  });
+  const invalidX5tS256Token = signToken(claims, primaryKey, {
+    "x5t#S256": Buffer.alloc(31, 0x34).toString("base64url"),
+  });
   const disallowedAlgorithmToken = signToken(claims, primaryKey, {
     alg: "HS256",
   });
-  const invalidKidToken = signToken(claims, primaryKey, { kid: "" });
+  const invalidKidToken = signToken(claims, primaryKey, { kid: undefined });
   const disallowedTypeToken = signToken(claims, primaryKey, { typ: "TEST" });
-  const extraParameterToken = signToken(claims, primaryKey, {
-    extra: "TEST_ONLY_HEADER_MARKER_DO_NOT_LOG",
+  const malformedCritToken = signToken(claims, primaryKey, {
+    crit: "alg",
+  });
+  const danglingCritToken = signToken(claims, primaryKey, {
+    crit: ["test-only-extension"],
+  });
+  const unsupportedCritToken = signToken(claims, primaryKey, {
+    crit: ["test-only-extension"],
+    "test-only-extension": "TEST_ONLY_CRITICAL_VALUE_DO_NOT_LOG",
+  });
+  const jkuToken = signToken(claims, primaryKey, {
+    jku: "TEST_ONLY_REMOTE_KEY_REFERENCE_DO_NOT_LOG",
+  });
+  const jwkToken = signToken(claims, primaryKey, {
+    jwk: { kty: "RSA", marker: "TEST_ONLY_EMBEDDED_KEY_DO_NOT_LOG" },
+  });
+  const x5uToken = signToken(claims, primaryKey, {
+    x5u: "TEST_ONLY_REMOTE_CERTIFICATE_REFERENCE_DO_NOT_LOG",
   });
   const metadataToken = signToken(claims);
   const invalidRsaToken = signToken(claims);
@@ -382,9 +407,49 @@ test("TEST ONLY OIDC verifier returns fixed safe JWT subcategories", () => {
       subcategory: "jwt_type_disallowed",
     },
     {
-      token: extraParameterToken,
+      token: invalidX5tToken,
       jwks: { keys: [primaryPublicJwk] },
-      subcategory: "jwt_header_parameter_disallowed",
+      subcategory: "jwt_x5t_invalid",
+    },
+    {
+      token: shortX5tToken,
+      jwks: { keys: [primaryPublicJwk] },
+      subcategory: "jwt_x5t_invalid",
+    },
+    {
+      token: invalidX5tS256Token,
+      jwks: { keys: [primaryPublicJwk] },
+      subcategory: "jwt_x5t_s256_invalid",
+    },
+    {
+      token: malformedCritToken,
+      jwks: { keys: [primaryPublicJwk] },
+      subcategory: "jwt_critical_header_invalid",
+    },
+    {
+      token: danglingCritToken,
+      jwks: { keys: [primaryPublicJwk] },
+      subcategory: "jwt_critical_header_invalid",
+    },
+    {
+      token: unsupportedCritToken,
+      jwks: { keys: [primaryPublicJwk] },
+      subcategory: "jwt_critical_parameter_unsupported",
+    },
+    {
+      token: jkuToken,
+      jwks: { keys: [primaryPublicJwk] },
+      subcategory: "jwt_key_reference_disallowed",
+    },
+    {
+      token: jwkToken,
+      jwks: { keys: [primaryPublicJwk] },
+      subcategory: "jwt_key_reference_disallowed",
+    },
+    {
+      token: x5uToken,
+      jwks: { keys: [primaryPublicJwk] },
+      subcategory: "jwt_key_reference_disallowed",
     },
     {
       token: metadataToken,
@@ -437,7 +502,15 @@ test("TEST ONLY OIDC verifier returns fixed safe JWT subcategories", () => {
     disallowedAlgorithmToken,
     invalidKidToken,
     disallowedTypeToken,
-    extraParameterToken,
+    invalidX5tToken,
+    shortX5tToken,
+    invalidX5tS256Token,
+    malformedCritToken,
+    danglingCritToken,
+    unsupportedCritToken,
+    jkuToken,
+    jwkToken,
+    x5uToken,
     metadataToken,
     invalidRsaToken,
     badSignatureToken,
@@ -445,6 +518,10 @@ test("TEST ONLY OIDC verifier returns fixed safe JWT subcategories", () => {
     badSignatureToken.split(".")[2],
     String(primaryPublicJwk.kid),
     sensitiveMarker,
+    "TEST_ONLY_CRITICAL_VALUE_DO_NOT_LOG",
+    "TEST_ONLY_REMOTE_KEY_REFERENCE_DO_NOT_LOG",
+    "TEST_ONLY_EMBEDDED_KEY_DO_NOT_LOG",
+    "TEST_ONLY_REMOTE_CERTIFICATE_REFERENCE_DO_NOT_LOG",
     String(primaryPublicJwk.n),
     String(primaryPublicJwk.e),
     invalidModulus,
@@ -453,6 +530,55 @@ test("TEST ONLY OIDC verifier returns fixed safe JWT subcategories", () => {
   for (const value of sensitiveValues.filter((value) => value.length > 0)) {
     assert.equal(diagnostics.includes(value), false);
   }
+});
+
+test("TEST ONLY accepts validated thumbprints and ignores unknown noncritical JOSE parameters", () => {
+  const validX5t = Buffer.alloc(20, 0x41).toString("base64url");
+  const validX5tS256 = Buffer.alloc(32, 0x42).toString("base64url");
+  const validTokens = [
+    signToken(defaultClaims(), primaryKey, { x5t: validX5t }),
+    signToken(defaultClaims(), primaryKey, {
+      "x5t#S256": validX5tS256,
+    }),
+    signToken(defaultClaims(), primaryKey, {
+      x5t: validX5t,
+      "x5t#S256": validX5tS256,
+    }),
+    signToken(defaultClaims(), primaryKey, { crit: ["alg"] }),
+    signToken(defaultClaims(), primaryKey, {
+      "test-only-noncritical": "TEST_ONLY_IGNORED_HEADER_VALUE",
+    }),
+  ];
+
+  for (const token of validTokens) {
+    assert.equal(
+      verifyGitHubActionsOidcTokenDetailed(
+        token,
+        { keys: [primaryPublicJwk] },
+        expected,
+        now,
+      ).ok,
+      true,
+    );
+  }
+
+  const wrongSigningKeyToken = signToken(defaultClaims(), alternateKey, {
+    x5t: validX5t,
+    "x5t#S256": validX5tS256,
+  });
+  assert.deepEqual(
+    verifyGitHubActionsOidcTokenDetailed(
+      wrongSigningKeyToken,
+      { keys: [primaryPublicJwk] },
+      expected,
+      now,
+    ),
+    {
+      ok: false,
+      category: "oidc_jwt_header_key_signature_invalid",
+      subcategory: "signature_unverifiable",
+    },
+  );
 });
 
 test("TEST ONLY GitHub OIDC rejects claim mismatches, expiry, and stale tokens", () => {

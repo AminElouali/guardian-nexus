@@ -141,7 +141,11 @@ export type GitHubActionsOidcFailureSubcategory =
   | "jwt_algorithm_disallowed"
   | "jwt_kid_invalid"
   | "jwt_type_disallowed"
-  | "jwt_header_parameter_disallowed"
+  | "jwt_x5t_invalid"
+  | "jwt_x5t_s256_invalid"
+  | "jwt_critical_header_invalid"
+  | "jwt_critical_parameter_unsupported"
+  | "jwt_key_reference_disallowed"
   | "jwk_metadata_incompatible"
   | "rsa_key_invalid"
   | "signature_unverifiable";
@@ -207,6 +211,51 @@ function isPositiveDecimalString(value: unknown): value is string {
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.length > 0 && value.length <= 2048;
+}
+
+function isBase64UrlThumbprint(
+  value: unknown,
+  expectedBytes: number,
+): value is string {
+  if (typeof value !== "string" || !/^[A-Za-z0-9_-]+$/.test(value)) {
+    return false;
+  }
+  const decoded = Buffer.from(value, "base64url");
+  return (
+    decoded.length === expectedBytes &&
+    decoded.toString("base64url") === value
+  );
+}
+
+const DANGEROUS_KEY_REFERENCE_PARAMETERS = new Set(["jku", "jwk", "x5u"]);
+const SUPPORTED_CRITICAL_HEADER_PARAMETERS = new Set(["alg", "kid", "typ"]);
+
+function criticalHeaderFailure(
+  header: Record<string, unknown>,
+): "jwt_critical_header_invalid" | "jwt_critical_parameter_unsupported" | undefined {
+  if (!Object.prototype.hasOwnProperty.call(header, "crit")) return undefined;
+  const critical = header.crit;
+  if (!Array.isArray(critical) || critical.length === 0) {
+    return "jwt_critical_header_invalid";
+  }
+
+  const seen = new Set<string>();
+  for (const parameter of critical) {
+    if (
+      typeof parameter !== "string" ||
+      parameter.length === 0 ||
+      parameter === "crit" ||
+      seen.has(parameter) ||
+      !Object.prototype.hasOwnProperty.call(header, parameter)
+    ) {
+      return "jwt_critical_header_invalid";
+    }
+    seen.add(parameter);
+    if (!SUPPORTED_CRITICAL_HEADER_PARAMETERS.has(parameter)) {
+      return "jwt_critical_parameter_unsupported";
+    }
+  }
+  return undefined;
 }
 
 function validateClaims(
@@ -335,8 +384,34 @@ function verifyGitHubActionsOidcTokenUnchecked(
   if (header.typ !== undefined && header.typ !== "JWT") {
     return jwtVerificationFailure("jwt_type_disallowed");
   }
-  if (Object.keys(header).some((key) => !["alg", "kid", "typ"].includes(key))) {
-    return jwtVerificationFailure("jwt_header_parameter_disallowed");
+  if (
+    [...DANGEROUS_KEY_REFERENCE_PARAMETERS].some((key) =>
+      Object.prototype.hasOwnProperty.call(header, key),
+    )
+  ) {
+    return jwtVerificationFailure("jwt_key_reference_disallowed");
+  }
+  // RFC 7515 requires rejecting unsupported critical parameters. The verifier
+  // fully processes alg/kid/typ; x5t values are format-checked below but are
+  // not used for key selection or certificate binding, so they are not treated
+  // as supported critical extensions.
+  const criticalFailure = criticalHeaderFailure(header);
+  if (criticalFailure) {
+    return jwtVerificationFailure(criticalFailure);
+  }
+  // RFC 7515 permits ignoring unrecognized non-critical parameters. They are
+  // deliberately never consumed as key material, URLs, or verification input.
+  if (
+    header.x5t !== undefined &&
+    !isBase64UrlThumbprint(header.x5t, 20)
+  ) {
+    return jwtVerificationFailure("jwt_x5t_invalid");
+  }
+  if (
+    header["x5t#S256"] !== undefined &&
+    !isBase64UrlThumbprint(header["x5t#S256"], 32)
+  ) {
+    return jwtVerificationFailure("jwt_x5t_s256_invalid");
   }
 
   const keys = jwks.keys;
