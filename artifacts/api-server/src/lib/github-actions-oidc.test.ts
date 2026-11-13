@@ -128,8 +128,6 @@ function makeJwksDependencies(
 }
 
 type SyntheticOidcFailure =
-  | "request-failed"
-  | "response-invalid"
   | "jwks-failed";
 
 function makeDiagnosticFetch(
@@ -348,6 +346,17 @@ test("TEST ONLY @actions/core token acquisition pins the audience and suppresses
       },
     }));
     assert.equal(acquired, token);
+    assert.deepEqual(stdoutWrites, []);
+    await assert.rejects(
+      acquireGitHubActionsOidcToken(async () => ({
+        getIDToken: async () => {
+          throw new Error(`TEST ONLY ${token}`);
+        },
+      })),
+      {
+        message: "GitHub Actions OIDC token acquisition failed.",
+      },
+    );
     assert.deepEqual(stdoutWrites, []);
   } finally {
     process.stdout.write = originalWrite;
