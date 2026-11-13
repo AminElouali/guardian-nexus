@@ -156,8 +156,8 @@ test("GitHub Actions lab workflow guards its isolated service before DB writes",
   );
   assert.match(
     targetGuard,
-    /console\.error\(\s*JSON\.stringify\(\{\s*category:\s*decision\.category,\s*stage:\s*decision\.stage,?\s*\}\)\s*,?\s*\)/,
-    "a rejected target prints only the safe category and stage identifier",
+    /console\.error\(\s*JSON\.stringify\(\{\s*category:\s*decision\.category,\s*subcategory:\s*decision\.subcategory,\s*stage:\s*decision\.stage,?\s*\}\)\s*,?\s*\)/,
+    "a rejected target prints only safe category, subcategory, and stage identifiers",
   );
   assert.match(
     targetGuard,

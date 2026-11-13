@@ -10,6 +10,7 @@ if (!decision.accepted) {
   console.error(
     JSON.stringify({
       category: decision.category,
+      subcategory: decision.subcategory,
       stage: decision.stage,
     }),
   );

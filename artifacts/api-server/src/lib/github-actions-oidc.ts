@@ -130,9 +130,29 @@ export type GitHubActionsOidcFailureCategory =
   | "oidc_verification_unexpected_exception"
   | "claims_mismatch";
 
+export type GitHubActionsOidcFailureSubcategory =
+  | "jwt_structure_or_header_invalid"
+  | "jwk_metadata_incompatible"
+  | "rsa_key_invalid"
+  | "signature_unverifiable";
+
 export type GitHubActionsOidcResult =
   | { ok: true; claims: GitHubActionsOidcClaims }
-  | { ok: false; category: GitHubActionsOidcFailureCategory };
+  | {
+      ok: false;
+      category: GitHubActionsOidcFailureCategory;
+      subcategory?: GitHubActionsOidcFailureSubcategory;
+    };
+
+function jwtVerificationFailure(
+  subcategory: GitHubActionsOidcFailureSubcategory,
+): GitHubActionsOidcResult {
+  return {
+    ok: false,
+    category: "oidc_jwt_header_key_signature_invalid",
+    subcategory,
+  };
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -250,27 +270,18 @@ function verifyGitHubActionsOidcTokenUnchecked(
     token.length === 0 ||
     Buffer.byteLength(token, "utf8") > MAX_TOKEN_BYTES
   ) {
-    return {
-      ok: false,
-      category: "oidc_jwt_header_key_signature_invalid",
-    };
+    return jwtVerificationFailure("jwt_structure_or_header_invalid");
   }
   const segments = token.split(".");
   if (segments.length !== 3) {
-    return {
-      ok: false,
-      category: "oidc_jwt_header_key_signature_invalid",
-    };
+    return jwtVerificationFailure("jwt_structure_or_header_invalid");
   }
 
   const [encodedHeader, encodedPayload, encodedSignature] = segments;
   const header = decodeJsonSegment(encodedHeader);
   const payload = decodeJsonSegment(encodedPayload);
   if (!header || !payload || !/^[A-Za-z0-9_-]+$/.test(encodedSignature)) {
-    return {
-      ok: false,
-      category: "oidc_jwt_header_key_signature_invalid",
-    };
+    return jwtVerificationFailure("jwt_structure_or_header_invalid");
   }
   if (
     header.alg !== "RS256" ||
@@ -280,10 +291,7 @@ function verifyGitHubActionsOidcTokenUnchecked(
       (key) => !["alg", "kid", "typ"].includes(key),
     )
   ) {
-    return {
-      ok: false,
-      category: "oidc_jwt_header_key_signature_invalid",
-    };
+    return jwtVerificationFailure("jwt_structure_or_header_invalid");
   }
 
   const keys = jwks.keys;
@@ -308,26 +316,26 @@ function verifyGitHubActionsOidcTokenUnchecked(
     (jwk.key_ops !== undefined &&
       (!Array.isArray(jwk.key_ops) || !jwk.key_ops.includes("verify")))
   ) {
-    return {
-      ok: false,
-      category: "oidc_jwt_header_key_signature_invalid",
-    };
+    return jwtVerificationFailure("jwk_metadata_incompatible");
   }
 
+  let publicKey: ReturnType<typeof createPublicKey>;
   try {
-    const publicKey = createPublicKey({
+    publicKey = createPublicKey({
       key: { kty: "RSA", n: jwk.n, e: jwk.e } as never,
       format: "jwk",
     });
-    if (
-      publicKey.asymmetricKeyType !== "rsa" ||
-      (publicKey.asymmetricKeyDetails?.modulusLength ?? 0) < 2048
-    ) {
-      return {
-        ok: false,
-        category: "oidc_jwt_header_key_signature_invalid",
-      };
-    }
+  } catch {
+    return jwtVerificationFailure("rsa_key_invalid");
+  }
+  if (
+    publicKey.asymmetricKeyType !== "rsa" ||
+    (publicKey.asymmetricKeyDetails?.modulusLength ?? 0) < 2048
+  ) {
+    return jwtVerificationFailure("rsa_key_invalid");
+  }
+
+  try {
     const signature = Buffer.from(encodedSignature, "base64url");
     if (
       signature.length === 0 ||
@@ -339,16 +347,10 @@ function verifyGitHubActionsOidcTokenUnchecked(
         signature,
       )
     ) {
-      return {
-        ok: false,
-        category: "oidc_jwt_header_key_signature_invalid",
-      };
+      return jwtVerificationFailure("signature_unverifiable");
     }
   } catch {
-    return {
-      ok: false,
-      category: "oidc_jwt_header_key_signature_invalid",
-    };
+    return jwtVerificationFailure("signature_unverifiable");
   }
 
   const claims = validateClaims(payload, expected, nowEpochSeconds);

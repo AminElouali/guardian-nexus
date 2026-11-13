@@ -15,6 +15,7 @@ import {
   GITHUB_ACTIONS_RLS_AUDIENCE,
   GITHUB_ACTIONS_TRUSTED_REPOSITORY_ID,
   verifyGitHubActionsOidcToken,
+  verifyGitHubActionsOidcTokenDetailed,
   verifyGitHubActionsClaimsWithOfficialJwksDetailed,
   type ExpectedGitHubActionsOidcContext,
   type OidcFetchDependencies,
@@ -247,6 +248,110 @@ test("TEST ONLY GitHub OIDC rejects invalid signatures, keys, algorithms, and he
     ),
     undefined,
   );
+});
+
+test("TEST ONLY OIDC verifier returns fixed safe JWT subcategories", () => {
+  const sensitiveMarker = "TEST_ONLY_CLAIMS_MARKER_DO_NOT_LOG";
+  const claims = defaultClaims({ jti: sensitiveMarker });
+  const malformedToken = "TEST_ONLY_TOKEN_MARKER_MALFORMED";
+  const disallowedHeaderToken = signToken(claims, primaryKey, {
+    extra: "TEST_ONLY_HEADER_MARKER_DO_NOT_LOG",
+  });
+  const metadataToken = signToken(claims);
+  const invalidRsaToken = signToken(claims);
+  const invalidModulus = "TEST_ONLY_MODULUS_MARKER_INVALID";
+  const invalidExponent = "TEST_ONLY_EXPONENT_MARKER_INVALID";
+  const badSignatureToken = signToken(claims, alternateKey);
+
+  const malformed = verifyGitHubActionsOidcTokenDetailed(
+    malformedToken,
+    { keys: [primaryPublicJwk] },
+    expected,
+    now,
+  );
+  const disallowedHeader = verifyGitHubActionsOidcTokenDetailed(
+    disallowedHeaderToken,
+    { keys: [primaryPublicJwk] },
+    expected,
+    now,
+  );
+  const incompatibleMetadata = verifyGitHubActionsOidcTokenDetailed(
+    metadataToken,
+    { keys: [{ ...primaryPublicJwk, use: "enc" }] },
+    expected,
+    now,
+  );
+  const invalidRsaKey = verifyGitHubActionsOidcTokenDetailed(
+    invalidRsaToken,
+    {
+      keys: [
+        {
+          ...primaryPublicJwk,
+          n: invalidModulus,
+          e: invalidExponent,
+        },
+      ],
+    },
+    expected,
+    now,
+  );
+  const unverifiableSignature = verifyGitHubActionsOidcTokenDetailed(
+    badSignatureToken,
+    { keys: [primaryPublicJwk] },
+    expected,
+    now,
+  );
+
+  assert.deepEqual(malformed, {
+    ok: false,
+    category: "oidc_jwt_header_key_signature_invalid",
+    subcategory: "jwt_structure_or_header_invalid",
+  });
+  assert.deepEqual(disallowedHeader, {
+    ok: false,
+    category: "oidc_jwt_header_key_signature_invalid",
+    subcategory: "jwt_structure_or_header_invalid",
+  });
+  assert.deepEqual(incompatibleMetadata, {
+    ok: false,
+    category: "oidc_jwt_header_key_signature_invalid",
+    subcategory: "jwk_metadata_incompatible",
+  });
+  assert.deepEqual(invalidRsaKey, {
+    ok: false,
+    category: "oidc_jwt_header_key_signature_invalid",
+    subcategory: "rsa_key_invalid",
+  });
+  assert.deepEqual(unverifiableSignature, {
+    ok: false,
+    category: "oidc_jwt_header_key_signature_invalid",
+    subcategory: "signature_unverifiable",
+  });
+
+  const diagnostics = JSON.stringify([
+    malformed,
+    disallowedHeader,
+    incompatibleMetadata,
+    invalidRsaKey,
+    unverifiableSignature,
+  ]);
+  const sensitiveValues = [
+    malformedToken,
+    disallowedHeaderToken,
+    metadataToken,
+    invalidRsaToken,
+    badSignatureToken,
+    badSignatureToken.split(".")[2],
+    String(primaryPublicJwk.kid),
+    sensitiveMarker,
+    String(primaryPublicJwk.n),
+    String(primaryPublicJwk.e),
+    invalidModulus,
+    invalidExponent,
+  ];
+  for (const value of sensitiveValues) {
+    assert.equal(diagnostics.includes(value), false);
+  }
 });
 
 test("TEST ONLY GitHub OIDC rejects claim mismatches, expiry, and stale tokens", () => {
@@ -495,6 +600,7 @@ test("TEST ONLY CI target diagnostics expose safe rejection categories and remai
   assert.deepEqual(jwtInvalid, {
     accepted: false,
     category: "oidc_jwt_header_key_signature_invalid",
+    subcategory: "jwt_structure_or_header_invalid",
     stage: "bootstrap",
   });
 
@@ -518,6 +624,7 @@ test("TEST ONLY CI target diagnostics expose safe rejection categories and remai
   assert.deepEqual(badSignature, {
     accepted: false,
     category: "oidc_jwt_header_key_signature_invalid",
+    subcategory: "signature_unverifiable",
     stage: "bootstrap",
   });
 
@@ -617,6 +724,7 @@ test("TEST ONLY CI target diagnostics expose safe rejection categories and remai
   assert.deepEqual(malformedTokenResult, {
     ok: false,
     category: "oidc_jwt_header_key_signature_invalid",
+    subcategory: "jwt_structure_or_header_invalid",
   });
   for (const result of [
     missingContext,

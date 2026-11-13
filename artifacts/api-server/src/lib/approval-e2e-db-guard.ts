@@ -1,6 +1,7 @@
 import {
   verifyGitHubActionsClaimsWithOfficialJwksDetailed,
   type GitHubActionsOidcFailureCategory,
+  type GitHubActionsOidcFailureSubcategory,
 } from "./github-actions-oidc";
 
 // Do not rely on resolving "localhost": a disposable-target gate should only
@@ -28,6 +29,7 @@ export type ApprovalLabTargetDecision =
   | {
       accepted: false;
       category: ApprovalLabRejectionCategory;
+      subcategory?: GitHubActionsOidcFailureSubcategory;
       stage: ApprovalLabCiStage | "unknown";
     };
 
@@ -145,9 +147,11 @@ export async function diagnoseGitHubActionsApprovalLabTarget(
   ];
   const reject = (
     category: ApprovalLabRejectionCategory,
+    subcategory?: GitHubActionsOidcFailureSubcategory,
   ): ApprovalLabTargetDecision => ({
     accepted: false,
     category,
+    ...(subcategory ? { subcategory } : {}),
     stage: stageId,
   });
 
@@ -219,7 +223,9 @@ export async function diagnoseGitHubActionsApprovalLabTarget(
   } catch {
     return reject("oidc_verification_unexpected_exception");
   }
-  if (!oidcResult.ok) return reject(oidcResult.category);
+  if (!oidcResult.ok) {
+    return reject(oidcResult.category, oidcResult.subcategory);
+  }
   const claims = oidcResult.claims;
 
   // Derive expected connection values from signed claims, not caller supplied
