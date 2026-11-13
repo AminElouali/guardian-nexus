@@ -104,6 +104,24 @@ function signToken(
   return `${signingInput}.${signature.toString("base64url")}`;
 }
 
+function signTokenWithRawHeaderJson(
+  headerJson: string,
+  claims: Record<string, unknown>,
+  keyPair = primaryKey,
+): string {
+  const encodedHeader = Buffer.from(headerJson, "utf8").toString("base64url");
+  const encodedPayload = Buffer.from(JSON.stringify(claims)).toString(
+    "base64url",
+  );
+  const signingInput = `${encodedHeader}.${encodedPayload}`;
+  const signature = signJwt(
+    "RSA-SHA256",
+    Buffer.from(signingInput),
+    keyPair.privateKey,
+  );
+  return `${signingInput}.${signature.toString("base64url")}`;
+}
+
 function makeJwksDependencies(
   nowEpochSeconds = now,
 ): OidcFetchDependencies {
@@ -309,12 +327,29 @@ test("TEST ONLY OIDC verifier returns fixed safe JWT subcategories", () => {
   const malformedCritToken = signToken(claims, primaryKey, {
     crit: "alg",
   });
+  const emptyCritToken = signToken(claims, primaryKey, { crit: [] });
+  const invalidCritElementToken = signToken(claims, primaryKey, {
+    crit: [1],
+  });
   const danglingCritToken = signToken(claims, primaryKey, {
     crit: ["test-only-extension"],
+  });
+  const duplicateCritToken = signToken(claims, primaryKey, {
+    crit: ["test-only-extension", "test-only-extension"],
+    "test-only-extension": "TEST_ONLY_CRITICAL_VALUE_DO_NOT_LOG",
   });
   const unsupportedCritToken = signToken(claims, primaryKey, {
     crit: ["test-only-extension"],
     "test-only-extension": "TEST_ONLY_CRITICAL_VALUE_DO_NOT_LOG",
+  });
+  const registeredAlgCritToken = signToken(claims, primaryKey, {
+    crit: ["alg"],
+  });
+  const registeredKidCritToken = signToken(claims, primaryKey, {
+    crit: ["kid"],
+  });
+  const registeredTypCritToken = signToken(claims, primaryKey, {
+    crit: ["typ"],
   });
   const jkuToken = signToken(claims, primaryKey, {
     jku: "TEST_ONLY_REMOTE_KEY_REFERENCE_DO_NOT_LOG",
@@ -427,7 +462,22 @@ test("TEST ONLY OIDC verifier returns fixed safe JWT subcategories", () => {
       subcategory: "jwt_critical_header_invalid",
     },
     {
+      token: emptyCritToken,
+      jwks: { keys: [primaryPublicJwk] },
+      subcategory: "jwt_critical_header_invalid",
+    },
+    {
+      token: invalidCritElementToken,
+      jwks: { keys: [primaryPublicJwk] },
+      subcategory: "jwt_critical_header_invalid",
+    },
+    {
       token: danglingCritToken,
+      jwks: { keys: [primaryPublicJwk] },
+      subcategory: "jwt_critical_header_invalid",
+    },
+    {
+      token: duplicateCritToken,
       jwks: { keys: [primaryPublicJwk] },
       subcategory: "jwt_critical_header_invalid",
     },
@@ -435,6 +485,21 @@ test("TEST ONLY OIDC verifier returns fixed safe JWT subcategories", () => {
       token: unsupportedCritToken,
       jwks: { keys: [primaryPublicJwk] },
       subcategory: "jwt_critical_parameter_unsupported",
+    },
+    {
+      token: registeredAlgCritToken,
+      jwks: { keys: [primaryPublicJwk] },
+      subcategory: "jwt_critical_parameter_registered",
+    },
+    {
+      token: registeredKidCritToken,
+      jwks: { keys: [primaryPublicJwk] },
+      subcategory: "jwt_critical_parameter_registered",
+    },
+    {
+      token: registeredTypCritToken,
+      jwks: { keys: [primaryPublicJwk] },
+      subcategory: "jwt_critical_parameter_registered",
     },
     {
       token: jkuToken,
@@ -506,8 +571,14 @@ test("TEST ONLY OIDC verifier returns fixed safe JWT subcategories", () => {
     shortX5tToken,
     invalidX5tS256Token,
     malformedCritToken,
+    emptyCritToken,
+    invalidCritElementToken,
     danglingCritToken,
+    duplicateCritToken,
     unsupportedCritToken,
+    registeredAlgCritToken,
+    registeredKidCritToken,
+    registeredTypCritToken,
     jkuToken,
     jwkToken,
     x5uToken,
@@ -544,7 +615,6 @@ test("TEST ONLY accepts validated thumbprints and ignores unknown noncritical JO
       x5t: validX5t,
       "x5t#S256": validX5tS256,
     }),
-    signToken(defaultClaims(), primaryKey, { crit: ["alg"] }),
     signToken(defaultClaims(), primaryKey, {
       "test-only-noncritical": "TEST_ONLY_IGNORED_HEADER_VALUE",
     }),
@@ -577,6 +647,41 @@ test("TEST ONLY accepts validated thumbprints and ignores unknown noncritical JO
       ok: false,
       category: "oidc_jwt_header_key_signature_invalid",
       subcategory: "signature_unverifiable",
+    },
+  );
+});
+
+test("TEST ONLY duplicate JOSE header names use JSON.parse last-member semantics", () => {
+  const claims = defaultClaims();
+  const lastMemberRs256 = signTokenWithRawHeaderJson(
+    '{"alg":"HS256","alg":"RS256","kid":"test-only-github-key","typ":"JWT"}',
+    claims,
+  );
+  const lastMemberHs256 = signTokenWithRawHeaderJson(
+    '{"alg":"RS256","alg":"HS256","kid":"test-only-github-key","typ":"JWT"}',
+    claims,
+  );
+
+  assert.equal(
+    verifyGitHubActionsOidcTokenDetailed(
+      lastMemberRs256,
+      { keys: [primaryPublicJwk] },
+      expected,
+      now,
+    ).ok,
+    true,
+  );
+  assert.deepEqual(
+    verifyGitHubActionsOidcTokenDetailed(
+      lastMemberHs256,
+      { keys: [primaryPublicJwk] },
+      expected,
+      now,
+    ),
+    {
+      ok: false,
+      category: "oidc_jwt_header_key_signature_invalid",
+      subcategory: "jwt_algorithm_disallowed",
     },
   );
 });

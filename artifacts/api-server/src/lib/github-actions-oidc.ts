@@ -144,6 +144,7 @@ export type GitHubActionsOidcFailureSubcategory =
   | "jwt_x5t_invalid"
   | "jwt_x5t_s256_invalid"
   | "jwt_critical_header_invalid"
+  | "jwt_critical_parameter_registered"
   | "jwt_critical_parameter_unsupported"
   | "jwt_key_reference_disallowed"
   | "jwk_metadata_incompatible"
@@ -228,11 +229,15 @@ function isBase64UrlThumbprint(
 }
 
 const DANGEROUS_KEY_REFERENCE_PARAMETERS = new Set(["jku", "jwk", "x5u"]);
-const SUPPORTED_CRITICAL_HEADER_PARAMETERS = new Set(["alg", "kid", "typ"]);
+const REGISTERED_JWS_CRITICAL_PARAMETERS = new Set(["alg", "kid", "typ"]);
 
 function criticalHeaderFailure(
   header: Record<string, unknown>,
-): "jwt_critical_header_invalid" | "jwt_critical_parameter_unsupported" | undefined {
+):
+  | "jwt_critical_header_invalid"
+  | "jwt_critical_parameter_registered"
+  | "jwt_critical_parameter_unsupported"
+  | undefined {
   if (!Object.prototype.hasOwnProperty.call(header, "crit")) return undefined;
   const critical = header.crit;
   if (!Array.isArray(critical) || critical.length === 0) {
@@ -251,9 +256,13 @@ function criticalHeaderFailure(
       return "jwt_critical_header_invalid";
     }
     seen.add(parameter);
-    if (!SUPPORTED_CRITICAL_HEADER_PARAMETERS.has(parameter)) {
-      return "jwt_critical_parameter_unsupported";
+  }
+
+  for (const parameter of seen) {
+    if (REGISTERED_JWS_CRITICAL_PARAMETERS.has(parameter)) {
+      return "jwt_critical_parameter_registered";
     }
+    return "jwt_critical_parameter_unsupported";
   }
   return undefined;
 }
