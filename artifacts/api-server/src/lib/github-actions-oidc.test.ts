@@ -253,8 +253,51 @@ test("TEST ONLY GitHub OIDC rejects invalid signatures, keys, algorithms, and he
 test("TEST ONLY OIDC verifier returns fixed safe JWT subcategories", () => {
   const sensitiveMarker = "TEST_ONLY_CLAIMS_MARKER_DO_NOT_LOG";
   const claims = defaultClaims({ jti: sensitiveMarker });
-  const malformedToken = "TEST_ONLY_TOKEN_MARKER_MALFORMED";
-  const disallowedHeaderToken = signToken(claims, primaryKey, {
+  const header = Buffer.from(
+    JSON.stringify({
+      alg: "RS256",
+      kid: "test-only-github-key",
+      typ: "JWT",
+    }),
+  ).toString("base64url");
+  const payload = Buffer.from(JSON.stringify(claims)).toString("base64url");
+  const placeholderSignature = Buffer.from(
+    "TEST_ONLY_SIGNATURE_MARKER_DO_NOT_LOG",
+  ).toString("base64url");
+  const rawToken = (
+    encodedHeader: string,
+    encodedPayload: string,
+    encodedSignature = placeholderSignature,
+  ) => `${encodedHeader}.${encodedPayload}.${encodedSignature}`;
+  const malformedToken = "";
+  const oversizedToken = "a".repeat(16_385);
+  const segmentCountToken = "TEST_ONLY_TOKEN_MARKER_MALFORMED";
+  const invalidHeaderEncodingToken = rawToken("!header!", payload);
+  const invalidHeaderJsonToken = rawToken(
+    Buffer.from("TEST_ONLY_HEADER_JSON_MARKER").toString("base64url"),
+    payload,
+  );
+  const invalidHeaderShapeToken = rawToken(
+    Buffer.from("[]").toString("base64url"),
+    payload,
+  );
+  const invalidPayloadEncodingToken = rawToken(header, "!payload!");
+  const invalidPayloadJsonToken = rawToken(
+    header,
+    Buffer.from("TEST_ONLY_PAYLOAD_JSON_MARKER").toString("base64url"),
+  );
+  const invalidPayloadShapeToken = rawToken(
+    header,
+    Buffer.from("[]").toString("base64url"),
+  );
+  const invalidSignatureEncodingToken = rawToken(header, payload, "!");
+  const nonCanonicalSignatureToken = rawToken(header, payload, "AB");
+  const disallowedAlgorithmToken = signToken(claims, primaryKey, {
+    alg: "HS256",
+  });
+  const invalidKidToken = signToken(claims, primaryKey, { kid: "" });
+  const disallowedTypeToken = signToken(claims, primaryKey, { typ: "TEST" });
+  const extraParameterToken = signToken(claims, primaryKey, {
     extra: "TEST_ONLY_HEADER_MARKER_DO_NOT_LOG",
   });
   const metadataToken = signToken(claims);
@@ -263,84 +306,142 @@ test("TEST ONLY OIDC verifier returns fixed safe JWT subcategories", () => {
   const invalidExponent = "TEST_ONLY_EXPONENT_MARKER_INVALID";
   const badSignatureToken = signToken(claims, alternateKey);
 
-  const malformed = verifyGitHubActionsOidcTokenDetailed(
-    malformedToken,
-    { keys: [primaryPublicJwk] },
-    expected,
-    now,
-  );
-  const disallowedHeader = verifyGitHubActionsOidcTokenDetailed(
-    disallowedHeaderToken,
-    { keys: [primaryPublicJwk] },
-    expected,
-    now,
-  );
-  const incompatibleMetadata = verifyGitHubActionsOidcTokenDetailed(
-    metadataToken,
-    { keys: [{ ...primaryPublicJwk, use: "enc" }] },
-    expected,
-    now,
-  );
-  const invalidRsaKey = verifyGitHubActionsOidcTokenDetailed(
-    invalidRsaToken,
+  const cases: Array<{
+    token: string;
+    jwks: { keys: unknown[] };
+    subcategory: string;
+  }> = [
     {
-      keys: [
-        {
-          ...primaryPublicJwk,
-          n: invalidModulus,
-          e: invalidExponent,
-        },
-      ],
+      token: malformedToken,
+      jwks: { keys: [primaryPublicJwk] },
+      subcategory: "jwt_token_invalid",
     },
-    expected,
-    now,
+    {
+      token: oversizedToken,
+      jwks: { keys: [primaryPublicJwk] },
+      subcategory: "jwt_token_invalid",
+    },
+    {
+      token: segmentCountToken,
+      jwks: { keys: [primaryPublicJwk] },
+      subcategory: "jwt_segment_count_invalid",
+    },
+    {
+      token: invalidHeaderEncodingToken,
+      jwks: { keys: [primaryPublicJwk] },
+      subcategory: "jwt_header_base64url_invalid",
+    },
+    {
+      token: invalidHeaderJsonToken,
+      jwks: { keys: [primaryPublicJwk] },
+      subcategory: "jwt_header_json_invalid",
+    },
+    {
+      token: invalidHeaderShapeToken,
+      jwks: { keys: [primaryPublicJwk] },
+      subcategory: "jwt_header_json_invalid",
+    },
+    {
+      token: invalidPayloadEncodingToken,
+      jwks: { keys: [primaryPublicJwk] },
+      subcategory: "jwt_payload_base64url_invalid",
+    },
+    {
+      token: invalidPayloadJsonToken,
+      jwks: { keys: [primaryPublicJwk] },
+      subcategory: "jwt_payload_json_invalid",
+    },
+    {
+      token: invalidPayloadShapeToken,
+      jwks: { keys: [primaryPublicJwk] },
+      subcategory: "jwt_payload_json_invalid",
+    },
+    {
+      token: invalidSignatureEncodingToken,
+      jwks: { keys: [primaryPublicJwk] },
+      subcategory: "jwt_signature_base64url_invalid",
+    },
+    {
+      token: nonCanonicalSignatureToken,
+      jwks: { keys: [primaryPublicJwk] },
+      subcategory: "jwt_signature_base64url_invalid",
+    },
+    {
+      token: disallowedAlgorithmToken,
+      jwks: { keys: [primaryPublicJwk] },
+      subcategory: "jwt_algorithm_disallowed",
+    },
+    {
+      token: invalidKidToken,
+      jwks: { keys: [primaryPublicJwk] },
+      subcategory: "jwt_kid_invalid",
+    },
+    {
+      token: disallowedTypeToken,
+      jwks: { keys: [primaryPublicJwk] },
+      subcategory: "jwt_type_disallowed",
+    },
+    {
+      token: extraParameterToken,
+      jwks: { keys: [primaryPublicJwk] },
+      subcategory: "jwt_header_parameter_disallowed",
+    },
+    {
+      token: metadataToken,
+      jwks: { keys: [{ ...primaryPublicJwk, use: "enc" }] },
+      subcategory: "jwk_metadata_incompatible",
+    },
+    {
+      token: invalidRsaToken,
+      jwks: {
+        keys: [
+          {
+            ...primaryPublicJwk,
+            n: invalidModulus,
+            e: invalidExponent,
+          },
+        ],
+      },
+      subcategory: "rsa_key_invalid",
+    },
+    {
+      token: badSignatureToken,
+      jwks: { keys: [primaryPublicJwk] },
+      subcategory: "signature_unverifiable",
+    },
+  ];
+  const results = cases.map(({ token, jwks }) =>
+    verifyGitHubActionsOidcTokenDetailed(token, jwks, expected, now),
   );
-  const unverifiableSignature = verifyGitHubActionsOidcTokenDetailed(
-    badSignatureToken,
-    { keys: [primaryPublicJwk] },
-    expected,
-    now,
-  );
+  for (const [index, result] of results.entries()) {
+    assert.deepEqual(result, {
+      ok: false,
+      category: "oidc_jwt_header_key_signature_invalid",
+      subcategory: cases[index].subcategory,
+    });
+  }
 
-  assert.deepEqual(malformed, {
-    ok: false,
-    category: "oidc_jwt_header_key_signature_invalid",
-    subcategory: "jwt_structure_or_header_invalid",
-  });
-  assert.deepEqual(disallowedHeader, {
-    ok: false,
-    category: "oidc_jwt_header_key_signature_invalid",
-    subcategory: "jwt_structure_or_header_invalid",
-  });
-  assert.deepEqual(incompatibleMetadata, {
-    ok: false,
-    category: "oidc_jwt_header_key_signature_invalid",
-    subcategory: "jwk_metadata_incompatible",
-  });
-  assert.deepEqual(invalidRsaKey, {
-    ok: false,
-    category: "oidc_jwt_header_key_signature_invalid",
-    subcategory: "rsa_key_invalid",
-  });
-  assert.deepEqual(unverifiableSignature, {
-    ok: false,
-    category: "oidc_jwt_header_key_signature_invalid",
-    subcategory: "signature_unverifiable",
-  });
-
-  const diagnostics = JSON.stringify([
-    malformed,
-    disallowedHeader,
-    incompatibleMetadata,
-    invalidRsaKey,
-    unverifiableSignature,
-  ]);
+  const diagnostics = JSON.stringify(results);
   const sensitiveValues = [
     malformedToken,
-    disallowedHeaderToken,
+    oversizedToken,
+    segmentCountToken,
+    invalidHeaderEncodingToken,
+    invalidHeaderJsonToken,
+    invalidHeaderShapeToken,
+    invalidPayloadEncodingToken,
+    invalidPayloadJsonToken,
+    invalidPayloadShapeToken,
+    invalidSignatureEncodingToken,
+    nonCanonicalSignatureToken,
+    disallowedAlgorithmToken,
+    invalidKidToken,
+    disallowedTypeToken,
+    extraParameterToken,
     metadataToken,
     invalidRsaToken,
     badSignatureToken,
+    placeholderSignature,
     badSignatureToken.split(".")[2],
     String(primaryPublicJwk.kid),
     sensitiveMarker,
@@ -349,7 +450,7 @@ test("TEST ONLY OIDC verifier returns fixed safe JWT subcategories", () => {
     invalidModulus,
     invalidExponent,
   ];
-  for (const value of sensitiveValues) {
+  for (const value of sensitiveValues.filter((value) => value.length > 0)) {
     assert.equal(diagnostics.includes(value), false);
   }
 });
@@ -600,7 +701,7 @@ test("TEST ONLY CI target diagnostics expose safe rejection categories and remai
   assert.deepEqual(jwtInvalid, {
     accepted: false,
     category: "oidc_jwt_header_key_signature_invalid",
-    subcategory: "jwt_structure_or_header_invalid",
+    subcategory: "jwt_segment_count_invalid",
     stage: "bootstrap",
   });
 
@@ -724,7 +825,7 @@ test("TEST ONLY CI target diagnostics expose safe rejection categories and remai
   assert.deepEqual(malformedTokenResult, {
     ok: false,
     category: "oidc_jwt_header_key_signature_invalid",
-    subcategory: "jwt_structure_or_header_invalid",
+    subcategory: "jwt_segment_count_invalid",
   });
   for (const result of [
     missingContext,
