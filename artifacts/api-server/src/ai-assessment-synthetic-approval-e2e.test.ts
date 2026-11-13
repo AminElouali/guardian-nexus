@@ -20,6 +20,7 @@ import {
   getAllowlistedSyntheticApprovalAction,
 } from "./lib/ai-assessment-approval-actions";
 import { verifyExplicitDisposableApprovalDatabase } from "./lib/approval-e2e-db-guard";
+import { acquireGitHubActionsOidcToken } from "./lib/github-actions-oidc";
 import {
   POLICY_LAB_PROFILE_IDS,
   QWEN_POLICY_LAB_PROFILE_IDS,
@@ -324,7 +325,12 @@ test(
   "deterministic fixtures verify persistent approval state from a fresh database pool",
   { timeout: 60_000 },
   async (t) => {
-    if (!(await verifyExplicitDisposableApprovalDatabase(process.env))) {
+    if (
+      !(await verifyExplicitDisposableApprovalDatabase(
+        process.env,
+        acquireGitHubActionsOidcToken,
+      ))
+    ) {
       t.skip(
         "requires an authenticated GitHub Actions OIDC target or explicit local disposable opt-in",
       );

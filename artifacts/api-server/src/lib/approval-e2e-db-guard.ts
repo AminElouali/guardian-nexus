@@ -1,5 +1,5 @@
 import {
-  requestVerifiedGitHubActionsClaimsDetailed,
+  verifyGitHubActionsClaimsWithOfficialJwksDetailed,
   type GitHubActionsOidcFailureCategory,
 } from "./github-actions-oidc";
 
@@ -22,6 +22,7 @@ export type ApprovalLabRejectionCategory =
   | "github_context_incompatible"
   | GitHubActionsOidcFailureCategory
   | "database_url_mismatch";
+export type ApprovalLabOidcTokenProvider = () => Promise<string>;
 export type ApprovalLabTargetDecision =
   | { accepted: true; stage: ApprovalLabCiStage }
   | {
@@ -117,6 +118,7 @@ function matchesLocalRuntimeUrl(
 export async function diagnoseGitHubActionsApprovalLabTarget(
   env: Readonly<Record<string, string | undefined>>,
   stage: string | undefined = env.GUARDIAN_APPROVAL_E2E_CI_STAGE,
+  tokenProvider?: ApprovalLabOidcTokenProvider,
 ): Promise<ApprovalLabTargetDecision> {
   const stageId = isApprovalLabCiStage(stage) ? stage : "unknown";
   const runId = env.GITHUB_RUN_ID;
@@ -180,11 +182,29 @@ export async function diagnoseGitHubActionsApprovalLabTarget(
     return reject("github_context_incompatible");
   }
 
+  if (!tokenProvider) return reject("oidc_request_credentials_invalid");
+
+  let token: string;
+  try {
+    token = await tokenProvider();
+  } catch {
+    return reject("oidc_request_failed_or_timeout");
+  }
+  if (
+    typeof token !== "string" ||
+    token.length === 0 ||
+    Buffer.byteLength(token, "utf8") > 16_384
+  ) {
+    return reject("oidc_response_invalid");
+  }
+
   let oidcResult: Awaited<
-    ReturnType<typeof requestVerifiedGitHubActionsClaimsDetailed>
+    ReturnType<typeof verifyGitHubActionsClaimsWithOfficialJwksDetailed>
   >;
   try {
-    oidcResult = await requestVerifiedGitHubActionsClaimsDetailed(env, {
+    oidcResult = await verifyGitHubActionsClaimsWithOfficialJwksDetailed(
+      token,
+      {
       repository: CI_REPOSITORY,
       repositoryOwner: "AminElouali",
       workflow: CI_WORKFLOW_NAME,
@@ -194,7 +214,8 @@ export async function diagnoseGitHubActionsApprovalLabTarget(
       sha: commitSha,
       runId,
       runAttempt,
-    });
+      },
+    );
   } catch {
     return reject("oidc_verification_unexpected_exception");
   }
@@ -242,8 +263,13 @@ export async function diagnoseGitHubActionsApprovalLabTarget(
 export async function isGitHubActionsApprovalLabTarget(
   env: Readonly<Record<string, string | undefined>>,
   stage?: ApprovalLabCiStage,
+  tokenProvider?: ApprovalLabOidcTokenProvider,
 ): Promise<boolean> {
-  const decision = await diagnoseGitHubActionsApprovalLabTarget(env, stage);
+  const decision = await diagnoseGitHubActionsApprovalLabTarget(
+    env,
+    stage,
+    tokenProvider,
+  );
   return decision.accepted;
 }
 
@@ -325,11 +351,13 @@ export function isExplicitDisposableApprovalDatabase(
 
 export async function verifyExplicitDisposableApprovalDatabase(
   env: Readonly<Record<string, string | undefined>>,
+  tokenProvider?: ApprovalLabOidcTokenProvider,
 ): Promise<boolean> {
   if (hasGitHubActionsContext(env)) {
     return isGitHubActionsApprovalLabTarget(
       env,
       "approval-e2e",
+      tokenProvider,
     );
   }
   return isExplicitDisposableApprovalDatabase(env);

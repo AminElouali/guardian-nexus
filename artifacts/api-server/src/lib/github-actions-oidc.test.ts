@@ -10,12 +10,12 @@ import {
   isGitHubActionsApprovalLabTarget,
 } from "./approval-e2e-db-guard";
 import {
+  acquireGitHubActionsOidcToken,
   GITHUB_ACTIONS_OIDC_ISSUER,
   GITHUB_ACTIONS_RLS_AUDIENCE,
   GITHUB_ACTIONS_TRUSTED_REPOSITORY_ID,
-  requestVerifiedGitHubActionsClaims,
-  requestVerifiedGitHubActionsClaimsDetailed,
   verifyGitHubActionsOidcToken,
+  verifyGitHubActionsClaimsWithOfficialJwksDetailed,
   type ExpectedGitHubActionsOidcContext,
   type OidcFetchDependencies,
 } from "./github-actions-oidc";
@@ -103,41 +103,26 @@ function signToken(
   return `${signingInput}.${signature.toString("base64url")}`;
 }
 
-function makeDependencies(token: string): OidcFetchDependencies {
+function makeJwksDependencies(
+  nowEpochSeconds = now,
+): OidcFetchDependencies {
   return {
-    nowEpochSeconds: now,
+    nowEpochSeconds,
     fetchImpl: async (input, init) => {
       const url = new URL(input.toString());
-      if (url.hostname === "pipelines.actions.githubusercontent.com") {
-        assert.equal(
-          url.searchParams.get("audience"),
-          GITHUB_ACTIONS_RLS_AUDIENCE,
-        );
-        assert.deepEqual([...url.searchParams.keys()], ["audience"]);
-        assert.equal(
-          new Headers(init?.headers).get("accept"),
-          "application/json; api-version=2.0",
-        );
-        assert.equal(init?.redirect, "error");
-        assert.match(
-          new Headers(init?.headers).get("authorization") ?? "",
-          /^Bearer test-only-/,
-        );
-        return new Response(JSON.stringify({ value: token }), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        });
-      }
-      if (
-        url.href ===
-        "https://token.actions.githubusercontent.com/.well-known/jwks"
-      ) {
-        return new Response(JSON.stringify({ keys: [primaryPublicJwk] }), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        });
-      }
-      throw new Error("Unexpected test-only URL");
+      assert.equal(
+        url.href,
+        "https://token.actions.githubusercontent.com/.well-known/jwks",
+      );
+      assert.equal(
+        new Headers(init?.headers).get("accept"),
+        "application/json",
+      );
+      assert.equal(init?.redirect, "error");
+      return new Response(JSON.stringify({ keys: [primaryPublicJwk] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
     },
   };
 }
@@ -148,48 +133,21 @@ type SyntheticOidcFailure =
   | "jwks-failed";
 
 function makeDiagnosticFetch(
-  token: string,
   failure?: SyntheticOidcFailure,
 ): typeof fetch {
   return async (input) => {
     const url = new URL(input.toString());
-    if (url.hostname === "pipelines.actions.githubusercontent.com") {
-      if (failure === "request-failed") {
-        throw new Error("TEST ONLY request failure");
-      }
-      if (failure === "response-invalid") {
-        return new Response("TEST ONLY invalid response", { status: 200 });
-      }
-      return new Response(JSON.stringify({ value: token }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
+    assert.equal(
+      url.href,
+      "https://token.actions.githubusercontent.com/.well-known/jwks",
+    );
+    if (failure === "jwks-failed") {
+      return new Response("TEST ONLY unavailable JWKS", { status: 503 });
     }
-    if (
-      url.href ===
-      "https://token.actions.githubusercontent.com/.well-known/jwks"
-    ) {
-      if (failure === "jwks-failed") {
-        return new Response("TEST ONLY unavailable JWKS", { status: 503 });
-      }
-      return new Response(JSON.stringify({ keys: [primaryPublicJwk] }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
-    }
-    throw new Error("Unexpected TEST ONLY URL");
-  };
-}
-
-function actionsEnvironment(
-  token: string,
-  overrides: Record<string, string | undefined> = {},
-) {
-  return {
-    ACTIONS_ID_TOKEN_REQUEST_URL:
-      "https://pipelines.actions.githubusercontent.com/test-guid/_apis/actions/runners/runner-123/jobs/job-456/idtoken",
-    ACTIONS_ID_TOKEN_REQUEST_TOKEN: "test-only-request-bearer",
-    ...overrides,
+    return new Response(JSON.stringify({ keys: [primaryPublicJwk] }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
   };
 }
 
@@ -215,9 +173,6 @@ function approvalLabEnvironment(
     GUARDIAN_APPROVAL_E2E_CI_SERVICE: "postgres",
     GUARDIAN_APPROVAL_E2E_DISPOSABLE: "1",
     GUARDIAN_APPROVAL_E2E_CI_STAGE: stage,
-    ACTIONS_ID_TOKEN_REQUEST_URL:
-      "https://pipelines.actions.githubusercontent.com/test-guid/_apis/actions/runners/runner-123/jobs/job-456/idtoken",
-    ACTIONS_ID_TOKEN_REQUEST_TOKEN: "test-only-request-bearer",
     DATABASE_URL: `postgresql://postgres:${adminPassword}@127.0.0.1:5432/${stage === "bootstrap" ? "postgres" : "guardian_approval_lab_ci"}`,
     ...overrides,
   };
@@ -374,115 +329,57 @@ test("TEST ONLY GitHub OIDC pins the immutable canonical repository ID", () => {
   }
 });
 
-test("TEST ONLY token request requires Actions credentials and fixed official endpoints", async () => {
+test("TEST ONLY @actions/core token acquisition pins the audience and suppresses toolkit output", async () => {
+  const token = signToken(defaultClaims());
+  const stdoutWrites: string[] = [];
+  const originalWrite = process.stdout.write;
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    stdoutWrites.push(String(chunk));
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    const acquired = await acquireGitHubActionsOidcToken(async () => ({
+      getIDToken: async (audience) => {
+        assert.equal(audience, GITHUB_ACTIONS_RLS_AUDIENCE);
+        process.stdout.write(`::add-mask::${token}\n`);
+        process.stdout.write("##[debug]TEST ONLY request URL\n");
+        return token;
+      },
+    }));
+    assert.equal(acquired, token);
+    assert.deepEqual(stdoutWrites, []);
+  } finally {
+    process.stdout.write = originalWrite;
+  }
+});
+
+test("TEST ONLY verifier accepts an in-memory token and fetches only fixed official JWKS", async () => {
   const token = signToken(defaultClaims());
   let calls = 0;
-  const dependencies = makeDependencies(token);
-  const validEnv = actionsEnvironment(token);
-  const claims = await requestVerifiedGitHubActionsClaims(
-    validEnv,
-    expected,
-    dependencies,
-  );
-  assert.equal(claims?.event_name, "workflow_dispatch");
-
-  const matchingAudience = await requestVerifiedGitHubActionsClaims(
-    actionsEnvironment(token, {
-      ACTIONS_ID_TOKEN_REQUEST_URL:
-        `https://pipelines.actions.githubusercontent.com/test-guid/_apis/actions/runners/runner-123/jobs/job-456/idtoken?audience=${encodeURIComponent(GITHUB_ACTIONS_RLS_AUDIENCE)}`,
-    }),
-    expected,
-    dependencies,
-  );
-  assert.equal(matchingAudience?.event_name, "workflow_dispatch");
-
-  const noToken = await requestVerifiedGitHubActionsClaims(
-    { ACTIONS_ID_TOKEN_REQUEST_URL: validEnv.ACTIONS_ID_TOKEN_REQUEST_URL },
+  const result = await verifyGitHubActionsClaimsWithOfficialJwksDetailed(
+    token,
     expected,
     {
-      ...dependencies,
-      fetchImpl: async () => {
+      ...makeJwksDependencies(),
+      fetchImpl: async (input, init) => {
         calls += 1;
-        throw new Error("Must not fetch without runner token");
+        assert.equal(
+          new URL(input.toString()).href,
+          "https://token.actions.githubusercontent.com/.well-known/jwks",
+        );
+        assert.equal(new Headers(init?.headers).get("accept"), "application/json");
+        assert.equal(init?.redirect, "error");
+        return new Response(JSON.stringify({ keys: [primaryPublicJwk] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
       },
     },
   );
-  assert.equal(noToken, undefined);
-  assert.equal(calls, 0);
-
-  const untrustedEndpoint = await requestVerifiedGitHubActionsClaims(
-    actionsEnvironment(token, {
-      ACTIONS_ID_TOKEN_REQUEST_URL:
-        "https://attacker.invalid/idtoken",
-    }),
-    expected,
-    {
-      ...dependencies,
-      fetchImpl: async () => {
-        calls += 1;
-        throw new Error("Must not fetch an untrusted endpoint");
-      },
-    },
-  );
-  assert.equal(untrustedEndpoint, undefined);
-  assert.equal(calls, 0);
-
-  const queryApiVersion = await requestVerifiedGitHubActionsClaims(
-    actionsEnvironment(token, {
-      ACTIONS_ID_TOKEN_REQUEST_URL:
-        "https://pipelines.actions.githubusercontent.com/test-guid/_apis/actions/idtoken?api-version=2.0",
-    }),
-    expected,
-    {
-      ...dependencies,
-      fetchImpl: async () => {
-        calls += 1;
-        throw new Error("Must not fetch an unsupported API version");
-      },
-    },
-  );
-  assert.equal(queryApiVersion, undefined);
-  assert.equal(calls, 0);
-
-  for (const query of [
-    "unexpected=value",
-    `audience=${encodeURIComponent(GITHUB_ACTIONS_RLS_AUDIENCE)}&audience=${encodeURIComponent(GITHUB_ACTIONS_RLS_AUDIENCE)}`,
-    "audience=untrusted-audience",
-  ]) {
-    const rejectedQuery = await requestVerifiedGitHubActionsClaims(
-      actionsEnvironment(token, {
-        ACTIONS_ID_TOKEN_REQUEST_URL:
-          `https://pipelines.actions.githubusercontent.com/test-guid/_apis/actions/idtoken?${query}`,
-      }),
-      expected,
-      {
-        ...dependencies,
-        fetchImpl: async () => {
-          calls += 1;
-          throw new Error("Must not fetch an untrusted query");
-        },
-      },
-    );
-    assert.equal(rejectedQuery, undefined);
-  }
-  assert.equal(calls, 0);
-
-  const pathTraversal = await requestVerifiedGitHubActionsClaims(
-    actionsEnvironment(token, {
-      ACTIONS_ID_TOKEN_REQUEST_URL:
-        "https://pipelines.actions.githubusercontent.com/test-guid/_apis/actions/../idtoken",
-    }),
-    expected,
-    {
-      ...dependencies,
-      fetchImpl: async () => {
-        calls += 1;
-        throw new Error("Must not fetch an invalid Actions path");
-      },
-    },
-  );
-  assert.equal(pathTraversal, undefined);
-  assert.equal(calls, 0);
+  assert.equal(result.ok, true);
+  assert.equal(calls, 1);
+  if (result.ok) assert.equal(result.claims.event_name, "workflow_dispatch");
 });
 
 test("TEST ONLY CI target diagnostics expose safe rejection categories and remain fail-closed", async () => {
@@ -509,9 +406,7 @@ test("TEST ONLY CI target diagnostics expose safe rejection categories and remai
   });
 
   const unavailableOidc = await diagnoseGitHubActionsApprovalLabTarget(
-    approvalLabEnvironment("bootstrap", {
-      ACTIONS_ID_TOKEN_REQUEST_TOKEN: undefined,
-    }),
+    approvalLabEnvironment(),
     "bootstrap",
   );
   assert.deepEqual(unavailableOidc, {
@@ -519,29 +414,18 @@ test("TEST ONLY CI target diagnostics expose safe rejection categories and remai
     category: "oidc_request_credentials_invalid",
     stage: "bootstrap",
   });
-  const oversizedCredential = await diagnoseGitHubActionsApprovalLabTarget(
+  let rejectedContextProviderCalls = 0;
+  await diagnoseGitHubActionsApprovalLabTarget(
     approvalLabEnvironment("bootstrap", {
-      ACTIONS_ID_TOKEN_REQUEST_TOKEN: "TEST ONLY".repeat(2_000),
+      GITHUB_REF: "refs/heads/feature",
     }),
     "bootstrap",
+    async () => {
+      rejectedContextProviderCalls += 1;
+      return "TEST ONLY token";
+    },
   );
-  assert.deepEqual(oversizedCredential, {
-    accepted: false,
-    category: "oidc_request_credentials_invalid",
-    stage: "bootstrap",
-  });
-
-  const endpointRejected = await diagnoseGitHubActionsApprovalLabTarget(
-    approvalLabEnvironment("bootstrap", {
-      ACTIONS_ID_TOKEN_REQUEST_URL: "https://test-only.invalid/idtoken",
-    }),
-    "bootstrap",
-  );
-  assert.deepEqual(endpointRejected, {
-    accepted: false,
-    category: "oidc_request_endpoint_rejected",
-    stage: "bootstrap",
-  });
+  assert.equal(rejectedContextProviderCalls, 0);
 
   const actualNow = Math.floor(Date.now() / 1000);
   const validToken = signToken(
@@ -551,13 +435,12 @@ test("TEST ONLY CI target diagnostics expose safe rejection categories and remai
       exp: actualNow + 240,
     }),
   );
-  const requestFailed = await withMockedGlobalFetch(
-    makeDiagnosticFetch(validToken, "request-failed"),
-    () =>
-      diagnoseGitHubActionsApprovalLabTarget(
-        approvalLabEnvironment(),
-        "bootstrap",
-      ),
+  const requestFailed = await diagnoseGitHubActionsApprovalLabTarget(
+    approvalLabEnvironment(),
+    "bootstrap",
+    async () => {
+      throw new Error(`TEST ONLY ${validToken}`);
+    },
   );
   assert.deepEqual(requestFailed, {
     accepted: false,
@@ -565,13 +448,10 @@ test("TEST ONLY CI target diagnostics expose safe rejection categories and remai
     stage: "bootstrap",
   });
 
-  const responseInvalid = await withMockedGlobalFetch(
-    makeDiagnosticFetch(validToken, "response-invalid"),
-    () =>
-      diagnoseGitHubActionsApprovalLabTarget(
-        approvalLabEnvironment(),
-        "bootstrap",
-      ),
+  const responseInvalid = await diagnoseGitHubActionsApprovalLabTarget(
+    approvalLabEnvironment(),
+    "bootstrap",
+    async () => "",
   );
   assert.deepEqual(responseInvalid, {
     accepted: false,
@@ -580,11 +460,12 @@ test("TEST ONLY CI target diagnostics expose safe rejection categories and remai
   });
 
   const jwksFailed = await withMockedGlobalFetch(
-    makeDiagnosticFetch(validToken, "jwks-failed"),
+    makeDiagnosticFetch("jwks-failed"),
     () =>
       diagnoseGitHubActionsApprovalLabTarget(
         approvalLabEnvironment(),
         "bootstrap",
+        async () => validToken,
       ),
   );
   assert.deepEqual(jwksFailed, {
@@ -594,11 +475,12 @@ test("TEST ONLY CI target diagnostics expose safe rejection categories and remai
   });
 
   const jwtInvalid = await withMockedGlobalFetch(
-    makeDiagnosticFetch("TEST ONLY malformed JWT"),
+    makeDiagnosticFetch(),
     () =>
       diagnoseGitHubActionsApprovalLabTarget(
         approvalLabEnvironment(),
         "bootstrap",
+        async () => "TEST ONLY malformed JWT",
       ),
   );
   assert.deepEqual(jwtInvalid, {
@@ -616,11 +498,12 @@ test("TEST ONLY CI target diagnostics expose safe rejection categories and remai
     alternateKey,
   );
   const badSignature = await withMockedGlobalFetch(
-    makeDiagnosticFetch(badSignatureToken),
+    makeDiagnosticFetch(),
     () =>
       diagnoseGitHubActionsApprovalLabTarget(
         approvalLabEnvironment(),
         "bootstrap",
+        async () => badSignatureToken,
       ),
   );
   assert.deepEqual(badSignature, {
@@ -634,35 +517,30 @@ test("TEST ONLY CI target diagnostics expose safe rejection categories and remai
       throw new Error("TEST ONLY unexpected verification exception");
     },
   }) as ExpectedGitHubActionsOidcContext;
-  const unexpectedException =
-    await requestVerifiedGitHubActionsClaimsDetailed(
-      actionsEnvironment(validToken),
-      throwingExpected,
-      {
-        nowEpochSeconds: actualNow,
-        fetchImpl: makeDiagnosticFetch(validToken),
-      },
-    );
+  const unexpectedException = await withMockedGlobalFetch(
+    makeDiagnosticFetch(),
+    () =>
+      verifyGitHubActionsClaimsWithOfficialJwksDetailed(
+        validToken,
+        throwingExpected,
+        { nowEpochSeconds: actualNow },
+      ),
+  );
   assert.deepEqual(unexpectedException, {
     ok: false,
     category: "oidc_verification_unexpected_exception",
   });
-  const unexpectedGuardEnvironment = new Proxy(approvalLabEnvironment(), {
-    get(target, key, receiver) {
-      if (key === "ACTIONS_ID_TOKEN_REQUEST_TOKEN") {
-        throw new Error("TEST ONLY unexpected guard exception");
-      }
-      return Reflect.get(target, key, receiver);
-    },
-  });
   const unexpectedGuardException =
     await diagnoseGitHubActionsApprovalLabTarget(
-      unexpectedGuardEnvironment,
+      approvalLabEnvironment(),
       "bootstrap",
+      async () => {
+        throw new Error("TEST ONLY unexpected acquisition exception");
+      },
     );
   assert.deepEqual(unexpectedGuardException, {
     accepted: false,
-    category: "oidc_verification_unexpected_exception",
+    category: "oidc_request_failed_or_timeout",
     stage: "bootstrap",
   });
 
@@ -674,14 +552,13 @@ test("TEST ONLY CI target diagnostics expose safe rejection categories and remai
       exp: actualNow + 240,
     }),
   );
-  const claimsMismatchFetch = makeDependencies(claimsMismatchToken).fetchImpl;
-  assert.ok(claimsMismatchFetch);
   const claimsMismatch = await withMockedGlobalFetch(
-    claimsMismatchFetch,
+    makeDiagnosticFetch(),
     () =>
       diagnoseGitHubActionsApprovalLabTarget(
         approvalLabEnvironment(),
         "bootstrap",
+        async () => claimsMismatchToken,
       ),
   );
   assert.deepEqual(claimsMismatch, {
@@ -690,24 +567,28 @@ test("TEST ONLY CI target diagnostics expose safe rejection categories and remai
     stage: "bootstrap",
   });
 
-  const validFetch = makeDependencies(validToken).fetchImpl;
-  assert.ok(validFetch);
-  const validTarget = await withMockedGlobalFetch(validFetch, () =>
-    diagnoseGitHubActionsApprovalLabTarget(
-      approvalLabEnvironment(),
-      "bootstrap",
-    ),
+  const validTarget = await withMockedGlobalFetch(
+    makeDiagnosticFetch(),
+    () =>
+      diagnoseGitHubActionsApprovalLabTarget(
+        approvalLabEnvironment(),
+        "bootstrap",
+        async () => validToken,
+      ),
   );
   assert.deepEqual(validTarget, { accepted: true, stage: "bootstrap" });
 
-  const databaseUrlMismatch = await withMockedGlobalFetch(validFetch, () =>
-    diagnoseGitHubActionsApprovalLabTarget(
-      approvalLabEnvironment("bootstrap", {
-        DATABASE_URL:
-          "postgresql://postgres:test-only-password@127.0.0.1:5432/not-postgres",
-      }),
-      "bootstrap",
-    ),
+  const databaseUrlMismatch = await withMockedGlobalFetch(
+    makeDiagnosticFetch(),
+    () =>
+      diagnoseGitHubActionsApprovalLabTarget(
+        approvalLabEnvironment("bootstrap", {
+          DATABASE_URL:
+            "postgresql://postgres:test-only-password@127.0.0.1:5432/not-postgres",
+        }),
+        "bootstrap",
+        async () => validToken,
+      ),
   );
   assert.deepEqual(databaseUrlMismatch, {
     accepted: false,
@@ -715,13 +596,14 @@ test("TEST ONLY CI target diagnostics expose safe rejection categories and remai
     stage: "bootstrap",
   });
 
-  const malformedTokenResult = await requestVerifiedGitHubActionsClaimsDetailed(
-    actionsEnvironment("not-a-test-only-jwt"),
-    expected,
-    {
-      nowEpochSeconds: actualNow,
-      fetchImpl: makeDependencies("not-a-test-only-jwt").fetchImpl,
-    },
+  const malformedTokenResult = await withMockedGlobalFetch(
+    makeDiagnosticFetch(),
+    () =>
+      verifyGitHubActionsClaimsWithOfficialJwksDetailed(
+        "not-a-test-only-jwt",
+        expected,
+        { nowEpochSeconds: actualNow },
+      ),
   );
   assert.deepEqual(malformedTokenResult, {
     ok: false,
@@ -731,8 +613,6 @@ test("TEST ONLY CI target diagnostics expose safe rejection categories and remai
     missingContext,
     incompatibleContext,
     unavailableOidc,
-    oversizedCredential,
-    endpointRejected,
     requestFailed,
     responseInvalid,
     jwksFailed,
@@ -746,12 +626,13 @@ test("TEST ONLY CI target diagnostics expose safe rejection categories and remai
     const serialized = JSON.stringify(result);
     assert.doesNotMatch(
       serialized,
-      /postgresql|test-only-request-bearer|test-only-jti|guardian-ci-/,
+      /postgresql|test-only-jti|guardian-ci-/,
     );
+    assert.doesNotMatch(serialized, new RegExp(validToken));
   }
   assert.doesNotMatch(
     JSON.stringify(unexpectedException),
-    /postgresql|test-only-request-bearer|test-only-jti|guardian-ci-/,
+    /postgresql|test-only-jti|guardian-ci-/,
   );
 });
 

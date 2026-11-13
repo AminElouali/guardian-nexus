@@ -1,6 +1,11 @@
 import { diagnoseGitHubActionsApprovalLabTarget } from "../lib/approval-e2e-db-guard";
+import { acquireGitHubActionsOidcToken } from "../lib/github-actions-oidc";
 
-const decision = await diagnoseGitHubActionsApprovalLabTarget(process.env);
+const decision = await diagnoseGitHubActionsApprovalLabTarget(
+  process.env,
+  undefined,
+  acquireGitHubActionsOidcToken,
+);
 if (!decision.accepted) {
   console.error(
     JSON.stringify({

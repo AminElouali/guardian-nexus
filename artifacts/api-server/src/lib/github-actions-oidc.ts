@@ -7,8 +7,6 @@ export const GITHUB_ACTIONS_OIDC_ISSUER =
 export const GITHUB_ACTIONS_TRUSTED_REPOSITORY_ID = "1455418736";
 const GITHUB_ACTIONS_OIDC_JWKS_URL =
   "https://token.actions.githubusercontent.com/.well-known/jwks";
-const GITHUB_ACTIONS_OIDC_REQUEST_HOST =
-  "pipelines.actions.githubusercontent.com";
 const MAX_TOKEN_BYTES = 16_384;
 const MAX_JSON_RESPONSE_BYTES = 65_536;
 const MAX_JWKS_KEYS = 32;
@@ -69,6 +67,57 @@ export interface OidcFetchDependencies {
   fetchImpl?: typeof fetch;
   /** Test-only clock injection. Production callers must omit this field. */
   nowEpochSeconds?: number;
+}
+
+export interface GitHubActionsCoreOidcClient {
+  getIDToken(audience?: string): Promise<string>;
+}
+
+async function loadGitHubActionsCore(): Promise<GitHubActionsCoreOidcClient> {
+  // Keep the package load deferred until the trusted CI context has passed the
+  // guard. A non-literal specifier lets local typecheck run without installing
+  // the CI-only package into the Replit workspace.
+  const packageName: string = "@actions/core";
+  return (await import(packageName)) as GitHubActionsCoreOidcClient;
+}
+
+/**
+ * Acquire the fixed-audience token using the GitHub Actions toolkit. The
+ * toolkit emits an add-mask command containing the token and may emit the
+ * request URL in debug mode. Suppress stdout only for this short acquisition
+ * window; the returned token remains in memory for verification.
+ */
+export async function acquireGitHubActionsOidcToken(
+  loadCore: () => Promise<GitHubActionsCoreOidcClient> =
+    loadGitHubActionsCore,
+): Promise<string> {
+  const originalWrite = process.stdout.write;
+  process.stdout.write = ((...args: unknown[]) => {
+    const callback = args.find(
+      (argument): argument is (error?: Error | null) => void =>
+        typeof argument === "function",
+    );
+    callback?.();
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    const core = await loadCore();
+    const token = await core.getIDToken(GITHUB_ACTIONS_RLS_AUDIENCE);
+    if (
+      typeof token !== "string" ||
+      token.length === 0 ||
+      Buffer.byteLength(token, "utf8") > MAX_TOKEN_BYTES
+    ) {
+      throw new Error();
+    }
+    return token;
+  } catch {
+    // Do not forward toolkit errors: they can contain request metadata.
+    throw new Error("GitHub Actions OIDC token acquisition failed.");
+  } finally {
+    process.stdout.write = originalWrite;
+  }
 }
 
 export type GitHubActionsOidcFailureCategory =
@@ -344,61 +393,6 @@ export function verifyGitHubActionsOidcToken(
   return result.ok ? result.claims : undefined;
 }
 
-function validatedActionsRequestUrl(
-  value: string | undefined,
-): URL | undefined {
-  if (!value) return undefined;
-  try {
-    const url = new URL(value);
-    const path = url.pathname;
-    const pathSegments = path.split("/");
-    const validActionsPath =
-      path.length <= 2048 &&
-      !path.includes("%") &&
-      !path.includes("\\") &&
-      pathSegments[0] === "" &&
-      pathSegments.length >= 5 &&
-      /^[A-Za-z0-9-]+$/.test(pathSegments[1]) &&
-      pathSegments[2] === "_apis" &&
-      pathSegments[3] === "actions" &&
-      pathSegments.at(-1) === "idtoken" &&
-      pathSegments.slice(4, -1).every((segment) =>
-        /^[A-Za-z0-9-]+$/.test(segment),
-      );
-    if (
-      url.protocol !== "https:" ||
-      url.hostname !== GITHUB_ACTIONS_OIDC_REQUEST_HOST ||
-      (url.port !== "" && url.port !== "443") ||
-      url.username !== "" ||
-      url.password !== "" ||
-      url.hash !== "" ||
-      !validActionsPath
-    ) {
-      return undefined;
-    }
-    const queryKeys = [...url.searchParams.keys()];
-    if (
-      queryKeys.some((key) => key !== "audience") ||
-      url.searchParams.getAll("audience").length > 1
-    ) {
-      return undefined;
-    }
-    const suppliedAudience = url.searchParams.get("audience");
-    if (
-      suppliedAudience !== null &&
-      suppliedAudience !== GITHUB_ACTIONS_RLS_AUDIENCE
-    ) {
-      return undefined;
-    }
-    if (suppliedAudience === null) {
-      url.searchParams.set("audience", GITHUB_ACTIONS_RLS_AUDIENCE);
-    }
-    return url;
-  } catch {
-    return undefined;
-  }
-}
-
 async function readJsonResponse(
   response: Response,
 ): Promise<Record<string, unknown> | undefined> {
@@ -423,60 +417,21 @@ async function readJsonResponse(
 }
 
 /**
- * Requests a short-lived token from the Actions-provided endpoint, then checks
- * it using the fixed official GitHub JWKS URL. Neither the token nor either
- * request URL is returned, logged, or persisted.
+ * Verifies a token already acquired in memory using only the fixed official
+ * GitHub JWKS endpoint. The token and request URL are never returned, logged,
+ * or persisted.
  */
-async function requestVerifiedGitHubActionsClaimsUnchecked(
-  env: Readonly<Record<string, string | undefined>>,
+async function verifyGitHubActionsClaimsWithOfficialJwksUnchecked(
+  token: string,
   expected: ExpectedGitHubActionsOidcContext,
   dependencies: OidcFetchDependencies = {},
 ): Promise<GitHubActionsOidcResult> {
-  const requestToken = env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
-  if (!requestToken || requestToken.length > MAX_TOKEN_BYTES) {
-    return { ok: false, category: "oidc_request_credentials_invalid" };
-  }
-
-  const requestUrl = validatedActionsRequestUrl(
-    env.ACTIONS_ID_TOKEN_REQUEST_URL,
-  );
-  if (!requestUrl) {
-    return { ok: false, category: "oidc_request_endpoint_rejected" };
-  }
-
   const fetchImpl = dependencies.fetchImpl ?? globalThis.fetch;
   if (typeof fetchImpl !== "function") {
-    return { ok: false, category: "oidc_request_failed_or_timeout" };
+    return { ok: false, category: "oidc_jwks_failed" };
   }
   const nowEpochSeconds =
     dependencies.nowEpochSeconds ?? Math.floor(Date.now() / 1000);
-
-  let tokenResponse: Response;
-  try {
-    tokenResponse = await fetchImpl(requestUrl, {
-      method: "GET",
-      headers: {
-        Accept: "application/json; api-version=2.0",
-        Authorization: `Bearer ${requestToken}`,
-      },
-      redirect: "error",
-      cache: "no-store",
-      signal: AbortSignal.timeout(5000),
-    });
-  } catch {
-    return { ok: false, category: "oidc_request_failed_or_timeout" };
-  }
-
-  let tokenBody: Record<string, unknown> | undefined;
-  try {
-    tokenBody = await readJsonResponse(tokenResponse);
-  } catch {
-    return { ok: false, category: "oidc_response_invalid" };
-  }
-  const token = tokenBody?.value;
-  if (typeof token !== "string" || token.length === 0) {
-    return { ok: false, category: "oidc_response_invalid" };
-  }
 
   let jwksResponse: Response;
   try {
@@ -509,14 +464,14 @@ async function requestVerifiedGitHubActionsClaimsUnchecked(
   );
 }
 
-export async function requestVerifiedGitHubActionsClaimsDetailed(
-  env: Readonly<Record<string, string | undefined>>,
+export async function verifyGitHubActionsClaimsWithOfficialJwksDetailed(
+  token: string,
   expected: ExpectedGitHubActionsOidcContext,
   dependencies: OidcFetchDependencies = {},
 ): Promise<GitHubActionsOidcResult> {
   try {
-    return await requestVerifiedGitHubActionsClaimsUnchecked(
-      env,
+    return await verifyGitHubActionsClaimsWithOfficialJwksUnchecked(
+      token,
       expected,
       dependencies,
     );
@@ -526,17 +481,4 @@ export async function requestVerifiedGitHubActionsClaimsDetailed(
       category: "oidc_verification_unexpected_exception",
     };
   }
-}
-
-export async function requestVerifiedGitHubActionsClaims(
-  env: Readonly<Record<string, string | undefined>>,
-  expected: ExpectedGitHubActionsOidcContext,
-  dependencies: OidcFetchDependencies = {},
-): Promise<GitHubActionsOidcClaims | undefined> {
-  const result = await requestVerifiedGitHubActionsClaimsDetailed(
-    env,
-    expected,
-    dependencies,
-  );
-  return result.ok ? result.claims : undefined;
 }

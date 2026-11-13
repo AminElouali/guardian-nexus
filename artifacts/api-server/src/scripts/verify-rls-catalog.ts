@@ -10,6 +10,7 @@ import {
   type RlsCatalogSnapshot,
 } from "@workspace/db/rls-catalog-audit";
 import { isGitHubActionsApprovalLabTarget } from "../lib/approval-e2e-db-guard";
+import { acquireGitHubActionsOidcToken } from "../lib/github-actions-oidc";
 
 const { Pool } = pg;
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -279,7 +280,13 @@ async function writeReport(report: Record<string, unknown>): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  if (!(await isGitHubActionsApprovalLabTarget(process.env, "approval-e2e"))) {
+  if (
+    !(await isGitHubActionsApprovalLabTarget(
+      process.env,
+      "approval-e2e",
+      acquireGitHubActionsOidcToken,
+    ))
+  ) {
     console.error(
       "RLS catalog audit refused: CI disposable-target contract not met.",
     );

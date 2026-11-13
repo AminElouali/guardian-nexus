@@ -119,7 +119,7 @@ test("GitHub Actions lab workflow guards its isolated service before DB writes",
   );
   assert.match(
     catalogAudit,
-    /await isGitHubActionsApprovalLabTarget\(process\.env,\s*"approval-e2e"\)[\s\S]*?new Pool/,
+    /await isGitHubActionsApprovalLabTarget\(process\.env,\s*"approval-e2e",\s*acquireGitHubActionsOidcToken\)[\s\S]*?new Pool/,
     "the catalog script verifies OIDC before opening a connection",
   );
   assert.match(
@@ -151,7 +151,7 @@ test("GitHub Actions lab workflow guards its isolated service before DB writes",
   );
   assert.match(
     targetGuard,
-    /await diagnoseGitHubActionsApprovalLabTarget\(process\.env\)/,
+    /await diagnoseGitHubActionsApprovalLabTarget\(\s*process\.env,\s*undefined,\s*acquireGitHubActionsOidcToken\s*\)/,
     "the target guard awaits authenticated OIDC verification and safe diagnostics",
   );
   assert.match(
@@ -180,7 +180,7 @@ test("GitHub Actions lab workflow guards its isolated service before DB writes",
   );
   assert.match(
     approvalE2e,
-    /await verifyExplicitDisposableApprovalDatabase\(process\.env\)[\s\S]*?await import\("@workspace\/db"\)/,
+    /await verifyExplicitDisposableApprovalDatabase\(\s*process\.env,\s*acquireGitHubActionsOidcToken\s*\)[\s\S]*?await import\("@workspace\/db"\)/,
     "the E2E authenticates the job before importing the database pool",
   );
   assert.doesNotMatch(
