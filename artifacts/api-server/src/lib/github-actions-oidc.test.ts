@@ -736,6 +736,105 @@ test("TEST ONLY GitHub OIDC rejects claim mismatches, expiry, and stale tokens",
   }
 });
 
+test("TEST ONLY claims diagnostics expose only fixed allowlisted subcategories", () => {
+  const sensitiveMarker = "TEST_ONLY_PRIVATE_CLAIM_VALUE";
+  const cases: Array<{
+    subcategory: string;
+    overrides: Record<string, unknown>;
+  }> = [
+    { subcategory: "claims_issuer_mismatch", overrides: { iss: sensitiveMarker } },
+    { subcategory: "claims_audience_mismatch", overrides: { aud: sensitiveMarker } },
+    { subcategory: "claims_subject_mismatch", overrides: { sub: sensitiveMarker } },
+    {
+      subcategory: "claims_repository_mismatch",
+      overrides: { repository: sensitiveMarker },
+    },
+    {
+      subcategory: "claims_repository_id_mismatch",
+      overrides: { repository_id: sensitiveMarker },
+    },
+    {
+      subcategory: "claims_repository_owner_mismatch",
+      overrides: { repository_owner: sensitiveMarker },
+    },
+    {
+      subcategory: "claims_repository_owner_id_invalid",
+      overrides: { repository_owner_id: sensitiveMarker },
+    },
+    {
+      subcategory: "claims_event_name_mismatch",
+      overrides: { event_name: sensitiveMarker },
+    },
+    { subcategory: "claims_ref_mismatch", overrides: { ref: sensitiveMarker } },
+    {
+      subcategory: "claims_ref_type_mismatch",
+      overrides: { ref_type: sensitiveMarker },
+    },
+    {
+      subcategory: "claims_workflow_mismatch",
+      overrides: { workflow: sensitiveMarker },
+    },
+    {
+      subcategory: "claims_workflow_ref_mismatch",
+      overrides: { workflow_ref: sensitiveMarker },
+    },
+    { subcategory: "claims_sha_mismatch", overrides: { sha: sensitiveMarker } },
+    {
+      subcategory: "claims_workflow_sha_invalid",
+      overrides: { workflow_sha: sensitiveMarker },
+    },
+    {
+      subcategory: "claims_run_id_mismatch",
+      overrides: { run_id: sensitiveMarker },
+    },
+    {
+      subcategory: "claims_run_attempt_mismatch",
+      overrides: { run_attempt: sensitiveMarker },
+    },
+    { subcategory: "claims_jti_invalid", overrides: { jti: "" } },
+    { subcategory: "claims_iat_invalid", overrides: { iat: sensitiveMarker } },
+    { subcategory: "claims_nbf_invalid", overrides: { nbf: sensitiveMarker } },
+    { subcategory: "claims_exp_invalid", overrides: { exp: sensitiveMarker } },
+    { subcategory: "claims_expired", overrides: { exp: now - 1 } },
+    { subcategory: "claims_iat_in_future", overrides: { iat: now + 31 } },
+    { subcategory: "claims_nbf_in_future", overrides: { nbf: now + 31 } },
+    { subcategory: "claims_iat_too_old", overrides: { iat: now - 601 } },
+    {
+      subcategory: "claims_lifetime_too_long",
+      overrides: { exp: now + 591 },
+    },
+    {
+      subcategory: "claims_exp_not_after_iat",
+      overrides: { iat: now + 30, exp: now + 1 },
+    },
+    {
+      subcategory: "claims_nbf_after_exp",
+      overrides: { nbf: now + 11, exp: now + 10 },
+    },
+  ];
+
+  for (const { subcategory, overrides } of cases) {
+    const token = signToken(
+      defaultClaims({
+        diagnostic_private_marker: sensitiveMarker,
+        ...overrides,
+      }),
+    );
+    const result = verifyGitHubActionsOidcTokenDetailed(
+      token,
+      { keys: [primaryPublicJwk] },
+      expected,
+      now,
+    );
+    assert.deepEqual(result, {
+      ok: false,
+      category: "claims_mismatch",
+      subcategory,
+    });
+    assert.equal(JSON.stringify(result).includes(sensitiveMarker), false);
+  }
+});
+
 test("TEST ONLY GitHub OIDC pins the immutable canonical repository ID", () => {
   assert.equal(GITHUB_ACTIONS_TRUSTED_REPOSITORY_ID, "1455418736");
   const cases: Array<[string, Record<string, unknown>]> = [
@@ -995,6 +1094,7 @@ test("TEST ONLY CI target diagnostics expose safe rejection categories and remai
   const claimsMismatchToken = signToken(
     defaultClaims({
       repository: "untrusted/fork",
+      diagnostic_private_marker: "TEST_ONLY_PRIVATE_CLAIM_VALUE",
       iat: actualNow - 10,
       nbf: actualNow - 10,
       exp: actualNow + 240,
@@ -1012,8 +1112,17 @@ test("TEST ONLY CI target diagnostics expose safe rejection categories and remai
   assert.deepEqual(claimsMismatch, {
     accepted: false,
     category: "claims_mismatch",
+    subcategory: "claims_repository_mismatch",
     stage: "bootstrap",
   });
+  assert.equal(
+    JSON.stringify(claimsMismatch).includes("untrusted/fork"),
+    false,
+  );
+  assert.equal(
+    JSON.stringify(claimsMismatch).includes("TEST_ONLY_PRIVATE_CLAIM_VALUE"),
+    false,
+  );
 
   const validTarget = await withMockedGlobalFetch(
     makeDiagnosticFetch(),

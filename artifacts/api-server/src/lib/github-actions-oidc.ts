@@ -131,6 +131,33 @@ export type GitHubActionsOidcFailureCategory =
   | "claims_mismatch";
 
 export type GitHubActionsOidcFailureSubcategory =
+  | "claims_issuer_mismatch"
+  | "claims_audience_mismatch"
+  | "claims_subject_mismatch"
+  | "claims_repository_mismatch"
+  | "claims_repository_id_mismatch"
+  | "claims_repository_owner_mismatch"
+  | "claims_repository_owner_id_invalid"
+  | "claims_event_name_mismatch"
+  | "claims_ref_mismatch"
+  | "claims_ref_type_mismatch"
+  | "claims_workflow_mismatch"
+  | "claims_workflow_ref_mismatch"
+  | "claims_sha_mismatch"
+  | "claims_workflow_sha_invalid"
+  | "claims_run_id_mismatch"
+  | "claims_run_attempt_mismatch"
+  | "claims_jti_invalid"
+  | "claims_iat_invalid"
+  | "claims_nbf_invalid"
+  | "claims_exp_invalid"
+  | "claims_expired"
+  | "claims_iat_in_future"
+  | "claims_nbf_in_future"
+  | "claims_iat_too_old"
+  | "claims_lifetime_too_long"
+  | "claims_exp_not_after_iat"
+  | "claims_nbf_after_exp"
   | "jwt_token_invalid"
   | "jwt_segment_count_invalid"
   | "jwt_header_base64url_invalid"
@@ -271,7 +298,9 @@ function validateClaims(
   value: Record<string, unknown>,
   expected: ExpectedGitHubActionsOidcContext,
   nowEpochSeconds: number,
-): GitHubActionsOidcClaims | undefined {
+):
+  | { ok: true; claims: GitHubActionsOidcClaims }
+  | { ok: false; subcategory: GitHubActionsOidcFailureSubcategory } {
   const {
     iss,
     aud,
@@ -295,47 +324,104 @@ function validateClaims(
     exp,
   } = value;
 
+  if (iss !== GITHUB_ACTIONS_OIDC_ISSUER) {
+    return { ok: false, subcategory: "claims_issuer_mismatch" };
+  }
+  if (aud !== GITHUB_ACTIONS_RLS_AUDIENCE) {
+    return { ok: false, subcategory: "claims_audience_mismatch" };
+  }
+  if (sub !== `repo:${expected.repository}:ref:${expected.ref}`) {
+    return { ok: false, subcategory: "claims_subject_mismatch" };
+  }
   if (
-    iss !== GITHUB_ACTIONS_OIDC_ISSUER ||
-    aud !== GITHUB_ACTIONS_RLS_AUDIENCE ||
-    sub !== `repo:${expected.repository}:ref:${expected.ref}` ||
     typeof repository !== "string" ||
-    repository.toLowerCase() !== expected.repository.toLowerCase() ||
-    typeof repository_owner !== "string" ||
-    repository_owner.toLowerCase() !== expected.repositoryOwner.toLowerCase() ||
-    !isPositiveDecimalString(repository_id) ||
-    repository_id !== GITHUB_ACTIONS_TRUSTED_REPOSITORY_ID ||
-    !isPositiveDecimalString(repository_owner_id) ||
-    event_name !== expected.eventName ||
-    ref !== expected.ref ||
-    ref_type !== "branch" ||
-    workflow !== expected.workflow ||
-    workflow_ref !== expected.workflowRef ||
-    typeof sha !== "string" ||
-    sha.toLowerCase() !== expected.sha.toLowerCase() ||
-    typeof workflow_sha !== "string" ||
-    !/^[a-f0-9]{40}$/i.test(workflow_sha) ||
-    run_id !== expected.runId ||
-    run_attempt !== expected.runAttempt ||
-    !isNonEmptyString(jti) ||
-    typeof iat !== "number" ||
-    !Number.isInteger(iat) ||
-    typeof nbf !== "number" ||
-    !Number.isInteger(nbf) ||
-    typeof exp !== "number" ||
-    !Number.isInteger(exp) ||
-    exp <= nowEpochSeconds ||
-    iat > nowEpochSeconds + CLOCK_SKEW_SECONDS ||
-    nbf > nowEpochSeconds + CLOCK_SKEW_SECONDS ||
-    iat < nowEpochSeconds - MAX_TOKEN_AGE_SECONDS ||
-    exp - iat > MAX_TOKEN_AGE_SECONDS ||
-    exp <= iat ||
-    nbf > exp
+    repository.toLowerCase() !== expected.repository.toLowerCase()
   ) {
-    return undefined;
+    return { ok: false, subcategory: "claims_repository_mismatch" };
+  }
+  if (
+    !isPositiveDecimalString(repository_id) ||
+    repository_id !== GITHUB_ACTIONS_TRUSTED_REPOSITORY_ID
+  ) {
+    return { ok: false, subcategory: "claims_repository_id_mismatch" };
+  }
+  if (
+    typeof repository_owner !== "string" ||
+    repository_owner.toLowerCase() !== expected.repositoryOwner.toLowerCase()
+  ) {
+    return { ok: false, subcategory: "claims_repository_owner_mismatch" };
+  }
+  if (!isPositiveDecimalString(repository_owner_id)) {
+    return { ok: false, subcategory: "claims_repository_owner_id_invalid" };
+  }
+  if (event_name !== expected.eventName) {
+    return { ok: false, subcategory: "claims_event_name_mismatch" };
+  }
+  if (ref !== expected.ref) {
+    return { ok: false, subcategory: "claims_ref_mismatch" };
+  }
+  if (ref_type !== "branch") {
+    return { ok: false, subcategory: "claims_ref_type_mismatch" };
+  }
+  if (workflow !== expected.workflow) {
+    return { ok: false, subcategory: "claims_workflow_mismatch" };
+  }
+  if (workflow_ref !== expected.workflowRef) {
+    return { ok: false, subcategory: "claims_workflow_ref_mismatch" };
+  }
+  if (
+    typeof sha !== "string" ||
+    sha.toLowerCase() !== expected.sha.toLowerCase()
+  ) {
+    return { ok: false, subcategory: "claims_sha_mismatch" };
+  }
+  if (
+    typeof workflow_sha !== "string" ||
+    !/^[a-f0-9]{40}$/i.test(workflow_sha)
+  ) {
+    return { ok: false, subcategory: "claims_workflow_sha_invalid" };
+  }
+  if (run_id !== expected.runId) {
+    return { ok: false, subcategory: "claims_run_id_mismatch" };
+  }
+  if (run_attempt !== expected.runAttempt) {
+    return { ok: false, subcategory: "claims_run_attempt_mismatch" };
+  }
+  if (!isNonEmptyString(jti)) {
+    return { ok: false, subcategory: "claims_jti_invalid" };
+  }
+  if (typeof iat !== "number" || !Number.isInteger(iat)) {
+    return { ok: false, subcategory: "claims_iat_invalid" };
+  }
+  if (typeof nbf !== "number" || !Number.isInteger(nbf)) {
+    return { ok: false, subcategory: "claims_nbf_invalid" };
+  }
+  if (typeof exp !== "number" || !Number.isInteger(exp)) {
+    return { ok: false, subcategory: "claims_exp_invalid" };
+  }
+  if (exp <= nowEpochSeconds) {
+    return { ok: false, subcategory: "claims_expired" };
+  }
+  if (iat > nowEpochSeconds + CLOCK_SKEW_SECONDS) {
+    return { ok: false, subcategory: "claims_iat_in_future" };
+  }
+  if (nbf > nowEpochSeconds + CLOCK_SKEW_SECONDS) {
+    return { ok: false, subcategory: "claims_nbf_in_future" };
+  }
+  if (iat < nowEpochSeconds - MAX_TOKEN_AGE_SECONDS) {
+    return { ok: false, subcategory: "claims_iat_too_old" };
+  }
+  if (exp - iat > MAX_TOKEN_AGE_SECONDS) {
+    return { ok: false, subcategory: "claims_lifetime_too_long" };
+  }
+  if (exp <= iat) {
+    return { ok: false, subcategory: "claims_exp_not_after_iat" };
+  }
+  if (nbf > exp) {
+    return { ok: false, subcategory: "claims_nbf_after_exp" };
   }
 
-  return value as unknown as GitHubActionsOidcClaims;
+  return { ok: true, claims: value as unknown as GitHubActionsOidcClaims };
 }
 
 /**
@@ -486,10 +572,14 @@ function verifyGitHubActionsOidcTokenUnchecked(
     return jwtVerificationFailure("signature_unverifiable");
   }
 
-  const claims = validateClaims(payload, expected, nowEpochSeconds);
-  return claims
-    ? { ok: true, claims }
-    : { ok: false, category: "claims_mismatch" };
+  const claimsValidation = validateClaims(payload, expected, nowEpochSeconds);
+  return claimsValidation.ok
+    ? { ok: true, claims: claimsValidation.claims }
+    : {
+        ok: false,
+        category: "claims_mismatch",
+        subcategory: claimsValidation.subcategory,
+      };
 }
 
 export function verifyGitHubActionsOidcTokenDetailed(
