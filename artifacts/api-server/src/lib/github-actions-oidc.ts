@@ -4,6 +4,8 @@ export const GITHUB_ACTIONS_RLS_AUDIENCE =
   "guardian-nexus-postgres-rls-catalog";
 export const GITHUB_ACTIONS_OIDC_ISSUER =
   "https://token.actions.githubusercontent.com";
+// Canonical owner ID from the public GitHub repository metadata.
+export const GITHUB_ACTIONS_TRUSTED_REPOSITORY_OWNER_ID = "218157651";
 export const GITHUB_ACTIONS_TRUSTED_REPOSITORY_ID = "1455418736";
 const GITHUB_ACTIONS_OIDC_JWKS_URL =
   "https://token.actions.githubusercontent.com/.well-known/jwks";
@@ -138,6 +140,7 @@ export type GitHubActionsOidcFailureSubcategory =
   | "claims_repository_id_mismatch"
   | "claims_repository_owner_mismatch"
   | "claims_repository_owner_id_invalid"
+  | "claims_repository_owner_id_mismatch"
   | "claims_event_name_mismatch"
   | "claims_ref_mismatch"
   | "claims_ref_type_mismatch"
@@ -323,6 +326,12 @@ function validateClaims(
     nbf,
     exp,
   } = value;
+  const repositorySeparator = expected.repository.indexOf("/");
+  const expectedRepositoryName =
+    repositorySeparator >= 0
+      ? expected.repository.slice(repositorySeparator + 1)
+      : "";
+  const expectedSubject = `repo:${expected.repositoryOwner}@${GITHUB_ACTIONS_TRUSTED_REPOSITORY_OWNER_ID}/${expectedRepositoryName}@${GITHUB_ACTIONS_TRUSTED_REPOSITORY_ID}:ref:${expected.ref}`;
 
   if (iss !== GITHUB_ACTIONS_OIDC_ISSUER) {
     return { ok: false, subcategory: "claims_issuer_mismatch" };
@@ -330,7 +339,7 @@ function validateClaims(
   if (aud !== GITHUB_ACTIONS_RLS_AUDIENCE) {
     return { ok: false, subcategory: "claims_audience_mismatch" };
   }
-  if (sub !== `repo:${expected.repository}:ref:${expected.ref}`) {
+  if (sub !== expectedSubject) {
     return { ok: false, subcategory: "claims_subject_mismatch" };
   }
   if (
@@ -353,6 +362,9 @@ function validateClaims(
   }
   if (!isPositiveDecimalString(repository_owner_id)) {
     return { ok: false, subcategory: "claims_repository_owner_id_invalid" };
+  }
+  if (repository_owner_id !== GITHUB_ACTIONS_TRUSTED_REPOSITORY_OWNER_ID) {
+    return { ok: false, subcategory: "claims_repository_owner_id_mismatch" };
   }
   if (event_name !== expected.eventName) {
     return { ok: false, subcategory: "claims_event_name_mismatch" };

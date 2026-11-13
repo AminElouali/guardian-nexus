@@ -14,6 +14,7 @@ import {
   GITHUB_ACTIONS_OIDC_ISSUER,
   GITHUB_ACTIONS_RLS_AUDIENCE,
   GITHUB_ACTIONS_TRUSTED_REPOSITORY_ID,
+  GITHUB_ACTIONS_TRUSTED_REPOSITORY_OWNER_ID,
   verifyGitHubActionsOidcToken,
   verifyGitHubActionsOidcTokenDetailed,
   verifyGitHubActionsClaimsWithOfficialJwksDetailed,
@@ -59,11 +60,11 @@ function defaultClaims(overrides: Record<string, unknown> = {}) {
   return {
     iss: GITHUB_ACTIONS_OIDC_ISSUER,
     aud: GITHUB_ACTIONS_RLS_AUDIENCE,
-    sub: `repo:${repository}:ref:refs/heads/main`,
+    sub: `repo:AminElouali@218157651/guardian-nexus@1455418736:ref:refs/heads/main`,
     repository,
     repository_id: GITHUB_ACTIONS_TRUSTED_REPOSITORY_ID,
     repository_owner: "AminElouali",
-    repository_owner_id: "987654321",
+    repository_owner_id: GITHUB_ACTIONS_TRUSTED_REPOSITORY_OWNER_ID,
     event_name: "workflow_dispatch",
     ref: "refs/heads/main",
     ref_type: "branch",
@@ -762,6 +763,10 @@ test("TEST ONLY claims diagnostics expose only fixed allowlisted subcategories",
       overrides: { repository_owner_id: sensitiveMarker },
     },
     {
+      subcategory: "claims_repository_owner_id_mismatch",
+      overrides: { repository_owner_id: "218157652" },
+    },
+    {
       subcategory: "claims_event_name_mismatch",
       overrides: { event_name: sensitiveMarker },
     },
@@ -834,6 +839,22 @@ test("TEST ONLY claims diagnostics expose only fixed allowlisted subcategories",
     assert.equal(JSON.stringify(result).includes(sensitiveMarker), false);
   }
 
+  const legacySubject = verifyGitHubActionsOidcTokenDetailed(
+    signToken(
+      defaultClaims({
+        sub: `repo:${repository}:ref:refs/heads/main`,
+      }),
+    ),
+    { keys: [primaryPublicJwk] },
+    expected,
+    now,
+  );
+  assert.deepEqual(legacySubject, {
+    ok: false,
+    category: "claims_mismatch",
+    subcategory: "claims_subject_mismatch",
+  });
+
   const simultaneousRepositoryMismatches = verifyGitHubActionsOidcTokenDetailed(
     signToken(
       defaultClaims({
@@ -858,6 +879,7 @@ test("TEST ONLY claims diagnostics expose only fixed allowlisted subcategories",
 });
 
 test("TEST ONLY GitHub OIDC pins the immutable canonical repository ID", () => {
+  assert.equal(GITHUB_ACTIONS_TRUSTED_REPOSITORY_OWNER_ID, "218157651");
   assert.equal(GITHUB_ACTIONS_TRUSTED_REPOSITORY_ID, "1455418736");
   const cases: Array<[string, Record<string, unknown>]> = [
     ["correct string ID", { repository_id: GITHUB_ACTIONS_TRUSTED_REPOSITORY_ID }],
@@ -881,6 +903,31 @@ test("TEST ONLY GitHub OIDC pins the immutable canonical repository ID", () => {
         ? GITHUB_ACTIONS_TRUSTED_REPOSITORY_ID
         : undefined,
       `repository ID case: ${label}`,
+    );
+  }
+
+  const ownerIdCases: Array<[string, Record<string, unknown>]> = [
+    ["correct string ID", { repository_owner_id: GITHUB_ACTIONS_TRUSTED_REPOSITORY_OWNER_ID }],
+    ["different ID", { repository_owner_id: "218157652" }],
+    ["missing ID", { repository_owner_id: undefined }],
+    ["numeric JSON ID", { repository_owner_id: 218157651 }],
+    ["leading-zero representation", { repository_owner_id: "0218157651" }],
+    ["whitespace representation", { repository_owner_id: " 218157651" }],
+  ];
+
+  for (const [label, override] of ownerIdCases) {
+    const claims = verifyGitHubActionsOidcToken(
+      signToken(defaultClaims(override)),
+      { keys: [primaryPublicJwk] },
+      expected,
+      now,
+    );
+    assert.equal(
+      claims?.repository_owner_id,
+      label === "correct string ID"
+        ? GITHUB_ACTIONS_TRUSTED_REPOSITORY_OWNER_ID
+        : undefined,
+      `repository owner ID case: ${label}`,
     );
   }
 });
