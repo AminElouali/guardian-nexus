@@ -131,7 +131,17 @@ export type GitHubActionsOidcFailureCategory =
   | "claims_mismatch";
 
 export type GitHubActionsOidcFailureSubcategory =
-  | "jwt_structure_or_header_invalid"
+  | "jwt_token_invalid"
+  | "jwt_segment_count_invalid"
+  | "jwt_header_base64url_invalid"
+  | "jwt_header_json_invalid"
+  | "jwt_payload_base64url_invalid"
+  | "jwt_payload_json_invalid"
+  | "jwt_signature_base64url_invalid"
+  | "jwt_algorithm_disallowed"
+  | "jwt_kid_invalid"
+  | "jwt_type_disallowed"
+  | "jwt_header_parameter_disallowed"
   | "jwk_metadata_incompatible"
   | "rsa_key_invalid"
   | "signature_unverifiable";
@@ -158,21 +168,37 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function decodeJsonSegment(segment: string): Record<string, unknown> | undefined {
-  if (!/^[A-Za-z0-9_-]+$/.test(segment)) return undefined;
-  try {
-    const decoded = Buffer.from(segment, "base64url");
-    if (
-      decoded.length > MAX_TOKEN_BYTES ||
-      decoded.toString("base64url") !== segment
-    ) {
-      return undefined;
-    }
-    const value: unknown = JSON.parse(decoded.toString("utf8"));
-    return isRecord(value) ? value : undefined;
-  } catch {
-    return undefined;
+type DecodedJsonSegment =
+  | { ok: true; value: Record<string, unknown> }
+  | { ok: false; reason: "base64url_invalid" | "json_invalid" };
+
+function decodeJsonSegment(segment: string): DecodedJsonSegment {
+  if (!/^[A-Za-z0-9_-]+$/.test(segment)) {
+    return { ok: false, reason: "base64url_invalid" };
   }
+
+  let decoded: Buffer;
+  try {
+    decoded = Buffer.from(segment, "base64url");
+  } catch {
+    return { ok: false, reason: "base64url_invalid" };
+  }
+  if (
+    decoded.length > MAX_TOKEN_BYTES ||
+    decoded.toString("base64url") !== segment
+  ) {
+    return { ok: false, reason: "base64url_invalid" };
+  }
+
+  let value: unknown;
+  try {
+    value = JSON.parse(decoded.toString("utf8"));
+  } catch {
+    return { ok: false, reason: "json_invalid" };
+  }
+  return isRecord(value)
+    ? { ok: true, value }
+    : { ok: false, reason: "json_invalid" };
 }
 
 function isPositiveDecimalString(value: unknown): value is string {
@@ -270,28 +296,47 @@ function verifyGitHubActionsOidcTokenUnchecked(
     token.length === 0 ||
     Buffer.byteLength(token, "utf8") > MAX_TOKEN_BYTES
   ) {
-    return jwtVerificationFailure("jwt_structure_or_header_invalid");
+    return jwtVerificationFailure("jwt_token_invalid");
   }
   const segments = token.split(".");
   if (segments.length !== 3) {
-    return jwtVerificationFailure("jwt_structure_or_header_invalid");
+    return jwtVerificationFailure("jwt_segment_count_invalid");
   }
 
   const [encodedHeader, encodedPayload, encodedSignature] = segments;
-  const header = decodeJsonSegment(encodedHeader);
-  const payload = decodeJsonSegment(encodedPayload);
-  if (!header || !payload || !/^[A-Za-z0-9_-]+$/.test(encodedSignature)) {
-    return jwtVerificationFailure("jwt_structure_or_header_invalid");
+  const decodedHeader = decodeJsonSegment(encodedHeader);
+  if (!decodedHeader.ok) {
+    return jwtVerificationFailure(
+      decodedHeader.reason === "base64url_invalid"
+        ? "jwt_header_base64url_invalid"
+        : "jwt_header_json_invalid",
+    );
   }
-  if (
-    header.alg !== "RS256" ||
-    !isNonEmptyString(header.kid) ||
-    (header.typ !== undefined && header.typ !== "JWT") ||
-    Object.keys(header).some(
-      (key) => !["alg", "kid", "typ"].includes(key),
-    )
-  ) {
-    return jwtVerificationFailure("jwt_structure_or_header_invalid");
+  const decodedPayload = decodeJsonSegment(encodedPayload);
+  if (!decodedPayload.ok) {
+    return jwtVerificationFailure(
+      decodedPayload.reason === "base64url_invalid"
+        ? "jwt_payload_base64url_invalid"
+        : "jwt_payload_json_invalid",
+    );
+  }
+  if (!/^[A-Za-z0-9_-]+$/.test(encodedSignature)) {
+    return jwtVerificationFailure("jwt_signature_base64url_invalid");
+  }
+  const header = decodedHeader.value;
+  const payload = decodedPayload.value;
+
+  if (header.alg !== "RS256") {
+    return jwtVerificationFailure("jwt_algorithm_disallowed");
+  }
+  if (!isNonEmptyString(header.kid)) {
+    return jwtVerificationFailure("jwt_kid_invalid");
+  }
+  if (header.typ !== undefined && header.typ !== "JWT") {
+    return jwtVerificationFailure("jwt_type_disallowed");
+  }
+  if (Object.keys(header).some((key) => !["alg", "kid", "typ"].includes(key))) {
+    return jwtVerificationFailure("jwt_header_parameter_disallowed");
   }
 
   const keys = jwks.keys;
@@ -339,7 +384,11 @@ function verifyGitHubActionsOidcTokenUnchecked(
     const signature = Buffer.from(encodedSignature, "base64url");
     if (
       signature.length === 0 ||
-      signature.toString("base64url") !== encodedSignature ||
+      signature.toString("base64url") !== encodedSignature
+    ) {
+      return jwtVerificationFailure("jwt_signature_base64url_invalid");
+    }
+    if (
       !verifySignature(
         "RSA-SHA256",
         Buffer.from(`${encodedHeader}.${encodedPayload}`, "ascii"),
