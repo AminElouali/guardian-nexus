@@ -331,7 +331,8 @@ function validateClaims(
     repositorySeparator >= 0
       ? expected.repository.slice(repositorySeparator + 1)
       : "";
-  const expectedSubject = `repo:${expected.repositoryOwner}@${GITHUB_ACTIONS_TRUSTED_REPOSITORY_OWNER_ID}/${expectedRepositoryName}@${GITHUB_ACTIONS_TRUSTED_REPOSITORY_ID}:ref:${expected.ref}`;
+  const expectedLegacySubject = `repo:${expected.repository}:ref:${expected.ref}`;
+  const expectedImmutableSubject = `repo:${expected.repositoryOwner}@${GITHUB_ACTIONS_TRUSTED_REPOSITORY_OWNER_ID}/${expectedRepositoryName}@${GITHUB_ACTIONS_TRUSTED_REPOSITORY_ID}:ref:${expected.ref}`;
 
   if (iss !== GITHUB_ACTIONS_OIDC_ISSUER) {
     return { ok: false, subcategory: "claims_issuer_mismatch" };
@@ -339,7 +340,7 @@ function validateClaims(
   if (aud !== GITHUB_ACTIONS_RLS_AUDIENCE) {
     return { ok: false, subcategory: "claims_audience_mismatch" };
   }
-  if (sub !== expectedSubject) {
+  if (sub !== expectedLegacySubject && sub !== expectedImmutableSubject) {
     return { ok: false, subcategory: "claims_subject_mismatch" };
   }
   if (

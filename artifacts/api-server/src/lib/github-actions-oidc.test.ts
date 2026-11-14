@@ -223,6 +223,44 @@ test("TEST ONLY GitHub OIDC token verifies signature and exact trusted claims", 
   assert.equal(verified?.run_id, runId);
 });
 
+test("TEST ONLY GitHub OIDC accepts only the exact legacy and immutable main subjects", () => {
+  const acceptedSubjects = [
+    "repo:AminElouali/guardian-nexus:ref:refs/heads/main",
+    "repo:AminElouali@218157651/guardian-nexus@1455418736:ref:refs/heads/main",
+  ];
+  for (const sub of acceptedSubjects) {
+    const result = verifyGitHubActionsOidcTokenDetailed(
+      signToken(defaultClaims({ sub })),
+      { keys: [primaryPublicJwk] },
+      expected,
+      now,
+    );
+    assert.equal(result.ok, true, `accepted exact subject format: ${sub}`);
+  }
+
+  const rejectedSubjects = [
+    "repo:AminElouali@218157651/guardian-nexus@1455418737:ref:refs/heads/main",
+    "repo:AminElouali@218157651/guardian-nexus@1455418736:ref:refs/heads/feature",
+    "repo:AminElouali@218157651/other-repo@1455418736:ref:refs/heads/main",
+  ];
+  for (const sub of rejectedSubjects) {
+    assert.deepEqual(
+      verifyGitHubActionsOidcTokenDetailed(
+        signToken(defaultClaims({ sub })),
+        { keys: [primaryPublicJwk] },
+        expected,
+        now,
+      ),
+      {
+        ok: false,
+        category: "claims_mismatch",
+        subcategory: "claims_subject_mismatch",
+      },
+      `rejected altered subject: ${sub}`,
+    );
+  }
+});
+
 test("TEST ONLY GitHub OIDC rejects invalid signatures, keys, algorithms, and headers", () => {
   const validClaims = defaultClaims();
   const validToken = signToken(validClaims);
@@ -838,22 +876,6 @@ test("TEST ONLY claims diagnostics expose only fixed allowlisted subcategories",
     });
     assert.equal(JSON.stringify(result).includes(sensitiveMarker), false);
   }
-
-  const legacySubject = verifyGitHubActionsOidcTokenDetailed(
-    signToken(
-      defaultClaims({
-        sub: `repo:${repository}:ref:refs/heads/main`,
-      }),
-    ),
-    { keys: [primaryPublicJwk] },
-    expected,
-    now,
-  );
-  assert.deepEqual(legacySubject, {
-    ok: false,
-    category: "claims_mismatch",
-    subcategory: "claims_subject_mismatch",
-  });
 
   const simultaneousRepositoryMismatches = verifyGitHubActionsOidcTokenDetailed(
     signToken(
