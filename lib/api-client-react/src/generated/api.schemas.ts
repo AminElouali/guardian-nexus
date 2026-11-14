@@ -4285,6 +4285,69 @@ export interface AiAssessmentApprovalDecisionResponse {
   execution: AiAssessmentApprovalDecisionResponseExecution;
 }
 
+export interface SyntheticRefundProposalRequest {
+  scenarioId: 'guardian.synthetic.support.refund.v1';
+  /**
+     * @minLength 16
+     * @maxLength 128
+     * @pattern ^[A-Za-z0-9._:-]+$
+     */
+  idempotencyKey: string;
+}
+
+export type SyntheticRefundProposalResponseDecision = typeof SyntheticRefundProposalResponseDecision[keyof typeof SyntheticRefundProposalResponseDecision];
+
+
+export const SyntheticRefundProposalResponseDecision = {
+  allow: 'allow',
+  deny: 'deny',
+  require_approval: 'require_approval',
+} as const;
+
+export type SyntheticRefundProposalResponseReasonCode = typeof SyntheticRefundProposalResponseReasonCode[keyof typeof SyntheticRefundProposalResponseReasonCode];
+
+
+export const SyntheticRefundProposalResponseReasonCode = {
+  synthetic_policy_allowed: 'synthetic_policy_allowed',
+  synthetic_policy_denied: 'synthetic_policy_denied',
+  human_approval_required: 'human_approval_required',
+} as const;
+
+export type SyntheticRefundProposalResponseExecution = typeof SyntheticRefundProposalResponseExecution[keyof typeof SyntheticRefundProposalResponseExecution];
+
+
+export const SyntheticRefundProposalResponseExecution = {
+  not_performed: 'not_performed',
+  not_performed_denied: 'not_performed_denied',
+  synthetic_action_simulated_once: 'synthetic_action_simulated_once',
+} as const;
+
+/**
+ * @nullable
+ */
+export type SyntheticRefundProposalResponseSimulationResultCode = typeof SyntheticRefundProposalResponseSimulationResultCode[keyof typeof SyntheticRefundProposalResponseSimulationResultCode] | null;
+
+
+export const SyntheticRefundProposalResponseSimulationResultCode = {
+  synthetic_refund_approved_in_clone: 'synthetic_refund_approved_in_clone',
+} as const;
+
+export interface SyntheticRefundProposalResponse {
+  decision: SyntheticRefundProposalResponseDecision;
+  reasonCode: SyntheticRefundProposalResponseReasonCode;
+  approval: AiAssessmentApproval | null;
+  execution: SyntheticRefundProposalResponseExecution;
+  /** @nullable */
+  simulationResultCode: SyntheticRefundProposalResponseSimulationResultCode;
+  /**
+     * @nullable
+     * @pattern ^[a-f0-9]{64}$
+     */
+  simulationResultSha256: string | null;
+  idempotent: boolean;
+  externalSideEffect: false;
+}
+
 export type MicrosoftOAuthCallbackParams = {
 code?: string;
 state: string;

@@ -795,6 +795,42 @@ paths:
               schema: { $ref: "#/components/schemas/AiAssessmentApprovalList" }
         "403":
           description: Workspace membership required
+  /workspaces/{workspaceId}/ai-security-assessments/synthetic-refund-proposals:
+    post:
+      operationId: createWorkspaceSyntheticRefundProposal
+      tags: [ai-evaluations]
+      summary: Create one fixed synthetic refund proposal for independent human review
+      description: The server derives the actor, tenant, policy evidence, and exact allow-listed action. A pending decision never dispatches the synthetic simulator; approval by another workspace owner/admin uses the existing one-time in-memory clone path.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SyntheticRefundProposalRequest" }
+      responses:
+        "200":
+          description: Existing idempotent proposal or a terminal synthetic policy result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SyntheticRefundProposalResponse" }
+        "201":
+          description: Pending synthetic refund approval recorded; no simulator dispatch occurred
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SyntheticRefundProposalResponse" }
+        "400":
+          description: Invalid or unsupported request
+        "403":
+          description: Workspace owner or admin role required
+        "409":
+          description: Idempotency key is bound to a different request
+        "503":
+          description: Fixed policy-lab evidence was unavailable or invalid
   /workspaces/{workspaceId}/ai-security-assessments/approvals/{approvalId}/decision:
     post:
       operationId: decideWorkspaceAiAssessmentApproval
@@ -1385,6 +1421,43 @@ components:
         approval: { $ref: "#/components/schemas/AiAssessmentApproval" }
         execution: { type: string, enum: [decision_only, not_performed_denied, synthetic_action_simulated_once] }
       required: [approval, execution]
+    SyntheticRefundProposalRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        scenarioId:
+          type: string
+          const: guardian.synthetic.support.refund.v1
+        idempotencyKey:
+          type: string
+          minLength: 16
+          maxLength: 128
+          pattern: "^[A-Za-z0-9._:-]+$"
+      required: [scenarioId, idempotencyKey]
+    SyntheticRefundProposalResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        decision: { type: string, enum: [allow, deny, require_approval] }
+        reasonCode:
+          type: string
+          enum: [synthetic_policy_allowed, synthetic_policy_denied, human_approval_required]
+        approval:
+          anyOf:
+            - $ref: "#/components/schemas/AiAssessmentApproval"
+            - type: "null"
+        execution:
+          type: string
+          enum: [not_performed, not_performed_denied, synthetic_action_simulated_once]
+        simulationResultCode:
+          type: ["string", "null"]
+          enum: [synthetic_refund_approved_in_clone, null]
+        simulationResultSha256:
+          type: ["string", "null"]
+          pattern: "^[a-f0-9]{64}$"
+        idempotent: { type: boolean }
+        externalSideEffect: { type: boolean, const: false }
+      required: [decision, reasonCode, approval, execution, simulationResultCode, simulationResultSha256, idempotent, externalSideEffect]
     GuardianLocalLlmEvidence:
       type: object
       additionalProperties: false

@@ -196,6 +196,31 @@ test("approval inbox shows tenant-safe decisions without claiming tool execution
   assert.doesNotMatch(customerMarkup, /Qwen|SHA-256|Job:|message\.tool_calls/i);
 });
 
+test("approval inbox offers only the fixed synthetic refund proposal to workspace decision-makers", () => {
+  const markup = renderToStaticMarkup(
+    createElement(GuardianApprovalInbox, {
+      approvals: [],
+      canDecide: true,
+      canRequestRefund: true,
+      refundRequestPending: false,
+      loading: false,
+      error: false,
+      mutationPending: false,
+      message: "",
+      errorMessage: "",
+      onRetry: () => undefined,
+      onRequestRefund: () => undefined,
+      onDecision: () => undefined,
+    }),
+  );
+  assert.match(markup, /data-testid="button-request-synthetic-refund"/);
+  assert.match(markup, /Proponer reembolso sintético/);
+  assert.match(markup, /Caso fijo de laboratorio/);
+  assert.match(markup, /conecta con pagos/);
+  assert.match(markup, /otra persona lo revise/);
+  assert.doesNotMatch(markup, /Qwen real|reembolso real|proveedor de pagos/i);
+});
+
 test("approval confirmation states synthetic impact before any decision", () => {
   const message = buildSyntheticApprovalConfirmationMessage({
     id: "11111111-1111-4111-8111-111111111111",

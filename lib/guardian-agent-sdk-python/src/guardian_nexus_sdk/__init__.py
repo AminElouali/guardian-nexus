@@ -3,6 +3,7 @@
 from .client import (
     AGENT_ACTION_SCENARIOS,
     QWEN_AGENT_PROFILE_IDS,
+    SYNTHETIC_REFUND_SCENARIO_ID,
     ApprovalDecision,
     GuardianNexusClient,
     GuardianNexusSdkError,
@@ -11,6 +12,7 @@ from .client import (
 __all__ = [
     "AGENT_ACTION_SCENARIOS",
     "QWEN_AGENT_PROFILE_IDS",
+    "SYNTHETIC_REFUND_SCENARIO_ID",
     "ApprovalDecision",
     "GuardianNexusClient",
     "GuardianNexusSdkError",

@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, isNull, lte, sql } from "drizzle-orm";
+import { and, count, desc, eq, gt, isNull, lte, sql } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import { Router, type IRouter, type RequestHandler } from "express";
 import {
@@ -14,6 +14,9 @@ import {
   DecideWorkspaceAiAssessmentApprovalBody,
   DecideWorkspaceAiAssessmentApprovalParams,
   DecideWorkspaceAiAssessmentApprovalResponse,
+  CreateWorkspaceSyntheticRefundProposalBody,
+  CreateWorkspaceSyntheticRefundProposalParams,
+  CreateWorkspaceSyntheticRefundProposalResponse,
   GetWorkspaceAiAssessmentLabAvailabilityParams,
   GetWorkspaceAiAssessmentLabAvailabilityResponse,
   ListWorkspaceAiAssessmentLabJobsParams,
@@ -27,6 +30,7 @@ import {
   aiAssessmentApprovalRequestsTable,
   aiAssessmentJobsTable,
   workspaceAuditEventsTable,
+  type AiAssessmentJobEvidence,
   type AiAssessmentJob,
 } from "@workspace/db";
 import {
@@ -77,6 +81,16 @@ import {
   loadPinnedHostTrustAnchor,
 } from "../lib/host-attestation-protocol";
 import { createHostAttestationNonceRepository } from "../lib/host-attestation-persistence";
+import {
+  coalesceSyntheticRefundRequest,
+  resolveSyntheticRefundDecision,
+  SYNTHETIC_REFUND_CASE_ID,
+  SYNTHETIC_REFUND_PROFILE_ID,
+  SYNTHETIC_REFUND_REQUIRED_PERMISSION,
+  SYNTHETIC_REFUND_SCENARIO_ID,
+  SYNTHETIC_REFUND_TOOL_NAME,
+  validateSyntheticRefundPolicyEvidence,
+} from "../lib/synthetic-refund-gateway";
 
 const routes: IRouter = Router();
 const UUID_PATTERN =
@@ -93,6 +107,7 @@ function hasOnlyPolicyPreviewProfile(value: unknown): boolean {
 const MAX_HISTORY = 20;
 const MAX_PENDING_PER_WORKSPACE = 3;
 const MAX_APPROVAL_HISTORY = 50;
+const SYNTHETIC_REFUND_APPROVAL_TTL_MS = 15 * 60 * 1_000;
 
 function bodyHasOnlyKeys(
   value: unknown,
@@ -1044,6 +1059,430 @@ routes.get(
         execution: "laboratory_only",
       }),
     );
+  },
+);
+
+routes.post(
+  "/workspaces/:workspaceId/ai-security-assessments/synthetic-refund-proposals",
+  async (req, res): Promise<void> => {
+    const params = CreateWorkspaceSyntheticRefundProposalParams.safeParse(
+      req.params,
+    );
+    const body = CreateWorkspaceSyntheticRefundProposalBody.safeParse(req.body);
+    if (
+      !params.success ||
+      !UUID_PATTERN.test(params.data.workspaceId) ||
+      !body.success ||
+      !bodyHasOnlyKeys(req.body, ["scenarioId", "idempotencyKey"]) ||
+      body.data.scenarioId !== SYNTHETIC_REFUND_SCENARIO_ID
+    ) {
+      res.status(400).json({ error: "Invalid synthetic refund proposal request" });
+      return;
+    }
+
+    const { workspaceId } = params.data;
+    const userId = req.authUserId!;
+    const idempotencyKey = body.data.idempotencyKey;
+    const inFlightKey = `${workspaceId}:${userId}:${idempotencyKey}`;
+    try {
+      const coalesced = await coalesceSyntheticRefundRequest(
+        inFlightKey,
+        async () => {
+          const preflight = await withWorkspaceUserTransaction(
+            userId,
+            workspaceId,
+            async (tx, membership) => {
+              if (!canRunAiEvaluation(membership.role)) {
+                return { kind: "forbidden" as const };
+              }
+              const [existingJob] = await tx
+                .select()
+                .from(aiAssessmentJobsTable)
+                .where(
+                  and(
+                    eq(aiAssessmentJobsTable.workspaceId, workspaceId),
+                    eq(aiAssessmentJobsTable.idempotencyKey, idempotencyKey),
+                  ),
+                )
+                .limit(1);
+              if (!existingJob) {
+                return { kind: "ready" as const, role: membership.role };
+              }
+              if (
+                existingJob.requestedByUserId !== userId ||
+                existingJob.profileId !== SYNTHETIC_REFUND_PROFILE_ID ||
+                existingJob.status !== "succeeded" ||
+                !validateSyntheticRefundPolicyEvidence(
+                  existingJob.result,
+                  [SYNTHETIC_REFUND_REQUIRED_PERMISSION],
+                )
+              ) {
+                return { kind: "idempotency_conflict" as const };
+              }
+              const [existingApproval] = await tx
+                .select()
+                .from(aiAssessmentApprovalRequestsTable)
+                .where(
+                  and(
+                    eq(aiAssessmentApprovalRequestsTable.workspaceId, workspaceId),
+                    eq(aiAssessmentApprovalRequestsTable.jobId, existingJob.id),
+                    eq(aiAssessmentApprovalRequestsTable.caseId, SYNTHETIC_REFUND_CASE_ID),
+                  ),
+                )
+                .limit(1);
+              return existingApproval
+                ? { kind: "existing" as const, approval: existingApproval }
+                : { kind: "idempotency_conflict" as const };
+            },
+          );
+          if (!preflight.authorized) {
+            return { kind: "not_member" as const };
+          }
+          if (preflight.value.kind === "forbidden") {
+            return { kind: "forbidden" as const };
+          }
+          if (preflight.value.kind === "idempotency_conflict") {
+            return { kind: "idempotency_conflict" as const };
+          }
+          if (preflight.value.kind === "existing") {
+            return {
+              kind: "response" as const,
+              status: 200,
+              body: {
+                decision: "require_approval" as const,
+                reasonCode: "human_approval_required" as const,
+                approval: formatApproval(preflight.value.approval),
+                execution: preflight.value.approval.simulatedAt
+                  ? "synthetic_action_simulated_once" as const
+                  : "not_performed" as const,
+                simulationResultCode:
+                  preflight.value.approval.simulationResultCode as
+                    | "synthetic_refund_approved_in_clone"
+                    | null,
+                simulationResultSha256:
+                  preflight.value.approval.simulationResultSha256,
+                idempotent: true,
+                externalSideEffect: false as const,
+              },
+            };
+          }
+
+          const actorPermissions = canRunAiEvaluation(preflight.membership.role)
+            ? [SYNTHETIC_REFUND_REQUIRED_PERMISSION]
+            : [];
+          if (!actorPermissions.includes(SYNTHETIC_REFUND_REQUIRED_PERMISSION)) {
+            return { kind: "forbidden" as const };
+          }
+
+          const policyEvidence = await runPolicyLabPreview(
+            SYNTHETIC_REFUND_PROFILE_ID,
+          );
+          const policyCase = validateSyntheticRefundPolicyEvidence(
+            policyEvidence,
+            actorPermissions,
+          );
+          if (!policyCase) return { kind: "policy_evidence_invalid" as const };
+
+          const resolution = await resolveSyntheticRefundDecision(
+            policyCase.decision,
+            {
+              persistPendingApproval: async () => {
+                const persisted = await withWorkspaceUserTransaction(
+                  userId,
+                  workspaceId,
+                  async (tx, membership) => {
+                    if (!canRunAiEvaluation(membership.role)) {
+                      return { kind: "forbidden" as const };
+                    }
+                    await tx.execute(
+                      sql`SELECT pg_advisory_xact_lock(hashtextextended(${`${workspaceId}:${idempotencyKey}`}, 0))`,
+                    );
+                    const [existingJob] = await tx
+                      .select()
+                      .from(aiAssessmentJobsTable)
+                      .where(
+                        and(
+                          eq(aiAssessmentJobsTable.workspaceId, workspaceId),
+                          eq(aiAssessmentJobsTable.idempotencyKey, idempotencyKey),
+                        ),
+                      )
+                      .limit(1);
+                    if (existingJob) {
+                      if (
+                        existingJob.requestedByUserId !== userId ||
+                        existingJob.profileId !== SYNTHETIC_REFUND_PROFILE_ID ||
+                        existingJob.status !== "succeeded" ||
+                        !validateSyntheticRefundPolicyEvidence(
+                          existingJob.result,
+                          [SYNTHETIC_REFUND_REQUIRED_PERMISSION],
+                        )
+                      ) {
+                        return { kind: "idempotency_conflict" as const };
+                      }
+                      const [existingApproval] = await tx
+                        .select()
+                        .from(aiAssessmentApprovalRequestsTable)
+                        .where(
+                          and(
+                            eq(aiAssessmentApprovalRequestsTable.workspaceId, workspaceId),
+                            eq(aiAssessmentApprovalRequestsTable.jobId, existingJob.id),
+                            eq(aiAssessmentApprovalRequestsTable.caseId, SYNTHETIC_REFUND_CASE_ID),
+                          ),
+                        )
+                        .limit(1);
+                      return existingApproval
+                        ? { kind: "existing" as const, approval: existingApproval }
+                        : { kind: "idempotency_conflict" as const };
+                    }
+
+                    const now = new Date();
+                    const [pendingApprovals] = await tx
+                      .select({ total: count() })
+                      .from(aiAssessmentApprovalRequestsTable)
+                      .where(
+                        and(
+                          eq(aiAssessmentApprovalRequestsTable.workspaceId, workspaceId),
+                          eq(aiAssessmentApprovalRequestsTable.status, "pending"),
+                          gt(aiAssessmentApprovalRequestsTable.expiresAt, now),
+                        ),
+                      );
+                    if ((pendingApprovals?.total ?? 0) >= MAX_PENDING_PER_WORKSPACE) {
+                      return { kind: "pending_limit" as const };
+                    }
+                    const expiresAt = new Date(
+                      now.getTime() + SYNTHETIC_REFUND_APPROVAL_TTL_MS,
+                    );
+                    const bindingProvenance = resolveApprovalEvidenceProvenance({
+                      engine: policyEvidence.engine,
+                      executionMode: policyEvidence.executionMode,
+                      modelInference: policyEvidence.modelInference,
+                      toolCallOrigin: "controlled_fixture_not_llm",
+                    });
+                    if (!bindingProvenance) {
+                      return { kind: "policy_evidence_invalid" as const };
+                    }
+                    const [job] = await tx
+                      .insert(aiAssessmentJobsTable)
+                      .values({
+                        workspaceId,
+                        requestedByUserId: userId,
+                        idempotencyKey,
+                        profileId: SYNTHETIC_REFUND_PROFILE_ID,
+                        status: "succeeded",
+                        workerVersion: "guardian-synthetic-refund-gateway-v1",
+                        engineVersion: policyEvidence.engineVersion,
+                        // JSONB can store the validated API-preview v3 evidence;
+                        // the legacy TypeScript union still describes persisted v1/v2 worker evidence.
+                        result: policyEvidence as unknown as AiAssessmentJobEvidence,
+                        startedAt: now,
+                        completedAt: now,
+                      })
+                      .onConflictDoNothing({
+                        target: [
+                          aiAssessmentJobsTable.workspaceId,
+                          aiAssessmentJobsTable.idempotencyKey,
+                        ],
+                      })
+                      .returning();
+                    if (!job) return { kind: "idempotency_conflict" as const };
+
+                    const proposalBindingSha256 =
+                      computeApprovalProposalBindingV3({
+                        workspaceId,
+                        jobId: job.id,
+                        caseId: SYNTHETIC_REFUND_CASE_ID,
+                        proposalSha256: policyCase.proof.proposalSha256,
+                        actionSha256: policyCase.proof.actionSha256,
+                        syntheticActionRef: SYNTHETIC_REFUND_SCENARIO_ID,
+                        requestedByUserId: userId,
+                        requestedByRole: membership.role,
+                        expiresAt,
+                        ...bindingProvenance,
+                      });
+                    const [approval] = await tx
+                      .insert(aiAssessmentApprovalRequestsTable)
+                      .values({
+                        workspaceId,
+                        jobId: job.id,
+                        caseId: SYNTHETIC_REFUND_CASE_ID,
+                        proposalSha256: policyCase.proof.proposalSha256,
+                        actionSha256: policyCase.proof.actionSha256,
+                        proposalBindingSha256,
+                        requestedByUserId: userId,
+                        requestedByRole: membership.role,
+                        bindingVersion: 3,
+                        syntheticActionRef: SYNTHETIC_REFUND_SCENARIO_ID,
+                        modelInference: false,
+                        executionMode: "deterministic_fixture",
+                        toolCallOrigin: "controlled_fixture_not_llm",
+                        status: "pending",
+                        expiresAt,
+                      })
+                      .returning();
+                    if (!approval) return { kind: "policy_evidence_invalid" as const };
+                    await tx.insert(workspaceAuditEventsTable).values({
+                      workspaceId,
+                      actorUserId: userId,
+                      action: "ai_assessment.synthetic_refund_approval_requested",
+                      resourceType: "ai_assessment_approval",
+                      resourceId: approval.id,
+                      metadata: {
+                        jobId: job.id,
+                        caseId: SYNTHETIC_REFUND_CASE_ID,
+                        proposalSha256: policyCase.proof.proposalSha256,
+                        actionSha256: policyCase.proof.actionSha256,
+                        proposalBindingSha256,
+                        syntheticActionRef: SYNTHETIC_REFUND_SCENARIO_ID,
+                        decision: "require_approval",
+                        modelInference: false,
+                        executionMode: "deterministic_fixture",
+                        toolCallOrigin: "controlled_fixture_not_llm",
+                        execution: "not_performed",
+                        externalSideEffect: false,
+                      },
+                    });
+                    return { kind: "created" as const, approval };
+                  },
+                );
+                if (!persisted.authorized) return { kind: "not_member" as const };
+                return persisted.value;
+              },
+              simulateAllowedAction: async () =>
+                createSyntheticApprovalSimulationReceipt(policyCase.proof),
+            },
+          );
+
+          if (resolution.kind === "approval_required") {
+            if (resolution.approval.kind === "created") {
+              return {
+                kind: "response" as const,
+                status: 201,
+                body: {
+                  decision: "require_approval" as const,
+                  reasonCode: "human_approval_required" as const,
+                  approval: formatApproval(resolution.approval.approval),
+                  execution: "not_performed" as const,
+                  simulationResultCode: null,
+                  simulationResultSha256: null,
+                  idempotent: false,
+                  externalSideEffect: false as const,
+                },
+              };
+            }
+            if (resolution.approval.kind === "existing") {
+              return {
+                kind: "response" as const,
+                status: 200,
+                body: {
+                  decision: "require_approval" as const,
+                  reasonCode: "human_approval_required" as const,
+                  approval: formatApproval(
+                    resolution.approval.approval,
+                    resolution.approval.approval.simulatedAt
+                      ? "simulated_once"
+                      : "not_performed",
+                  ),
+                  execution: resolution.approval.approval.simulatedAt
+                    ? "synthetic_action_simulated_once" as const
+                    : "not_performed" as const,
+                  simulationResultCode:
+                    resolution.approval.approval.simulationResultCode as
+                      | "synthetic_refund_approved_in_clone"
+                      | null,
+                  simulationResultSha256:
+                    resolution.approval.approval.simulationResultSha256,
+                  idempotent: true,
+                  externalSideEffect: false as const,
+                },
+              };
+            }
+            return resolution.approval;
+          }
+          if (resolution.kind === "simulated") {
+            if (!resolution.simulation) {
+              return { kind: "policy_evidence_invalid" as const };
+            }
+            return {
+              kind: "response" as const,
+              status: 200,
+              body: {
+                decision: "allow" as const,
+                reasonCode: "synthetic_policy_allowed" as const,
+                approval: null,
+                execution: "synthetic_action_simulated_once" as const,
+                simulationResultCode:
+                  "synthetic_refund_approved_in_clone" as const,
+                simulationResultSha256: resolution.simulation.resultSha256,
+                idempotent: false,
+                externalSideEffect: false as const,
+              },
+            };
+          }
+          if (resolution.kind === "denied") {
+            return {
+              kind: "response" as const,
+              status: 200,
+              body: {
+                decision: "deny" as const,
+                reasonCode: "synthetic_policy_denied" as const,
+                approval: null,
+                execution: "not_performed_denied" as const,
+                simulationResultCode: null,
+                simulationResultSha256: null,
+                idempotent: false,
+                externalSideEffect: false as const,
+              },
+            };
+          }
+          return { kind: "policy_evidence_invalid" as const };
+        },
+      );
+
+      if (coalesced.value.kind === "not_member") {
+        res.status(403).json({ error: "Workspace membership required" });
+        return;
+      }
+      if (coalesced.value.kind === "forbidden") {
+        res.status(403).json({ error: "Workspace owner or admin role required" });
+        return;
+      }
+      if (coalesced.value.kind === "idempotency_conflict") {
+        res.status(409).json({ error: "Idempotency key is bound to a different request" });
+        return;
+      }
+      if (coalesced.value.kind === "pending_limit") {
+        res.status(409).json({ error: "Workspace pending approval limit reached" });
+        return;
+      }
+      if (coalesced.value.kind === "policy_evidence_invalid") {
+        res.status(503).json({ error: "Synthetic policy evidence unavailable" });
+        return;
+      }
+      if (coalesced.value.kind !== "response") {
+        res.status(503).json({ error: "Synthetic policy decision unavailable" });
+        return;
+      }
+
+      const responseBody = {
+        ...coalesced.value.body,
+        idempotent: coalesced.replayed || coalesced.value.body.idempotent,
+      };
+      res
+        .status(coalesced.replayed ? 200 : coalesced.value.status)
+        .json(CreateWorkspaceSyntheticRefundProposalResponse.parse(responseBody));
+    } catch (error) {
+      const errorCode =
+        error instanceof PolicyLabPreviewError
+          ? error.code
+          : "synthetic_refund_proposal_failed";
+      req.log?.error?.(
+        { errorCode },
+        "Synthetic refund proposal could not be created",
+      );
+      res.status(
+        error instanceof PolicyLabPreviewError ? 503 : 500,
+      ).json({ error: "Synthetic refund proposal failed" });
+    }
   },
 );
 

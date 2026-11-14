@@ -9,6 +9,7 @@ from threading import Thread
 from guardian_nexus_sdk import (
     AGENT_ACTION_SCENARIOS,
     QWEN_AGENT_PROFILE_IDS,
+    SYNTHETIC_REFUND_SCENARIO_ID,
     GuardianNexusClient,
     GuardianNexusSdkError,
 )
@@ -134,6 +135,86 @@ class GuardianNexusClientTests(unittest.TestCase):
                 profile_id="unapproved-profile",
                 idempotency_key="qwen-request-000002",
             )
+
+    def test_synthetic_refund_sdk_sends_only_fixed_scenario_and_idempotency(self) -> None:
+        transport = FakeTransport(
+            [
+                response(
+                    201,
+                    {
+                        "decision": "require_approval",
+                        "reasonCode": "human_approval_required",
+                        "approval": {
+                            "id": APPROVAL,
+                            "jobId": WORKSPACE,
+                            "caseId": "support_trusted_refund_requires_approval",
+                            "proposalBindingSha256": BINDING,
+                            "status": "pending",
+                            "expiresAt": "2026-11-14T12:15:00Z",
+                            "syntheticActionRef": SYNTHETIC_REFUND_SCENARIO_ID,
+                            "bindingVersion": 3,
+                            "modelInference": False,
+                            "executionMode": "deterministic_fixture",
+                            "toolCallOrigin": "controlled_fixture_not_llm",
+                            "requestedByRole": "owner",
+                            "execution": "not_performed",
+                            "simulatedAt": None,
+                            "simulationResultCode": None,
+                            "simulationResultSha256": None,
+                            "replayBindingSha256": None,
+                            "canCurrentUserDecide": False,
+                        },
+                        "execution": "not_performed",
+                        "simulationResultCode": None,
+                        "simulationResultSha256": None,
+                        "idempotent": False,
+                        "externalSideEffect": False,
+                    },
+                )
+            ]
+        )
+        result = self.client(transport).propose_synthetic_refund(
+            idempotency_key="refund-request-000001",
+        )
+        self.assertEqual(result["decision"], "require_approval")
+        self.assertFalse(result["externalSideEffect"])
+        url, method, headers, body = transport.calls[0]
+        self.assertEqual(
+            url,
+            f"http://127.0.0.1:8080/api/workspaces/{WORKSPACE}/ai-security-assessments/synthetic-refund-proposals",
+        )
+        self.assertEqual(method, "POST")
+        self.assertEqual(
+            json.loads(body),
+            {
+                "scenarioId": SYNTHETIC_REFUND_SCENARIO_ID,
+                "idempotencyKey": "refund-request-000001",
+            },
+        )
+
+    def test_synthetic_refund_sdk_rejects_malformed_allow_response(self) -> None:
+        transport = FakeTransport(
+            [
+                response(
+                    200,
+                    {
+                        "decision": "allow",
+                        "reasonCode": "synthetic_policy_allowed",
+                        "approval": None,
+                        "execution": "not_performed",
+                        "simulationResultCode": "synthetic_refund_approved_in_clone",
+                        "simulationResultSha256": "f" * 64,
+                        "idempotent": False,
+                        "externalSideEffect": False,
+                    },
+                )
+            ]
+        )
+        with self.assertRaises(GuardianNexusSdkError) as error:
+            self.client(transport).propose_synthetic_refund(
+                idempotency_key="refund-request-000002",
+            )
+        self.assertEqual(error.exception.code, "invalid_synthetic_refund_response")
 
     def test_bounded_retry_reuses_same_idempotency_body_and_refreshes_token(self) -> None:
         transport = FakeTransport(

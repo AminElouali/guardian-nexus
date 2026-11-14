@@ -13,6 +13,7 @@ import {
   DecideWorkspaceAiAssessmentApprovalResponse,
   ListWorkspaceAiAssessmentApprovalsResponse,
   PreviewWorkspaceAiAssessmentPolicyLabResponse,
+  CreateWorkspaceSyntheticRefundProposalResponse,
 } from "@workspace/api-zod";
 import {
   canonicalApprovalJson,
@@ -28,10 +29,9 @@ import {
 
 /*
  * This is an explicitly fixture-only integration harness. It executes the
- * deterministic Python policy worker locally, without Docker, then provisions
- * its redacted evidence as a completed fixture job so the real authenticated
- * approval API and RLS transaction path can be tested. It is not Qwen evidence,
- * a broker test, or a production job-queue consumer.
+ * deterministic Python policy lab locally, without Docker, and exercises the
+ * authenticated approval API, Python SDK proposal path, and RLS transaction
+ * path. It is not Qwen evidence, a broker test, or a production queue consumer.
  */
 
 const workerRoot = resolve(
@@ -65,12 +65,11 @@ function sha256(value: unknown): string {
     .digest("hex");
 }
 
-function runPythonSdkApprovalClient(input: {
+function runPythonSdkRefundProposalClient(input: {
   apiBase: string;
   workspaceId: string;
   testUser: string;
-  approvalId: string;
-  binding: string;
+  idempotencyKey: string;
 }): Promise<string> {
   const sdkSource = resolve(
     workerRoot,
@@ -88,19 +87,19 @@ function runPythonSdkApprovalClient(input: {
         PATH: process.env.PATH ?? "/usr/bin:/bin",
         PYTHONPATH: sdkSource,
         PYTHONDONTWRITEBYTECODE: "1",
+        GUARDIAN_SDK_OPERATION: "propose_synthetic_refund",
         GUARDIAN_API_BASE_URL: input.apiBase,
         GUARDIAN_WORKSPACE_ID: input.workspaceId,
         GUARDIAN_TEST_USER: input.testUser,
-        GUARDIAN_APPROVAL_ID: input.approvalId,
-        GUARDIAN_PROPOSAL_BINDING_SHA256: input.binding,
+        GUARDIAN_REFUND_IDEMPOTENCY_KEY: input.idempotencyKey,
       },
     });
     let stdout = "";
     let settled = false;
     const timeout = setTimeout(() => {
       child.kill("SIGKILL");
-      finish(new Error("python_sdk_e2e_timeout"));
-    }, 15_000);
+      finish(new Error("python_sdk_refund_proposal_timeout"));
+    }, 20_000);
     const finish = (error?: Error) => {
       if (settled) return;
       settled = true;
@@ -113,15 +112,15 @@ function runPythonSdkApprovalClient(input: {
       if (settled) return;
       if (Buffer.byteLength(stdout) + Buffer.byteLength(chunk) > 4_096) {
         child.kill("SIGKILL");
-        finish(new Error("python_sdk_e2e_output_limit"));
+        finish(new Error("python_sdk_refund_proposal_output_limit"));
         return;
       }
       stdout += chunk;
     });
-    child.on("error", () => finish(new Error("python_sdk_e2e_spawn_failed")));
+    child.on("error", () => finish(new Error("python_sdk_refund_proposal_spawn_failed")));
     child.on("close", (code) => {
       if (code !== 0) {
-        finish(new Error(`python_sdk_e2e_failed:exit_${code ?? "unknown"}`));
+        finish(new Error(`python_sdk_refund_proposal_failed:exit_${code ?? "unknown"}`));
       } else {
         finish();
       }
@@ -711,15 +710,17 @@ test(
         idempotencyKey: `synthetic-finance-${randomUUID()}`,
         expectedResult: "synthetic_bank_change_approved_in_clone",
       },
-      {
-        profileId: "guardian-agent-lab-customer-service-v1",
-        caseId: "support_trusted_refund_requires_approval",
-        idempotencyKey: `synthetic-support-${randomUUID()}`,
-        expectedResult: "synthetic_refund_approved_in_clone",
-      },
     ] as const;
 
-    const approvals = [];
+    const approvals: Array<{
+      jobId: string;
+      approvalId: string;
+      binding: string;
+      profileId: string;
+      caseId: string;
+      idempotencyKey: string;
+      expectedResult: string;
+    }> = [];
     for (const fixture of cases) {
       const evidence = runDeterministicFixtureWorker(fixture.profileId);
       assert.equal(evidence.modelInference, false);
@@ -734,6 +735,121 @@ test(
       });
       approvals.push({ ...seeded, ...fixture });
     }
+
+    const refundPath =
+      `/api/workspaces/${workspaceA}/ai-security-assessments/synthetic-refund-proposals`;
+    assert.equal(
+      (await request(null, refundPath, "POST", {
+        scenarioId: "guardian.synthetic.support.refund.v1",
+        idempotencyKey: `synthetic-refund-${randomUUID()}`,
+      })).status,
+      401,
+      "refund proposal requires authentication",
+    );
+    assert.equal(
+      (await request(workspaceBOwner, refundPath, "POST", {
+        scenarioId: "guardian.synthetic.support.refund.v1",
+        idempotencyKey: `synthetic-refund-${randomUUID()}`,
+      })).status,
+      403,
+      "refund proposal is tenant-scoped",
+    );
+    assert.equal(
+      (await request(workspaceAViewer, refundPath, "POST", {
+        scenarioId: "guardian.synthetic.support.refund.v1",
+        idempotencyKey: `synthetic-refund-${randomUUID()}`,
+      })).status,
+      403,
+      "viewer cannot request a refund proposal",
+    );
+    assert.equal(
+      (await request(workspaceAOwner, refundPath, "POST", {
+        scenarioId: "guardian.synthetic.support.refund.v1",
+        idempotencyKey: `synthetic-refund-${randomUUID()}`,
+        tool: "untrusted_tool",
+      })).status,
+      400,
+      "client cannot provide tools or action arguments",
+    );
+    const refundIdempotencyKey = `synthetic-refund-${randomUUID()}`;
+    const refundProposalResponse = JSON.parse(
+      await runPythonSdkRefundProposalClient({
+        apiBase,
+        workspaceId: workspaceA,
+        testUser: workspaceAOwner,
+        idempotencyKey: refundIdempotencyKey,
+      }),
+    ) as {
+      approvalId: string;
+      jobId: string;
+      proposalBindingSha256: string;
+      idempotentReplay: boolean;
+    };
+    assert.match(
+      refundProposalResponse.approvalId,
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
+    assert.match(
+      refundProposalResponse.jobId,
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
+    assert.match(refundProposalResponse.proposalBindingSha256, /^[a-f0-9]{64}$/);
+    assert.equal(refundProposalResponse.idempotentReplay, true);
+    assert.equal(
+      (
+        await request(workspaceAAdmin, refundPath, "POST", {
+          scenarioId: "guardian.synthetic.support.refund.v1",
+          idempotencyKey: refundIdempotencyKey,
+        })
+      ).status,
+      409,
+      "another actor cannot reuse the requester's idempotency key",
+    );
+    approvals.push({
+      approvalId: refundProposalResponse.approvalId,
+      jobId: refundProposalResponse.jobId,
+      binding: refundProposalResponse.proposalBindingSha256,
+      profileId: "guardian-agent-lab-customer-service-v1",
+      caseId: "support_trusted_refund_requires_approval",
+      idempotencyKey: refundIdempotencyKey,
+      expectedResult: "synthetic_refund_approved_in_clone",
+    });
+
+    const concurrentRefundKey = `synthetic-refund-${randomUUID()}`;
+    const concurrentRefundResponses = await Promise.all([
+      request(workspaceAOwner, refundPath, "POST", {
+        scenarioId: "guardian.synthetic.support.refund.v1",
+        idempotencyKey: concurrentRefundKey,
+      }),
+      request(workspaceAOwner, refundPath, "POST", {
+        scenarioId: "guardian.synthetic.support.refund.v1",
+        idempotencyKey: concurrentRefundKey,
+      }),
+    ]);
+    assert.deepEqual(
+      concurrentRefundResponses.map((response) => response.status).sort(),
+      [200, 201],
+      "concurrent identical requests create one pending approval",
+    );
+    const concurrentRefundBodies = await Promise.all(
+      concurrentRefundResponses.map(async (response) =>
+        CreateWorkspaceSyntheticRefundProposalResponse.parse(
+          await response.json(),
+        ),
+      ),
+    );
+    assert.equal(
+      concurrentRefundBodies[0]?.approval?.id,
+      concurrentRefundBodies[1]?.approval?.id,
+    );
+    assert.equal(
+      concurrentRefundBodies[0]?.execution,
+      "not_performed",
+    );
+    assert.equal(
+      concurrentRefundBodies[1]?.execution,
+      "not_performed",
+    );
 
     assert.equal((await request(null, approvalPath)).status, 401);
     assert.equal((await request(workspaceBOwner, approvalPath)).status, 403);
@@ -916,16 +1032,38 @@ test(
 
     const support = approvals[1]!;
     const supportDecisionPath = `${approvalPath}/${support.approvalId}/decision`;
-    const pythonSdkOutcome = await runPythonSdkApprovalClient({
-      apiBase,
-      workspaceId: workspaceA,
-      testUser: workspaceAAdmin,
-      approvalId: support.approvalId,
-      binding: support.binding,
-    });
+    const dashboardDecision = DecideWorkspaceAiAssessmentApprovalResponse.parse(
+      await (
+        await request(workspaceAAdmin, supportDecisionPath, "POST", {
+          decision: "approve",
+          proposalBindingSha256: support.binding,
+        })
+      ).json(),
+    );
     assert.equal(
-      pythonSdkOutcome,
-      "PYTHON_SDK_APPROVAL_E2E status=approved execution=synthetic_action_simulated_once",
+      dashboardDecision.approval.status,
+      "approved",
+      "a different workspace admin can decide the SDK-created proposal",
+    );
+    assert.equal(
+      dashboardDecision.execution,
+      "synthetic_action_simulated_once",
+    );
+    assert.equal(
+      dashboardDecision.approval.simulationResultCode,
+      "synthetic_refund_approved_in_clone",
+    );
+    const visibleAfterApproval = ListWorkspaceAiAssessmentApprovalsResponse.parse(
+      await (await request(workspaceAAdmin, approvalPath)).json(),
+    );
+    const recordedRefund = visibleAfterApproval.approvals.find(
+      (approval) => approval.id === support.approvalId,
+    );
+    assert.equal(recordedRefund?.status, "approved");
+    assert.equal(
+      recordedRefund?.execution,
+      "synthetic_action_simulated_once",
+      "the dashboard list exposes the persisted one-time synthetic result",
     );
     assert.equal(
       (

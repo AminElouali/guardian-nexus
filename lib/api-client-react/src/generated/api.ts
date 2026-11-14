@@ -54,6 +54,8 @@ import type {
   MicrosoftIntegrationSetupInput,
   MicrosoftOAuthCallbackParams,
   Plan,
+  SyntheticRefundProposalRequest,
+  SyntheticRefundProposalResponse,
   Workspace,
   WorkspaceInput,
   WorkspaceIntegration,
@@ -3016,6 +3018,96 @@ export function useListWorkspaceAiAssessmentApprovals<TData = Awaited<ReturnType
 
 
 
+
+export const getCreateWorkspaceSyntheticRefundProposalUrl = (workspaceId: string,) => {
+
+
+
+
+  return `/api/workspaces/${workspaceId}/ai-security-assessments/synthetic-refund-proposals`
+}
+
+/**
+ * The server derives the actor, tenant, policy evidence, and exact allow-listed action. A pending decision never dispatches the synthetic simulator; approval by another workspace owner/admin uses the existing one-time in-memory clone path.
+ * @summary Create one fixed synthetic refund proposal for independent human review
+ */
+export const createWorkspaceSyntheticRefundProposal = async (workspaceId: string,
+    syntheticRefundProposalRequest: SyntheticRefundProposalRequest, options?: Parameters<typeof customFetch>[1]): Promise<SyntheticRefundProposalResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<SyntheticRefundProposalResponse>(getCreateWorkspaceSyntheticRefundProposalUrl(workspaceId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(syntheticRefundProposalRequest)
+  }
+);}
+
+
+
+
+
+export const getCreateWorkspaceSyntheticRefundProposalMutationKey = () => ['createWorkspaceSyntheticRefundProposal'] as const;
+
+export const getCreateWorkspaceSyntheticRefundProposalMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createWorkspaceSyntheticRefundProposal>>, TError,CreateWorkspaceSyntheticRefundProposalMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createWorkspaceSyntheticRefundProposal>>, TError,CreateWorkspaceSyntheticRefundProposalMutationVariables, TContext> => {
+
+const mutationKey = getCreateWorkspaceSyntheticRefundProposalMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createWorkspaceSyntheticRefundProposal>>, CreateWorkspaceSyntheticRefundProposalMutationVariables> = (props) => {
+          const {workspaceId,data} = props ?? {};
+
+          return  createWorkspaceSyntheticRefundProposal(workspaceId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateWorkspaceSyntheticRefundProposalMutationResult = NonNullable<Awaited<ReturnType<typeof createWorkspaceSyntheticRefundProposal>>>
+    export type CreateWorkspaceSyntheticRefundProposalMutationBody = BodyType<SyntheticRefundProposalRequest>
+    export type CreateWorkspaceSyntheticRefundProposalMutationError = ErrorType<void>
+    export type CreateWorkspaceSyntheticRefundProposalMutationVariables = {workspaceId: string;data: BodyType<SyntheticRefundProposalRequest>}
+
+    /**
+ * @summary Create one fixed synthetic refund proposal for independent human review
+ */
+export const useCreateWorkspaceSyntheticRefundProposal = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createWorkspaceSyntheticRefundProposal>>, TError,CreateWorkspaceSyntheticRefundProposalMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createWorkspaceSyntheticRefundProposal>>,
+        TError,
+        CreateWorkspaceSyntheticRefundProposalMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateWorkspaceSyntheticRefundProposalMutationOptions(options), queryClient);
+    }
 
 export const getDecideWorkspaceAiAssessmentApprovalUrl = (workspaceId: string,
     approvalId: string,) => {

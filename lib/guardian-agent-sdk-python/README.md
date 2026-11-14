@@ -44,6 +44,14 @@ configured. Do not paste tokens into source files or command history.
 
 - Fixed synthetic intent scenarios currently cover email and finance. They are
   not enterprise connectors.
+- `GuardianNexusClient.propose_synthetic_refund()` submits only the fixed
+  `guardian.synthetic.support.refund.v1` scenario. The API evaluates its
+  deterministic policy fixture server-side and creates a pending, tenant-bound
+  approval; it accepts no client-supplied action arguments or policy decision.
+  This path is a deterministic fixture, not live Qwen inference or a real
+  refund. A different workspace owner/admin must approve it in the dashboard;
+  the existing approval route then simulates the allow-listed action once in
+  an in-memory clone.
 - Qwen profile submission supports the eight server-allowlisted profile IDs,
   but its response remains `not_yet_verified` until a worker result is read.
 - When the isolated assessment worker/broker is disabled, the API may return

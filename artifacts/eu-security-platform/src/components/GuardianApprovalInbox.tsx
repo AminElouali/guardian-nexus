@@ -15,7 +15,10 @@ type GuardianApprovalInboxProps = {
   mutationPending: boolean;
   message: string;
   errorMessage: string;
+  canRequestRefund?: boolean;
+  refundRequestPending?: boolean;
   onRetry: () => void;
+  onRequestRefund?: () => void;
   onDecision: (
     approvalId: string,
     proposalBindingSha256: string,
@@ -62,7 +65,10 @@ export function GuardianApprovalInbox({
   mutationPending,
   message,
   errorMessage,
+  canRequestRefund = false,
+  refundRequestPending = false,
   onRetry,
+  onRequestRefund,
   onDecision,
 }: GuardianApprovalInboxProps) {
   function confirmDecision(
@@ -97,6 +103,25 @@ export function GuardianApprovalInbox({
         una copia efímera en memoria; nunca se llama a herramientas ni sistemas
         externos.
       </p>
+      {canRequestRefund && onRequestRefund && (
+        <div className="ai-evaluation-actions" data-testid="synthetic-refund-request">
+          <Button
+            variant="outline"
+            onClick={onRequestRefund}
+            disabled={refundRequestPending}
+            data-testid="button-request-synthetic-refund"
+          >
+            {refundRequestPending
+              ? "Evaluando política…"
+              : "Proponer reembolso sintético"}
+          </Button>
+          <small>
+            Caso fijo de laboratorio; no usa Qwen ni conecta con pagos. El
+            servidor decide y, si requiere aprobación, no simula nada hasta que
+            otra persona lo revise.
+          </small>
+        </div>
+      )}
       {message && (
         <div className="notice notice-success" role="status" data-testid="approval-success">
           {message}

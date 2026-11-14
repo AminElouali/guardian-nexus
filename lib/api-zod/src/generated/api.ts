@@ -11249,6 +11249,72 @@ export const ListWorkspaceAiAssessmentApprovalsResponse = zod.object({
 
 
 /**
+ * The server derives the actor, tenant, policy evidence, and exact allow-listed action. A pending decision never dispatches the synthetic simulator; approval by another workspace owner/admin uses the existing one-time in-memory clone path.
+ * @summary Create one fixed synthetic refund proposal for independent human review
+ */
+export const CreateWorkspaceSyntheticRefundProposalParams = zod.object({
+  "workspaceId": zod.uuid()
+})
+
+export const createWorkspaceSyntheticRefundProposalBodyIdempotencyKeyMin = 16;
+export const createWorkspaceSyntheticRefundProposalBodyIdempotencyKeyMax = 128;
+
+
+export const createWorkspaceSyntheticRefundProposalBodyIdempotencyKeyRegExp = new RegExp('^[A-Za-z0-9._:-]+$');
+
+
+export const CreateWorkspaceSyntheticRefundProposalBody = zod.object({
+  "scenarioId": zod.literal("guardian.synthetic.support.refund.v1"),
+  "idempotencyKey": zod.string().min(createWorkspaceSyntheticRefundProposalBodyIdempotencyKeyMin).max(createWorkspaceSyntheticRefundProposalBodyIdempotencyKeyMax).regex(createWorkspaceSyntheticRefundProposalBodyIdempotencyKeyRegExp)
+})
+
+export const createWorkspaceSyntheticRefundProposalResponseApprovalOneProposalSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceSyntheticRefundProposalResponseApprovalOneActionSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceSyntheticRefundProposalResponseApprovalOneProposalBindingSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceSyntheticRefundProposalResponseApprovalOneSimulationResultSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceSyntheticRefundProposalResponseApprovalOneReplayBindingSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceSyntheticRefundProposalResponseSimulationResultSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+
+
+export const CreateWorkspaceSyntheticRefundProposalResponse = zod.object({
+  "decision": zod.enum(['allow', 'deny', 'require_approval']),
+  "reasonCode": zod.enum(['synthetic_policy_allowed', 'synthetic_policy_denied', 'human_approval_required']),
+  "approval": zod.union([zod.object({
+  "id": zod.uuid(),
+  "jobId": zod.uuid(),
+  "caseId": zod.string(),
+  "proposalSha256": zod.string().regex(createWorkspaceSyntheticRefundProposalResponseApprovalOneProposalSha256RegExp),
+  "actionSha256": zod.string().regex(createWorkspaceSyntheticRefundProposalResponseApprovalOneActionSha256RegExp).nullable(),
+  "proposalBindingSha256": zod.string().regex(createWorkspaceSyntheticRefundProposalResponseApprovalOneProposalBindingSha256RegExp),
+  "requestedByUserId": zod.string(),
+  "requestedByRole": zod.union([zod.literal('owner'),zod.literal('admin'),zod.literal('member'),zod.literal('viewer'),zod.literal(null)]).nullable(),
+  "bindingVersion": zod.union([zod.literal(1),zod.literal(2),zod.literal(3)]),
+  "syntheticActionRef": zod.union([zod.literal('guardian.synthetic.finance.bank-change.v1'),zod.literal('guardian.synthetic.support.refund.v1'),zod.literal(null)]).nullable(),
+  "modelInference": zod.boolean().nullable(),
+  "executionMode": zod.union([zod.literal('deterministic_fixture'),zod.literal('real_local_qwen_inference'),zod.literal(null)]).nullable(),
+  "toolCallOrigin": zod.union([zod.literal('controlled_fixture_not_llm'),zod.literal('guardian_qwen_native_markup_adapter'),zod.literal('runtime_message_tool_calls'),zod.literal(null)]).nullable(),
+  "status": zod.enum(['pending', 'approved', 'denied', 'expired']),
+  "canCurrentUserDecide": zod.boolean(),
+  "expiresAt": zod.coerce.date(),
+  "decidedByUserId": zod.string().nullable(),
+  "decidedByRole": zod.union([zod.literal('owner'),zod.literal('admin'),zod.literal('member'),zod.literal('viewer'),zod.literal(null)]).nullable(),
+  "decidedAt": zod.coerce.date().nullable(),
+  "execution": zod.enum(['not_performed', 'synthetic_action_simulated_once']),
+  "simulatedAt": zod.coerce.date().nullable(),
+  "simulationResultCode": zod.union([zod.literal('synthetic_bank_change_approved_in_clone'),zod.literal('synthetic_refund_approved_in_clone'),zod.literal(null)]).nullable(),
+  "simulationResultSha256": zod.string().regex(createWorkspaceSyntheticRefundProposalResponseApprovalOneSimulationResultSha256RegExp).nullable(),
+  "replayBindingSha256": zod.string().regex(createWorkspaceSyntheticRefundProposalResponseApprovalOneReplayBindingSha256RegExp).nullable(),
+  "createdAt": zod.coerce.date()
+}),zod.null()]),
+  "execution": zod.enum(['not_performed', 'not_performed_denied', 'synthetic_action_simulated_once']),
+  "simulationResultCode": zod.union([zod.literal('synthetic_refund_approved_in_clone'),zod.literal(null)]).nullable(),
+  "simulationResultSha256": zod.string().regex(createWorkspaceSyntheticRefundProposalResponseSimulationResultSha256RegExp).nullable(),
+  "idempotent": zod.boolean(),
+  "externalSideEffect": zod.literal(false)
+})
+
+
+/**
  * Requires a different workspace owner/admin. The immutable proposal binding prevents replay or altered proposals. An exact allow-listed version 2 synthetic action may be replayed once against an ephemeral in-memory clone; external tools and systems are never called.
  * @summary Approve or deny one exact simulated proposal
  */

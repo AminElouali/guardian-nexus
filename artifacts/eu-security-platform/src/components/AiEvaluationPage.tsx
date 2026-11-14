@@ -7,6 +7,7 @@ import {
   getListWorkspaceAiEvaluationsQueryKey,
   useDecideWorkspaceAiAssessmentApproval,
   useCreateWorkspaceAiAssessmentLabJob,
+  useCreateWorkspaceSyntheticRefundProposal,
   useGetWorkspaceAiAssessmentLabAvailability,
   useListWorkspaceAiAssessmentApprovals,
   useListWorkspaceAiAssessmentLabJobs,
@@ -903,6 +904,7 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
   const previewPolicyLab = usePreviewWorkspaceAiAssessmentPolicyLab();
   const retryLabJob = useRetryWorkspaceAiAssessmentLabJob();
   const decideApproval = useDecideWorkspaceAiAssessmentApproval();
+  const createSyntheticRefund = useCreateWorkspaceSyntheticRefundProposal();
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [labMessage, setLabMessage] = useState('');
@@ -1002,6 +1004,41 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
       });
     } catch {
       setApprovalError('No se pudo registrar la decisión. La operación simulada no se ejecutó.');
+      await approvalList.refetch();
+    }
+  }
+
+  async function requestSyntheticRefund() {
+    setApprovalMessage('');
+    setApprovalError('');
+    try {
+      const result = await createSyntheticRefund.mutateAsync({
+        workspaceId: workspace.id,
+        data: {
+          scenarioId: 'guardian.synthetic.support.refund.v1',
+          idempotencyKey: crypto.randomUUID(),
+        },
+      });
+      if (result.decision === 'require_approval' && result.approval) {
+        setApprovalMessage(
+          result.idempotent
+            ? 'La solicitud ya estaba registrada. El solicitante no puede aprobarla.'
+            : 'Propuesta sintética registrada como pendiente. El solicitante no puede aprobarla.',
+        );
+        setActiveSection('approvals');
+        await cache.invalidateQueries({
+          queryKey: getListWorkspaceAiAssessmentApprovalsQueryKey(workspace.id),
+        });
+        await cache.invalidateQueries({
+          queryKey: getListWorkspaceAiAssessmentLabJobsQueryKey(workspace.id),
+        });
+      } else if (result.decision === 'deny') {
+        setApprovalError('El Policy Engine denegó la propuesta. No se ejecutó ninguna simulación.');
+      } else {
+        setApprovalMessage('El Policy Engine permitió solo una simulación en memoria; no hubo efectos externos.');
+      }
+    } catch {
+      setApprovalError('No se pudo crear la propuesta. No se ejecutó ningún simulador.');
       await approvalList.refetch();
     }
   }
@@ -1182,9 +1219,12 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
       loadError={approvalList.error}
       isRetrying={approvalList.isFetching}
       mutationPending={decideApproval.isPending}
+      canRequestRefund={canRun}
+      refundRequestPending={createSyntheticRefund.isPending}
       message={approvalMessage}
       errorMessage={approvalError}
       onRetry={() => void approvalList.refetch()}
+      onRequestRefund={() => void requestSyntheticRefund()}
       onDecision={(approvalId, binding, decision) =>
         void recordApprovalDecision(approvalId, binding, decision)
       }

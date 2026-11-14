@@ -23,6 +23,7 @@ AGENT_ACTION_SCENARIOS = (
     "finance.untrusted_transfer",
     "finance.trusted_bank_change_approval",
 )
+SYNTHETIC_REFUND_SCENARIO_ID = "guardian.synthetic.support.refund.v1"
 
 QWEN_AGENT_PROFILE_IDS = (
     "guardian-agent-qwen-lab-email-v1",
@@ -249,6 +250,22 @@ class GuardianNexusClient:
             raise GuardianNexusSdkError("invalid_approval_list_response")
         return [dict(approval) for approval in approvals]
 
+    def propose_synthetic_refund(self, *, idempotency_key: str) -> dict[str, Any]:
+        """Request the one fixed synthetic refund scenario for human review."""
+        _validate_idempotency_key(idempotency_key)
+        value = self._request(
+            f"/workspaces/{self.workspace_id}/ai-security-assessments/synthetic-refund-proposals",
+            method="POST",
+            body={
+                "scenarioId": SYNTHETIC_REFUND_SCENARIO_ID,
+                "idempotencyKey": idempotency_key,
+            },
+            retryable=True,
+        )
+        if not _is_valid_synthetic_refund_response(value):
+            raise GuardianNexusSdkError("invalid_synthetic_refund_response")
+        return dict(value)
+
     def decide_approval(
         self,
         *,
@@ -431,6 +448,78 @@ def _is_valid_approval_summary(value: Any) -> bool:
         and _is_sha256(value.get("proposalBindingSha256"))
         and isinstance(value.get("expiresAt"), str)
     )
+
+
+def _is_valid_synthetic_refund_approval(value: Any) -> bool:
+    if not _is_valid_approval_summary(value):
+        return False
+    if (
+        value.get("caseId") != "support_trusted_refund_requires_approval"
+        or value.get("syntheticActionRef") != SYNTHETIC_REFUND_SCENARIO_ID
+        or value.get("bindingVersion") != 3
+        or value.get("modelInference") is not False
+        or value.get("executionMode") != "deterministic_fixture"
+        or value.get("toolCallOrigin") != "controlled_fixture_not_llm"
+        or value.get("requestedByRole") not in {"owner", "admin"}
+    ):
+        return False
+    if value.get("status") == "pending":
+        return (
+            value.get("execution") == "not_performed"
+            and value.get("simulatedAt") is None
+            and value.get("simulationResultCode") is None
+            and value.get("simulationResultSha256") is None
+            and value.get("canCurrentUserDecide") is False
+        )
+    if value.get("status") == "approved":
+        return (
+            value.get("execution") == "synthetic_action_simulated_once"
+            and value.get("simulatedAt") is not None
+            and value.get("simulationResultCode")
+            == "synthetic_refund_approved_in_clone"
+            and _is_sha256(value.get("simulationResultSha256"))
+            and _is_sha256(value.get("replayBindingSha256"))
+        )
+    return value.get("status") in {"denied", "expired"}
+
+
+def _is_valid_synthetic_refund_response(value: Any) -> bool:
+    if (
+        not _is_mapping(value)
+        or not isinstance(value.get("idempotent"), bool)
+        or value.get("externalSideEffect") is not False
+    ):
+        return False
+    decision = value.get("decision")
+    if decision == "require_approval":
+        approval = value.get("approval")
+        return (
+            value.get("reasonCode") == "human_approval_required"
+            and _is_valid_synthetic_refund_approval(approval)
+            and approval.get("execution") == value.get("execution")
+            and value.get("simulationResultCode")
+            == approval.get("simulationResultCode")
+            and value.get("simulationResultSha256")
+            == approval.get("simulationResultSha256")
+        )
+    if decision == "allow":
+        return (
+            value.get("reasonCode") == "synthetic_policy_allowed"
+            and value.get("approval") is None
+            and value.get("execution") == "synthetic_action_simulated_once"
+            and value.get("simulationResultCode")
+            == "synthetic_refund_approved_in_clone"
+            and _is_sha256(value.get("simulationResultSha256"))
+        )
+    if decision == "deny":
+        return (
+            value.get("reasonCode") == "synthetic_policy_denied"
+            and value.get("approval") is None
+            and value.get("execution") == "not_performed_denied"
+            and value.get("simulationResultCode") is None
+            and value.get("simulationResultSha256") is None
+        )
+    return False
 
 
 def _header(headers: Mapping[str, str], name: str) -> str | None:

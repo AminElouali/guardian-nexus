@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import json
 
 from guardian_nexus_sdk import GuardianNexusClient, GuardianNexusSdkError
 from guardian_nexus_sdk.client import HttpResponse, UrllibTransport
@@ -25,12 +26,11 @@ class _SyntheticTestIdentityTransport:
 
 
 def main() -> int:
+    operation = os.environ.get("GUARDIAN_SDK_OPERATION", "approve")
     required = (
         "GUARDIAN_API_BASE_URL",
         "GUARDIAN_WORKSPACE_ID",
         "GUARDIAN_TEST_USER",
-        "GUARDIAN_APPROVAL_ID",
-        "GUARDIAN_PROPOSAL_BINDING_SHA256",
     )
     if any(not os.environ.get(name) for name in required):
         return 2
@@ -44,6 +44,49 @@ def main() -> int:
         transport=_SyntheticTestIdentityTransport(),
         max_retries=0,
     )
+    if operation == "propose_synthetic_refund":
+        idempotency_key = os.environ.get("GUARDIAN_REFUND_IDEMPOTENCY_KEY")
+        if not idempotency_key:
+            return 2
+        first = client.propose_synthetic_refund(idempotency_key=idempotency_key)
+        replay = client.propose_synthetic_refund(idempotency_key=idempotency_key)
+        first_approval = first["approval"]
+        replay_approval = replay["approval"]
+        if (
+            first["decision"] != "require_approval"
+            or first["execution"] != "not_performed"
+            or first["externalSideEffect"] is not False
+            or first_approval.get("status") != "pending"
+            or first_approval.get("canCurrentUserDecide") is not False
+            or replay.get("idempotent") is not True
+            or replay_approval.get("id") != first_approval.get("id")
+            or replay_approval.get("proposalBindingSha256")
+            != first_approval.get("proposalBindingSha256")
+        ):
+            return 5
+        print(
+            json.dumps(
+                {
+                    "approvalId": first_approval["id"],
+                    "jobId": first_approval["jobId"],
+                    "proposalBindingSha256": first_approval[
+                        "proposalBindingSha256"
+                    ],
+                    "idempotentReplay": replay["idempotent"],
+                },
+                separators=(",", ":"),
+            )
+        )
+        return 0
+    if operation != "approve" or any(
+        not os.environ.get(name)
+        for name in (
+            "GUARDIAN_APPROVAL_ID",
+            "GUARDIAN_PROPOSAL_BINDING_SHA256",
+        )
+    ):
+        return 2
+
     pending = next(
         (
             item
