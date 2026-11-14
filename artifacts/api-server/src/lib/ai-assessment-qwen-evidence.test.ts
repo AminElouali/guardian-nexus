@@ -392,7 +392,7 @@ test("TEST ONLY support approval lifecycle binds proposal, tenant, actor, role, 
   });
 });
 
-test("persistent approval E2E requires explicit opt-in to a named loopback disposable database", () => {
+test("persistent approval E2E rejects a loopback URL without private-socket proof", () => {
   const safeDisposableTarget = {
     NODE_ENV: "development",
     GUARDIAN_APPROVAL_E2E_DISPOSABLE: "1",
@@ -402,7 +402,10 @@ test("persistent approval E2E requires explicit opt-in to a named loopback dispo
     APP_RUNTIME_DATABASE_URL:
       "postgresql://app_runtime_login:synthetic-runtime-password-0123456789abcdef@127.0.0.1:5432/guardian_approval_lab_run_01",
   };
-  assert.equal(isExplicitDisposableApprovalDatabase(safeDisposableTarget), true);
+  assert.equal(
+    isExplicitDisposableApprovalDatabase(safeDisposableTarget),
+    false,
+  );
 
   for (const unsafeTarget of [
     { ...safeDisposableTarget, GUARDIAN_APPROVAL_E2E_DISPOSABLE: undefined },

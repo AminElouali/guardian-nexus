@@ -1,6 +1,7 @@
 import { is } from "drizzle-orm";
 import { PgDialect, PgTable, getTableConfig } from "drizzle-orm/pg-core";
 import { parse } from "pgsql-ast-parser";
+import type { PoolClient } from "pg";
 import * as schema from "./schema/index";
 import {
   expectedDisposableRlsTableOwner,
@@ -55,6 +56,7 @@ export type RlsCatalogPhaseConstraint = {
 };
 
 export type RlsCatalogPhaseSnapshot = {
+  maxIdentifierLength: number;
   tables: RlsCatalogPhaseTable[];
   columns: RlsCatalogPhaseColumn[];
   indexes: RlsCatalogPhaseIndex[];
@@ -97,6 +99,7 @@ type ExpectedTable = {
 
 export type RlsCatalogPhaseAudit = {
   passed: boolean;
+  stage: RlsCatalogAuditStage;
   expectedTableCount: number;
   expectedColumnCount: number;
   expectedIndexCount: number;
@@ -104,10 +107,28 @@ export type RlsCatalogPhaseAudit = {
   expectedPolicyCount: number;
   expectedRoleCount: number;
   violations: string[];
+  diagnostics: string[];
 };
 
 const dialect = new PgDialect();
-const phaseRoleNames = new Set(["app_runtime", "app_ai_assessment_worker"]);
+
+export type RlsCatalogAuditStage = "post-schema" | "final";
+const defaultPostgresMaxIdentifierLength = 63;
+
+export function postgresIdentifier(
+  value: string,
+  maxBytes = defaultPostgresMaxIdentifierLength,
+): string {
+  let result = "";
+  let usedBytes = 0;
+  for (const codePoint of value) {
+    const bytes = Buffer.byteLength(codePoint, "utf8");
+    if (usedBytes + bytes > maxBytes) break;
+    result += codePoint;
+    usedBytes += bytes;
+  }
+  return result;
+}
 
 function sqlText(value: { toQuery: (config: unknown) => unknown } | undefined) {
   if (!value) return null;
@@ -118,8 +139,21 @@ function sqlText(value: { toQuery: (config: unknown) => unknown } | undefined) {
   return query.sql;
 }
 
-function tableNameOf(table: PgTable): string {
-  return getTableConfig(table).name;
+function requireName(value: unknown, kind: string): string {
+  if (typeof value !== "string" || value.length === 0) {
+    throw new Error(`Unnamed ${kind} in Drizzle schema.`);
+  }
+  return value;
+}
+
+function tableNameOf(
+  table: PgTable,
+  maxIdentifierLength: number,
+): string {
+  return postgresIdentifier(
+    getTableConfig(table).name,
+    maxIdentifierLength,
+  );
 }
 
 function normalizeAst(value: unknown, baseTable: string): unknown {
@@ -129,6 +163,86 @@ function normalizeAst(value: unknown, baseTable: string): unknown {
   if (!value || typeof value !== "object") return value;
 
   const node = value as Record<string, unknown>;
+  if (
+    node.type === "ternary" &&
+    node.op === "BETWEEN" &&
+    node.value !== undefined &&
+    node.lo !== undefined &&
+    node.hi !== undefined
+  ) {
+    return normalizeAst(
+      {
+        type: "binary",
+        left: {
+          type: "binary",
+          left: node.value,
+          op: ">=",
+          right: node.lo,
+        },
+        op: "AND",
+        right: {
+          type: "binary",
+          left: node.value,
+          op: "<=",
+          right: node.hi,
+        },
+      },
+      baseTable,
+    );
+  }
+  if (
+    node.type === "table" &&
+    node.name &&
+    typeof node.name === "object" &&
+    typeof (node.name as Record<string, unknown>).name === "string"
+  ) {
+    const relation = node.name as Record<string, unknown>;
+    if (relation.schema === undefined) {
+      return normalizeAst(
+        {
+          ...node,
+          name: { ...relation, schema: "public" },
+        },
+        baseTable,
+      );
+    }
+  }
+  if (
+    node.type === "binary" &&
+    node.op === "=" &&
+    node.right &&
+    typeof node.right === "object"
+  ) {
+    const right = node.right as Record<string, unknown>;
+    const call = right.type === "call" ? (right as Record<string, unknown>) : null;
+    const functionNode = call?.function;
+    const args = call?.args;
+    const arrayNode =
+      Array.isArray(args) && args.length === 1 ? args[0] : undefined;
+    if (
+      functionNode &&
+      typeof functionNode === "object" &&
+      String((functionNode as Record<string, unknown>).name).toLowerCase() ===
+        "any" &&
+      arrayNode &&
+      typeof arrayNode === "object" &&
+      (arrayNode as Record<string, unknown>).type === "array" &&
+      Array.isArray((arrayNode as Record<string, unknown>).expressions)
+    ) {
+      return normalizeAst(
+        {
+          type: "binary",
+          left: node.left,
+          op: "IN",
+          right: {
+            type: "list",
+            expressions: (arrayNode as Record<string, unknown>).expressions,
+          },
+        },
+        baseTable,
+      );
+    }
+  }
   if (
     node.type === "cast" &&
     node.to &&
@@ -177,23 +291,76 @@ function equalExpression(
   }
 }
 
-function requireNamedColumns(
-  values: Array<{ name?: string }>,
-  objectLabel: string,
+function expressionMismatchCategories(
+  expected: string | null,
+  actual: string | null,
+  tableName: string,
 ): string[] {
-  const names = values.map((value) => value.name);
-  if (names.some((name) => typeof name !== "string" || !name)) {
-    throw new Error(`Unsupported unnamed ${objectLabel} in Drizzle schema.`);
+  if (expected === null || actual === null) {
+    return expected === actual ? [] : ["presence"];
   }
-  return names as string[];
+  try {
+    const left = JSON.parse(canonicalizeRlsExpression(expected, tableName) ?? "null");
+    const right = JSON.parse(canonicalizeRlsExpression(actual, tableName) ?? "null");
+    const categories = new Set<string>();
+    const compare = (
+      a: unknown,
+      b: unknown,
+      key = "",
+      parentPath = "root",
+    ): void => {
+      if (Object.is(a, b)) return;
+      const path = key ? `${parentPath}.${key}` : parentPath;
+      if (Array.isArray(a) || Array.isArray(b)) {
+        if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) {
+          categories.add(`shape@${path}`);
+          return;
+        }
+        a.forEach((value, index) =>
+          compare(value, b[index], String(index), path),
+        );
+        return;
+      }
+      if (a && b && typeof a === "object" && typeof b === "object") {
+        const leftObject = a as Record<string, unknown>;
+        const rightObject = b as Record<string, unknown>;
+        const keys = new Set([...Object.keys(leftObject), ...Object.keys(rightObject)]);
+        for (const childKey of keys) {
+          if (!(childKey in leftObject) || !(childKey in rightObject)) {
+            categories.add(`shape@${path}.${childKey}`);
+          } else {
+            compare(leftObject[childKey], rightObject[childKey], childKey, path);
+          }
+        }
+        return;
+      }
+      if (key === "op") categories.add(`operator@${path}`);
+      else if (key === "name" || key === "schema") {
+        categories.add(`identifier@${path}`);
+      } else if (key === "value") categories.add(`literal@${path}`);
+      else categories.add(`other@${path}`);
+    };
+    compare(left, right);
+    return [...categories].sort();
+  } catch {
+    return ["unparseable"];
+  }
 }
 
-function roleNamesForPolicy(value: unknown): string[] {
+function roleNamesForPolicy(
+  value: unknown,
+  maxIdentifierLength: number,
+): string[] {
   const values = Array.isArray(value) ? value : [value ?? "public"];
   const names = values.map((role) => {
-    if (typeof role === "string") return role;
+    if (typeof role === "string") {
+      return postgresIdentifier(role, maxIdentifierLength);
+    }
     if (role && typeof role === "object" && "name" in role) {
-      return String((role as { name: unknown }).name);
+      return postgresIdentifier(
+        String((role as { name: unknown }).name),
+        maxIdentifierLength,
+      );
     }
     throw new Error("Unsupported policy role in Drizzle schema.");
   });
@@ -203,7 +370,9 @@ function roleNamesForPolicy(value: unknown): string[] {
   return names.sort();
 }
 
-function getExpectedTables(): ExpectedTable[] {
+function getExpectedTables(
+  maxIdentifierLength = defaultPostgresMaxIdentifierLength,
+): ExpectedTable[] {
   const tableObjects = Object.values(schema).filter((value) =>
     is(value, PgTable),
   ) as PgTable[];
@@ -213,6 +382,11 @@ function getExpectedTables(): ExpectedTable[] {
 
   const result = tableObjects.map((table) => {
     const config = getTableConfig(table);
+    const tableName = postgresIdentifier(config.name, maxIdentifierLength);
+    const schemaName = postgresIdentifier(
+      config.schema ?? "public",
+      maxIdentifierLength,
+    );
     const primaryKeyColumns = new Set([
       ...config.columns.filter((column) => column.primary).map((column) => column.name),
       ...config.primaryKeys.flatMap((key) =>
@@ -220,7 +394,7 @@ function getExpectedTables(): ExpectedTable[] {
       ),
     ]);
     const columns: ExpectedColumn[] = config.columns.map((column) => ({
-      columnName: column.name,
+      columnName: postgresIdentifier(column.name, maxIdentifierLength),
       dataType: column.getSQLType().toLowerCase(),
       notNull: column.notNull,
       hasDefault: column.hasDefault,
@@ -235,17 +409,25 @@ function getExpectedTables(): ExpectedTable[] {
         return String(column.name);
       });
       return {
-        indexName: index.config.name ?? "",
+        indexName: postgresIdentifier(
+          requireName(index.config.name, "index"),
+          maxIdentifierLength,
+        ),
         unique: index.config.unique,
         method: (index.config.method ?? "btree").toLowerCase(),
-        columns: indexColumns,
+        columns: indexColumns.map((name) =>
+          postgresIdentifier(name, maxIdentifierLength),
+        ),
         where: sqlText(index.config.where),
       };
     });
 
     const constraints: ExpectedConstraint[] = [
       ...config.checks.map((check) => ({
-        constraintName: check.name,
+        constraintName: postgresIdentifier(
+          requireName(check.name, "check constraint"),
+          maxIdentifierLength,
+        ),
         kind: "check" as const,
         columns: [],
         referencedTable: null,
@@ -257,20 +439,35 @@ function getExpectedTables(): ExpectedTable[] {
       ...config.foreignKeys.map((foreignKey) => {
         const reference = foreignKey.reference();
         return {
-          constraintName: foreignKey.getName(),
+          constraintName: postgresIdentifier(
+            requireName(foreignKey.getName(), "foreign key"),
+            maxIdentifierLength,
+          ),
           kind: "foreign_key" as const,
-          columns: reference.columns.map((column) => column.name),
-          referencedTable: tableNameOf(reference.foreignTable),
-          referencedColumns: reference.foreignColumns.map((column) => column.name),
+          columns: reference.columns.map((column) =>
+            postgresIdentifier(column.name, maxIdentifierLength),
+          ),
+          referencedTable: tableNameOf(
+            reference.foreignTable,
+            maxIdentifierLength,
+          ),
+          referencedColumns: reference.foreignColumns.map((column) =>
+            postgresIdentifier(column.name, maxIdentifierLength),
+          ),
           onDelete: foreignKey.onDelete ?? "no action",
           onUpdate: foreignKey.onUpdate ?? "no action",
           expression: null,
         };
       }),
       ...config.primaryKeys.map((primaryKey) => ({
-        constraintName: primaryKey.getName(),
+        constraintName: postgresIdentifier(
+          requireName(primaryKey.getName(), "primary key"),
+          maxIdentifierLength,
+        ),
         kind: "primary_key" as const,
-        columns: primaryKey.columns.map((column) => column.name),
+        columns: primaryKey.columns.map((column) =>
+          postgresIdentifier(column.name, maxIdentifierLength),
+        ),
         referencedTable: null,
         referencedColumns: [],
         onDelete: null,
@@ -278,9 +475,14 @@ function getExpectedTables(): ExpectedTable[] {
         expression: null,
       })),
       ...config.uniqueConstraints.map((constraint) => ({
-        constraintName: constraint.name,
+        constraintName: postgresIdentifier(
+          requireName(constraint.name, "unique constraint"),
+          maxIdentifierLength,
+        ),
         kind: "unique" as const,
-        columns: constraint.columns.map((column) => column.name),
+        columns: constraint.columns.map((column) =>
+          postgresIdentifier(column.name, maxIdentifierLength),
+        ),
         referencedTable: null,
         referencedColumns: [],
         onDelete: null,
@@ -293,8 +495,13 @@ function getExpectedTables(): ExpectedTable[] {
       if (!constraints.some((constraint) => constraint.kind === "primary_key")) {
         const primaryColumns = config.columns
           .filter((candidate) => candidate.primary)
-          .map((candidate) => candidate.name);
-        const primaryKeyName = `${config.name}_pkey`;
+          .map((candidate) =>
+            postgresIdentifier(candidate.name, maxIdentifierLength),
+          );
+        const primaryKeyName = postgresIdentifier(
+          `${tableName}_pkey`,
+          maxIdentifierLength,
+        );
         constraints.push({
           constraintName: primaryKeyName,
           kind: "primary_key",
@@ -317,29 +524,39 @@ function getExpectedTables(): ExpectedTable[] {
     }
     for (const constraint of config.primaryKeys) {
       indexes.push({
-        indexName: constraint.getName(),
+        indexName: postgresIdentifier(
+          requireName(constraint.getName(), "primary key index"),
+          maxIdentifierLength,
+        ),
         unique: true,
         method: "btree",
-        columns: constraint.columns.map((column) => column.name),
+        columns: constraint.columns.map((column) =>
+          postgresIdentifier(column.name, maxIdentifierLength),
+        ),
         where: null,
       });
     }
     for (const constraint of config.uniqueConstraints) {
       indexes.push({
-        indexName: constraint.name,
+        indexName: postgresIdentifier(
+          requireName(constraint.name, "unique index"),
+          maxIdentifierLength,
+        ),
         unique: true,
         method: "btree",
-        columns: constraint.columns.map((column) => column.name),
+        columns: constraint.columns.map((column) =>
+          postgresIdentifier(column.name, maxIdentifierLength),
+        ),
         where: null,
       });
     }
 
     const policies: ExpectedPolicy[] = config.policies.map((policy) => {
       return {
-        tableName: config.name,
-        policyName: policy.name,
+        tableName,
+        policyName: postgresIdentifier(policy.name, maxIdentifierLength),
         command: (policy.for ?? "all").toUpperCase(),
-        roles: roleNamesForPolicy(policy.to),
+        roles: roleNamesForPolicy(policy.to, maxIdentifierLength),
         permissive: (policy.as ?? "permissive").toUpperCase(),
         qual: sqlText(policy.using),
         withCheck: sqlText(policy.withCheck),
@@ -349,8 +566,8 @@ function getExpectedTables(): ExpectedTable[] {
       throw new Error("Every table in the protected Drizzle schema must enable RLS.");
     }
     return {
-      tableName: config.name,
-      schemaName: config.schema ?? "public",
+      tableName,
+      schemaName,
       columns,
       indexes,
       constraints,
@@ -359,15 +576,33 @@ function getExpectedTables(): ExpectedTable[] {
     };
   });
 
-  const names = result.map((table) => table.tableName);
+  const names = result.map((table) => `${table.schemaName}.${table.tableName}`);
   if (new Set(names).size !== names.length) {
-    throw new Error("Drizzle schema contains duplicate PostgreSQL table names.");
+    throw new Error("Drizzle schema contains duplicate PostgreSQL table identities.");
+  }
+  for (const table of result) {
+    for (const identifiers of [
+      table.columns.map((column) => column.columnName),
+      table.indexes.map((index) => index.indexName),
+      table.constraints.map((constraint) => constraint.constraintName),
+      table.policies.map((policy) => policy.policyName),
+    ]) {
+      if (new Set(identifiers).size !== identifiers.length) {
+        throw new Error(
+          "PostgreSQL identifier truncation creates a schema name collision.",
+        );
+      }
+    }
   }
   return result.sort((left, right) => left.tableName.localeCompare(right.tableName));
 }
 
 function sorted(values: string[]): string {
   return [...values].sort().join("\u0000");
+}
+
+export function orderedValuesEqual<T>(expected: T[], actual: T[]): boolean {
+  return JSON.stringify(expected) === JSON.stringify(actual);
 }
 
 function policyKey(value: { tableName: string; policyName: string }): string {
@@ -384,20 +619,26 @@ function membershipKey(value: ExpectedMembership): string {
   ].join(":");
 }
 
-function stableObjectKey(value: object): string {
-  return JSON.stringify(value, Object.keys(value).sort());
-}
-
 export function auditRlsPostPushCatalog(
   contract: RlsCatalogContract,
   snapshot: RlsCatalogPhaseSnapshot,
+  stage: RlsCatalogAuditStage = "post-schema",
 ): RlsCatalogPhaseAudit {
   const violations = new Set<string>();
-  const expectedTables = getExpectedTables();
-  const expectedTableNames = expectedTables.map((table) => table.tableName);
-  const actualTableNames = snapshot.tables.map((table) => table.tableName);
+  const diagnostics = new Set<string>();
+  const fail = (code: string, expectedObject: string) => {
+    violations.add(code);
+    diagnostics.add(`${code}:${expectedObject}`);
+  };
+  const expectedTables = getExpectedTables(snapshot.maxIdentifierLength);
+  const expectedTableNames = expectedTables.map(
+    (table) => `${table.schemaName}.${table.tableName}`,
+  );
+  const actualTableNames = snapshot.tables.map(
+    (table) => `${table.schemaName}.${table.tableName}`,
+  );
   if (sorted(expectedTableNames) !== sorted(actualTableNames)) {
-    violations.add("table_inventory_mismatch");
+    fail("table_inventory_mismatch", "table_inventory");
   }
 
   const expectedColumnRows = expectedTables.flatMap((table) =>
@@ -417,7 +658,7 @@ export function auditRlsPostPushCatalog(
     sorted(expectedColumnRows.map(columnKey)) !==
     sorted(actualColumnRows.map(columnKey))
   ) {
-    violations.add("column_inventory_mismatch");
+    fail("column_inventory_mismatch", "column_inventory");
   }
 
   const expectedIndexes = expectedTables.flatMap((table) =>
@@ -425,27 +666,36 @@ export function auditRlsPostPushCatalog(
   );
   const actualIndexes = snapshot.indexes;
   if (expectedIndexes.length !== actualIndexes.length) {
-    violations.add("index_inventory_mismatch");
+    fail("index_inventory_mismatch", "index_inventory");
   } else {
     const matched = new Set<string>();
     for (const expected of expectedIndexes) {
+        const expectedId = `${expected.tableName}.${expected.indexName}`;
       const actual = actualIndexes.find(
         (candidate) =>
           candidate.tableName === expected.tableName &&
           candidate.indexName === expected.indexName,
       );
-      if (
-        !actual ||
-        actual.unique !== expected.unique ||
-        !actual.valid ||
-        actual.method.toLowerCase() !== expected.method ||
-        sorted(actual.columns.filter((column): column is string => column !== null)) !==
-          sorted(expected.columns) ||
-        actual.columns.some((column) => column === null) ||
-        !equalExpression(expected.where, actual.where, expected.tableName)
-      ) {
-        violations.add("index_definition_mismatch");
+        if (!actual) {
+          fail("index_definition_mismatch", expectedId);
+          continue;
       }
+        if (actual.unique !== expected.unique) {
+          fail("index_uniqueness_mismatch", expectedId);
+        }
+        if (!actual.valid) fail("index_invalid", expectedId);
+        if (actual.method.toLowerCase() !== expected.method) {
+          fail("index_method_mismatch", expectedId);
+        }
+        if (
+          !orderedValuesEqual(expected.columns, actual.columns) ||
+          actual.columns.some((column) => column === null)
+        ) {
+          fail("index_columns_mismatch", expectedId);
+        }
+        if (!equalExpression(expected.where, actual.where, expected.tableName)) {
+          fail("index_predicate_mismatch", expectedId);
+        }
       matched.add(`${expected.tableName}.${expected.indexName}`);
     }
     if (
@@ -453,7 +703,7 @@ export function auditRlsPostPushCatalog(
         (actual) => !matched.has(`${actual.tableName}.${actual.indexName}`),
       )
     ) {
-      violations.add("index_inventory_mismatch");
+      fail("index_inventory_mismatch", "index_inventory");
     }
   }
 
@@ -465,30 +715,47 @@ export function auditRlsPostPushCatalog(
   );
   const actualConstraints = snapshot.constraints;
   if (expectedConstraints.length !== actualConstraints.length) {
-    violations.add("constraint_inventory_mismatch");
+    fail("constraint_inventory_mismatch", "constraint_inventory");
   }
   const constraintIdentity = (item: {
     tableName: string;
     constraintName: string;
   }) => `${item.tableName}.${item.constraintName}`;
   for (const expected of expectedConstraints) {
+    const expectedId = constraintIdentity(expected);
     const actual = actualConstraints.find(
-      (candidate) => constraintIdentity(candidate) === constraintIdentity(expected),
+      (candidate) => constraintIdentity(candidate) === expectedId,
     );
+    if (!actual) {
+      fail("constraint_definition_mismatch", expectedId);
+      continue;
+    }
+    if (actual.kind !== expected.kind) {
+      fail("constraint_kind_mismatch", expectedId);
+    }
     if (
-      !actual ||
-      actual.kind !== expected.kind ||
-      sorted(actual.columns) !== sorted(expected.columns) ||
-      actual.referencedTable !== expected.referencedTable ||
-      sorted(actual.referencedColumns) !== sorted(expected.referencedColumns) ||
-      actual.onDelete !== expected.onDelete ||
-      actual.onUpdate !== expected.onUpdate ||
-      !actual.validated ||
-      actual.deferrable ||
-      actual.initiallyDeferred ||
-      !equalExpression(expected.expression, actual.expression, expected.tableName)
+      expected.kind !== "check" &&
+      !orderedValuesEqual(expected.columns, actual.columns)
     ) {
-      violations.add("constraint_definition_mismatch");
+      fail("constraint_columns_mismatch", expectedId);
+    }
+    if (actual.referencedTable !== expected.referencedTable) {
+      fail("constraint_reference_mismatch", expectedId);
+    }
+    if (!orderedValuesEqual(expected.referencedColumns, actual.referencedColumns)) {
+      fail("constraint_referenced_columns_mismatch", expectedId);
+    }
+    if (actual.onDelete !== expected.onDelete) {
+      fail("constraint_on_delete_mismatch", expectedId);
+    }
+    if (actual.onUpdate !== expected.onUpdate) {
+      fail("constraint_on_update_mismatch", expectedId);
+    }
+    if (!actual.validated || actual.deferrable || actual.initiallyDeferred) {
+      fail("constraint_flags_mismatch", expectedId);
+    }
+    if (!equalExpression(expected.expression, actual.expression, expected.tableName)) {
+      fail("constraint_expression_mismatch", expectedId);
     }
   }
   const expectedConstraintIds = new Set(expectedConstraints.map(constraintIdentity));
@@ -497,15 +764,41 @@ export function auditRlsPostPushCatalog(
       (actual) => !expectedConstraintIds.has(constraintIdentity(actual)),
     )
   ) {
-    violations.add("constraint_inventory_mismatch");
+      fail("constraint_inventory_mismatch", "constraint_inventory");
   }
 
-  const expectedPolicies = expectedTables.flatMap((table) => table.policies);
-  const contractPolicies = new Map(
-    contract.policies.map((policy) => [policyKey(policy), policy]),
+  const expectedPolicies = expectedTables.flatMap((table) =>
+    table.policies.map((policy) =>
+      stage === "post-schema"
+        ? { ...policy, qual: null, withCheck: null }
+        : policy,
+    ),
   );
+  const contractPolicies = new Map(
+    contract.policies.map((policy) => {
+      const normalized = {
+        ...policy,
+        tableName: postgresIdentifier(
+          policy.tableName,
+          snapshot.maxIdentifierLength,
+        ),
+        policyName: postgresIdentifier(
+          policy.policyName,
+          snapshot.maxIdentifierLength,
+        ),
+        roleName: postgresIdentifier(
+          policy.roleName,
+          snapshot.maxIdentifierLength,
+        ),
+      };
+      return [policyKey(normalized), normalized] as const;
+    }),
+  );
+  if (contractPolicies.size !== contract.policies.length) {
+    fail("policy_identifier_collision", "policy_inventory");
+  }
   if (expectedPolicies.length !== contract.policies.length) {
-    violations.add("policy_source_contract_mismatch");
+    fail("policy_source_contract_mismatch", "policy_source_contract");
   }
   for (const expected of expectedPolicies) {
     const parsed = contractPolicies.get(policyKey(expected));
@@ -515,7 +808,10 @@ export function auditRlsPostPushCatalog(
       expected.roles.length !== 1 ||
       parsed.roleName !== expected.roles[0]
     ) {
-      violations.add("policy_source_contract_mismatch");
+      fail(
+        "policy_source_contract_mismatch",
+        `${expected.tableName}.${expected.policyName}`,
+      );
     }
   }
   const actualPolicies = snapshot.policies;
@@ -523,25 +819,64 @@ export function auditRlsPostPushCatalog(
     expectedPolicies.length !== actualPolicies.length ||
     new Set(actualPolicies.map(policyKey)).size !== actualPolicies.length
   ) {
-    violations.add("policy_inventory_mismatch");
+    fail("policy_inventory_mismatch", "policy_inventory");
   }
   for (const expected of expectedPolicies) {
+    const parsed = contractPolicies.get(policyKey(expected));
     const actual = actualPolicies.find(
       (candidate) => policyKey(candidate) === policyKey(expected),
     );
     if (!actual) continue;
-    if (
-      actual.command.toUpperCase() !== expected.command ||
-      sorted(actual.roles) !== sorted(expected.roles) ||
-      actual.permissive !== expected.permissive
-    ) {
-      violations.add("policy_definition_mismatch");
+    const expectedId = `${expected.tableName}.${expected.policyName}`;
+    if (actual.command.toUpperCase() !== expected.command) {
+      fail("policy_command_mismatch", expectedId);
     }
-    if (
-      !equalExpression(expected.qual, actual.qual, expected.tableName) ||
-      !equalExpression(expected.withCheck, actual.withCheck, expected.tableName)
-    ) {
-      violations.add("policy_expression_mismatch");
+    if (sorted(actual.roles) !== sorted(expected.roles)) {
+      fail("policy_target_role_mismatch", expectedId);
+    }
+    if (actual.permissive !== expected.permissive) {
+      fail("policy_permissive_mismatch", expectedId);
+    }
+    if (stage === "post-schema") {
+      if (!equalExpression(null, actual.qual, expected.tableName)) {
+        fail("policy_using_expression_mismatch", expectedId);
+      }
+      if (!equalExpression(null, actual.withCheck, expected.tableName)) {
+        fail("policy_with_check_expression_mismatch", expectedId);
+      }
+    } else if (parsed) {
+      if (!equalExpression(parsed.qual, actual.qual, expected.tableName)) {
+        for (const category of expressionMismatchCategories(
+          parsed.qual,
+          actual.qual,
+          expected.tableName,
+        )) {
+          const [kind, path] = category.split("@");
+          fail(
+            `policy_using_expression_${kind}_mismatch`,
+            `${expectedId}:${path ?? "root"}`,
+          );
+        }
+      }
+      if (
+        !equalExpression(
+          parsed.withCheck,
+          actual.withCheck,
+          expected.tableName,
+        )
+      ) {
+        for (const category of expressionMismatchCategories(
+          parsed.withCheck,
+          actual.withCheck,
+          expected.tableName,
+        )) {
+          const [kind, path] = category.split("@");
+          fail(
+            `policy_with_check_expression_${kind}_mismatch`,
+            `${expectedId}:${path ?? "root"}`,
+          );
+        }
+      }
     }
   }
 
@@ -549,27 +884,48 @@ export function auditRlsPostPushCatalog(
     const actual = snapshot.tables.find(
       (candidate) => candidate.tableName === expected.tableName,
     );
-    if (
-      !actual ||
-      actual.schemaName !== expected.schemaName ||
-      actual.owner !== expectedDisposableRlsTableOwner ||
-      !actual.rlsEnabled
-    ) {
-      violations.add("table_rls_or_owner_mismatch");
+    const expectedId = `${expected.schemaName}.${expected.tableName}`;
+    if (!actual) {
+      fail("table_missing", expectedId);
+      continue;
+    }
+    if (actual.schemaName !== expected.schemaName) {
+      fail("table_schema_mismatch", expectedId);
+    }
+    if (actual.owner !== expectedDisposableRlsTableOwner) {
+      fail("table_owner_mismatch", expectedId);
+    }
+    if (!actual.rlsEnabled) {
+      fail("table_rls_not_enabled", expectedId);
+    }
+    if (stage === "final" && !actual.rlsForced) {
+      fail("table_rls_not_forced", expectedId);
     }
   }
 
   const expectedRoles = Object.entries(contract.roles)
-    .filter(([roleName]) => phaseRoleNames.has(roleName))
+    .map(([roleName, attributes]) => [
+      postgresIdentifier(roleName, snapshot.maxIdentifierLength),
+      attributes,
+    ] as const)
+    .filter(([, attributes]) => stage === "final" || !attributes.rolcanlogin)
     .sort(([left], [right]) => left.localeCompare(right));
+  if (
+    new Set(expectedRoles.map(([roleName]) => roleName)).size !==
+    expectedRoles.length
+  ) {
+    fail("role_identifier_collision", "role_inventory");
+  }
   const actualRoles = snapshot.roles
-    .filter((role) => phaseRoleNames.has(role.roleName))
+    .filter((role) =>
+      expectedRoles.some(([roleName]) => roleName === role.roleName),
+    )
     .sort((left, right) => left.roleName.localeCompare(right.roleName));
   if (
     sorted(expectedRoles.map(([roleName]) => roleName)) !==
     sorted(actualRoles.map((role) => role.roleName))
   ) {
-    violations.add("role_inventory_mismatch");
+    fail("role_inventory_mismatch", "role_inventory");
   }
   for (const [roleName, expected] of expectedRoles) {
     const actual = actualRoles.find((role) => role.roleName === roleName);
@@ -580,30 +936,41 @@ export function auditRlsPostPushCatalog(
           actual[key as keyof ExpectedRoleAttributes] !== value,
       )
     ) {
-      violations.add("role_hardening_mismatch");
+      fail("role_hardening_mismatch", roleName);
     }
   }
 
+  const expectedRoleNames = new Set(expectedRoles.map(([roleName]) => roleName));
   const expectedMemberships = contract.memberships
-    .filter(
-      (membership) =>
-        phaseRoleNames.has(membership.grantedRole) &&
-        phaseRoleNames.has(membership.memberRole),
+    .map((membership) => ({
+      ...membership,
+      grantedRole: postgresIdentifier(
+        membership.grantedRole,
+        snapshot.maxIdentifierLength,
+      ),
+      memberRole: postgresIdentifier(
+        membership.memberRole,
+        snapshot.maxIdentifierLength,
+      ),
+    }))
+    .filter((membership) =>
+      expectedRoleNames.has(membership.grantedRole) &&
+      expectedRoleNames.has(membership.memberRole),
     )
     .map(membershipKey);
   const actualMemberships = snapshot.memberships
-    .filter(
-      (membership) =>
-        phaseRoleNames.has(membership.grantedRole) &&
-        phaseRoleNames.has(membership.memberRole),
+    .filter((membership) =>
+      expectedRoleNames.has(membership.grantedRole) ||
+      expectedRoleNames.has(membership.memberRole),
     )
     .map(membershipKey);
   if (sorted(expectedMemberships) !== sorted(actualMemberships)) {
-    violations.add("role_membership_mismatch");
+    fail("role_membership_mismatch", "role_memberships");
   }
 
   return {
     passed: violations.size === 0,
+    stage,
     expectedTableCount: expectedTables.length,
     expectedColumnCount: expectedColumnRows.length,
     expectedIndexCount: expectedIndexes.length,
@@ -611,11 +978,14 @@ export function auditRlsPostPushCatalog(
     expectedPolicyCount: expectedPolicies.length,
     expectedRoleCount: expectedRoles.length,
     violations: [...violations].sort(),
+    diagnostics: [...diagnostics].sort(),
   };
 }
 
-export function deriveDrizzleRlsTableNames(): string[] {
-  return getExpectedTables().map((table) => table.tableName);
+export function deriveDrizzleRlsTableNames(
+  maxIdentifierLength = defaultPostgresMaxIdentifierLength,
+): string[] {
+  return getExpectedTables(maxIdentifierLength).map((table) => table.tableName);
 }
 
 export function deriveDrizzleRlsMetadataCounts(): {
@@ -640,8 +1010,402 @@ export function deriveDrizzleRlsMetadataCounts(): {
 
 export function expectedPostPushRoleNames(
   contract: RlsCatalogContract,
+  maxIdentifierLength = defaultPostgresMaxIdentifierLength,
 ): string[] {
-  return Object.keys(contract.roles)
-    .filter((roleName) => phaseRoleNames.has(roleName))
+  return Object.entries(contract.roles)
+    .filter(([, attributes]) => attributes.rolcanlogin === false)
+    .map(([roleName]) => postgresIdentifier(roleName, maxIdentifierLength))
     .sort();
+}
+
+/**
+ * Builds a baseline directly from the loaded Drizzle schema for unit tests.
+ * Post-schema Drizzle 0.31.11 emits policy shells; the later SQL stage applies
+ * the predicates, which the final audit compares semantically.
+ */
+export function deriveRlsCatalogPhaseSnapshot(
+  contract: RlsCatalogContract,
+  stage: RlsCatalogAuditStage,
+  maxIdentifierLength = defaultPostgresMaxIdentifierLength,
+): RlsCatalogPhaseSnapshot {
+  const tables = getExpectedTables(maxIdentifierLength);
+  const roleEntries = Object.entries(contract.roles).filter(
+    ([, attributes]) =>
+      stage === "final" || !attributes.rolcanlogin,
+  ).map(([roleName, attributes]) => [
+    postgresIdentifier(roleName, maxIdentifierLength),
+    attributes,
+  ] as const);
+  const roleNames = new Set(roleEntries.map(([roleName]) => roleName));
+  const sqlPolicies = new Map(
+    contract.policies.map((policy) => {
+      const normalized = {
+        ...policy,
+        tableName: postgresIdentifier(
+          policy.tableName,
+          maxIdentifierLength,
+        ),
+        policyName: postgresIdentifier(
+          policy.policyName,
+          maxIdentifierLength,
+        ),
+        roleName: postgresIdentifier(
+          policy.roleName,
+          maxIdentifierLength,
+        ),
+      };
+      return [policyKey(normalized), normalized] as const;
+    }),
+  );
+  return {
+    maxIdentifierLength,
+    tables: tables.map((table) => ({
+      tableName: table.tableName,
+      schemaName: table.schemaName,
+      owner: expectedDisposableRlsTableOwner,
+      rlsEnabled: true,
+      rlsForced: stage === "final",
+    })),
+    columns: tables.flatMap((table) =>
+      table.columns.map((column) => ({
+        tableName: table.tableName,
+        ...column,
+      })),
+    ),
+    indexes: tables.flatMap((table) =>
+      table.indexes.map((index) => ({
+        tableName: table.tableName,
+        ...index,
+        valid: true,
+      })),
+    ),
+    constraints: tables.flatMap((table) =>
+      table.constraints.map((constraint) => ({
+        tableName: table.tableName,
+        ...constraint,
+        validated: true,
+        deferrable: false,
+        initiallyDeferred: false,
+      })),
+    ),
+    policies: tables.flatMap((table) =>
+      table.policies.map((policy) => {
+        if (stage === "post-schema") {
+          return { ...policy, qual: null, withCheck: null };
+        }
+        const source = sqlPolicies.get(policyKey(policy));
+        if (!source) {
+          throw new Error("RLS SQL policy source is incomplete.");
+        }
+        return {
+          ...policy,
+          command: source.command,
+          roles: [source.roleName],
+          permissive: source.permissive,
+          qual: source.qual,
+          withCheck: source.withCheck,
+        };
+      }),
+    ),
+    roles: roleEntries.map(([roleName, attributes]) => ({
+      roleName,
+      ...attributes,
+    })),
+    memberships: contract.memberships
+      .map((membership) => ({
+        ...membership,
+        grantedRole: postgresIdentifier(
+          membership.grantedRole,
+          maxIdentifierLength,
+        ),
+        memberRole: postgresIdentifier(
+          membership.memberRole,
+          maxIdentifierLength,
+        ),
+      }))
+      .filter(
+        (membership) =>
+          roleNames.has(membership.grantedRole) &&
+          roleNames.has(membership.memberRole),
+      ),
+  };
+}
+
+/**
+ * Reads only PostgreSQL catalogs. It intentionally does not select application
+ * rows and is shared by the OIDC-guarded CI verifier and the isolated local lab.
+ */
+export async function readRlsCatalogPhaseSnapshot(
+  client: Pick<PoolClient, "query">,
+  tableNames: string[],
+  roleNames: string[],
+): Promise<RlsCatalogPhaseSnapshot> {
+  const [
+    tables,
+    columns,
+    indexes,
+    constraints,
+    policies,
+    roles,
+    memberships,
+    settings,
+  ] = await Promise.all([
+    client.query(
+      `SELECT n.nspname AS "schemaName",
+              c.relname AS "tableName",
+              pg_get_userbyid(c.relowner) AS owner,
+              c.relrowsecurity AS "rlsEnabled",
+              c.relforcerowsecurity AS "rlsForced"
+         FROM pg_class AS c
+         JOIN pg_namespace AS n ON n.oid = c.relnamespace
+        WHERE c.relname = ANY($1::text[])
+          AND c.relkind IN ('r', 'p')
+        ORDER BY n.nspname, c.relname`,
+      [tableNames],
+    ),
+    client.query(
+      `SELECT c.relname AS "tableName",
+              a.attname AS "columnName",
+              format_type(a.atttypid, a.atttypmod) AS "dataType",
+              a.attnotnull AS "notNull",
+              a.atthasdef AS "hasDefault",
+              EXISTS (
+                SELECT 1 FROM pg_constraint AS pk
+                 WHERE pk.conrelid = c.oid
+                   AND pk.contype = 'p'
+                   AND a.attnum = ANY(pk.conkey)
+              ) AS "primaryKey"
+         FROM pg_class AS c
+         JOIN pg_namespace AS n ON n.oid = c.relnamespace
+         JOIN pg_attribute AS a ON a.attrelid = c.oid
+        WHERE c.relname = ANY($1::text[])
+          AND c.relkind IN ('r', 'p')
+          AND a.attnum > 0
+          AND NOT a.attisdropped
+        ORDER BY c.relname, a.attnum`,
+      [tableNames],
+    ),
+    client.query(
+      `SELECT table_class.relname AS "tableName",
+              index_class.relname AS "indexName",
+              index_info.indisunique AS "unique",
+              index_info.indisvalid AS valid,
+              access_method.amname AS method,
+              ARRAY(
+                SELECT attribute.attname::text
+                  FROM unnest(index_info.indkey) WITH ORDINALITY
+                       AS key_column(attnum, ordinal)
+                  LEFT JOIN pg_attribute AS attribute
+                    ON attribute.attrelid = table_class.oid
+                   AND attribute.attnum = key_column.attnum
+                 WHERE key_column.ordinal <= index_info.indnkeyatts
+                 ORDER BY key_column.ordinal
+              ) AS columns,
+              pg_get_expr(index_info.indpred, index_info.indrelid) AS "where"
+         FROM pg_index AS index_info
+         JOIN pg_class AS table_class ON table_class.oid = index_info.indrelid
+         JOIN pg_namespace AS table_namespace
+           ON table_namespace.oid = table_class.relnamespace
+         JOIN pg_class AS index_class ON index_class.oid = index_info.indexrelid
+         JOIN pg_am AS access_method ON access_method.oid = index_class.relam
+        WHERE table_class.relname = ANY($1::text[])
+          AND table_namespace.nspname = 'public'
+        ORDER BY table_class.relname, index_class.relname`,
+      [tableNames],
+    ),
+    client.query(
+      `SELECT table_class.relname AS "tableName",
+              constraint_info.conname AS "constraintName",
+              CASE constraint_info.contype
+                WHEN 'c' THEN 'check'
+                WHEN 'f' THEN 'foreign_key'
+                WHEN 'p' THEN 'primary_key'
+                WHEN 'u' THEN 'unique'
+                WHEN 'x' THEN 'exclusion'
+                ELSE 'unknown'
+              END AS kind,
+              ARRAY(
+                SELECT attribute.attname::text
+                  FROM unnest(constraint_info.conkey) WITH ORDINALITY
+                       AS key_column(attnum, ordinal)
+                  LEFT JOIN pg_attribute AS attribute
+                    ON attribute.attrelid = constraint_info.conrelid
+                   AND attribute.attnum = key_column.attnum
+                 ORDER BY key_column.ordinal
+              ) AS columns,
+              referenced_class.relname AS "referencedTable",
+              ARRAY(
+                SELECT attribute.attname::text
+                  FROM unnest(constraint_info.confkey) WITH ORDINALITY
+                       AS key_column(attnum, ordinal)
+                  LEFT JOIN pg_attribute AS attribute
+                    ON attribute.attrelid = constraint_info.confrelid
+                   AND attribute.attnum = key_column.attnum
+                 ORDER BY key_column.ordinal
+              ) AS "referencedColumns",
+              CASE WHEN constraint_info.contype = 'f' THEN
+                CASE constraint_info.confdeltype
+                  WHEN 'r' THEN 'restrict'
+                  WHEN 'c' THEN 'cascade'
+                  WHEN 'n' THEN 'set null'
+                  WHEN 'd' THEN 'set default'
+                  ELSE 'no action'
+                END
+                ELSE NULL
+              END AS "onDelete",
+              CASE WHEN constraint_info.contype = 'f' THEN
+                CASE constraint_info.confupdtype
+                  WHEN 'r' THEN 'restrict'
+                  WHEN 'c' THEN 'cascade'
+                  WHEN 'n' THEN 'set null'
+                  WHEN 'd' THEN 'set default'
+                  ELSE 'no action'
+                END
+                ELSE NULL
+              END AS "onUpdate",
+              pg_get_expr(constraint_info.conbin, constraint_info.conrelid)
+                AS expression,
+              constraint_info.convalidated AS validated,
+              constraint_info.condeferrable AS deferrable,
+              constraint_info.condeferred AS "initiallyDeferred"
+         FROM pg_constraint AS constraint_info
+         JOIN pg_class AS table_class
+           ON table_class.oid = constraint_info.conrelid
+         JOIN pg_namespace AS table_namespace
+           ON table_namespace.oid = table_class.relnamespace
+         LEFT JOIN pg_class AS referenced_class
+           ON referenced_class.oid = constraint_info.confrelid
+        WHERE table_namespace.nspname = 'public'
+          AND table_class.relname = ANY($1::text[])
+        ORDER BY table_class.relname, constraint_info.conname`,
+      [tableNames],
+    ),
+    client.query(
+      `SELECT tablename AS "tableName",
+              policyname AS "policyName",
+              permissive,
+              cmd AS command,
+              roles::text[] AS roles,
+              qual,
+              with_check AS "withCheck"
+         FROM pg_policies
+        WHERE schemaname = 'public'
+          AND tablename = ANY($1::text[])
+        ORDER BY tablename, policyname`,
+      [tableNames],
+    ),
+    client.query(
+      `SELECT rolname AS "roleName",
+              rolcanlogin, rolsuper, rolcreatedb, rolcreaterole,
+              rolinherit, rolreplication, rolbypassrls
+         FROM pg_roles
+        WHERE rolname = ANY($1::text[])
+        ORDER BY rolname`,
+      [roleNames],
+    ),
+    client.query(
+      `SELECT granted.rolname AS "grantedRole",
+              member.rolname AS "memberRole",
+              membership.admin_option AS "adminOption",
+              membership.inherit_option AS "inheritOption",
+              membership.set_option AS "setOption"
+         FROM pg_auth_members AS membership
+         JOIN pg_roles AS granted ON granted.oid = membership.roleid
+         JOIN pg_roles AS member ON member.oid = membership.member
+        WHERE granted.rolname = ANY($1::text[])
+           OR member.rolname = ANY($1::text[])
+        ORDER BY granted.rolname, member.rolname`,
+      [roleNames],
+    ),
+    client.query(
+      `SELECT current_setting('max_identifier_length')::integer
+         AS "maxIdentifierLength"`,
+    ),
+  ]);
+
+  const maxIdentifierLength = Number(
+    settings.rows[0]?.maxIdentifierLength,
+  );
+  if (
+    !Number.isInteger(maxIdentifierLength) ||
+    maxIdentifierLength !== defaultPostgresMaxIdentifierLength
+  ) {
+    throw new Error("Unsupported PostgreSQL identifier length.");
+  }
+
+  const stringArray = (value: unknown): string[] =>
+    Array.isArray(value) ? value.map(String) : [];
+  const nullableStringArray = (value: unknown): Array<string | null> =>
+    Array.isArray(value)
+      ? value.map((item) => (item === null ? null : String(item)))
+      : [];
+
+  return {
+    maxIdentifierLength,
+    tables: tables.rows.map((row) => ({
+      schemaName: String(row.schemaName),
+      tableName: String(row.tableName),
+      owner: String(row.owner),
+      rlsEnabled: Boolean(row.rlsEnabled),
+      rlsForced: Boolean(row.rlsForced),
+    })),
+    columns: columns.rows.map((row) => ({
+      tableName: String(row.tableName),
+      columnName: String(row.columnName),
+      dataType: String(row.dataType).toLowerCase(),
+      notNull: Boolean(row.notNull),
+      hasDefault: Boolean(row.hasDefault),
+      primaryKey: Boolean(row.primaryKey),
+    })),
+    indexes: indexes.rows.map((row) => ({
+      tableName: String(row.tableName),
+      indexName: String(row.indexName),
+      unique: Boolean(row.unique),
+      valid: Boolean(row.valid),
+      method: String(row.method),
+      columns: nullableStringArray(row.columns),
+      where: row.where === null ? null : String(row.where),
+    })),
+    constraints: constraints.rows.map((row) => ({
+      tableName: String(row.tableName),
+      constraintName: String(row.constraintName),
+      kind: String(row.kind) as RlsCatalogPhaseConstraint["kind"],
+      columns: stringArray(row.columns),
+      referencedTable:
+        row.referencedTable === null ? null : String(row.referencedTable),
+      referencedColumns: stringArray(row.referencedColumns),
+      onDelete: row.onDelete === null ? null : String(row.onDelete),
+      onUpdate: row.onUpdate === null ? null : String(row.onUpdate),
+      expression: row.expression === null ? null : String(row.expression),
+      validated: Boolean(row.validated),
+      deferrable: Boolean(row.deferrable),
+      initiallyDeferred: Boolean(row.initiallyDeferred),
+    })),
+    policies: policies.rows.map((row) => ({
+      tableName: String(row.tableName),
+      policyName: String(row.policyName),
+      permissive: String(row.permissive).toUpperCase(),
+      command: String(row.command).toUpperCase(),
+      roles: stringArray(row.roles).sort(),
+      qual: row.qual === null ? null : String(row.qual),
+      withCheck: row.withCheck === null ? null : String(row.withCheck),
+    })),
+    roles: roles.rows.map((row) => ({
+      roleName: String(row.roleName),
+      rolcanlogin: Boolean(row.rolcanlogin),
+      rolsuper: Boolean(row.rolsuper),
+      rolcreatedb: Boolean(row.rolcreatedb),
+      rolcreaterole: Boolean(row.rolcreaterole),
+      rolinherit: Boolean(row.rolinherit),
+      rolreplication: Boolean(row.rolreplication),
+      rolbypassrls: Boolean(row.rolbypassrls),
+    })),
+    memberships: memberships.rows.map((row) => ({
+      grantedRole: String(row.grantedRole),
+      memberRole: String(row.memberRole),
+      adminOption: Boolean(row.adminOption),
+      inheritOption: Boolean(row.inheritOption),
+      setOption: Boolean(row.setOption),
+    })),
+  };
 }

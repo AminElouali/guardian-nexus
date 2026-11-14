@@ -65,7 +65,9 @@ jobs:
         run: pnpm --filter @workspace/api-server exec tsx --test src/lib/approval-e2e-db-guard.test.ts
 
       - name: Test RLS catalog comparator offline
-        run: pnpm --filter @workspace/api-server exec tsx --test ../../lib/db/src/rls-catalog-audit.test.ts
+        run: |
+          pnpm --filter @workspace/api-server exec tsx --test ../../lib/db/src/rls-catalog-audit.test.ts
+          pnpm --filter @workspace/api-server exec tsx --test ../../lib/db/src/rls-catalog-phase-audit.test.ts
 
       - name: Create the uniquely named lab database
         env:
@@ -75,7 +77,7 @@ jobs:
           pnpm --filter @workspace/api-server exec tsx src/scripts/verify-approval-lab-ci-target.ts
           psql "$DATABASE_URL" --set=ON_ERROR_STOP=1 --command "CREATE DATABASE guardian_approval_lab_ci;"
 
-      - name: Apply Drizzle schema and least-privilege RLS roles
+      - name: Prepare runtime role and synchronize Drizzle schema
         env:
           GUARDIAN_APPROVAL_E2E_CI_STAGE: provision
           ALLOW_DEV_DB_ROLE_BOOTSTRAP: "true"
@@ -85,6 +87,21 @@ jobs:
           pnpm --filter @workspace/api-server exec tsx src/scripts/verify-approval-lab-ci-target.ts
           pnpm --filter @workspace/db run harden-runtime-role:dev
           pnpm --filter @workspace/db run push
+
+      - name: Audit catalog after Drizzle schema synchronization
+        env:
+          GUARDIAN_APPROVAL_E2E_CI_STAGE: provision
+          DATABASE_URL: postgresql://postgres:${{ format('guardian-ci-{0}-{1}-{2}', github.run_id, github.run_attempt, github.sha) }}@127.0.0.1:5432/guardian_approval_lab_ci
+        run: pnpm --filter @workspace/api-server exec tsx src/scripts/verify-rls-catalog.ts --stage=post-schema
+
+      - name: Apply RLS policies and configure least-privilege runtime
+        env:
+          GUARDIAN_APPROVAL_E2E_CI_STAGE: provision
+          ALLOW_DEV_DB_ROLE_BOOTSTRAP: "true"
+          DATABASE_URL: postgresql://postgres:${{ format('guardian-ci-{0}-{1}-{2}', github.run_id, github.run_attempt, github.sha) }}@127.0.0.1:5432/guardian_approval_lab_ci
+          APP_RUNTIME_DB_PASSWORD: ${{ format('guardian-runtime-{0}-{1}-{2}', github.run_id, github.run_attempt, github.sha) }}
+        run: |
+          pnpm --filter @workspace/api-server exec tsx src/scripts/verify-approval-lab-ci-target.ts
           pnpm --filter @workspace/db run apply-rls-policies:dev
           pnpm --filter @workspace/db run grant-runtime-role:dev
           pnpm --filter @workspace/db run configure-runtime-login:dev
@@ -109,6 +126,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: guardian-postgres-rls-catalog-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/guardian-postgres-rls-catalog-report.json
+          path: |
+            ${{ runner.temp }}/guardian-postgres-rls-catalog-post-schema-report.json
+            ${{ runner.temp }}/guardian-postgres-rls-catalog-report.json
           if-no-files-found: ignore
           retention-days: 14

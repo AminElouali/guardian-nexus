@@ -3,7 +3,13 @@ import { readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
-import { expectedRlsTableNames } from "@workspace/db/rls-catalog-contract";
+import {
+  deriveDrizzleRlsTableNames,
+  auditRlsPostPushCatalog,
+  expectedPostPushRoleNames,
+  readRlsCatalogPhaseSnapshot,
+  type RlsCatalogAuditStage,
+} from "@workspace/db/rls-catalog-phase-audit";
 import {
   auditRlsCatalog,
   parseRlsCatalogContract,
@@ -60,7 +66,7 @@ async function loadContractSources() {
   };
 }
 
-async function readCatalogSnapshot(
+export async function readCatalogSnapshot(
   client: QueryClient,
   tableNames: string[],
   roleNames: string[],
@@ -94,7 +100,7 @@ async function readCatalogSnapshot(
                 policyname AS "policyName",
                 permissive,
                 cmd AS command,
-                roles,
+                roles::text[] AS roles,
                 qual,
                 with_check AS "withCheck"
            FROM pg_policies
@@ -175,7 +181,8 @@ async function readCatalogSnapshot(
     ),
     client.query(
       `SELECT c.relname AS "tableName",
-                array_agg(attribute.attname ORDER BY attribute.attnum) AS "columnNames"
+                array_agg(attribute.attname::text ORDER BY attribute.attnum)::text[]
+                  AS "columnNames"
            FROM pg_class AS c
            JOIN pg_namespace AS n ON n.oid = c.relnamespace
            JOIN pg_attribute AS attribute ON attribute.attrelid = c.oid
@@ -257,14 +264,19 @@ async function readCatalogSnapshot(
   return { snapshot, postgresMajor: Math.floor(version / 10000) };
 }
 
-async function writeReport(report: Record<string, unknown>): Promise<void> {
+async function writeReport(
+  report: Record<string, unknown>,
+  stage: RlsCatalogAuditStage,
+): Promise<void> {
   const runnerTemporaryDirectory = process.env.RUNNER_TEMP;
   if (!runnerTemporaryDirectory) {
     throw new Error("CI runner report directory is unavailable.");
   }
   const reportPath = path.resolve(
     runnerTemporaryDirectory,
-    "guardian-postgres-rls-catalog-report.json",
+    stage === "post-schema"
+      ? "guardian-postgres-rls-catalog-post-schema-report.json"
+      : "guardian-postgres-rls-catalog-report.json",
   );
   if (
     !reportPath.startsWith(
@@ -279,11 +291,36 @@ async function writeReport(report: Record<string, unknown>): Promise<void> {
   });
 }
 
+function requestedAuditStage(): RlsCatalogAuditStage | null {
+  const args = process.argv.slice(2);
+  if (args.length === 0 || (args.length === 1 && args[0] === "--stage=final")) {
+    return "final";
+  }
+  if (args.length === 1 && args[0] === "--stage=post-schema") {
+    return "post-schema";
+  }
+  return null;
+}
+
+function sanitizedPhaseAudit(
+  audit: ReturnType<typeof auditRlsPostPushCatalog>,
+) {
+  const { diagnostics: _diagnostics, ...report } = audit;
+  return report;
+}
+
 async function main(): Promise<void> {
+  const stage = requestedAuditStage();
+  if (!stage) {
+    console.error("RLS catalog audit refused: invalid stage argument.");
+    process.exitCode = 1;
+    return;
+  }
+  const guardedStage = stage === "post-schema" ? "provision" : "approval-e2e";
   if (
     !(await isGitHubActionsApprovalLabTarget(
       process.env,
-      "approval-e2e",
+      guardedStage,
       acquireGitHubActionsOidcToken,
     ))
   ) {
@@ -312,7 +349,9 @@ async function main(): Promise<void> {
 
   const reportBase = {
     reportVersion: 1,
+    stage,
     generatedAt: new Date().toISOString(),
+    commitSha: process.env.GITHUB_SHA,
     applicationRowsRead: false,
     credentialsIncluded: false,
     connectionCoordinatesIncluded: false,
@@ -346,13 +385,76 @@ async function main(): Promise<void> {
       .update(sources.rlsContractSource)
       .digest("hex");
     const contract = parseRlsCatalogContract(sources);
+    const tableNames = deriveDrizzleRlsTableNames();
+    const phaseRoleNames =
+      stage === "post-schema"
+        ? expectedPostPushRoleNames(contract)
+        : Object.keys(contract.roles).sort();
+    const phaseSnapshot = await readRlsCatalogPhaseSnapshot(
+      pool,
+      tableNames,
+      phaseRoleNames,
+    );
+    const phaseAudit = auditRlsPostPushCatalog(
+      contract,
+      phaseSnapshot,
+      stage,
+    );
+    if (stage === "post-schema") {
+      report = {
+        ...reportBase,
+        generatedAt: new Date().toISOString(),
+        policySourceSha256,
+        schemaSourceSha256,
+        bootstrapSourceSha256,
+        rlsContractSourceSha256,
+        status: phaseAudit.passed ? "passed" : "failed",
+        catalogAudit: sanitizedPhaseAudit(phaseAudit),
+        policyPredicatesDeferredToFinalAudit: true,
+      };
+      await writeReport(report, stage);
+      if (!phaseAudit.passed) {
+        console.error(
+          "Post-schema catalog audit failed; inspect the sanitized job artifact.",
+        );
+        process.exitCode = 1;
+        return;
+      }
+      console.log(
+        `Post-schema catalog audit passed: ${phaseAudit.expectedTableCount} tables, ${phaseAudit.expectedPolicyCount} policy shells; sanitized artifact written.`,
+      );
+      return;
+    }
+
     const roleNames = Object.keys(contract.roles).sort();
     const { snapshot, postgresMajor } = await readCatalogSnapshot(
       pool,
-      expectedRlsTableNames.map(String),
+      tableNames,
       roleNames,
     );
     const audit = auditRlsCatalog(contract, snapshot);
+    const runtimeLoginUrl = process.env.APP_RUNTIME_DATABASE_URL;
+    let runtimeLoginAuthenticated = false;
+    if (runtimeLoginUrl) {
+      const runtimePool = new Pool({
+        connectionString: runtimeLoginUrl,
+        max: 1,
+        connectionTimeoutMillis: 5000,
+        statement_timeout: 10000,
+      });
+      try {
+        const runtimeIdentity = await runtimePool.query(
+          "SELECT current_user AS role_name",
+        );
+        runtimeLoginAuthenticated =
+          runtimeIdentity.rows.length === 1 &&
+          runtimeIdentity.rows[0]?.role_name === "app_runtime_login";
+      } catch {
+        runtimeLoginAuthenticated = false;
+      } finally {
+        await runtimePool.end().catch(() => undefined);
+      }
+    }
 
     report = {
       ...reportBase,
@@ -362,10 +464,15 @@ async function main(): Promise<void> {
       bootstrapSourceSha256,
       rlsContractSourceSha256,
       postgresMajor,
-      status: audit.passed ? "passed" : "failed",
+      status:
+        audit.passed && phaseAudit.passed && runtimeLoginAuthenticated
+          ? "passed"
+          : "failed",
       catalogAudit: audit,
+      phaseAudit: sanitizedPhaseAudit(phaseAudit),
+      runtimeLoginAuthenticated,
     };
-    await writeReport(report);
+    await writeReport(report, stage);
     if (report.status !== "passed") {
       console.error(
         "RLS catalog audit failed; inspect the sanitized job artifact.",
@@ -383,7 +490,7 @@ async function main(): Promise<void> {
       status: "failed",
       failureCode: "catalog_audit_internal_or_query_failure",
     };
-    await writeReport(report);
+    await writeReport(report, stage);
     console.error(
       "RLS catalog audit failed; inspect the sanitized job artifact.",
     );
@@ -393,4 +500,9 @@ async function main(): Promise<void> {
   }
 }
 
-void main();
+if (
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
+  void main();
+}

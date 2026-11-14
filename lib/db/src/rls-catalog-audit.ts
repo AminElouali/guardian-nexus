@@ -22,6 +22,9 @@ export type ExpectedPolicy = {
   tableName: string;
   command: string;
   roleName: string;
+  permissive: "PERMISSIVE" | "RESTRICTIVE";
+  qual: string | null;
+  withCheck: string | null;
 };
 
 export type ExpectedMembership = {
@@ -61,6 +64,15 @@ export type RlsCatalogContract = {
   memberships: ExpectedMembership[];
   roles: Record<string, ExpectedRoleAttributes>;
   grants: ExpectedGrant[];
+};
+
+type SqlPolicyDefinition = {
+  tableName: string;
+  permissive: "PERMISSIVE" | "RESTRICTIVE";
+  command: string | null;
+  roleName: string | null;
+  qual: string | null;
+  withCheck: string | null;
 };
 
 export type RlsCatalogSnapshot = {
@@ -166,6 +178,147 @@ function parseRoleAttributes(
   return result;
 }
 
+function scanSqlCode(
+  source: string,
+  start: number,
+  visit: (index: number, character: string, depth: number) => boolean,
+): number {
+  let depth = 0;
+  let quote: "'" | '"' | null = null;
+  let dollarQuote: string | null = null;
+  let lineComment = false;
+  let blockCommentDepth = 0;
+
+  for (let index = start; index < source.length; index += 1) {
+    const character = source[index]!;
+    const next = source[index + 1];
+    if (lineComment) {
+      if (character === "\n") lineComment = false;
+      continue;
+    }
+    if (blockCommentDepth > 0) {
+      if (character === "/" && next === "*") {
+        blockCommentDepth += 1;
+        index += 1;
+      } else if (character === "*" && next === "/") {
+        blockCommentDepth -= 1;
+        index += 1;
+      }
+      continue;
+    }
+    if (dollarQuote) {
+      if (source.startsWith(dollarQuote, index)) {
+        index += dollarQuote.length - 1;
+        dollarQuote = null;
+      }
+      continue;
+    }
+    if (quote) {
+      if (quote === "'" && character === "\\") {
+        index += 1;
+      } else if (character === quote && next === quote) {
+        index += 1;
+      } else if (character === quote) {
+        quote = null;
+      }
+      continue;
+    }
+    if (character === "-" && next === "-") {
+      lineComment = true;
+      index += 1;
+      continue;
+    }
+    if (character === "/" && next === "*") {
+      blockCommentDepth = 1;
+      index += 1;
+      continue;
+    }
+    if (character === "'" || character === '"') {
+      quote = character;
+      continue;
+    }
+    if (character === "$") {
+      const delimiter = /^\$[A-Za-z_0-9]*\$/.exec(source.slice(index))?.[0];
+      if (delimiter) {
+        dollarQuote = delimiter;
+        index += delimiter.length - 1;
+        continue;
+      }
+    }
+    if (visit(index, character, depth)) return index;
+    if (character === "(") depth += 1;
+    else if (character === ")") depth -= 1;
+    if (depth < 0) return -1;
+  }
+  return -1;
+}
+
+function findSqlStatementEnd(source: string, start: number): number {
+  return scanSqlCode(
+    source,
+    start,
+    (index, character, depth) => character === ";" && depth === 0,
+  );
+}
+
+function findSqlClosingParen(source: string, openIndex: number): number {
+  return scanSqlCode(
+    source,
+    openIndex,
+    (index, character, depth) =>
+      index > openIndex && character === ")" && depth === 1,
+  );
+}
+
+function extractPolicyExpressions(statement: string): {
+  header: string;
+  qual: string | null;
+  withCheck: string | null;
+} {
+  let qual: string | null = null;
+  let withCheck: string | null = null;
+  let headerEnd = statement.length;
+  let malformed = false;
+  scanSqlCode(statement, 0, (index, character, depth) => {
+    if (depth !== 0 || !/[A-Za-z]/.test(character)) return false;
+    const clause = /^(USING|WITH\s+CHECK)\s*\(/i.exec(
+      statement.slice(index),
+    );
+    if (!clause) return false;
+    const name = clause[1]!.toUpperCase().replace(/\s+/g, " ");
+    const openIndex = index + clause[0].lastIndexOf("(");
+    const closeIndex = findSqlClosingParen(statement, openIndex);
+    if (closeIndex < 0) {
+      malformed = true;
+      return true;
+    }
+    const expression = statement.slice(openIndex + 1, closeIndex).trim();
+    if (!expression) {
+      malformed = true;
+      return true;
+    }
+    if (name === "USING") {
+      if (qual !== null) {
+        malformed = true;
+        return true;
+      }
+      qual = expression;
+    } else {
+      if (withCheck !== null) {
+        malformed = true;
+        return true;
+      }
+      withCheck = expression;
+    }
+    headerEnd = Math.min(headerEnd, index);
+    return false;
+  });
+  if (malformed) {
+    throw new Error("Canonical SQL policy predicate is malformed.");
+  }
+  return { header: statement.slice(0, headerEnd), qual, withCheck };
+}
+
 function parsePolicies(
   sources: RlsCatalogSources,
   roles: Map<string, string>,
@@ -187,21 +340,53 @@ function parsePolicies(
     }
   }
 
-  const sqlPolicyTables = new Map<string, string>();
+  const sqlPolicies = new Map<string, SqlPolicyDefinition>();
   const sqlPattern =
     /\b(?:CREATE|ALTER)\s+POLICY\s+("?[\w$]+"?)\s+ON\s+public\.("?[\w$]+"?)/gi;
   for (const match of sources.policiesSql.matchAll(sqlPattern)) {
     const policyName = unquoteIdentifier(match[1]!);
     const tableName = unquoteIdentifier(match[2]!);
-    if (sqlPolicyTables.has(policyName)) {
-      throw new Error(
-        `Duplicate canonical SQL policy declaration: ${policyName}`,
-      );
+    const statementStart = match.index!;
+    const statementEnd = findSqlStatementEnd(sources.policiesSql, statementStart);
+    if (statementEnd < 0) {
+      throw new Error("Canonical SQL policy statement is unterminated.");
     }
-    sqlPolicyTables.set(policyName, tableName);
+    const statement = sources.policiesSql.slice(statementStart, statementEnd);
+    const action = /^\s*(CREATE|ALTER)\s+POLICY\b/i.exec(statement)?.[1]
+      ?.toUpperCase();
+    if (!action) throw new Error("Canonical SQL policy action is unsupported.");
+    const previous = sqlPolicies.get(policyName);
+    if (previous && previous.tableName !== tableName) {
+      throw new Error("Canonical SQL policy table changes between statements.");
+    }
+    const clauses = extractPolicyExpressions(statement);
+    const declaredMode =
+      /\bAS\s+(PERMISSIVE|RESTRICTIVE)\b/i
+        .exec(clauses.header)?.[1]
+        ?.toUpperCase();
+    const declaredCommand =
+      /\bFOR\s+(ALL|SELECT|INSERT|UPDATE|DELETE)\b/i
+        .exec(clauses.header)?.[1]
+        ?.toUpperCase() ?? null;
+    const declaredRole =
+      /\bTO\s+("?[\w$]+"?)/i.exec(clauses.header)?.[1] ?? null;
+    sqlPolicies.set(policyName, {
+      tableName,
+      permissive:
+        (declaredMode as "PERMISSIVE" | "RESTRICTIVE" | undefined) ??
+        previous?.permissive ??
+        "PERMISSIVE",
+      command: declaredCommand ?? previous?.command ?? null,
+      roleName:
+        (declaredRole ? unquoteIdentifier(declaredRole) : null) ??
+        previous?.roleName ??
+        null,
+      qual: clauses.qual ?? previous?.qual ?? null,
+      withCheck: clauses.withCheck ?? previous?.withCheck ?? null,
+    });
   }
 
-  if (drizzlePolicies.length !== 34 || sqlPolicyTables.size !== 34) {
+  if (drizzlePolicies.length !== 34 || sqlPolicies.size !== 34) {
     throw new Error(
       "Canonical Drizzle/SQL sources must declare 34 RLS policies.",
     );
@@ -214,14 +399,43 @@ function parsePolicies(
       );
     }
     seen.add(policy.policyName);
-    const tableName = sqlPolicyTables.get(policy.policyName);
+    const sqlPolicy = sqlPolicies.get(policy.policyName);
     const roleName = roles.get(policy.roleReference);
-    if (!tableName || !roleName) {
+    if (!sqlPolicy || !roleName) {
       throw new Error(
         `Incomplete canonical policy mapping: ${policy.policyName}`,
       );
     }
-    return { ...policy, tableName, roleName };
+    if (
+      (sqlPolicy.command && sqlPolicy.command !== policy.command) ||
+      (sqlPolicy.roleName && sqlPolicy.roleName !== roleName)
+    ) {
+      throw new Error(
+        `Canonical SQL policy metadata differs from Drizzle: ${policy.policyName}`,
+      );
+    }
+    const needsQual = ["SELECT", "UPDATE", "DELETE", "ALL"].includes(
+      policy.command,
+    );
+    const needsCheck = ["INSERT", "UPDATE", "ALL"].includes(policy.command);
+    if (
+      (needsQual && !sqlPolicy.qual) ||
+      (!needsQual && sqlPolicy.qual !== null) ||
+      (needsCheck && !sqlPolicy.withCheck) ||
+      (!needsCheck && sqlPolicy.withCheck !== null)
+    ) {
+      throw new Error(
+        `Canonical SQL policy predicates are incomplete: ${policy.policyName}`,
+      );
+    }
+    return {
+      ...policy,
+      tableName: sqlPolicy.tableName,
+      roleName,
+      permissive: sqlPolicy.permissive,
+      qual: sqlPolicy.qual,
+      withCheck: sqlPolicy.withCheck,
+    };
   });
 }
 

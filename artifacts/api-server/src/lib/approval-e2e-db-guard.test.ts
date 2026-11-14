@@ -1,28 +1,56 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { createServer } from "node:net";
 import { test } from "node:test";
+import os from "node:os";
+import path from "node:path";
 import { isExplicitDisposableApprovalDatabase } from "./approval-e2e-db-guard";
 
-test("local approval lab requires explicit, loopback-only disposable opt-in", () => {
+test("local approval lab requires an explicit private Unix-socket target", async () => {
+  const labRoot = mkdtempSync(path.join(os.tmpdir(), "guardian-nexus-pg-lab-"));
+  chmodSync(labRoot, 0o700);
+  const socketDirectory = path.join(labRoot, "socket");
+  mkdirSync(socketDirectory, { mode: 0o700 });
+  chmodSync(socketDirectory, 0o700);
+  const socketPath = path.join(socketDirectory, ".s.PGSQL.5432");
+  const server = createServer();
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(socketPath, resolve);
+  });
+  const databaseUrl = new URL(
+    "postgresql://test-only-user:test-only-password@127.0.0.1:5432/guardian_approval_lab_unit",
+  );
+  databaseUrl.searchParams.set("host", socketDirectory);
+  const runtimeUrl = new URL(
+    "postgresql://app_runtime_login:test-only-runtime-password-0123456789abcdef@127.0.0.1:5432/guardian_approval_lab_unit",
+  );
+  runtimeUrl.searchParams.set("host", socketDirectory);
   const valid = {
     NODE_ENV: "development",
     GUARDIAN_APPROVAL_E2E_DISPOSABLE: "1",
     GUARDIAN_APPROVAL_E2E_DATABASE_NAME: "guardian_approval_lab_unit",
-    DATABASE_URL:
-      "postgresql://test-only-user:test-only-password@127.0.0.1:5432/guardian_approval_lab_unit",
-    APP_RUNTIME_DATABASE_URL:
-      "postgresql://app_runtime_login:test-only-runtime-password-0123456789abcdef@127.0.0.1:5432/guardian_approval_lab_unit",
+    DATABASE_URL: databaseUrl.toString(),
+    APP_RUNTIME_DATABASE_URL: runtimeUrl.toString(),
   };
-  assert.equal(isExplicitDisposableApprovalDatabase(valid), true);
+  try {
+    assert.equal(isExplicitDisposableApprovalDatabase(valid), true);
 
-  for (const unsafe of [
+    for (const unsafe of [
     { ...valid, DATABASE_URL: "postgresql://user:pass@db.example.invalid:5432/guardian_approval_lab_unit" },
     { ...valid, DATABASE_URL: "postgresql://user:pass@127.0.0.1:5432/workspace" },
-    { ...valid, DATABASE_URL: `${valid.DATABASE_URL}?host=db.example.invalid` },
+    {
+      ...valid,
+      DATABASE_URL: `postgresql://test-only-user:test-only-password@127.0.0.1:5432/guardian_approval_lab_unit?host=db.example.invalid`,
+    },
+    {
+      ...valid,
+      DATABASE_URL: `${valid.DATABASE_URL}&host=${encodeURIComponent(socketDirectory)}`,
+    },
     {
       ...valid,
       APP_RUNTIME_DATABASE_URL:
-        "postgresql://app_runtime_login:test-only-runtime-password-0123456789abcdef@db.example.invalid:5432/guardian_approval_lab_unit",
+        `postgresql://app_runtime_login:test-only-runtime-password-0123456789abcdef@127.0.0.1:5432/guardian_approval_lab_unit?host=${encodeURIComponent(path.join(labRoot, "other-socket"))}`,
     },
     {
       ...valid,
@@ -45,8 +73,12 @@ test("local approval lab requires explicit, loopback-only disposable opt-in", ()
       GUARDIAN_APPROVAL_E2E_CI_TARGET_VERIFIED:
         "guardian-approval-lab:123456789:2:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     },
-  ]) {
-    assert.equal(isExplicitDisposableApprovalDatabase(unsafe), false);
+    ]) {
+      assert.equal(isExplicitDisposableApprovalDatabase(unsafe), false);
+    }
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    rmSync(labRoot, { recursive: true, force: true });
   }
 });
 
@@ -107,8 +139,8 @@ test("GitHub Actions lab workflow guards its isolated service before DB writes",
   );
   assert.match(
     workflow,
-    /Upload sanitized RLS catalog report[\s\S]*?actions\/upload-artifact@v4[\s\S]*?path:\s*\$\{\{\s*runner\.temp\s*\}\}\/guardian-postgres-rls-catalog-report\.json[\s\S]*?retention-days:\s*14/,
-    "the sanitized catalog report is retained as a bounded job artifact",
+    /Upload sanitized RLS catalog report[\s\S]*?actions\/upload-artifact@v4[\s\S]*?path:\s*\|[\s\S]*?guardian-postgres-rls-catalog-post-schema-report\.json[\s\S]*?guardian-postgres-rls-catalog-report\.json[\s\S]*?retention-days:\s*14/,
+    "the two sanitized catalog reports are retained as bounded job artifacts",
   );
   const catalogAudit = readFileSync(
     new URL(
@@ -119,7 +151,12 @@ test("GitHub Actions lab workflow guards its isolated service before DB writes",
   );
   assert.match(
     catalogAudit,
-    /await isGitHubActionsApprovalLabTarget\(\s*process\.env,\s*"approval-e2e",\s*acquireGitHubActionsOidcToken,?\s*\)[\s\S]*?new Pool/,
+    /const guardedStage = stage === "post-schema" \? "provision" : "approval-e2e";[\s\S]*?await isGitHubActionsApprovalLabTarget\(\s*process\.env,\s*guardedStage,\s*acquireGitHubActionsOidcToken/,
+    "each catalog stage maps to its protected OIDC stage",
+  );
+  assert.ok(
+    catalogAudit.indexOf("await isGitHubActionsApprovalLabTarget") <
+      catalogAudit.indexOf("const pool = new Pool"),
     "the catalog script verifies OIDC before opening a connection",
   );
   assert.match(

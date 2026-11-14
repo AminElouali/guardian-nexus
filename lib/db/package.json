@@ -7,7 +7,8 @@
     ".": "./src/index.ts",
     "./schema": "./src/schema/index.ts",
     "./rls-catalog-audit": "./src/rls-catalog-audit.ts",
-    "./rls-catalog-contract": "./src/rls-catalog-contract.ts"
+    "./rls-catalog-contract": "./src/rls-catalog-contract.ts",
+    "./rls-catalog-phase-audit": "./src/rls-catalog-phase-audit.ts"
   },
   "scripts": {
     "push": "drizzle-kit push --config ./drizzle.config.ts",

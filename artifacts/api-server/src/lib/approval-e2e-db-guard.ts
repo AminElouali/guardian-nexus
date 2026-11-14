@@ -1,3 +1,6 @@
+import { lstatSync, realpathSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import {
   verifyGitHubActionsClaimsWithOfficialJwksDetailed,
   type GitHubActionsOidcFailureCategory,
@@ -16,6 +19,8 @@ const CI_WORKFLOW_NAME = "Guardian Nexus PostgreSQL Approval Lab";
 const CI_JOB_ID = "postgres-approval-lab";
 const CI_WORKFLOW_REF =
   `${CI_REPOSITORY}/.github/workflows/postgres-approval-lab.yml@${CI_MAIN_REF}`;
+const LOCAL_LAB_SOCKET_DIRECTORY =
+  /^guardian-nexus-pg-lab-[A-Za-z0-9]+\/socket$/;
 
 export type ApprovalLabCiStage = "bootstrap" | "provision" | "approval-e2e";
 export type ApprovalLabRejectionCategory =
@@ -89,23 +94,60 @@ function matchesPostgresUrl(
 function matchesLocalRuntimeUrl(
   value: string | undefined,
   expectedDatabase: string,
-  expectedHost: string,
+  expectedSocketDirectory: string,
 ): boolean {
   if (!value) return false;
   try {
     const parsed = new URL(value);
     const password = decodeURIComponent(parsed.password);
+    const socketHosts = parsed.searchParams.getAll("host");
     return (
       ["postgres:", "postgresql:"].includes(parsed.protocol) &&
       LOOPBACK_HOSTS.has(parsed.hostname.toLowerCase()) &&
-      parsed.hostname.toLowerCase() === expectedHost.toLowerCase() &&
       parsed.port === "5432" &&
+      Array.from(parsed.searchParams.keys()).length === 1 &&
+      socketHosts.length === 1 &&
+      socketHosts[0] === expectedSocketDirectory &&
+      isPrivateLocalLabSocketDirectory(expectedSocketDirectory) &&
       decodeURIComponent(parsed.username) === APP_RUNTIME_LOGIN &&
       password.length >= 32 &&
       decodeURIComponent(parsed.pathname.replace(/^\/+/, "")) ===
         expectedDatabase &&
-      parsed.search === "" &&
       parsed.hash === ""
+    );
+  } catch {
+    return false;
+  }
+}
+
+function isPrivateLocalLabSocketDirectory(value: string): boolean {
+  try {
+    const tempRoot = path.resolve(os.tmpdir());
+    const resolved = path.resolve(value);
+    const relative = path.relative(tempRoot, resolved);
+    const parts = relative.split(path.sep);
+    if (
+      path.isAbsolute(relative) ||
+      parts.length !== 2 ||
+      !LOCAL_LAB_SOCKET_DIRECTORY.test(relative)
+    ) {
+      return false;
+    }
+    const labRoot = path.join(tempRoot, parts[0]!);
+    const rootStat = lstatSync(labRoot);
+    const socketDirectoryStat = lstatSync(resolved);
+    const socketStat = lstatSync(path.join(resolved, ".s.PGSQL.5432"));
+    return (
+      !rootStat.isSymbolicLink() &&
+      rootStat.isDirectory() &&
+      (rootStat.mode & 0o077) === 0 &&
+      !socketDirectoryStat.isSymbolicLink() &&
+      socketDirectoryStat.isDirectory() &&
+      (socketDirectoryStat.mode & 0o077) === 0 &&
+      realpathSync(labRoot) === labRoot &&
+      realpathSync(resolved) === resolved &&
+      !socketStat.isSymbolicLink() &&
+      socketStat.isSocket()
     );
   } catch {
     return false;
@@ -281,7 +323,7 @@ export async function isGitHubActionsApprovalLabTarget(
 
 /**
  * The persistent approval E2E mutates and deletes synthetic rows. Require an
- * explicit opt-in and a uniquely named loopback database so a normal dev or
+ * explicit opt-in, a private Unix socket and a uniquely named database so a normal dev or
  * managed database URL can never be treated as disposable by accident.
  *
  * This helper intentionally returns only a boolean; callers must not log the
@@ -324,17 +366,16 @@ export function isExplicitDisposableApprovalDatabase(
 
   try {
     const parsed = new URL(databaseUrl);
-    // Do not allow libpq/driver options or fragments to alter connection
-    // routing/configuration after this URL has passed the disposable-target
-    // check (for example `service`, `servicefile`, `host`, or `hostaddr`).
-    const hasConnectionOverrides =
-      Array.from(parsed.searchParams.keys()).length > 0 ||
-      parsed.hash.length > 0;
+    const socketDirectory = parsed.searchParams.get("host");
     if (
       !["postgres:", "postgresql:"].includes(parsed.protocol) ||
       !LOOPBACK_HOSTS.has(parsed.hostname.toLowerCase()) ||
       parsed.port !== "5432" ||
-      hasConnectionOverrides
+      Array.from(parsed.searchParams.keys()).length !== 1 ||
+      parsed.searchParams.getAll("host").length !== 1 ||
+      !socketDirectory ||
+      !isPrivateLocalLabSocketDirectory(socketDirectory) ||
+      parsed.hash.length > 0
     ) {
       return false;
     }
@@ -347,7 +388,7 @@ export function isExplicitDisposableApprovalDatabase(
       matchesLocalRuntimeUrl(
         env.APP_RUNTIME_DATABASE_URL,
         expectedDatabaseName,
-        parsed.hostname,
+        socketDirectory,
       )
     );
   } catch {
