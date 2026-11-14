@@ -982,6 +982,48 @@ export function auditRlsPostPushCatalog(
   };
 }
 
+export type PostSchemaAuditBarrierReport = {
+  stage: "post-schema";
+  status: "passed" | "failed";
+  counts: { tables: number; policies: number; roles: number };
+  violationCodes: string[];
+};
+
+/**
+ * A successful Drizzle process exit is not evidence that every DDL statement
+ * was applied. Always read and audit the resulting catalog before RLS setup.
+ */
+export async function runPostSchemaAuditBarrier(
+  contract: RlsCatalogContract,
+  runDrizzlePush: () => Promise<number>,
+  readSnapshot: () => Promise<RlsCatalogPhaseSnapshot>,
+): Promise<{
+  snapshot: RlsCatalogPhaseSnapshot;
+  audit: RlsCatalogPhaseAudit;
+  report: PostSchemaAuditBarrierReport;
+}> {
+  const exitCode = await runDrizzlePush();
+  if (exitCode !== 0) {
+    throw new Error("drizzle_push_failed");
+  }
+  const snapshot = await readSnapshot();
+  const audit = auditRlsPostPushCatalog(contract, snapshot, "post-schema");
+  return {
+    snapshot,
+    audit,
+    report: {
+      stage: "post-schema",
+      status: audit.passed ? "passed" : "failed",
+      counts: {
+        tables: snapshot.tables.length,
+        policies: snapshot.policies.length,
+        roles: snapshot.roles.length,
+      },
+      violationCodes: audit.violations,
+    },
+  };
+}
+
 export function deriveDrizzleRlsTableNames(
   maxIdentifierLength = defaultPostgresMaxIdentifierLength,
 ): string[] {

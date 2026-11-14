@@ -10,6 +10,7 @@ import {
   expectedPostPushRoleNames,
   orderedValuesEqual,
   postgresIdentifier,
+  runPostSchemaAuditBarrier,
 } from "./rls-catalog-phase-audit";
 import { parseRlsCatalogContract } from "./rls-catalog-audit";
 
@@ -132,6 +133,38 @@ test("post-schema audit rejects omitted schema objects and invalid definitions",
     assert.equal(report.passed, false, `${label} must fail closed`);
     assert.ok(report.violations.length > 0);
   }
+});
+
+test("post-schema barrier rejects zero-exit Drizzle push when role hardening was skipped and reports violations", async () => {
+  const snapshot = deriveRlsCatalogPhaseSnapshot(contract, "post-schema");
+  snapshot.roles = snapshot.roles.filter(
+    (role) => role.roleName !== "app_runtime",
+  );
+  snapshot.policies = [];
+  const observedSteps: string[] = [];
+
+  const result = await runPostSchemaAuditBarrier(
+    contract,
+    async () => {
+      observedSteps.push("drizzle_push_exit_0");
+      return 0;
+    },
+    async () => {
+      observedSteps.push("post_schema_audit");
+      return snapshot;
+    },
+  );
+
+  assert.deepEqual(observedSteps, [
+    "drizzle_push_exit_0",
+    "post_schema_audit",
+  ]);
+  assert.equal(result.audit.passed, false);
+  assert.equal(result.report.stage, "post-schema");
+  assert.equal(result.report.status, "failed");
+  assert.ok(result.report.violationCodes.includes("role_inventory_mismatch"));
+  assert.ok(result.report.violationCodes.includes("policy_inventory_mismatch"));
+  assert.deepEqual(result.report.violationCodes, result.audit.violations);
 });
 
 test("ordered comparison rejects reordered composite constraint columns", () => {

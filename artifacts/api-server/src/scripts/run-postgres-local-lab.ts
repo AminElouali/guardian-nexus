@@ -22,6 +22,7 @@ import {
   deriveDrizzleRlsTableNames,
   expectedPostPushRoleNames,
   readRlsCatalogPhaseSnapshot,
+  runPostSchemaAuditBarrier,
 } from "@workspace/db/rls-catalog-phase-audit";
 import {
   parseRlsCatalogContract,
@@ -317,7 +318,8 @@ async function verifyConnectedInstance(
               current_setting('port') AS port,
               current_setting('listen_addresses') AS listen_addresses,
               current_setting('unix_socket_directories') AS socket_directories,
-              current_setting('guardian_nexus.lab_nonce') AS nonce`,
+              current_setting('guardian_nexus.lab_nonce') AS nonce,
+              current_setting('server_version_num')::integer AS server_version_num`,
     );
     const row = result.rows[0];
     if (
@@ -330,9 +332,31 @@ async function verifyConnectedInstance(
     ) {
       throw new Error("connected_instance_identity_mismatch");
     }
+    const serverVersionNum = Number(row?.server_version_num);
+    if (!Number.isInteger(serverVersionNum) || serverVersionNum < 160000) {
+      throw new Error("postgres_version_16_required");
+    }
   } finally {
     await client.end().catch(() => undefined);
   }
+}
+
+async function configureRuntimeLoginScram(pgData: string): Promise<void> {
+  const pgHbaPath = path.join(pgData, "pg_hba.conf");
+  const fileInfo = await lstat(pgHbaPath);
+  if (!fileInfo.isFile() || fileInfo.isSymbolicLink()) {
+    throw new Error("pg_hba_file_not_regular");
+  }
+  const current = await readFile(pgHbaPath, "utf8");
+  const roleRule = "local all app_runtime_login scram-sha-256";
+  if (
+    current
+      .split(/\r?\n/)
+      .some((line) => line.trim().replace(/\s+/g, " ") === roleRule)
+  ) {
+    throw new Error("pg_hba_runtime_rule_already_present");
+  }
+  await writeFile(pgHbaPath, `${roleRule}\n${current}`);
 }
 
 async function main(): Promise<void> {
@@ -400,6 +424,7 @@ async function main(): Promise<void> {
       currentStage,
       120_000,
     );
+    await configureRuntimeLoginScram(pgData);
 
     currentStage = "postgres_start";
     await runAndCheck(
@@ -410,7 +435,7 @@ async function main(): Promise<void> {
         "-l",
         "/dev/null",
         "-o",
-        `-p 5432 -k ${socketDirectory} -c listen_addresses='' -c unix_socket_directories=${socketDirectory} -c unix_socket_permissions=0700 -c guardian_nexus.lab_nonce=${nonce}`,
+        `-p 5432 -k ${socketDirectory} -c listen_addresses='' -c unix_socket_directories=${socketDirectory} -c unix_socket_permissions=0700 -c password_encryption=scram-sha-256 -c guardian_nexus.lab_nonce=${nonce}`,
         "-w",
         "-t",
         "30",
@@ -484,37 +509,47 @@ async function main(): Promise<void> {
     );
 
     currentStage = "drizzle_push";
-    await runAndCheck(
-      pnpm,
-      ["--filter", "@workspace/db", "run", "push"],
-      repoRoot,
-      envForDatabase(labRoot, databaseName, socketDirectory),
-      currentStage,
-    );
-
     const tableNames = deriveDrizzleRlsTableNames();
-    const catalogPool = new Pool({
-      host: socketDirectory,
-      port: 5432,
-      user: "postgres",
-      database: databaseName,
-      application_name: "guardian-nexus-disposable-lab-catalog",
-      max: 1,
-      connectionTimeoutMillis: 5000,
-      statement_timeout: 10000,
-    });
-    try {
+    const postSchemaBarrier = await runPostSchemaAuditBarrier(
+      contract,
+      async () => {
+        await runAndCheck(
+          pnpm,
+          ["--filter", "@workspace/db", "run", "push"],
+          repoRoot,
+          envForDatabase(labRoot!, databaseName, socketDirectory),
+          "drizzle_push",
+        );
+        return 0;
+      },
+      async () => {
+        const catalogPool = new Pool({
+          host: socketDirectory,
+          port: 5432,
+          user: "postgres",
+          database: databaseName,
+          application_name: "guardian-nexus-disposable-lab-catalog",
+          max: 1,
+          connectionTimeoutMillis: 5000,
+          statement_timeout: 10000,
+        });
+        try {
+          currentStage = "post_schema_audit";
+          return await readRlsCatalogPhaseSnapshot(
+            catalogPool,
+            tableNames,
+            expectedPostPushRoleNames(contract),
+          );
+        } finally {
+          await catalogPool.end();
+        }
+      },
+    );
+    {
+      const phaseSnapshot = postSchemaBarrier.snapshot;
+      const phaseAudit = postSchemaBarrier.audit;
+      const phaseReport = postSchemaBarrier.report;
       currentStage = "post_schema_audit";
-      const phaseSnapshot = await readRlsCatalogPhaseSnapshot(
-        catalogPool,
-        tableNames,
-        expectedPostPushRoleNames(contract),
-      );
-      const phaseAudit = auditRlsPostPushCatalog(
-        contract,
-        phaseSnapshot,
-        "post-schema",
-      );
       violations = phaseAudit.violations;
       expectedObjectDiagnostics = phaseAudit.diagnostics;
       const constraintMismatchTables = new Set(
@@ -538,22 +573,20 @@ async function main(): Promise<void> {
         policies: phaseSnapshot.policies.length,
         roles: phaseSnapshot.roles.length,
       };
+      await writeSafeReport(reportDirectory, {
+        version: 1,
+        stage: phaseReport.stage,
+        status: phaseReport.status,
+        commitSha,
+        sourceSha256: hashes,
+        counts: phaseReport.counts,
+        violationCodes: phaseReport.violationCodes,
+        identityVerified,
+      });
       if (!phaseAudit.passed) {
         throw new Error("post_schema_audit_failed");
       }
-    } finally {
-      await catalogPool.end();
     }
-    await writeSafeReport(reportDirectory, {
-      version: 1,
-      stage: "post-schema",
-      status: postSchemaPassed ? "passed" : "failed",
-      commitSha,
-      sourceSha256: hashes,
-      counts: postSchemaCounts,
-      violationCodes: violations,
-      identityVerified,
-    });
 
     currentStage = "apply_rls";
     await runAndCheck(
