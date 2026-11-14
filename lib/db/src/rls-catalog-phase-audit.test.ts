@@ -55,6 +55,22 @@ test("post-schema audit derives expected catalog from Drizzle and accepts policy
   assert.ok(snapshot.policies.every((policy) => policy.withCheck === null));
 });
 
+test("post-schema audit ignores memberships involving roles outside its stage", () => {
+  const snapshot = deriveRlsCatalogPhaseSnapshot(contract, "post-schema");
+  snapshot.memberships.push({
+    grantedRole: "app_runtime",
+    memberRole: "app_runtime_login",
+    adminOption: false,
+    inheritOption: false,
+    setOption: true,
+  });
+
+  const report = auditRlsPostPushCatalog(contract, snapshot, "post-schema");
+
+  assert.equal(report.passed, true, report.violations.join(", "));
+  assert.equal(report.violations.includes("role_membership_mismatch"), false);
+});
+
 test("post-schema audit rejects omitted schema objects and invalid definitions", () => {
   const cases: Array<
     [string, (snapshot: ReturnType<typeof deriveRlsCatalogPhaseSnapshot>) => void]
