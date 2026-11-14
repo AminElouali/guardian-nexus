@@ -1,6 +1,9 @@
 import app from "./app";
 import { logger } from "./lib/logger";
-import { assertRlsRuntimeReady } from "@workspace/db";
+import {
+  assertRlsRuntimeReady,
+  safeRlsReadinessViolationCodes,
+} from "@workspace/db";
 
 const rawPort = process.env["PORT"];
 
@@ -28,6 +31,9 @@ void assertRlsRuntimeReady()
     });
   })
   .catch((err: unknown) => {
-    logger.fatal({ err }, "RLS readiness checks failed; API will not start");
+    logger.fatal(
+      { violationCodes: safeRlsReadinessViolationCodes(err) },
+      "RLS readiness checks failed; API will not start",
+    );
     process.exit(1);
   });

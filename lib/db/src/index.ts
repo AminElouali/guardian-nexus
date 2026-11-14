@@ -4,8 +4,30 @@ import pg from "pg";
 import * as schema from "./schema";
 import { appRuntimeLoginRoleName } from "./schema/roles";
 import { expectedRlsPolicyCounts } from "./rls-catalog-contract";
+import {
+  RlsRuntimeReadinessError,
+  type RlsReadinessViolationCode,
+} from "./rls-readiness-diagnostics";
+
+export {
+  RlsRuntimeReadinessError,
+  safeRlsReadinessViolationCodes,
+  rlsReadinessViolationCodes,
+} from "./rls-readiness-diagnostics";
+export type { RlsReadinessViolationCode } from "./rls-readiness-diagnostics";
 
 const { Pool } = pg;
+
+async function runRlsReadinessStep<T>(
+  operation: () => Promise<T>,
+  failureCode: RlsReadinessViolationCode,
+): Promise<T> {
+  try {
+    return await operation();
+  } catch {
+    throw new RlsRuntimeReadinessError([failureCode]);
+  }
+}
 
 function requiredEnvironmentValue(name: string): string {
   const value = process.env[name];
@@ -64,7 +86,8 @@ export const pool = new Pool(poolConfig);
 export const db = drizzle(pool, { schema });
 
 export async function assertRlsRuntimeReady(): Promise<void> {
-  const { rows } = await db.execute(sql`
+  const { rows } = await runRlsReadinessStep(
+    () => db.execute(sql`
     SELECT
       c.relname,
       c.relrowsecurity,
@@ -105,29 +128,43 @@ export async function assertRlsRuntimeReady(): Promise<void> {
         'ai_assessment_approval_requests'
       )
     GROUP BY c.relname, c.relrowsecurity, c.relforcerowsecurity
-  `);
-  if (
-    rows.length !== Object.keys(expectedRlsPolicyCounts).length ||
-    rows.some((row) => {
+  `),
+    "table_catalog_query_failed",
+  );
+  const catalogViolations: RlsReadinessViolationCode[] = [];
+  if (rows.length !== Object.keys(expectedRlsPolicyCounts).length) {
+    catalogViolations.push("table_inventory_mismatch");
+  }
+  for (const row of rows) {
       const expectedCount =
         expectedRlsPolicyCounts[
           String(row.relname) as keyof typeof expectedRlsPolicyCounts
         ];
-      return (
+      if (expectedCount === undefined) {
+        catalogViolations.push("table_inventory_mismatch");
+      }
+      if (row.relrowsecurity !== true) {
+        catalogViolations.push("rls_disabled");
+      }
+      if (row.relforcerowsecurity !== true) {
+        catalogViolations.push("rls_not_forced");
+      }
+      if (
         expectedCount === undefined ||
-        row.relrowsecurity !== true ||
-        row.relforcerowsecurity !== true ||
-        Number(row.policy_count) !== expectedCount ||
-        Number(row.invalid_policies) !== 0
-      );
-    })
-  ) {
-    throw new Error(
-      "Tenant RLS policies are missing, unqualified, or not forced; refusing to start.",
-    );
+        Number(row.policy_count) !== expectedCount
+      ) {
+        catalogViolations.push("policy_count_mismatch");
+      }
+      if (Number(row.invalid_policies) !== 0) {
+        catalogViolations.push("policy_contract_mismatch");
+      }
+  }
+  if (catalogViolations.length > 0) {
+    throw new RlsRuntimeReadinessError(catalogViolations);
   }
 
-  const loginResult = await db.execute(sql`
+  const loginResult = await runRlsReadinessStep(
+    () => db.execute(sql`
     SELECT
       session_user::text AS session_role,
       current_user::text AS current_role,
@@ -399,12 +436,21 @@ export async function assertRlsRuntimeReady(): Promise<void> {
       AND role.rolname = ${appRuntimeLoginRoleName}
       AND runtime.rolname = 'app_runtime'
       AND worker.rolname = 'app_ai_assessment_worker'
-  `);
+  `),
+    "role_catalog_query_failed",
+  );
   const login = loginResult.rows[0];
+  if (!login) {
+    throw new RlsRuntimeReadinessError(["role_catalog_query_failed"]);
+  }
+  const roleViolations: RlsReadinessViolationCode[] = [];
   if (
-    !login ||
     login.session_role !== appRuntimeLoginRoleName ||
-    login.current_role !== appRuntimeLoginRoleName ||
+    login.current_role !== appRuntimeLoginRoleName
+  ) {
+    roleViolations.push("runtime_login_identity_mismatch");
+  }
+  if (
     login.rolsuper !== false ||
     login.rolbypassrls !== false ||
     login.rolcanlogin !== true ||
@@ -425,41 +471,64 @@ export async function assertRlsRuntimeReady(): Promise<void> {
     login.worker_can_create_databases !== false ||
     login.worker_can_create_roles !== false ||
     login.worker_can_replicate !== false ||
-    login.worker_inherits_privileges !== false ||
+    login.worker_inherits_privileges !== false
+  ) {
+    roleViolations.push("role_attributes_mismatch");
+  }
+  if (
     login.can_set_runtime_role !== true ||
     login.inherits_runtime_privileges !== false ||
-    login.runtime_can_set_worker_role !== true ||
+    login.runtime_can_set_worker_role !== true
+  ) {
+    roleViolations.push("role_membership_mismatch");
+  }
+  if (
     login.worker_can_read_job_result !== false ||
     login.worker_can_write_job_result !== false ||
     login.worker_can_change_tenant !== false ||
     login.worker_can_change_actor !== false ||
-    login.worker_can_change_profile !== false ||
-    login.runtime_owns_protected_table !== false ||
-    login.runtime_has_required_table_grants !== true ||
-    login.login_has_direct_protected_table_access !== false
+    login.worker_can_change_profile !== false
   ) {
-    throw new Error(
-      "The API must connect as a non-privileged login with no direct tenant-data access.",
-    );
+    roleViolations.push("worker_privileges_mismatch");
+  }
+  if (
+    login.runtime_owns_protected_table !== false ||
+    login.runtime_has_required_table_grants !== true
+  ) {
+    roleViolations.push("runtime_table_privileges_mismatch");
+  }
+  if (login.login_has_direct_protected_table_access !== false) {
+    roleViolations.push("runtime_login_direct_table_access");
+  }
+  if (roleViolations.length > 0) {
+    throw new RlsRuntimeReadinessError(roleViolations);
   }
 
-  const effectiveRole = await db.transaction(async (tx) => {
-    await tx.execute(sql`SET LOCAL ROLE app_runtime`);
-    const result = await tx.execute(sql`SELECT current_user AS role_name`);
-    return result.rows[0]?.role_name;
-  });
+  const effectiveRole = await runRlsReadinessStep(
+    () =>
+      db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL ROLE app_runtime`);
+        const result = await tx.execute(sql`SELECT current_user AS role_name`);
+        return result.rows[0]?.role_name;
+      }),
+    "runtime_role_activation_failed",
+  );
   if (effectiveRole !== "app_runtime") {
-    throw new Error("Could not enter the app_runtime database role.");
+    throw new RlsRuntimeReadinessError(["runtime_role_activation_failed"]);
   }
 
-  const effectiveWorkerRole = await db.transaction(async (tx) => {
-    await tx.execute(sql`SET LOCAL ROLE app_runtime`);
-    await tx.execute(sql`SET LOCAL ROLE app_ai_assessment_worker`);
-    const result = await tx.execute(sql`SELECT current_user AS role_name`);
-    return result.rows[0]?.role_name;
-  });
+  const effectiveWorkerRole = await runRlsReadinessStep(
+    () =>
+      db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL ROLE app_runtime`);
+        await tx.execute(sql`SET LOCAL ROLE app_ai_assessment_worker`);
+        const result = await tx.execute(sql`SELECT current_user AS role_name`);
+        return result.rows[0]?.role_name;
+      }),
+    "worker_role_activation_failed",
+  );
   if (effectiveWorkerRole !== "app_ai_assessment_worker") {
-    throw new Error("Could not enter the restricted assessment queue role.");
+    throw new RlsRuntimeReadinessError(["worker_role_activation_failed"]);
   }
 
   let workerResultColumnDenied = false;
@@ -468,7 +537,7 @@ export async function assertRlsRuntimeReady(): Promise<void> {
       await tx.execute(sql`SET LOCAL ROLE app_runtime`);
       await tx.execute(sql`SET LOCAL ROLE app_ai_assessment_worker`);
       await tx.execute(
-        sql`SELECT result FROM public.ai_assessment_jobs LIMIT 1`,
+        sql`SELECT result FROM public.ai_assessment_jobs LIMIT 0`,
       );
     });
   } catch (error) {
@@ -490,11 +559,15 @@ export async function assertRlsRuntimeReady(): Promise<void> {
     ) {
       workerResultColumnDenied = true;
     } else {
-      throw error;
+      throw new RlsRuntimeReadinessError([
+        "worker_result_column_access_probe_failed",
+      ]);
     }
   }
   if (!workerResultColumnDenied) {
-    throw new Error("The assessment queue role can read tenant result data.");
+    throw new RlsRuntimeReadinessError([
+      "worker_result_column_access_not_denied",
+    ]);
   }
 }
 
