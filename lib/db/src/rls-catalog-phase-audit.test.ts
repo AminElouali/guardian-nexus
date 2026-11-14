@@ -55,7 +55,7 @@ test("post-schema audit derives expected catalog from Drizzle and accepts policy
   assert.ok(snapshot.policies.every((policy) => policy.withCheck === null));
 });
 
-test("post-schema audit ignores memberships involving roles outside its stage", () => {
+test("post-schema audit rejects memberships linking a stage role to a role outside the stage", () => {
   const snapshot = deriveRlsCatalogPhaseSnapshot(contract, "post-schema");
   snapshot.memberships.push({
     grantedRole: "app_runtime",
@@ -63,6 +63,22 @@ test("post-schema audit ignores memberships involving roles outside its stage", 
     adminOption: false,
     inheritOption: false,
     setOption: true,
+  });
+
+  const report = auditRlsPostPushCatalog(contract, snapshot, "post-schema");
+
+  assert.equal(report.passed, false);
+  assert.ok(report.violations.includes("role_membership_mismatch"));
+});
+
+test("post-schema audit ignores memberships unrelated to protected roles", () => {
+  const snapshot = deriveRlsCatalogPhaseSnapshot(contract, "post-schema");
+  snapshot.memberships.push({
+    grantedRole: "unrelated_role_a",
+    memberRole: "unrelated_role_b",
+    adminOption: false,
+    inheritOption: false,
+    setOption: false,
   });
 
   const report = auditRlsPostPushCatalog(contract, snapshot, "post-schema");

@@ -960,7 +960,7 @@ export function auditRlsPostPushCatalog(
     .map(membershipKey);
   const actualMemberships = snapshot.memberships
     .filter((membership) =>
-      expectedRoleNames.has(membership.grantedRole) &&
+      expectedRoleNames.has(membership.grantedRole) ||
       expectedRoleNames.has(membership.memberRole),
     )
     .map(membershipKey);
