@@ -71,6 +71,23 @@ test("post-schema audit ignores memberships involving roles outside its stage", 
   assert.equal(report.violations.includes("role_membership_mismatch"), false);
 });
 
+test("Drizzle and policy SQL require expired approvals to have no decision timestamp", () => {
+  const snapshot = deriveRlsCatalogPhaseSnapshot(contract, "final");
+  const decisionCheck = snapshot.constraints.find(
+    (constraint) =>
+      constraint.constraintName === "ai_assessment_approval_decision_check",
+  );
+  assert.ok(decisionCheck?.expression);
+  assert.match(
+    decisionCheck.expression,
+    /status["]? = 'expired'[\s\S]*decided_by_user_id["]? IS NULL[\s\S]*decided_by_role["]? IS NULL[\s\S]*decided_at["]? IS NULL/,
+  );
+  assert.match(
+    sources.policiesSql,
+    /OR \(status = 'expired'\s+AND decided_by_user_id IS NULL\s+AND decided_by_role IS NULL\s+AND decided_at IS NULL\)/,
+  );
+});
+
 test("post-schema audit rejects omitted schema objects and invalid definitions", () => {
   const cases: Array<
     [string, (snapshot: ReturnType<typeof deriveRlsCatalogPhaseSnapshot>) => void]

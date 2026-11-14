@@ -1348,7 +1348,7 @@ export const aiAssessmentApprovalRequestsTable = pgTable(
     ),
     check(
       "ai_assessment_approval_decision_check",
-      sql`(${table.status} = 'pending' AND ${table.decidedByUserId} IS NULL AND ${table.decidedByRole} IS NULL AND ${table.decidedAt} IS NULL) OR (${table.status} IN ('approved', 'denied') AND ${table.decidedByUserId} IS NOT NULL AND ${table.decidedAt} IS NOT NULL AND (${table.bindingVersion} = 1 OR ${table.decidedByRole} IN ('owner', 'admin'))) OR (${table.status} = 'expired' AND ${table.decidedByUserId} IS NULL AND ${table.decidedByRole} IS NULL)`,
+      sql`(${table.status} = 'pending' AND ${table.decidedByUserId} IS NULL AND ${table.decidedByRole} IS NULL AND ${table.decidedAt} IS NULL) OR (${table.status} IN ('approved', 'denied') AND ${table.decidedByUserId} IS NOT NULL AND ${table.decidedAt} IS NOT NULL AND (${table.bindingVersion} = 1 OR ${table.decidedByRole} IN ('owner', 'admin'))) OR (${table.status} = 'expired' AND ${table.decidedByUserId} IS NULL AND ${table.decidedByRole} IS NULL AND ${table.decidedAt} IS NULL)`,
     ),
     check(
       "ai_assessment_approval_no_self_approval_check",
