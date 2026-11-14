@@ -74,6 +74,7 @@ id_ecdsa
 pgpass.conf
 
 # Local database files and dumps (SQL migrations remain tracked)
+/.backups/
 *.sqlite
 *.sqlite3
 *.db
