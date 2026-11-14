@@ -74,7 +74,16 @@ type SafeReport = {
   failureStage?: Stage;
 };
 
+type NodeTestSummary = {
+  tests: number;
+  pass: number;
+  fail: number;
+  cancelled: number;
+  skipped: number;
+};
+
 const allowedChildEnvironmentKeys = ["PATH", "HOME", "LANG", "LC_ALL"] as const;
+const MAX_CAPTURED_TEST_OUTPUT_BYTES = 256 * 1024;
 
 function safeChildEnvironment(home: string): NodeJS.ProcessEnv {
   const environment: NodeJS.ProcessEnv = {};
@@ -136,6 +145,92 @@ function run(
       }
     });
   });
+}
+
+function runAndCapture(
+  command: string,
+  args: string[],
+  cwd: string,
+  env: NodeJS.ProcessEnv,
+  stage: Stage,
+  timeoutMs = 240_000,
+): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd,
+      env,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    const stdout: Buffer[] = [];
+    const stderr: Buffer[] = [];
+    let capturedBytes = 0;
+    let settled = false;
+    const finishWithError = (error: Error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      reject(error);
+    };
+    const timeout = setTimeout(() => {
+      child.kill("SIGTERM");
+      setTimeout(() => child.kill("SIGKILL"), 3000).unref();
+      finishWithError(new Error(`child_timeout:${stage}`));
+    }, timeoutMs);
+    const capture = (target: Buffer[], chunk: Buffer) => {
+      if (settled) return;
+      if (capturedBytes + chunk.length > MAX_CAPTURED_TEST_OUTPUT_BYTES) {
+        child.kill("SIGTERM");
+        finishWithError(new Error(`child_output_limit:${stage}`));
+        return;
+      }
+      target.push(chunk);
+      capturedBytes += chunk.length;
+    };
+
+    child.stdout.on("data", (chunk: Buffer) => capture(stdout, chunk));
+    child.stderr.on("data", (chunk: Buffer) => capture(stderr, chunk));
+    child.once("error", () =>
+      finishWithError(new Error(`child_start_failed:${stage}`)),
+    );
+    child.once("exit", (code, signal) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      if (code === 0 && signal === null) {
+        resolve({
+          stdout: Buffer.concat(stdout).toString("utf8"),
+          stderr: Buffer.concat(stderr).toString("utf8"),
+        });
+      } else {
+        reject(new Error(`child_failed:${stage}`));
+      }
+    });
+  });
+}
+
+function parseNodeTestSummary(output: string): NodeTestSummary {
+  const summary: Partial<NodeTestSummary> = {};
+  for (const match of output.matchAll(
+    /^# (tests|pass|fail|cancelled|skipped) (\d+)$/gm,
+  )) {
+    const key = match[1] as keyof NodeTestSummary;
+    if (summary[key] !== undefined) {
+      throw new Error("approval_e2e_summary_duplicate");
+    }
+    summary[key] = Number(match[2]);
+  }
+  if (
+    summary.tests === undefined ||
+    summary.pass === undefined ||
+    summary.fail === undefined ||
+    summary.cancelled === undefined ||
+    summary.skipped === undefined ||
+    summary.tests !==
+      summary.pass + summary.fail + summary.cancelled + summary.skipped
+  ) {
+    throw new Error("approval_e2e_summary_invalid");
+  }
+  return summary as NodeTestSummary;
 }
 
 function binaryPath(name: string): string {
@@ -697,6 +792,7 @@ async function main(): Promise<void> {
       ...safeChildEnvironment(labRoot),
       NODE_ENV: "development",
       GUARDIAN_APPROVAL_E2E_DISPOSABLE: "1",
+      GUARDIAN_APPROVAL_E2E_REQUIRED: "1",
       GUARDIAN_APPROVAL_E2E_DATABASE_NAME: databaseName,
       DATABASE_URL: databaseUrl(databaseName, socketDirectory),
       APP_RUNTIME_DATABASE_URL: runtimeUrl(
@@ -705,22 +801,38 @@ async function main(): Promise<void> {
         socketDirectory,
       ),
     };
-    await runAndCheck(
+    const e2eOutput = await runAndCapture(
       pnpm,
       [
         "--filter",
         "@workspace/api-server",
         "exec",
+        "node",
+        "--import",
         "tsx",
         "--test",
+        "--test-reporter=tap",
         "src/ai-assessment-synthetic-approval-e2e.test.ts",
       ],
       repoRoot,
       e2eEnv,
       currentStage,
-      240_000,
     );
+    const nodeTestSummary = parseNodeTestSummary(
+      `${e2eOutput.stdout}\n${e2eOutput.stderr}`,
+    );
+    if (
+      nodeTestSummary.pass < 1 ||
+      nodeTestSummary.skipped !== 0 ||
+      nodeTestSummary.fail !== 0 ||
+      nodeTestSummary.cancelled !== 0
+    ) {
+      throw new Error("approval_e2e_summary_rejected");
+    }
     approvalE2ePassed = true;
+    console.log(
+      `node:test approval E2E: tests=${nodeTestSummary.tests} pass=${nodeTestSummary.pass} fail=${nodeTestSummary.fail} skipped=${nodeTestSummary.skipped}`,
+    );
 
     await writeSafeReport(reportDirectory, {
       version: 1,

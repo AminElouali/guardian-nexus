@@ -117,6 +117,7 @@ jobs:
       - name: Run persistent synthetic approval E2E
         env:
           GUARDIAN_APPROVAL_E2E_CI_STAGE: approval-e2e
+          GUARDIAN_APPROVAL_E2E_REQUIRED: "1"
           DATABASE_URL: postgresql://postgres:${{ format('guardian-ci-{0}-{1}-{2}', github.run_id, github.run_attempt, github.sha) }}@127.0.0.1:5432/guardian_approval_lab_ci
           APP_RUNTIME_DATABASE_URL: postgresql://app_runtime_login:${{ format('guardian-runtime-{0}-{1}-{2}', github.run_id, github.run_attempt, github.sha) }}@127.0.0.1:5432/guardian_approval_lab_ci
         run: pnpm --filter @workspace/api-server exec tsx --test src/ai-assessment-synthetic-approval-e2e.test.ts

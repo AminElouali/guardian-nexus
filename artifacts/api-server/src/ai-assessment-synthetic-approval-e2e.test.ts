@@ -331,6 +331,11 @@ test(
         acquireGitHubActionsOidcToken,
       ))
     ) {
+      if (process.env.GUARDIAN_APPROVAL_E2E_REQUIRED === "1") {
+        throw new Error(
+          "Required disposable approval database guard was not verified.",
+        );
+      }
       t.skip(
         "requires an authenticated GitHub Actions OIDC target or explicit local disposable opt-in",
       );
