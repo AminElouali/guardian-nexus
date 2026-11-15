@@ -4,13 +4,16 @@
 
 **Referencia de código:** `main` en `5585c07dbd7d636f3f7ed80b366be4f587e073ec` (estado local observado al actualizar este checkpoint).
 
-**Validación comunicada para Actions run #12:** resultado verde sobre `5585c07`. Se reportan OIDC real de GitHub Actions, PostgreSQL 16 efímero, auditorías del catálogo RLS y E2E de aprobaciones. Este registro refleja el resultado comunicado; no se vuelve a ejecutar ni se inspecciona el run o su artefacto en esta actualización.
+**Actions run #12:** verificado por el propietario en GitHub el 15 nov 2026 (estado `Success` sobre `5585c07`); el artefacto aún no inspeccionado. El resultado incluye OIDC real de GitHub Actions, PostgreSQL 16 efímero, auditorías del catálogo RLS y E2E de aprobaciones. No se vuelve a ejecutar el run en esta actualización.
 
 ### Implementado
 
-- El laboratorio CI ejecutó OIDC real y validaciones contra PostgreSQL 16 efímero, incluidas auditorías RLS y E2E de aprobaciones, según el resultado comunicado de Actions run #12.
+- El laboratorio CI ejecutó OIDC real y validaciones contra PostgreSQL 16 efímero, incluidas auditorías RLS y E2E de aprobaciones, según Actions run #12.
+- Las aprobaciones persistentes vinculan la propuesta/contexto mediante SHA-256, quedan protegidas por RLS y pasan por el Policy Engine determinista; el E2E usa fixtures y simulación, no efectos externos.
 - El flujo sintético de reembolso está implementado; representa una propuesta y una simulación controlada, no el movimiento real de dinero.
 - El auditor RLS incluye la corrección para detectar membresías inesperadas que involucran roles protegidos.
+- El SDK de Python se usa en el E2E para proponer; la aprobación se prueba por la API directa.
+- El SDK de TypeScript no está publicado.
 - El worker de IA permanece deshabilitado; la validación del laboratorio no acredita aislamiento independiente del host ni autorización para habilitarlo.
 
 ### Proyectado o no implementado
