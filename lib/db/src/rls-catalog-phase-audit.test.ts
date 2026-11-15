@@ -288,6 +288,32 @@ test("final audit compares policy ASTs and requires forced RLS and login role", 
   assert.equal(auditRlsPostPushCatalog(contract, noLogin, "final").passed, false);
 });
 
+test("membership policies enforce owner changes and creator-only privileged inserts without adding policies", () => {
+  const snapshot = deriveRlsCatalogPhaseSnapshot(contract, "final");
+  const report = auditRlsPostPushCatalog(contract, snapshot, "final");
+  const membershipPolicies = snapshot.policies.filter(
+    (policy) => policy.tableName === "workspace_memberships",
+  );
+  const insertPolicy = membershipPolicies.find(
+    (policy) => policy.policyName === "workspace_memberships_insert_self",
+  );
+  const updatePolicy = membershipPolicies.find(
+    (policy) => policy.policyName === "workspace_memberships_update_scoped",
+  );
+
+  assert.equal(report.passed, true, report.violations.join(", "));
+  assert.equal(report.expectedPolicyCount, 34);
+  assert.equal(membershipPolicies.length, 3);
+  assert.ok(insertPolicy?.withCheck);
+  assert.match(
+    insertPolicy.withCheck,
+    /role[\s\S]*'owner'[\s\S]*'admin'[\s\S]*created_by_user_id/,
+  );
+  assert.ok(updatePolicy?.qual);
+  assert.equal(updatePolicy.qual, updatePolicy.withCheck);
+  assert.match(updatePolicy.qual, /role[\s\S]*'owner'/);
+});
+
 test("unsupported policy expression syntax fails closed", () => {
   const snapshot = deriveRlsCatalogPhaseSnapshot(contract, "final");
   const policyWithPredicate = snapshot.policies.find(

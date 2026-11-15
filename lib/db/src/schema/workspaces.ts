@@ -86,13 +86,43 @@ export const membershipsTable = pgTable(
       withCheck: sql`
         ${table.userId} = ${currentUserId}
         AND ${table.workspaceId}::text = ${currentWorkspaceId}
+        AND (
+          (${table.role} <> 'owner' AND ${table.role} <> 'admin')
+          OR (
+            ${table.role} = 'owner'
+            AND EXISTS (
+              SELECT 1
+              FROM "workspaces" AS creator_workspace
+              WHERE creator_workspace."id" = ${table.workspaceId}
+                AND creator_workspace."created_by_user_id" = ${currentUserId}
+            )
+          )
+        )
       `,
     }),
     pgPolicy("workspace_memberships_update_scoped", {
       for: "update",
       to: appRuntimeRole,
-      using: sql`${table.workspaceId}::text = ${currentWorkspaceId}`,
-      withCheck: sql`${table.workspaceId}::text = ${currentWorkspaceId}`,
+      using: sql`
+        ${table.workspaceId}::text = ${currentWorkspaceId}
+        AND EXISTS (
+          SELECT 1
+          FROM "workspace_memberships" AS actor_membership
+          WHERE actor_membership."workspace_id"::text = ${currentWorkspaceId}
+            AND actor_membership."user_id" = ${currentUserId}
+            AND actor_membership."role" = 'owner'
+        )
+      `,
+      withCheck: sql`
+        ${table.workspaceId}::text = ${currentWorkspaceId}
+        AND EXISTS (
+          SELECT 1
+          FROM "workspace_memberships" AS actor_membership
+          WHERE actor_membership."workspace_id"::text = ${currentWorkspaceId}
+            AND actor_membership."user_id" = ${currentUserId}
+            AND actor_membership."role" = 'owner'
+        )
+      `,
     }),
   ],
 ).enableRLS();

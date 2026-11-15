@@ -181,6 +181,63 @@ async function runRuntimeMembershipProbe(input: {
   }
 }
 
+async function runWorkspaceCreatorMembershipProbe(input: {
+  pool: pg.Pool;
+  creatorUserId: string;
+  role: "owner" | "admin";
+}): Promise<RuntimeMembershipProbeOutcome> {
+  const client = await input.pool.connect();
+  let transactionStarted = false;
+  try {
+    await client.query("BEGIN");
+    transactionStarted = true;
+    await client.query("SET LOCAL ROLE app_runtime");
+    await client.query(
+      `SELECT set_config('app.user_id', $1, true),
+              set_config('app.workspace_id', '', true)`,
+      [input.creatorUserId],
+    );
+    try {
+      const workspace = await client.query<{ id: string }>(
+        `INSERT INTO public.workspaces
+           (name, plan_id, created_by_user_id)
+         VALUES ('Synthetic membership creator probe', 'small', $1)
+         RETURNING id`,
+        [input.creatorUserId],
+      );
+      const workspaceId = workspace.rows[0]?.id;
+      if (!workspaceId) {
+        throw new Error("workspace_creator_probe_workspace_missing");
+      }
+      await client.query(
+        "SELECT set_config('app.workspace_id', $1, true)",
+        [workspaceId],
+      );
+      const membership = await client.query(
+        `INSERT INTO public.workspace_memberships
+           (workspace_id, user_id, role)
+         VALUES ($1, $2, $3)
+         RETURNING id`,
+        [workspaceId, input.creatorUserId, input.role],
+      );
+      return membership.rowCount === 1 ? "allowed" : "denied";
+    } catch (error) {
+      const code =
+        typeof error === "object" && error !== null && "code" in error
+          ? error.code
+          : undefined;
+      if (code === "42501") return "denied";
+      throw new Error("workspace_creator_membership_probe_database_error");
+    }
+  } finally {
+    try {
+      if (transactionStarted) await client.query("ROLLBACK");
+    } finally {
+      client.release();
+    }
+  }
+}
+
 function runDeterministicFixtureWorker(profileId: string): SyntheticWorkerEvidence {
   const cached = workerEvidenceCache.get(profileId);
   if (cached) return cached;
@@ -361,7 +418,7 @@ async function seedApproval(
 }
 
 test(
-  "deterministic fixtures verify persistent approval state from a fresh database pool",
+  "deterministic fixtures verify persistent approvals and membership RLS",
   { timeout: 60_000 },
   async (t) => {
     if (
@@ -450,10 +507,10 @@ test(
       ],
     );
 
-    const membershipProbeResults: {
-      selfPromotionUpdate?: RuntimeMembershipProbeOutcome;
-      ownerMembershipInsert?: RuntimeMembershipProbeOutcome;
-    } = {};
+    const membershipProbeResults: Record<
+      string,
+      RuntimeMembershipProbeOutcome
+    > = {};
     membershipProbeResults.selfPromotionUpdate =
       await runRuntimeMembershipProbe({
         pool: runtimePool,
@@ -478,6 +535,45 @@ test(
                     RETURNING id`,
         values: [workspaceB, workspaceAViewer],
       });
+    membershipProbeResults.adminMembershipInsert =
+      await runWorkspaceCreatorMembershipProbe({
+        pool: runtimePool,
+        creatorUserId: workspaceAAdmin,
+        role: "admin",
+      });
+    membershipProbeResults.creatorOwnerMembershipInsert =
+      await runWorkspaceCreatorMembershipProbe({
+        pool: runtimePool,
+        creatorUserId: workspaceAAdmin,
+        role: "owner",
+      });
+    membershipProbeResults.ownerRoleChange =
+      await runRuntimeMembershipProbe({
+        pool: runtimePool,
+        userId: workspaceAOwner,
+        workspaceId: workspaceA,
+        statement: `UPDATE public.workspace_memberships
+                    SET role = 'analyst'
+                    WHERE workspace_id = $1
+                      AND user_id = $2
+                      AND role = 'viewer'
+                    RETURNING id`,
+        values: [workspaceA, workspaceAViewer],
+      });
+    for (const role of ["viewer", "analyst"] as const) {
+      const roleLabel = role === "viewer" ? "Viewer" : "Analyst";
+      membershipProbeResults[`crossWorkspace${roleLabel}Insert`] =
+        await runRuntimeMembershipProbe({
+          pool: runtimePool,
+          userId: workspaceAViewer,
+          workspaceId: workspaceB,
+          statement: `INSERT INTO public.workspace_memberships
+                        (workspace_id, user_id, role)
+                      VALUES ($1, $2, $3)
+                      RETURNING id`,
+          values: [workspaceB, workspaceAViewer, role],
+        });
+    }
     const membershipProbePath = fileURLToPath(
       new URL(
         "../../../generated-artifacts/guardian-membership-role-probes.json",
@@ -503,6 +599,11 @@ test(
       {
         selfPromotionUpdate: "denied",
         ownerMembershipInsert: "denied",
+        adminMembershipInsert: "denied",
+        creatorOwnerMembershipInsert: "allowed",
+        ownerRoleChange: "allowed",
+        crossWorkspaceViewerInsert: "allowed",
+        crossWorkspaceAnalystInsert: "allowed",
       },
       "app_runtime must not allow member role escalation through direct database mutations",
     );

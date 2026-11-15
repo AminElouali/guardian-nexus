@@ -387,14 +387,45 @@ ALTER POLICY workspace_memberships_insert_self ON public.workspace_memberships
   WITH CHECK (
     user_id = NULLIF(current_setting('app.user_id', true), '')
     AND workspace_id::text = NULLIF(current_setting('app.workspace_id', true), '')
+    AND (
+      (role <> 'owner' AND role <> 'admin')
+      OR (
+        role = 'owner'
+        AND EXISTS (
+          SELECT 1
+          FROM public.workspaces AS creator_workspace
+          WHERE creator_workspace.id = workspace_memberships.workspace_id
+            AND creator_workspace.created_by_user_id =
+              NULLIF(current_setting('app.user_id', true), '')
+        )
+      )
+    )
   );
 
 ALTER POLICY workspace_memberships_update_scoped ON public.workspace_memberships
   USING (
     workspace_id::text = NULLIF(current_setting('app.workspace_id', true), '')
+    AND EXISTS (
+      SELECT 1
+      FROM public.workspace_memberships AS actor_membership
+      WHERE actor_membership.workspace_id::text =
+        NULLIF(current_setting('app.workspace_id', true), '')
+        AND actor_membership.user_id =
+          NULLIF(current_setting('app.user_id', true), '')
+        AND actor_membership.role = 'owner'
+    )
   )
   WITH CHECK (
     workspace_id::text = NULLIF(current_setting('app.workspace_id', true), '')
+    AND EXISTS (
+      SELECT 1
+      FROM public.workspace_memberships AS actor_membership
+      WHERE actor_membership.workspace_id::text =
+        NULLIF(current_setting('app.workspace_id', true), '')
+        AND actor_membership.user_id =
+          NULLIF(current_setting('app.user_id', true), '')
+        AND actor_membership.role = 'owner'
+    )
   );
 
 ALTER POLICY assets_workspace_scope ON public.assets
