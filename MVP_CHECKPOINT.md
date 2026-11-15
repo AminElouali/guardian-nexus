@@ -1,5 +1,13 @@
 # Guardian Nexus — checkpoint del laboratorio PostgreSQL
 
+## Actualización — policies de membresías en desarrollo (2026-11-15)
+
+- Según la información del propietario, Actions run #13 terminó en verde sobre `a871b7f`; el informe final que inspeccionó reporta 12 tablas, 34 policies, 3 roles y 0 violaciones. Ese informe no se volvió a consultar durante esta operación.
+- En la base de desarrollo de Replit se aplicaron en una transacción únicamente `workspace_memberships_insert_self` y `workspace_memberships_update_scoped`, usando las expresiones canónicas de `lib/db/sql/rls-policies.sql`. La verificación dentro de la transacción y una consulta posterior confirmaron la condición de creador/owner y que `public` conserva 34 policies.
+- La base de desarrollo respondió como PostgreSQL 16.001; `/api/healthz` respondió HTTP 200 después del cambio.
+- Respaldo de recuperación: checkpoint de Replit anterior a la operación, comprobado por el propietario en View Checkpoints. No se creó dump ni SHA-256; el identificador del checkpoint no fue proporcionado en esta sesión.
+- No se modificaron grants, datos de aplicación, dependencias ni configuración. No se creó commit ni se hizo push.
+
 ## Estado actualizado — Actions run #12 y alcance del MVP
 
 **Referencia de código:** `main` en `5585c07dbd7d636f3f7ed80b366be4f587e073ec` (estado local observado al actualizar este checkpoint).
