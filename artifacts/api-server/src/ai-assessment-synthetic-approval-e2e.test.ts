@@ -380,14 +380,14 @@ test(
       );
       return;
     }
-    const { assertRlsRuntimeReady, pool: appPool } =
-      await import("@workspace/db");
-    const { createAiAssessmentLabRouter } =
-      await import("./routes/ai-assessment-lab");
     const databaseUrl = process.env.DATABASE_URL;
     const runtimeDatabaseUrl = process.env.APP_RUNTIME_DATABASE_URL;
     assert.ok(databaseUrl);
     assert.ok(runtimeDatabaseUrl);
+    const { assertRlsRuntimeReady, pool: appPool } =
+      await import("@workspace/db");
+    const { createAiAssessmentLabRouter } =
+      await import("./routes/ai-assessment-lab");
     await assertRlsRuntimeReady();
     const fixturePool = new pg.Pool({ connectionString: databaseUrl });
     const runtimePool = new pg.Pool({

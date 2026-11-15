@@ -28,8 +28,10 @@ El resultado del laboratorio PostgreSQL no equivale a una validación E2E comple
 
 ### Limitaciones conocidas
 
+- En las peticiones de la API, `app.user_id` procede de la identidad verificada por Clerk (`req.authUserId`), no del cuerpo ni de un encabezado del cliente. `app.workspace_id` procede del parámetro de workspace de la ruta; antes de fijarlo, `withWorkspaceUserTransaction` comprueba que la identidad autenticada pertenece a ese workspace. El E2E usa un middleware de prueba con usuarios sintéticos permitidos explícitamente.
 - El bootstrap concede a `app_runtime` `UPDATE` e `INSERT` a nivel de tabla en `workspace_memberships`; la policy RLS de actualización limita el workspace, pero no exige que el actor sea owner. La policy de inserción permite insertar la propia membresía en el workspace configurado con cualquier rol admitido por el `CHECK`. La ruta HTTP valida que solo owner gestione roles, pero la protección de base de datos no se limita por rol.
-- Se añadieron pruebas de estas dos operaciones bajo `app_runtime` en la base temporal local; resultado pendiente de ejecución.
+- Pruebas directas con `app_runtime` en PostgreSQL 16 efímero local: el `UPDATE` de viewer a owner y el `INSERT` de esa identidad como owner en otro workspace existente resultaron **permitidos**; ambas transacciones hicieron `ROLLBACK`. Las aserciones de regresión que esperaban denegación fallaron y `lab:local` terminó en `approval_e2e`. El informe de esa ejecución registra 12 tablas, 34 policies, 3 roles, 0 violaciones de catálogo, identidad del laboratorio verificada y login runtime autenticado; `approvalE2ePassed` es `false`. No se modificaron grants ni policies.
+- El resultado sintético de las probes se guarda sin IDs ni filas en `generated-artifacts/guardian-membership-role-probes.json`.
 
 ## Registro histórico — estado anterior al run #12
 
