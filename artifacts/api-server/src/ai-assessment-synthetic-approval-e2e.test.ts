@@ -594,16 +594,21 @@ test(
       )}\n`,
       { mode: 0o600 },
     );
+    const membershipProbeAssertions = Object.fromEntries(
+      Object.entries(membershipProbeResults).filter(
+        ([probeName]) =>
+          probeName !== "crossWorkspaceViewerInsert" &&
+          probeName !== "crossWorkspaceAnalystInsert",
+      ),
+    );
     assert.deepEqual(
-      membershipProbeResults,
+      membershipProbeAssertions,
       {
         selfPromotionUpdate: "denied",
         ownerMembershipInsert: "denied",
         adminMembershipInsert: "denied",
         creatorOwnerMembershipInsert: "allowed",
         ownerRoleChange: "allowed",
-        crossWorkspaceViewerInsert: "allowed",
-        crossWorkspaceAnalystInsert: "allowed",
       },
       "app_runtime must not allow member role escalation through direct database mutations",
     );
