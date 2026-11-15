@@ -141,6 +141,46 @@ type SyntheticWorkerEvidence = {
 const workerEvidenceCache = new Map<string, SyntheticWorkerEvidence>();
 let fixtureWorkerProcessCount = 0;
 
+type RuntimeMembershipProbeOutcome = "allowed" | "denied";
+
+async function runRuntimeMembershipProbe(input: {
+  pool: pg.Pool;
+  userId: string;
+  workspaceId: string;
+  statement: string;
+  values: string[];
+}): Promise<RuntimeMembershipProbeOutcome> {
+  const client = await input.pool.connect();
+  let transactionStarted = false;
+  try {
+    await client.query("BEGIN");
+    transactionStarted = true;
+    await client.query("SET LOCAL ROLE app_runtime");
+    await client.query(
+      `SELECT set_config('app.user_id', $1, true),
+              set_config('app.workspace_id', $2, true)`,
+      [input.userId, input.workspaceId],
+    );
+    try {
+      const result = await client.query(input.statement, input.values);
+      return result.rowCount === 1 ? "allowed" : "denied";
+    } catch (error) {
+      const code =
+        typeof error === "object" && error !== null && "code" in error
+          ? error.code
+          : undefined;
+      if (code === "42501") return "denied";
+      throw new Error("runtime_membership_probe_database_error");
+    }
+  } finally {
+    try {
+      if (transactionStarted) await client.query("ROLLBACK");
+    } finally {
+      client.release();
+    }
+  }
+}
+
 function runDeterministicFixtureWorker(profileId: string): SyntheticWorkerEvidence {
   const cached = workerEvidenceCache.get(profileId);
   if (cached) return cached;
@@ -345,9 +385,15 @@ test(
     const { createAiAssessmentLabRouter } =
       await import("./routes/ai-assessment-lab");
     const databaseUrl = process.env.DATABASE_URL;
+    const runtimeDatabaseUrl = process.env.APP_RUNTIME_DATABASE_URL;
     assert.ok(databaseUrl);
+    assert.ok(runtimeDatabaseUrl);
     await assertRlsRuntimeReady();
     const fixturePool = new pg.Pool({ connectionString: databaseUrl });
+    const runtimePool = new pg.Pool({
+      connectionString: runtimeDatabaseUrl,
+      max: 1,
+    });
     const app = express();
     app.use(express.json({ limit: "8kb" }));
     app.use("/api", createAiAssessmentLabRouter(authForTest));
@@ -371,6 +417,7 @@ test(
           workspaceB,
         ]);
       }
+      await runtimePool.end();
       await fixturePool.end();
     });
 
@@ -401,6 +448,63 @@ test(
         workspaceB,
         workspaceBOwner,
       ],
+    );
+
+    const membershipProbeResults: {
+      selfPromotionUpdate?: RuntimeMembershipProbeOutcome;
+      ownerMembershipInsert?: RuntimeMembershipProbeOutcome;
+    } = {};
+    membershipProbeResults.selfPromotionUpdate =
+      await runRuntimeMembershipProbe({
+        pool: runtimePool,
+        userId: workspaceAViewer,
+        workspaceId: workspaceA,
+        statement: `UPDATE public.workspace_memberships
+                    SET role = 'owner'
+                    WHERE workspace_id = $1
+                      AND user_id = $2
+                      AND role = 'viewer'
+                    RETURNING id`,
+        values: [workspaceA, workspaceAViewer],
+      });
+    membershipProbeResults.ownerMembershipInsert =
+      await runRuntimeMembershipProbe({
+        pool: runtimePool,
+        userId: workspaceAViewer,
+        workspaceId: workspaceB,
+        statement: `INSERT INTO public.workspace_memberships
+                      (workspace_id, user_id, role)
+                    VALUES ($1, $2, 'owner')
+                    RETURNING id`,
+        values: [workspaceB, workspaceAViewer],
+      });
+    const membershipProbePath = fileURLToPath(
+      new URL(
+        "../../../generated-artifacts/guardian-membership-role-probes.json",
+        import.meta.url,
+      ),
+    );
+    mkdirSync(dirname(membershipProbePath), { recursive: true });
+    writeFileSync(
+      membershipProbePath,
+      `${JSON.stringify(
+        {
+          source: "app_runtime_disposable_database_probe",
+          ...membershipProbeResults,
+          eachMutationRolledBack: true,
+        },
+        null,
+        2,
+      )}\n`,
+      { mode: 0o600 },
+    );
+    assert.deepEqual(
+      membershipProbeResults,
+      {
+        selfPromotionUpdate: "denied",
+        ownerMembershipInsert: "denied",
+      },
+      "app_runtime must not allow member role escalation through direct database mutations",
     );
 
     server = createServer(app);
@@ -1347,6 +1451,10 @@ test(
         crossTenantRejected: true,
         roleAndSelfApprovalRejected: true,
         bindingMutationRejected: true,
+      },
+      membershipRoleProbes: {
+        ...membershipProbeResults,
+        eachMutationRolledBack: true,
       },
       evidenceSha256: cases.map(
         (item) => runDeterministicFixtureWorker(item.profileId).evidenceSha256,

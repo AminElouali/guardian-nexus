@@ -4,7 +4,7 @@
 
 **Referencia de código:** `main` en `5585c07dbd7d636f3f7ed80b366be4f587e073ec` (estado local observado al actualizar este checkpoint).
 
-**Actions run #12:** verificado por el propietario en GitHub el 15 nov 2026 (estado `Success` sobre `5585c07`); el artefacto aún no inspeccionado. El resultado incluye OIDC real de GitHub Actions, PostgreSQL 16 efímero, auditorías del catálogo RLS y E2E de aprobaciones. No se vuelve a ejecutar el run en esta actualización.
+**Actions run #12:** verificado por el propietario en GitHub el 15 nov 2026 (estado `Success` sobre `5585c07`). El propietario inspeccionó el artefacto: post-schema y final reportan 12 tablas, 34 policies, 3 roles y 0 violaciones. El resultado incluye OIDC real de GitHub Actions, PostgreSQL 16 efímero, auditorías del catálogo RLS y E2E de aprobaciones.
 
 ### Implementado
 
@@ -25,6 +25,11 @@
 - **Worker de IA habilitado:** sigue deshabilitado.
 
 El resultado del laboratorio PostgreSQL no equivale a una validación E2E completa del producto ni demuestra que el MVP global esté terminado.
+
+### Limitaciones conocidas
+
+- El bootstrap concede a `app_runtime` `UPDATE` e `INSERT` a nivel de tabla en `workspace_memberships`; la policy RLS de actualización limita el workspace, pero no exige que el actor sea owner. La policy de inserción permite insertar la propia membresía en el workspace configurado con cualquier rol admitido por el `CHECK`. La ruta HTTP valida que solo owner gestione roles, pero la protección de base de datos no se limita por rol.
+- Se añadieron pruebas de estas dos operaciones bajo `app_runtime` en la base temporal local; resultado pendiente de ejecución.
 
 ## Registro histórico — estado anterior al run #12
 
