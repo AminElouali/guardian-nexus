@@ -27,4 +27,8 @@ export const expectedRlsTableNames = Object.keys(
   expectedRlsPolicyCounts,
 ) as Array<keyof typeof expectedRlsPolicyCounts>;
 
+export const appendOnlyRlsTableNames = [
+  "workspace_approval_ledger",
+] as const satisfies readonly (keyof typeof expectedRlsPolicyCounts)[];
+
 export const expectedDisposableRlsTableOwner = "postgres";

@@ -4,6 +4,8 @@ import pg from "pg";
 import * as schema from "./schema";
 import { appRuntimeLoginRoleName } from "./schema/roles";
 import {
+  appendOnlyRlsTableNamesSql,
+  appendOnlyRuntimeGrantsAllowed,
   assertRlsRuntimeCatalogReady,
   rlsRuntimeTableNamesSql,
 } from "./rls-runtime-readiness";
@@ -364,7 +366,81 @@ export async function assertRlsRuntimeReady(): Promise<void> {
   if (!login) {
     throw new RlsRuntimeReadinessError(["role_catalog_query_failed"]);
   }
+  const appendOnlyGrantResult = await runRlsReadinessStep(
+    () => db.execute(sql`
+      SELECT
+        append_only.table_name,
+        has_table_privilege(
+          runtime.oid, format('public.%I', append_only.table_name), 'SELECT'
+        ) AS can_select,
+        has_table_privilege(
+          runtime.oid, format('public.%I', append_only.table_name), 'INSERT'
+        ) AS can_insert,
+        has_table_privilege(
+          runtime.oid, format('public.%I', append_only.table_name), 'UPDATE'
+        ) AS can_update,
+        has_table_privilege(
+          runtime.oid, format('public.%I', append_only.table_name), 'DELETE'
+        ) AS can_delete,
+        has_table_privilege(
+          runtime.oid, format('public.%I', append_only.table_name), 'TRUNCATE'
+        ) AS can_truncate,
+        has_table_privilege(
+          runtime.oid, format('public.%I', append_only.table_name), 'REFERENCES'
+        ) AS can_references,
+        has_table_privilege(
+          runtime.oid, format('public.%I', append_only.table_name), 'TRIGGER'
+        ) AS can_trigger,
+        CASE
+          WHEN current_setting('server_version_num')::integer >= 170000
+          THEN has_table_privilege(
+            runtime.oid, format('public.%I', append_only.table_name), 'MAINTAIN'
+          )
+          ELSE false
+        END AS can_maintain,
+        current_setting('server_version_num')::integer >= 170000
+          AS maintain_supported,
+        EXISTS (
+          SELECT 1
+          FROM pg_class AS ledger_table
+          JOIN pg_namespace AS ledger_schema
+            ON ledger_schema.oid = ledger_table.relnamespace
+          JOIN pg_attribute AS ledger_column
+            ON ledger_column.attrelid = ledger_table.oid
+          WHERE ledger_schema.nspname = 'public'
+            AND ledger_table.relname = append_only.table_name
+            AND ledger_column.attnum > 0
+            AND NOT ledger_column.attisdropped
+            AND has_column_privilege(
+              runtime.oid, ledger_table.oid, ledger_column.attnum, 'UPDATE'
+            )
+        ) AS column_update,
+        EXISTS (
+          SELECT 1
+          FROM pg_class AS ledger_table
+          JOIN pg_namespace AS ledger_schema
+            ON ledger_schema.oid = ledger_table.relnamespace
+          JOIN pg_attribute AS ledger_column
+            ON ledger_column.attrelid = ledger_table.oid
+          WHERE ledger_schema.nspname = 'public'
+            AND ledger_table.relname = append_only.table_name
+            AND ledger_column.attnum > 0
+            AND NOT ledger_column.attisdropped
+            AND has_column_privilege(
+              runtime.oid, ledger_table.oid, ledger_column.attnum, 'REFERENCES'
+            )
+        ) AS column_references
+      FROM pg_roles AS runtime
+      CROSS JOIN unnest(ARRAY[${appendOnlyRlsTableNamesSql}])
+        AS append_only(table_name)
+      WHERE runtime.rolname = 'app_runtime'
+    `),
+    "role_catalog_query_failed",
+  );
   const roleViolations: RlsReadinessViolationCode[] = [];
+  if (!appendOnlyRuntimeGrantsAllowed(appendOnlyGrantResult.rows)) {
+    roleViolations.push("runtime_table_privileges_mismatch");
+  }
   if (
     login.session_role !== appRuntimeLoginRoleName ||
     login.current_role !== appRuntimeLoginRoleName
