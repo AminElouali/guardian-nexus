@@ -754,8 +754,24 @@ export function auditRlsPostPushCatalog(
     if (!actual.validated || actual.deferrable || actual.initiallyDeferred) {
       fail("constraint_flags_mismatch", expectedId);
     }
-    if (!equalExpression(expected.expression, actual.expression, expected.tableName)) {
-      fail("constraint_expression_mismatch", expectedId);
+    if (
+      !equalExpression(
+        expected.expression,
+        actual.expression,
+        expected.tableName,
+      )
+    ) {
+      for (const category of expressionMismatchCategories(
+        expected.expression,
+        actual.expression,
+        expected.tableName,
+      )) {
+        const [kind, path] = category.split("@");
+        fail(
+          `constraint_expression_${kind}_mismatch`,
+          `${expectedId}:${path ?? "root"}`,
+        );
+      }
     }
   }
   const expectedConstraintIds = new Set(expectedConstraints.map(constraintIdentity));
@@ -985,7 +1001,14 @@ export function auditRlsPostPushCatalog(
 export type PostSchemaAuditBarrierReport = {
   stage: "post-schema";
   status: "passed" | "failed";
-  counts: { tables: number; policies: number; roles: number };
+  counts: {
+    tables: number;
+    columns: number;
+    indexes: number;
+    constraints: number;
+    policies: number;
+    roles: number;
+  };
   violationCodes: string[];
 };
 
@@ -1016,6 +1039,9 @@ export async function runPostSchemaAuditBarrier(
       status: audit.passed ? "passed" : "failed",
       counts: {
         tables: snapshot.tables.length,
+        columns: snapshot.columns.length,
+        indexes: snapshot.indexes.length,
+        constraints: snapshot.constraints.length,
         policies: snapshot.policies.length,
         roles: snapshot.roles.length,
       },

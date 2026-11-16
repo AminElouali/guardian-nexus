@@ -191,8 +191,47 @@ function makeSnapshot(): RlsCatalogSnapshot {
 }
 
 test("RLS catalog contract is derived from Drizzle, SQL and role bootstrap sources", () => {
-  assert.equal(tableNames.length, 12);
-  assert.equal(contract.policies.length, 34);
+  assert.equal(tableNames.length, 13);
+  assert.equal(contract.policies.length, 36);
+  assert.deepEqual(
+    contract.policies
+      .filter((policy) => policy.tableName === "workspace_approval_ledger")
+      .map(({ policyName, command, roleName }) => ({
+        policyName,
+        command,
+        roleName,
+      }))
+      .sort((left, right) => left.policyName.localeCompare(right.policyName)),
+    [
+      {
+        policyName: "workspace_approval_ledger_insert_owner_admin",
+        command: "INSERT",
+        roleName: "app_runtime",
+      },
+      {
+        policyName: "workspace_approval_ledger_select_member",
+        command: "SELECT",
+        roleName: "app_runtime",
+      },
+    ],
+  );
+  assert.deepEqual(
+    contract.grants.filter(
+      (grant) => grant.tableName === "workspace_approval_ledger",
+    ),
+    [
+      {
+        roleName: "app_runtime",
+        tableName: "workspace_approval_ledger",
+        privilege: "SELECT",
+      },
+      {
+        roleName: "app_runtime",
+        tableName: "workspace_approval_ledger",
+        privilege: "INSERT",
+      },
+    ],
+  );
   assert.equal(
     contract.policies.filter(
       (policy) =>
@@ -325,10 +364,10 @@ test("RLS catalog contract is derived from Drizzle, SQL and role bootstrap sourc
 test("complete synthetic PostgreSQL catalog snapshot satisfies the contract", () => {
   const report = auditRlsCatalog(contract, makeSnapshot());
   assert.equal(report.passed, true, report.violations.join(", "));
-  assert.equal(report.expectedTableCount, 12);
-  assert.equal(report.expectedPolicyCount, 34);
-  assert.equal(report.policies.length, 34);
-  assert.equal(report.tablePrivileges.length, 3 * 12 * 4);
+  assert.equal(report.expectedTableCount, 13);
+  assert.equal(report.expectedPolicyCount, 36);
+  assert.equal(report.policies.length, 36);
+  assert.equal(report.tablePrivileges.length, 3 * 13 * 4);
   assert.equal(report.updateColumns.length, 3 * (6 + 6 + 12));
 });
 

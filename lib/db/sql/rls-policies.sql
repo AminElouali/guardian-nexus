@@ -819,4 +819,91 @@ ALTER POLICY ai_assessment_jobs_worker_update_queue
     )
   );
 
+CREATE TABLE IF NOT EXISTS public.workspace_approval_ledger (
+  workspace_id uuid NOT NULL,
+  sequence bigint NOT NULL,
+  event_type text NOT NULL,
+  approval_id text NOT NULL,
+  receipt_id text NOT NULL,
+  payload_canonical text NOT NULL,
+  previous_hash text NOT NULL DEFAULT '',
+  event_hash text NOT NULL,
+  key_id text NOT NULL,
+  signature text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT workspace_approval_ledger_pkey
+    PRIMARY KEY (workspace_id, sequence),
+  CONSTRAINT workspace_approval_ledger_workspace_id_workspaces_id_fk
+    FOREIGN KEY (workspace_id)
+    REFERENCES public.workspaces(id)
+    ON DELETE NO ACTION ON UPDATE NO ACTION,
+  CONSTRAINT workspace_approval_ledger_sequence_check
+    CHECK (sequence > 0),
+  CONSTRAINT workspace_approval_ledger_event_type_check
+    CHECK (event_type IN ('approval.approved', 'approval.receipt_consumed')),
+  CONSTRAINT workspace_approval_ledger_ids_check
+    CHECK (approval_id <> '' AND receipt_id <> ''),
+  CONSTRAINT workspace_approval_ledger_hashes_check CHECK (
+    (previous_hash = '' OR previous_hash ~ '^[a-f0-9]{64}$')
+    AND event_hash ~ '^[a-f0-9]{64}$'
+    AND key_id ~ '^[A-Za-z0-9._-]{1,64}$'
+  ),
+  CONSTRAINT workspace_approval_ledger_signature_check
+    CHECK (signature ~ '^[A-Za-z0-9_-]{85}[AQgw]$'),
+  CONSTRAINT workspace_approval_ledger_payload_binding_check CHECK (
+    jsonb_typeof(payload_canonical::jsonb) = 'object'
+    AND jsonb_extract_path_text(payload_canonical::jsonb, 'workspaceId') = workspace_id::text
+    AND jsonb_extract_path_text(payload_canonical::jsonb, 'sequence') = sequence::text
+    AND jsonb_extract_path_text(payload_canonical::jsonb, 'eventType') = event_type
+    AND jsonb_extract_path_text(payload_canonical::jsonb, 'approvalId') = approval_id
+    AND jsonb_extract_path_text(payload_canonical::jsonb, 'previousEventSha256') = previous_hash
+    AND jsonb_extract_path_text(payload_canonical::jsonb, 'keyId') = key_id
+    AND jsonb_extract_path_text(payload_canonical::jsonb, 'payload', 'receiptId') = receipt_id
+    AND created_at =
+      jsonb_extract_path_text(payload_canonical::jsonb, 'occurredAt')::timestamp with time zone
+  )
+);
+CREATE UNIQUE INDEX IF NOT EXISTS
+  workspace_approval_ledger_consumed_receipt_uidx
+  ON public.workspace_approval_ledger (receipt_id)
+  WHERE event_type = 'approval.receipt_consumed';
+CREATE INDEX IF NOT EXISTS workspace_approval_ledger_approval_idx
+  ON public.workspace_approval_ledger (workspace_id, approval_id, sequence);
+REVOKE ALL PRIVILEGES ON TABLE public.workspace_approval_ledger
+  FROM app_runtime;
+GRANT SELECT, INSERT ON TABLE public.workspace_approval_ledger TO app_runtime;
+ALTER TABLE public.workspace_approval_ledger ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.workspace_approval_ledger FORCE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS workspace_approval_ledger_select_member
+  ON public.workspace_approval_ledger;
+CREATE POLICY workspace_approval_ledger_select_member
+  ON public.workspace_approval_ledger FOR SELECT TO app_runtime
+  USING (
+    workspace_id::text = NULLIF(current_setting('app.workspace_id', true), '')
+    AND EXISTS (
+      SELECT 1
+      FROM public.workspace_memberships AS membership
+      WHERE membership.workspace_id = workspace_approval_ledger.workspace_id
+        AND membership.user_id = NULLIF(current_setting('app.user_id', true), '')
+    )
+  );
+
+DROP POLICY IF EXISTS workspace_approval_ledger_insert_owner_admin
+  ON public.workspace_approval_ledger;
+CREATE POLICY workspace_approval_ledger_insert_owner_admin
+  ON public.workspace_approval_ledger FOR INSERT TO app_runtime
+  WITH CHECK (
+    workspace_id::text = NULLIF(current_setting('app.workspace_id', true), '')
+    AND EXISTS (
+      SELECT 1
+      FROM public.workspace_memberships AS actor_membership
+      WHERE actor_membership.workspace_id =
+        workspace_approval_ledger.workspace_id
+        AND actor_membership.user_id =
+          NULLIF(current_setting('app.user_id', true), '')
+        AND actor_membership.role IN ('owner', 'admin')
+    )
+  );
+
 COMMIT;

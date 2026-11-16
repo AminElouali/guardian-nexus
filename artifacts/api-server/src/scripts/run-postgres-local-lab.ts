@@ -28,6 +28,7 @@ import {
   parseRlsCatalogContract,
   auditRlsCatalog,
 } from "@workspace/db/rls-catalog-audit";
+import { runApprovalLedgerRlsProbes } from "./approval-ledger-rls-probes";
 import { readCatalogSnapshot } from "./verify-rls-catalog";
 
 const { Client, Pool } = pg;
@@ -58,6 +59,7 @@ type Stage =
   | "runtime_role_verification"
   | "runtime_login_connection"
   | "final_audit"
+  | "approval_ledger_rls_probes"
   | "approval_e2e";
 
 type SafeReport = {
@@ -66,10 +68,19 @@ type SafeReport = {
   status: "passed" | "failed";
   commitSha: string | null;
   sourceSha256: Record<string, string>;
-  counts?: { tables: number; policies: number; roles: number };
+  counts?: {
+    tables: number;
+    columns: number;
+    indexes: number;
+    constraints: number;
+    policies: number;
+    roles: number;
+  };
   violationCodes?: string[];
   identityVerified?: boolean;
   runtimeLoginAuthenticated?: boolean;
+  approvalLedgerRlsProbesPassed?: boolean;
+  approvalLedgerRlsProbeCount?: number;
   approvalE2ePassed?: boolean;
   failureStage?: Stage;
 };
@@ -466,11 +477,27 @@ async function main(): Promise<void> {
   let identityVerified = false;
   let postSchemaPassed = false;
   let runtimeLoginAuthenticated = false;
+  let approvalLedgerRlsProbesPassed = false;
+  let approvalLedgerRlsProbeCount = 0;
   let approvalE2ePassed = false;
-  let postSchemaCounts = { tables: 0, policies: 0, roles: 0 };
+  let postSchemaCounts = {
+    tables: 0,
+    columns: 0,
+    indexes: 0,
+    constraints: 0,
+    policies: 0,
+    roles: 0,
+  };
   let expectedObjectDiagnostics: string[] = [];
   let actualConstraintDiagnostics: string[] = [];
-  let finalCounts = { tables: 0, policies: 0, roles: 0 };
+  let finalCounts = {
+    tables: 0,
+    columns: 0,
+    indexes: 0,
+    constraints: 0,
+    policies: 0,
+    roles: 0,
+  };
   let violations: string[] = [];
   let databaseName = "";
   let runtimePassword = "";
@@ -592,7 +619,20 @@ async function main(): Promise<void> {
     );
     const sources = await loadContractSources();
     const contract = parseRlsCatalogContract(sources);
-    hashes = sourceHashes(sources);
+    hashes = {
+      ...sourceHashes(sources),
+      ledgerRlsProbes: createHash("sha256")
+        .update(
+          await readFile(
+            path.join(
+              repoRoot,
+              "artifacts/api-server/src/scripts/approval-ledger-rls-probes.ts",
+            ),
+            "utf8",
+          ),
+        )
+        .digest("hex"),
+    };
 
     currentStage = "role_hardening";
     await runAndCheck(
@@ -665,16 +705,22 @@ async function main(): Promise<void> {
       postSchemaPassed = phaseAudit.passed;
       postSchemaCounts = {
         tables: phaseSnapshot.tables.length,
+        columns: phaseSnapshot.columns.length,
+        indexes: phaseSnapshot.indexes.length,
+        constraints: phaseSnapshot.constraints.length,
         policies: phaseSnapshot.policies.length,
         roles: phaseSnapshot.roles.length,
       };
+      console.log(
+        `Post-schema catalog: tables=${postSchemaCounts.tables} columns=${postSchemaCounts.columns} indexes=${postSchemaCounts.indexes} constraints=${postSchemaCounts.constraints} policies=${postSchemaCounts.policies} roles=${postSchemaCounts.roles}`,
+      );
       await writeSafeReport(reportDirectory, {
         version: 1,
         stage: phaseReport.stage,
         status: phaseReport.status,
         commitSha,
         sourceSha256: hashes,
-        counts: phaseReport.counts,
+        counts: postSchemaCounts,
         violationCodes: phaseReport.violationCodes,
         identityVerified,
       });
@@ -777,14 +823,42 @@ async function main(): Promise<void> {
       expectedObjectDiagnostics = finalAudit.diagnostics;
       finalCounts = {
         tables: finalSnapshot.tables.length,
+        columns: finalSnapshot.columns.length,
+        indexes: finalSnapshot.indexes.length,
+        constraints: finalSnapshot.constraints.length,
         policies: finalSnapshot.policies.length,
         roles: finalSnapshot.roles.length,
       };
+      console.log(
+        `Final catalog: tables=${finalCounts.tables} columns=${finalCounts.columns} indexes=${finalCounts.indexes} constraints=${finalCounts.constraints} policies=${finalCounts.policies} roles=${finalCounts.roles}`,
+      );
       if (!finalAudit.passed || !grantAudit.passed) {
         throw new Error("final_audit_failed");
       }
     } finally {
       await finalPool.end();
+    }
+
+    currentStage = "approval_ledger_rls_probes";
+    const ledgerProbePool = new Pool({
+      host: socketDirectory,
+      port: 5432,
+      user: "postgres",
+      database: databaseName,
+      application_name: "guardian-nexus-disposable-ledger-rls-probes",
+      max: 1,
+      connectionTimeoutMillis: 5000,
+      statement_timeout: 10000,
+    });
+    try {
+      const probeResult = await runApprovalLedgerRlsProbes(ledgerProbePool);
+      approvalLedgerRlsProbesPassed = probeResult.passed;
+      approvalLedgerRlsProbeCount = probeResult.probeCount;
+      console.log(
+        `Approval ledger RLS probes passed: ${probeResult.probeCount}/${probeResult.probeCount} (synthetic, disposable PostgreSQL).`,
+      );
+    } finally {
+      await ledgerProbePool.end();
     }
 
     currentStage = "approval_e2e";
@@ -844,6 +918,8 @@ async function main(): Promise<void> {
       violationCodes: [],
       identityVerified,
       runtimeLoginAuthenticated,
+      approvalLedgerRlsProbesPassed,
+      approvalLedgerRlsProbeCount,
       approvalE2ePassed,
     });
     console.log("Disposable PostgreSQL lab passed; sanitized reports were written.");
@@ -863,6 +939,8 @@ async function main(): Promise<void> {
         violationCodes: violations,
         identityVerified,
         runtimeLoginAuthenticated,
+        approvalLedgerRlsProbesPassed,
+        approvalLedgerRlsProbeCount,
         approvalE2ePassed,
         failureStage: currentStage,
       }).catch(() => undefined);

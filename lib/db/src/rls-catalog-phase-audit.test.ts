@@ -44,8 +44,8 @@ test("post-schema audit derives expected catalog from Drizzle and accepts policy
   const report = auditRlsPostPushCatalog(contract, snapshot, "post-schema");
 
   assert.equal(report.passed, true, report.violations.join(", "));
-  assert.equal(report.expectedTableCount, 12);
-  assert.equal(report.expectedPolicyCount, 34);
+  assert.equal(report.expectedTableCount, 13);
+  assert.equal(report.expectedPolicyCount, 36);
   assert.equal(report.stage, "post-schema");
   assert.deepEqual(expectedPostPushRoleNames(contract), [
     "app_ai_assessment_worker",
@@ -302,7 +302,7 @@ test("membership policies enforce owner changes and creator-only privileged inse
   );
 
   assert.equal(report.passed, true, report.violations.join(", "));
-  assert.equal(report.expectedPolicyCount, 34);
+  assert.equal(report.expectedPolicyCount, 36);
   assert.equal(membershipPolicies.length, 3);
   assert.ok(insertPolicy?.withCheck);
   assert.match(

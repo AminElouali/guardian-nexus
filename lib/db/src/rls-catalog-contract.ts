@@ -16,7 +16,12 @@ export const expectedRlsPolicyCounts = {
   ai_assessment_jobs: 5,
   host_boundary_attestation_challenges: 3,
   ai_assessment_approval_requests: 3,
+  workspace_approval_ledger: 2,
 } as const;
+
+export const expectedRlsPolicyCount = Object.values(
+  expectedRlsPolicyCounts,
+).reduce((total, count) => total + count, 0);
 
 export const expectedRlsTableNames = Object.keys(
   expectedRlsPolicyCounts,

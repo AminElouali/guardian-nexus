@@ -1,5 +1,6 @@
 import {
   expectedDisposableRlsTableOwner,
+  expectedRlsPolicyCount,
   expectedRlsPolicyCounts,
 } from "./rls-catalog-contract";
 
@@ -386,9 +387,12 @@ function parsePolicies(
     });
   }
 
-  if (drizzlePolicies.length !== 34 || sqlPolicies.size !== 34) {
+  if (
+    drizzlePolicies.length !== expectedRlsPolicyCount ||
+    sqlPolicies.size !== expectedRlsPolicyCount
+  ) {
     throw new Error(
-      "Canonical Drizzle/SQL sources must declare 34 RLS policies.",
+      `Canonical Drizzle/SQL sources must declare ${expectedRlsPolicyCount} RLS policies.`,
     );
   }
   const seen = new Set<string>();
@@ -673,8 +677,8 @@ export function auditRlsCatalog(
     snapshot.policies.map((policy) => [policyKey(policy), policy]),
   );
   if (
-    expectedPolicies.size !== 34 ||
-    actualPolicies.size !== 34 ||
+    expectedPolicies.size !== expectedRlsPolicyCount ||
+    actualPolicies.size !== expectedRlsPolicyCount ||
     [...expectedPolicies.keys()].some((key) => !actualPolicies.has(key)) ||
     [...actualPolicies.keys()].some((key) => !expectedPolicies.has(key))
   ) {
