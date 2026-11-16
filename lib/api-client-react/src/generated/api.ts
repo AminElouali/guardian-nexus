@@ -29,6 +29,7 @@ import type {
   AgentActionAdapterResponse,
   AiAssessmentApprovalDecisionRequest,
   AiAssessmentApprovalDecisionResponse,
+  AiAssessmentApprovalLedgerExportRequest,
   AiAssessmentApprovalList,
   AiAssessmentApprovalReceiptConsumeRequest,
   AiAssessmentApprovalReceiptConsumeResponse,
@@ -36,6 +37,7 @@ import type {
   AiAssessmentLabJob,
   AiAssessmentLabJobRequest,
   AiEvaluationRun,
+  ApprovalLedgerBundleV1,
   Asset,
   AssetInput,
   AwsIntegrationInput,
@@ -3213,7 +3215,7 @@ export const getConsumeWorkspaceAiAssessmentApprovalReceiptUrl = (workspaceId: s
 }
 
 /**
- * Verifies a signed v1 receipt against its approval and the signed approval event, then appends one receipt-consumed event. No external or financial action is performed.
+ * Verifies a signed v1 receipt against its approval and the complete signed workspace event chain, then appends one receipt-consumed event. Only the exact allowlisted synthetic refund is simulated in an in-memory clone; no external or financial action is performed.
  * @summary Consume one signed approval receipt
  */
 export const consumeWorkspaceAiAssessmentApprovalReceipt = async (workspaceId: string,
@@ -3293,5 +3295,95 @@ export const useConsumeWorkspaceAiAssessmentApprovalReceipt = <TError = ErrorTyp
         TContext
       > => {
       return useMutation(getConsumeWorkspaceAiAssessmentApprovalReceiptMutationOptions(options), queryClient);
+    }
+
+export const getExportWorkspaceApprovalLedgerBundleUrl = (workspaceId: string,) => {
+
+
+
+
+  return `/api/workspaces/${workspaceId}/ai-security-assessments/approval-ledger/export`
+}
+
+/**
+ * Returns the complete workspace event chain and attaches the caller-held signed receipts. The server does not persist receipt payloads; an incomplete receipt archive is rejected rather than exporting partial history. Verify the result offline with a separately trusted public-key registry.
+ * @summary Export a portable signed approval ledger bundle
+ */
+export const exportWorkspaceApprovalLedgerBundle = async (workspaceId: string,
+    aiAssessmentApprovalLedgerExportRequest: AiAssessmentApprovalLedgerExportRequest, options?: Parameters<typeof customFetch>[1]): Promise<ApprovalLedgerBundleV1> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ApprovalLedgerBundleV1>(getExportWorkspaceApprovalLedgerBundleUrl(workspaceId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(aiAssessmentApprovalLedgerExportRequest)
+  }
+);}
+
+
+
+
+
+export const getExportWorkspaceApprovalLedgerBundleMutationKey = () => ['exportWorkspaceApprovalLedgerBundle'] as const;
+
+export const getExportWorkspaceApprovalLedgerBundleMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof exportWorkspaceApprovalLedgerBundle>>, TError,ExportWorkspaceApprovalLedgerBundleMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof exportWorkspaceApprovalLedgerBundle>>, TError,ExportWorkspaceApprovalLedgerBundleMutationVariables, TContext> => {
+
+const mutationKey = getExportWorkspaceApprovalLedgerBundleMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof exportWorkspaceApprovalLedgerBundle>>, ExportWorkspaceApprovalLedgerBundleMutationVariables> = (props) => {
+          const {workspaceId,data} = props ?? {};
+
+          return  exportWorkspaceApprovalLedgerBundle(workspaceId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ExportWorkspaceApprovalLedgerBundleMutationResult = NonNullable<Awaited<ReturnType<typeof exportWorkspaceApprovalLedgerBundle>>>
+    export type ExportWorkspaceApprovalLedgerBundleMutationBody = BodyType<AiAssessmentApprovalLedgerExportRequest>
+    export type ExportWorkspaceApprovalLedgerBundleMutationError = ErrorType<void>
+    export type ExportWorkspaceApprovalLedgerBundleMutationVariables = {workspaceId: string;data: BodyType<AiAssessmentApprovalLedgerExportRequest>}
+
+    /**
+ * @summary Export a portable signed approval ledger bundle
+ */
+export const useExportWorkspaceApprovalLedgerBundle = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof exportWorkspaceApprovalLedgerBundle>>, TError,ExportWorkspaceApprovalLedgerBundleMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof exportWorkspaceApprovalLedgerBundle>>,
+        TError,
+        ExportWorkspaceApprovalLedgerBundleMutationVariables,
+        TContext
+      > => {
+      return useMutation(getExportWorkspaceApprovalLedgerBundleMutationOptions(options), queryClient);
     }
 

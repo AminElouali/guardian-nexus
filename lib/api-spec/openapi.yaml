@@ -854,7 +854,7 @@ paths:
             schema: { $ref: "#/components/schemas/AiAssessmentApprovalDecisionRequest" }
       responses:
         "200":
-          description: Decision recorded; any eligible replay is confined to an ephemeral synthetic clone, with no external side effect
+          description: Decision and signed receipt recorded. Synthetic refund execution is deferred until the receipt is consumed.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AiAssessmentApprovalDecisionResponse" }
@@ -871,7 +871,7 @@ paths:
       operationId: consumeWorkspaceAiAssessmentApprovalReceipt
       tags: [ai-evaluations]
       summary: Consume one signed approval receipt
-      description: Verifies a signed v1 receipt against its approval and the signed approval event, then appends one receipt-consumed event. No external or financial action is performed.
+      description: Verifies a signed v1 receipt against its approval and the complete signed workspace event chain, then appends one receipt-consumed event. Only the exact allowlisted synthetic refund is simulated in an in-memory clone; no external or financial action is performed.
       security: [{ bearerAuth: [] }]
       parameters:
         - in: path
@@ -889,7 +889,7 @@ paths:
             schema: { $ref: "#/components/schemas/AiAssessmentApprovalReceiptConsumeRequest" }
       responses:
         "200":
-          description: Receipt consumed and its signed event appended to the workspace ledger
+          description: Receipt consumed and its signed event appended; an eligible refund simulation result is returned without persisting refund data
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AiAssessmentApprovalReceiptConsumeResponse" }
@@ -901,6 +901,37 @@ paths:
           description: Approval not found in this workspace
         "409":
           description: Receipt invalid, expired, already consumed, or not bound to this approval
+  /workspaces/{workspaceId}/ai-security-assessments/approval-ledger/export:
+    post:
+      operationId: exportWorkspaceApprovalLedgerBundle
+      tags: [ai-evaluations]
+      summary: Export a portable signed approval ledger bundle
+      description: Returns the complete workspace event chain and attaches the caller-held signed receipts. The server does not persist receipt payloads; an incomplete receipt archive is rejected rather than exporting partial history. Verify the result offline with a separately trusted public-key registry.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AiAssessmentApprovalLedgerExportRequest" }
+      responses:
+        "200":
+          description: Complete portable v1 ledger bundle
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApprovalLedgerBundleV1" }
+        "400":
+          description: Invalid export request
+        "403":
+          description: Workspace owner or admin role required
+        "409":
+          description: Caller-held receipts do not cover the complete ledger history
+        "413":
+          description: Workspace ledger exceeds the bounded export size
 components:
   schemas:
     HealthStatus:
@@ -1505,7 +1536,82 @@ components:
         consumed: { type: boolean, const: true }
         receiptId: { type: string, format: uuid }
         consumedEventSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
-      required: [consumed, receiptId, consumedEventSha256]
+        syntheticRefundOperation:
+          anyOf:
+            - $ref: "#/components/schemas/SyntheticRefundOperationResult"
+            - type: "null"
+      required: [consumed, receiptId, consumedEventSha256, syntheticRefundOperation]
+    SyntheticRefundOperationResult:
+      type: object
+      additionalProperties: false
+      properties:
+        executed: { type: boolean, const: true }
+        reasonCode: { type: string, enum: [valid_receipt_consumed] }
+        resultCode: { type: string, enum: [synthetic_refund_approved_in_clone] }
+        resultSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        beforeStateSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        afterStateSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+      required: [executed, reasonCode, resultCode, resultSha256, beforeStateSha256, afterStateSha256]
+    ApprovalLedgerBundleV1:
+      type: object
+      additionalProperties: false
+      properties:
+        version: { type: integer, const: 1 }
+        events:
+          type: array
+          maxItems: 10000
+          items: { $ref: "#/components/schemas/SignedApprovalLedgerEventV1" }
+        receipts:
+          type: array
+          maxItems: 5000
+          items: { $ref: "#/components/schemas/SignedApprovalReceiptV1" }
+      required: [version, events, receipts]
+    SignedApprovalLedgerEventV1:
+      type: object
+      additionalProperties: false
+      properties:
+        event: { $ref: "#/components/schemas/ApprovalLedgerEventV1" }
+        eventSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        signature: { type: string, pattern: "^[A-Za-z0-9_-]{86}$" }
+      required: [event, eventSha256, signature]
+    ApprovalLedgerEventV1:
+      type: object
+      additionalProperties: false
+      properties:
+        version: { type: integer, const: 1 }
+        keyId: { type: string }
+        workspaceId: { type: string, format: uuid }
+        sequence: { type: integer, minimum: 1 }
+        eventId: { type: string, format: uuid }
+        eventType: { type: string, enum: [approval.approved, approval.receipt_consumed] }
+        approvalId: { type: string, format: uuid }
+        previousEventSha256: { type: string, pattern: "^([a-f0-9]{64})?$" }
+        occurredAt:
+          type: string
+          description: Canonical UTC ISO timestamp.
+          pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{3}Z$'
+        payload:
+          type: object
+          additionalProperties: false
+          properties:
+            receiptId: { type: string, format: uuid }
+            receiptSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+            nonce: { type: string, minLength: 32, maxLength: 128, pattern: "^[A-Za-z0-9_-]+$" }
+            consumedAt:
+              type: string
+              description: Canonical UTC ISO timestamp.
+              pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{3}Z$'
+          required: [receiptId, receiptSha256]
+      required: [version, keyId, workspaceId, sequence, eventId, eventType, approvalId, previousEventSha256, occurredAt, payload]
+    AiAssessmentApprovalLedgerExportRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        receipts:
+          type: array
+          maxItems: 5000
+          items: { $ref: "#/components/schemas/SignedApprovalReceiptV1" }
+      required: [receipts]
     SyntheticRefundProposalRequest:
       type: object
       additionalProperties: false

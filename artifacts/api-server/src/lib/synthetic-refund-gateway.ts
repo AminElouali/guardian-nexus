@@ -165,6 +165,7 @@ export function validateSyntheticRefundPolicyEvidence(
 export type SyntheticRefundDecisionResolution<TApproval, TSimulation> =
   | { kind: "approval_required"; approval: TApproval }
   | { kind: "simulated"; simulation: TSimulation }
+  | { kind: "receipt_required" }
   | { kind: "denied" }
   | { kind: "invalid" };
 
@@ -178,6 +179,7 @@ export async function resolveSyntheticRefundDecision<TApproval, TSimulation>(
   callbacks: {
     persistPendingApproval: () => Promise<TApproval>;
     simulateAllowedAction: () => Promise<TSimulation>;
+    requireReceiptForSimulation?: boolean;
   },
 ): Promise<SyntheticRefundDecisionResolution<TApproval, TSimulation>> {
   if (decision === "require_approval") {
@@ -187,6 +189,9 @@ export async function resolveSyntheticRefundDecision<TApproval, TSimulation>(
     };
   }
   if (decision === "allow") {
+    if (callbacks.requireReceiptForSimulation) {
+      return { kind: "receipt_required" };
+    }
     return {
       kind: "simulated",
       simulation: await callbacks.simulateAllowedAction(),

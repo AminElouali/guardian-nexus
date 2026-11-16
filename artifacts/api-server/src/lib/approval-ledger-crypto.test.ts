@@ -15,6 +15,7 @@ import {
   signApprovalReceiptV1,
   verifyApprovalReceiptV1,
   verifyApprovalLedgerBundleV1,
+  verifyApprovalLedgerEventChainV1,
   type ApprovalLedgerBundleV1,
   type ApprovalLedgerEventV1,
   type ApprovalReceiptPayloadV1,
@@ -178,6 +179,33 @@ test("shared JSON vector has stable canonical bytes and valid Ed25519 signatures
       verificationTime,
     ),
     { valid: true, code: "ok" },
+  );
+});
+
+test("event-chain verifier accepts the complete signed workspace chain", () => {
+  assert.deepEqual(
+    verifyApprovalLedgerEventChainV1(vectors.bundle.events, trustedKeysA),
+    { valid: true, code: "ok" },
+  );
+});
+
+test("event-chain verifier rejects reordering, missing events, and invalid signatures", () => {
+  const reordered = [...structuredClone(vectors.bundle.events)].reverse();
+  assert.deepEqual(
+    verifyApprovalLedgerEventChainV1(reordered, trustedKeysA),
+    { valid: false, code: "event_order_invalid" },
+  );
+
+  assert.deepEqual(
+    verifyApprovalLedgerEventChainV1(vectors.bundle.events.slice(1), trustedKeysA),
+    { valid: false, code: "event_order_invalid" },
+  );
+
+  const badSignature = [...structuredClone(vectors.bundle.events)];
+  badSignature[0] = { ...badSignature[0], signature: "invalid" };
+  assert.deepEqual(
+    verifyApprovalLedgerEventChainV1(badSignature, trustedKeysA),
+    { valid: false, code: "event_signature_invalid" },
   );
 });
 

@@ -15,6 +15,8 @@ export type ApprovalLedgerErrorCode =
   | "approval_event_missing"
   | "approval_event_invalid"
   | "receipt_reference_mismatch"
+  | "ledger_chain_invalid"
+  | "ledger_export_too_large"
   | "ledger_insert_failed";
 
 export class ApprovalLedgerError extends Error {

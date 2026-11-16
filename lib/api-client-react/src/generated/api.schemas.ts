@@ -4308,7 +4308,15 @@ export interface ApprovalReceiptPayloadV1 {
   /** @minLength 1 */
   approvedBy: string;
   approvedByRole: ApprovalReceiptPayloadV1ApprovedByRole;
+  /**
+     * Canonical UTC ISO timestamp preserved byte-for-byte for receipt verification.
+     * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{3}Z$
+     */
   issuedAt: string;
+  /**
+     * Canonical UTC ISO timestamp preserved byte-for-byte for receipt verification.
+     * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{3}Z$
+     */
   expiresAt: string;
   /**
      * @minLength 32
@@ -4336,11 +4344,103 @@ export interface AiAssessmentApprovalReceiptConsumeRequest {
   receipt: SignedApprovalReceiptV1;
 }
 
+export type SyntheticRefundOperationResultReasonCode = typeof SyntheticRefundOperationResultReasonCode[keyof typeof SyntheticRefundOperationResultReasonCode];
+
+
+export const SyntheticRefundOperationResultReasonCode = {
+  valid_receipt_consumed: 'valid_receipt_consumed',
+} as const;
+
+export type SyntheticRefundOperationResultResultCode = typeof SyntheticRefundOperationResultResultCode[keyof typeof SyntheticRefundOperationResultResultCode];
+
+
+export const SyntheticRefundOperationResultResultCode = {
+  synthetic_refund_approved_in_clone: 'synthetic_refund_approved_in_clone',
+} as const;
+
+export interface SyntheticRefundOperationResult {
+  executed: true;
+  reasonCode: SyntheticRefundOperationResultReasonCode;
+  resultCode: SyntheticRefundOperationResultResultCode;
+  /** @pattern ^[a-f0-9]{64}$ */
+  resultSha256: string;
+  /** @pattern ^[a-f0-9]{64}$ */
+  beforeStateSha256: string;
+  /** @pattern ^[a-f0-9]{64}$ */
+  afterStateSha256: string;
+}
+
 export interface AiAssessmentApprovalReceiptConsumeResponse {
   consumed: true;
   receiptId: string;
   /** @pattern ^[a-f0-9]{64}$ */
   consumedEventSha256: string;
+  syntheticRefundOperation: SyntheticRefundOperationResult | null;
+}
+
+export type ApprovalLedgerEventV1EventType = typeof ApprovalLedgerEventV1EventType[keyof typeof ApprovalLedgerEventV1EventType];
+
+
+export const ApprovalLedgerEventV1EventType = {
+  approvalapproved: 'approval.approved',
+  approvalreceipt_consumed: 'approval.receipt_consumed',
+} as const;
+
+export type ApprovalLedgerEventV1Payload = {
+  receiptId: string;
+  /** @pattern ^[a-f0-9]{64}$ */
+  receiptSha256: string;
+  /**
+     * @minLength 32
+     * @maxLength 128
+     * @pattern ^[A-Za-z0-9_-]+$
+     */
+  nonce?: string;
+  /**
+     * Canonical UTC ISO timestamp.
+     * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{3}Z$
+     */
+  consumedAt?: string;
+};
+
+export interface ApprovalLedgerEventV1 {
+  version: 1;
+  keyId: string;
+  workspaceId: string;
+  /** @minimum 1 */
+  sequence: number;
+  eventId: string;
+  eventType: ApprovalLedgerEventV1EventType;
+  approvalId: string;
+  /** @pattern ^([a-f0-9]{64})?$ */
+  previousEventSha256: string;
+  /**
+     * Canonical UTC ISO timestamp.
+     * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{3}Z$
+     */
+  occurredAt: string;
+  payload: ApprovalLedgerEventV1Payload;
+}
+
+export interface SignedApprovalLedgerEventV1 {
+  event: ApprovalLedgerEventV1;
+  /** @pattern ^[a-f0-9]{64}$ */
+  eventSha256: string;
+  /** @pattern ^[A-Za-z0-9_-]{86}$ */
+  signature: string;
+}
+
+export interface ApprovalLedgerBundleV1 {
+  version: 1;
+  /** @maxItems 10000 */
+  events: SignedApprovalLedgerEventV1[];
+  /** @maxItems 5000 */
+  receipts: SignedApprovalReceiptV1[];
+}
+
+export interface AiAssessmentApprovalLedgerExportRequest {
+  /** @maxItems 5000 */
+  receipts: SignedApprovalReceiptV1[];
 }
 
 export interface SyntheticRefundProposalRequest {

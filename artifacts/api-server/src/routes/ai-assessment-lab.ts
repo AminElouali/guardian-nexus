@@ -26,6 +26,9 @@ import {
   ConsumeWorkspaceAiAssessmentApprovalReceiptBody,
   ConsumeWorkspaceAiAssessmentApprovalReceiptParams,
   ConsumeWorkspaceAiAssessmentApprovalReceiptResponse,
+  ExportWorkspaceApprovalLedgerBundleBody,
+  ExportWorkspaceApprovalLedgerBundleParams,
+  ExportWorkspaceApprovalLedgerBundleResponse,
   RetryWorkspaceAiAssessmentLabJobParams,
   RetryWorkspaceAiAssessmentLabJobResponse,
 } from "@workspace/api-zod";
@@ -75,8 +78,10 @@ import type { AssessmentProfileId } from "../lib/ai-assessment-sandbox";
 import { withWorkspaceUserTransaction } from "../lib/tenant-db";
 import {
   consumeApprovalReceipt,
+  readWorkspaceApprovalLedgerEvents,
   updateApprovedRequestAndAppendReceipt,
 } from "../lib/approval-ledger-service";
+import { assembleApprovalLedgerBundleV1 } from "../lib/approval-ledger-export";
 import { ApprovalLedgerError } from "../lib/approval-ledger-keys";
 import type { SignedApprovalReceiptV1 } from "../lib/approval-ledger-crypto";
 import { UsageQuotaError, reserveWorkspaceUsageInTransaction } from "../lib/usage";
@@ -1358,6 +1363,7 @@ routes.post(
               },
               simulateAllowedAction: async () =>
                 createSyntheticApprovalSimulationReceipt(policyCase.proof),
+              requireReceiptForSimulation: true,
             },
           );
 
@@ -1407,9 +1413,12 @@ routes.post(
             }
             return resolution.approval;
           }
+          if (resolution.kind === "receipt_required") {
+            return { kind: "receipt_required" as const };
+          }
           if (resolution.kind === "simulated") {
             if (!resolution.simulation) {
-              return { kind: "policy_evidence_invalid" as const };
+              return { kind: "receipt_required" as const };
             }
             return {
               kind: "response" as const,
@@ -1461,6 +1470,12 @@ routes.post(
       }
       if (coalesced.value.kind === "pending_limit") {
         res.status(409).json({ error: "Workspace pending approval limit reached" });
+        return;
+      }
+      if (coalesced.value.kind === "receipt_required") {
+        res.status(409).json({
+          error: "A signed approval receipt must be consumed before simulation",
+        });
         return;
       }
       if (coalesced.value.kind === "policy_evidence_invalid") {
@@ -1590,17 +1605,19 @@ routes.post(
             .limit(1);
           const proof = verifyPersistedApprovalEvidence(approval, job);
           if (!proof) return { kind: "evidence_invalid" as const };
-          simulationReceipt = createSyntheticApprovalSimulationReceipt(proof);
-          if (!simulationReceipt) return { kind: "evidence_invalid" as const };
-          replayBindingSha256 = computeApprovalReplayBinding({
-            proposalBindingSha256: expectedBinding,
-            decision: "approved",
-            decidedByUserId: req.authUserId!,
-            decidedByRole: membership.role,
-            decidedAt: now,
-            simulationResultCode: simulationReceipt.resultCode,
-            simulationResultSha256: simulationReceipt.resultSha256,
-          });
+          if (approval.syntheticActionRef !== SYNTHETIC_REFUND_SCENARIO_ID) {
+            simulationReceipt = createSyntheticApprovalSimulationReceipt(proof);
+            if (!simulationReceipt) return { kind: "evidence_invalid" as const };
+            replayBindingSha256 = computeApprovalReplayBinding({
+              proposalBindingSha256: expectedBinding,
+              decision: "approved",
+              decidedByUserId: req.authUserId!,
+              decidedByRole: membership.role,
+              decidedAt: now,
+              simulationResultCode: simulationReceipt.resultCode,
+              simulationResultSha256: simulationReceipt.resultSha256,
+            });
+          }
         } else if (
           status === "approved" &&
           [2, 3].includes(approval.bindingVersion)
@@ -1805,6 +1822,46 @@ routes.post(
         ) {
           return { kind: "approval_binding_invalid" as const };
         }
+        let refundProof:
+          | NonNullable<ReturnType<typeof verifyPersistedApprovalEvidence>>
+          | null = null;
+        if (approval.syntheticActionRef === SYNTHETIC_REFUND_SCENARIO_ID) {
+          if (
+            approval.caseId !== SYNTHETIC_REFUND_CASE_ID ||
+            approval.bindingVersion !== 3
+          ) {
+            return { kind: "refund_evidence_invalid" as const };
+          }
+          const [job] = await tx
+            .select()
+            .from(aiAssessmentJobsTable)
+            .where(
+              and(
+                eq(aiAssessmentJobsTable.id, approval.jobId),
+                eq(aiAssessmentJobsTable.workspaceId, workspaceId),
+              ),
+            )
+            .limit(1);
+          const persistedProof = verifyPersistedApprovalEvidence(approval, job);
+          const refundEvidence = job
+            ? validateSyntheticRefundPolicyEvidence(
+                job.result,
+                [SYNTHETIC_REFUND_REQUIRED_PERMISSION],
+              )
+            : null;
+          if (
+            !job ||
+            job.profileId !== SYNTHETIC_REFUND_PROFILE_ID ||
+            !persistedProof ||
+            !refundEvidence ||
+            refundEvidence.decision !== "require_approval" ||
+            refundEvidence.proof.actionSha256 !== approval.actionSha256 ||
+            refundEvidence.proof.proposalSha256 !== approval.proposalSha256
+          ) {
+            return { kind: "refund_evidence_invalid" as const };
+          }
+          refundProof = persistedProof;
+        }
         const consumed = await consumeApprovalReceipt(tx, {
           workspaceId,
           approvalId,
@@ -1819,7 +1876,35 @@ routes.post(
             approvedByRole: approval.decidedByRole,
           },
         });
-        return { kind: "consumed" as const, ...consumed };
+        let syntheticRefundOperation: {
+          executed: true;
+          reasonCode: "valid_receipt_consumed";
+          resultCode: "synthetic_refund_approved_in_clone";
+          resultSha256: string;
+          beforeStateSha256: string;
+          afterStateSha256: string;
+        } | null = null;
+        if (refundProof) {
+          const simulation = createSyntheticApprovalSimulationReceipt(refundProof);
+          if (!simulation) {
+            // Throwing aborts this transaction, including its consumed event.
+            throw new Error("synthetic_refund_simulation_unavailable");
+          }
+          syntheticRefundOperation = {
+            executed: true,
+            reasonCode: "valid_receipt_consumed",
+            resultCode: simulation.resultCode as
+              "synthetic_refund_approved_in_clone",
+            resultSha256: simulation.resultSha256,
+            beforeStateSha256: simulation.beforeStateSha256,
+            afterStateSha256: simulation.afterStateSha256,
+          };
+        }
+        return {
+          kind: "consumed" as const,
+          ...consumed,
+          syntheticRefundOperation,
+        };
       },
     ).then(
       (value) => ({ ok: true as const, value }),
@@ -1870,6 +1955,7 @@ routes.post(
         consumed: true,
         receiptId: access.value.receiptId,
         consumedEventSha256: access.value.consumedEventSha256,
+        syntheticRefundOperation: access.value.syntheticRefundOperation,
       }),
     );
   },
@@ -2138,6 +2224,81 @@ routes.post(
     res.status(202).json(
       RetryWorkspaceAiAssessmentLabJobResponse.parse(
         formatJob(access.value.job),
+      ),
+    );
+  },
+);
+
+routes.post(
+  "/workspaces/:workspaceId/ai-security-assessments/approval-ledger/export",
+  async (req, res): Promise<void> => {
+    const params = ExportWorkspaceApprovalLedgerBundleParams.safeParse(
+      req.params,
+    );
+    const body = ExportWorkspaceApprovalLedgerBundleBody.safeParse(req.body);
+    if (
+      !params.success ||
+      !body.success ||
+      !UUID_PATTERN.test(params.data.workspaceId) ||
+      !bodyHasOnlyKeys(req.body, ["receipts"])
+    ) {
+      res.status(400).json({ error: "Invalid approval ledger export request" });
+      return;
+    }
+    const workspaceId = params.data.workspaceId;
+    const transactionResult = await withWorkspaceUserTransaction(
+      req.authUserId!,
+      workspaceId,
+      async (tx, membership) => {
+        if (membership.role !== "owner" && membership.role !== "admin") {
+          return { kind: "forbidden" as const };
+        }
+        const events = await readWorkspaceApprovalLedgerEvents(tx, workspaceId);
+        const assembled = assembleApprovalLedgerBundleV1(
+          events,
+          body.data.receipts,
+        );
+        return assembled.ok
+          ? { kind: "exported" as const, bundle: assembled.bundle }
+          : { kind: "receipt_archive_incomplete" as const };
+      },
+    ).then(
+      (value) => ({ ok: true as const, value }),
+      (error: unknown) => ({ ok: false as const, error }),
+    );
+    if (!transactionResult.ok) {
+      if (
+        transactionResult.error instanceof ApprovalLedgerError &&
+        transactionResult.error.code === "ledger_export_too_large"
+      ) {
+        res.status(413).json({ error: "Approval ledger export is too large" });
+        return;
+      }
+      req.log?.error?.(
+        { errorCode: "approval_ledger_export_failed" },
+        "Approval ledger export could not be assembled",
+      );
+      res.status(503).json({ error: "Approval ledger export unavailable" });
+      return;
+    }
+    const access = transactionResult.value;
+    if (!access.authorized) {
+      res.status(403).json({ error: "Workspace membership required" });
+      return;
+    }
+    if (access.value.kind === "forbidden") {
+      res.status(403).json({ error: "Workspace owner or admin role required" });
+      return;
+    }
+    if (access.value.kind !== "exported") {
+      res.status(409).json({
+        error: "Complete caller-held signed receipts are required",
+      });
+      return;
+    }
+    res.json(
+      ExportWorkspaceApprovalLedgerBundleResponse.parse(
+        access.value.bundle,
       ),
     );
   },

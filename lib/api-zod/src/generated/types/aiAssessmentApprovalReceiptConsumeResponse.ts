@@ -5,10 +5,12 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { SyntheticRefundOperationResult } from './syntheticRefundOperationResult';
 
 export interface AiAssessmentApprovalReceiptConsumeResponse {
   consumed: true;
   receiptId: string;
   /** @pattern ^[a-f0-9]{64}$ */
   consumedEventSha256: string;
+  syntheticRefundOperation: SyntheticRefundOperationResult | null;
 }

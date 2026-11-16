@@ -1,11 +1,22 @@
 import assert from "node:assert/strict";
-import { createHash, generateKeyPairSync, randomUUID } from "node:crypto";
+import {
+  createHash,
+  createPublicKey,
+  generateKeyPairSync,
+  randomUUID,
+} from "node:crypto";
 import { createPrivateKey } from "node:crypto";
-import { mkdirSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
 import { createServer, type Server } from "node:http";
 import { dirname, resolve } from "node:path";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import express, { type RequestHandler } from "express";
@@ -13,6 +24,7 @@ import pg from "pg";
 import {
   ConsumeWorkspaceAiAssessmentApprovalReceiptResponse,
   DecideWorkspaceAiAssessmentApprovalResponse,
+  ExportWorkspaceApprovalLedgerBundleResponse,
   ListWorkspaceAiAssessmentApprovalsResponse,
   PreviewWorkspaceAiAssessmentPolicyLabResponse,
   CreateWorkspaceSyntheticRefundProposalResponse,
@@ -68,6 +80,60 @@ function sha256(value: unknown): string {
   return createHash("sha256")
     .update(canonicalApprovalJson(value), "utf8")
     .digest("hex");
+}
+
+function verifyBundleWithOfflineCli(input: {
+  bundle: unknown;
+  keyId: string;
+  publicKeyPem: string;
+  verificationTime: string;
+}): { status: number | null; stdout: string; stderr: string } {
+  const directory = mkdtempSync(resolve(tmpdir(), "guardian-ledger-e2e-"));
+  try {
+    const bundlePath = resolve(directory, "bundle.json");
+    const trustedKeysPath = resolve(directory, "trusted-public-keys.json");
+    writeFileSync(bundlePath, JSON.stringify(input.bundle), { mode: 0o600 });
+    writeFileSync(
+      trustedKeysPath,
+      JSON.stringify({ [input.keyId]: input.publicKeyPem }),
+      { mode: 0o600 },
+    );
+    const cli = resolve(
+      dirname(fileURLToPath(import.meta.url)),
+      "scripts/verify-approval-ledger-bundle.ts",
+    );
+    const result = spawnSync(
+      process.execPath,
+      [
+        "--import",
+        "tsx",
+        cli,
+        "--bundle",
+        bundlePath,
+        "--trusted-keys",
+        trustedKeysPath,
+        "--at",
+        input.verificationTime,
+      ],
+      {
+        cwd: resolve(dirname(fileURLToPath(import.meta.url)), ".."),
+        encoding: "utf8",
+        env: {
+          PATH: process.env.PATH ?? "",
+          HOME: directory,
+          LANG: "C",
+          LC_ALL: "C",
+        },
+      },
+    );
+    return {
+      status: result.status,
+      stdout: result.stdout,
+      stderr: result.stderr,
+    };
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 }
 
 function runPythonSdkRefundProposalClient(input: {
@@ -423,7 +489,7 @@ async function seedApproval(
 }
 
 test(
-  "deterministic fixtures verify persistent approvals and membership RLS",
+  "deterministic approval E2E exports signed history and gates refund simulation",
   { timeout: 60_000 },
   async (t) => {
     if (
@@ -1502,14 +1568,13 @@ test(
     );
     assert.equal(
       dashboardDecision.execution,
-      "synthetic_action_simulated_once",
-    );
-    assert.equal(
-      dashboardDecision.approval.simulationResultCode,
-      "synthetic_refund_approved_in_clone",
+      "decision_only",
+      "approval records authorization but does not run the refund simulator",
     );
     assert.ok(dashboardDecision.receipt);
     const supportReceipt = dashboardDecision.receipt!;
+    assert.equal(dashboardDecision.approval.simulatedAt, null);
+    assert.equal(dashboardDecision.approval.simulationResultCode, null);
     const visibleAfterApproval = ListWorkspaceAiAssessmentApprovalsResponse.parse(
       await (await request(workspaceAAdmin, approvalPath)).json(),
     );
@@ -1519,8 +1584,8 @@ test(
     assert.equal(recordedRefund?.status, "approved");
     assert.equal(
       recordedRefund?.execution,
-      "synthetic_action_simulated_once",
-      "the dashboard list exposes the persisted one-time synthetic result",
+      "not_performed",
+      "the dashboard does not claim a refund simulation before receipt consumption",
     );
     assert.equal(
       (
@@ -1532,17 +1597,192 @@ test(
       409,
       "support approval replay is rejected",
     );
+    const supportConsumePath =
+      `/api/workspaces/${workspaceA}/ai-security-assessments/approvals/${support.approvalId}/receipt/consume`;
     assert.equal(
       (
-        await request(
-          workspaceAAdmin,
-          `/api/workspaces/${workspaceA}/ai-security-assessments/approvals/${support.approvalId}/receipt/consume`,
-          "POST",
-          { receipt: supportReceipt },
-        )
+        await request(workspaceAAdmin, supportConsumePath, "POST", {})
       ).status,
-      200,
-      "a valid unconsumed support receipt can be consumed",
+      400,
+      "missing receipt is rejected before any operation",
+    );
+    const tamperedSupportReceipt = structuredClone(supportReceipt);
+    tamperedSupportReceipt.signature =
+      `${tamperedSupportReceipt.signature[0] === "A" ? "B" : "A"}${tamperedSupportReceipt.signature.slice(1)}`;
+    assert.equal(
+      (
+        await request(workspaceAAdmin, supportConsumePath, "POST", {
+          receipt: tamperedSupportReceipt,
+        })
+      ).status,
+      409,
+      "an altered signed receipt cannot reach the simulator",
+    );
+
+    const expiredSupportAt = Date.now() - 60_000;
+    const expiredSupportReceipt = signApprovalReceiptV1(
+      {
+        ...supportReceipt.payload,
+        receiptId: randomUUID(),
+        issuedAt: new Date(expiredSupportAt - 60_000).toISOString(),
+        expiresAt: new Date(expiredSupportAt).toISOString(),
+      },
+      createPrivateKey(process.env.APPROVAL_LEDGER_ED25519_PRIVATE_KEY!),
+    );
+    assert.equal(
+      (
+        await request(workspaceAAdmin, supportConsumePath, "POST", {
+          receipt: expiredSupportReceipt,
+        })
+      ).status,
+      409,
+      "an expired signed receipt cannot reach the simulator",
+    );
+
+    const actionMismatchReceipt = signApprovalReceiptV1(
+      {
+        ...supportReceipt.payload,
+        actionSha256: "f".repeat(64),
+      },
+      createPrivateKey(process.env.APPROVAL_LEDGER_ED25519_PRIVATE_KEY!),
+    );
+    assert.notEqual(
+      actionMismatchReceipt.payload.actionSha256,
+      supportReceipt.payload.actionSha256,
+    );
+    assert.equal(
+      (
+        await request(workspaceAAdmin, supportConsumePath, "POST", {
+          receipt: actionMismatchReceipt,
+        })
+      ).status,
+      409,
+      "a validly signed receipt for a different action cannot reach the simulator",
+    );
+
+    const workspaceMismatchReceipt = signApprovalReceiptV1(
+      {
+        ...supportReceipt.payload,
+        workspaceId: workspaceB,
+      },
+      createPrivateKey(process.env.APPROVAL_LEDGER_ED25519_PRIVATE_KEY!),
+    );
+    assert.equal(
+      (
+        await request(workspaceAAdmin, supportConsumePath, "POST", {
+          receipt: workspaceMismatchReceipt,
+        })
+      ).status,
+      409,
+      "a validly signed receipt for another workspace cannot reach the simulator",
+    );
+
+    const publicKeyPem = createPublicKey(
+      createPrivateKey(process.env.APPROVAL_LEDGER_ED25519_PRIVATE_KEY!),
+    ).export({ format: "pem", type: "spki" }).toString();
+    const exportPath =
+      `/api/workspaces/${workspaceA}/ai-security-assessments/approval-ledger/export`;
+    assert.equal(
+      (
+        await request(workspaceAViewer, exportPath, "POST", {
+          receipts: [financeReceipt, supportReceipt],
+        })
+      ).status,
+      403,
+      "ledger export is limited to workspace owners and admins",
+    );
+    assert.equal(
+      (
+        await request(workspaceAAdmin, exportPath, "POST", {
+          receipts: [supportReceipt],
+        })
+      ).status,
+      409,
+      "export refuses to omit an earlier workspace receipt",
+    );
+    const exportResponse = await request(workspaceAAdmin, exportPath, "POST", {
+      receipts: [financeReceipt, supportReceipt],
+    });
+    assert.equal(exportResponse.status, 200);
+    const portableBundle = ExportWorkspaceApprovalLedgerBundleResponse.parse(
+      await exportResponse.json(),
+    );
+    const offlineVerification = verifyBundleWithOfflineCli({
+      bundle: portableBundle,
+      keyId: supportReceipt.payload.keyId,
+      publicKeyPem,
+      verificationTime: new Date().toISOString(),
+    });
+    assert.equal(offlineVerification.status, 0, offlineVerification.stderr);
+    assert.equal(offlineVerification.stderr, "");
+    assert.deepEqual(
+      JSON.parse(offlineVerification.stdout),
+      { valid: true, code: "ok" },
+      "a separate process verifies the exported signed history before operation",
+    );
+
+    const supportConsumptions = await Promise.all([
+      request(workspaceAAdmin, supportConsumePath, "POST", {
+        receipt: supportReceipt,
+      }),
+      request(workspaceAAdmin2, supportConsumePath, "POST", {
+        receipt: supportReceipt,
+      }),
+    ]);
+    assert.deepEqual(
+      supportConsumptions.map((response) => response.status).sort(),
+      [200, 409],
+      "one valid receipt consumption gates exactly one refund simulation",
+    );
+    const supportConsumed =
+      ConsumeWorkspaceAiAssessmentApprovalReceiptResponse.parse(
+        await supportConsumptions
+          .find((response) => response.status === 200)!
+          .json(),
+      );
+    assert.equal(supportConsumed.syntheticRefundOperation?.executed, true);
+    assert.equal(
+      supportConsumed.syntheticRefundOperation?.reasonCode,
+      "valid_receipt_consumed",
+    );
+    assert.equal(
+      supportConsumed.syntheticRefundOperation?.resultCode,
+      "synthetic_refund_approved_in_clone",
+    );
+    assert.match(
+      supportConsumed.syntheticRefundOperation?.resultSha256 ?? "",
+      /^[a-f0-9]{64}$/,
+    );
+    const consumedBundleResponse = await request(
+      workspaceAAdmin,
+      exportPath,
+      "POST",
+      { receipts: [financeReceipt, supportReceipt] },
+    );
+    assert.equal(consumedBundleResponse.status, 200);
+    const consumedBundle = ExportWorkspaceApprovalLedgerBundleResponse.parse(
+      await consumedBundleResponse.json(),
+    );
+    const consumedOfflineVerification = verifyBundleWithOfflineCli({
+      bundle: consumedBundle,
+      keyId: supportReceipt.payload.keyId,
+      publicKeyPem,
+      verificationTime: new Date().toISOString(),
+    });
+    assert.equal(consumedOfflineVerification.status, 0);
+    assert.deepEqual(
+      JSON.parse(consumedOfflineVerification.stdout),
+      { valid: true, code: "ok" },
+      "the independently verified export includes the consumed event",
+    );
+    assert.equal(
+      (
+        await request(workspaceAAdmin, supportConsumePath, "POST", {
+          receipt: supportReceipt,
+        })
+      ).status,
+      409,
+      "a replay is rejected and cannot run the simulator again",
     );
 
     const concurrentWorkspaceAApprovals = await Promise.all([
@@ -1754,7 +1994,7 @@ test(
       {
         approval: support,
         action: "ai_assessment.approval_approved",
-        simulated: true,
+        simulated: false,
       },
       {
         approval: supportDenied,
@@ -1825,10 +2065,21 @@ test(
       assert.ok(row, "approval decision must be persisted in its workspace");
       assert.equal(row.status, "approved");
       assert.equal(row.decided_by_role, "admin");
-      assert.ok(row.simulated_at);
-      assert.equal(row.simulation_result_code, approval.expectedResult);
-      assert.match(row.simulation_result_sha256 ?? "", /^[a-f0-9]{64}$/);
-      assert.match(row.replay_binding_sha256 ?? "", /^[a-f0-9]{64}$/);
+      if (approval === support) {
+        assert.equal(
+          row.simulated_at,
+          null,
+          "refund execution is not represented as an approval-time simulation",
+        );
+        assert.equal(row.simulation_result_code, null);
+        assert.equal(row.simulation_result_sha256, null);
+        assert.equal(row.replay_binding_sha256, null);
+      } else {
+        assert.ok(row.simulated_at);
+        assert.equal(row.simulation_result_code, approval.expectedResult);
+        assert.match(row.simulation_result_sha256 ?? "", /^[a-f0-9]{64}$/);
+        assert.match(row.replay_binding_sha256 ?? "", /^[a-f0-9]{64}$/);
+      }
     }
 
     // Reopen the database path through a fresh pool to verify that approval
@@ -1872,6 +2123,63 @@ test(
       "a revoked approver cannot create an approval audit/simulation event",
     );
 
+    const chainTamperApproval = await seedApproval(fixturePool, {
+      workspaceId: workspaceB,
+      requesterId: workspaceBOwner,
+      profileId: support.profileId,
+      caseId: support.caseId,
+      expiry: expireFuture(),
+      idempotencyKey: `synthetic-chain-tamper-${randomUUID()}`,
+    });
+    const chainTamperDecision =
+      DecideWorkspaceAiAssessmentApprovalResponse.parse(
+        await (
+          await request(
+            workspaceBAdmin,
+            `/api/workspaces/${workspaceB}/ai-security-assessments/approvals/${chainTamperApproval.approvalId}/decision`,
+            "POST",
+            {
+              decision: "approve",
+              proposalBindingSha256: chainTamperApproval.binding,
+            },
+          )
+        ).json(),
+      );
+    assert.ok(chainTamperDecision.receipt);
+    assert.equal(chainTamperDecision.execution, "decision_only");
+    await fixturePool.query(
+      `UPDATE public.workspace_approval_ledger
+          SET signature = 'invalid'
+        WHERE workspace_id = $1 AND approval_id = $2
+          AND event_type = 'approval.approved'`,
+      [workspaceB, chainTamperApproval.approvalId],
+    );
+    const tamperedChainConsume = await request(
+      workspaceBAdmin,
+      `/api/workspaces/${workspaceB}/ai-security-assessments/approvals/${chainTamperApproval.approvalId}/receipt/consume`,
+      "POST",
+      { receipt: chainTamperDecision.receipt },
+    );
+    assert.equal(
+      tamperedChainConsume.status,
+      503,
+      "a damaged signed event chain blocks the refund simulator",
+    );
+    const tamperedChainConsumptionCount = await fixturePool.query<{
+      count: string;
+    }>(
+      `SELECT count(*)::text AS count
+         FROM public.workspace_approval_ledger
+        WHERE workspace_id = $1 AND receipt_id = $2
+          AND event_type = 'approval.receipt_consumed'`,
+      [workspaceB, chainTamperDecision.receipt.payload.receiptId],
+    );
+    assert.equal(
+      tamperedChainConsumptionCount.rows[0]?.count,
+      "0",
+      "chain failure appends no consumption event and runs no operation",
+    );
+
     const summary = {
       source: "deterministic_fixture_worker_harness",
       evidenceVersion: 1,
@@ -1901,9 +2209,10 @@ test(
           authorizationChecks: queueAuthorizationChecks,
         },
       },
-      approvalRequests: approvals.length + 3,
+      approvalRequests: approvals.length + 4,
       approvalDecisions: {
         approvedOnce: 2,
+        chainTamperProbeApproval: 1,
         deniedWithoutSimulation: 1,
         expiredWithoutSimulation: 1,
         concurrentSingleWinner: 1,
@@ -1914,6 +2223,15 @@ test(
         crossTenantRejected: true,
         roleAndSelfApprovalRejected: true,
         bindingMutationRejected: true,
+      },
+      receiptGatedRefund: {
+        exportedBeforeConsumption: true,
+        independentlyVerifiedBeforeConsumption: true,
+        validReceiptAcceptedOnce: true,
+        missingAlteredExpiredWorkspaceMismatchActionMismatchRejected: true,
+        replayRejected: true,
+        corruptedEventChainRejected: true,
+        externalEffects: false,
       },
       membershipRoleProbes: {
         ...membershipProbeResults,

@@ -11407,7 +11407,7 @@ export const DecideWorkspaceAiAssessmentApprovalResponse = zod.object({
 
 
 /**
- * Verifies a signed v1 receipt against its approval and the signed approval event, then appends one receipt-consumed event. No external or financial action is performed.
+ * Verifies a signed v1 receipt against its approval and the complete signed workspace event chain, then appends one receipt-consumed event. Only the exact allowlisted synthetic refund is simulated in an in-memory clone; no external or financial action is performed.
  * @summary Consume one signed approval receipt
  */
 export const ConsumeWorkspaceAiAssessmentApprovalReceiptParams = zod.object({
@@ -11457,12 +11457,154 @@ export const ConsumeWorkspaceAiAssessmentApprovalReceiptBody = zod.object({
 })
 
 export const consumeWorkspaceAiAssessmentApprovalReceiptResponseConsumedEventSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const consumeWorkspaceAiAssessmentApprovalReceiptResponseSyntheticRefundOperationOneResultSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const consumeWorkspaceAiAssessmentApprovalReceiptResponseSyntheticRefundOperationOneBeforeStateSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const consumeWorkspaceAiAssessmentApprovalReceiptResponseSyntheticRefundOperationOneAfterStateSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 
 
 export const ConsumeWorkspaceAiAssessmentApprovalReceiptResponse = zod.object({
   "consumed": zod.literal(true),
   "receiptId": zod.uuid(),
-  "consumedEventSha256": zod.string().regex(consumeWorkspaceAiAssessmentApprovalReceiptResponseConsumedEventSha256RegExp)
+  "consumedEventSha256": zod.string().regex(consumeWorkspaceAiAssessmentApprovalReceiptResponseConsumedEventSha256RegExp),
+  "syntheticRefundOperation": zod.union([zod.object({
+  "executed": zod.literal(true),
+  "reasonCode": zod.enum(['valid_receipt_consumed']),
+  "resultCode": zod.enum(['synthetic_refund_approved_in_clone']),
+  "resultSha256": zod.string().regex(consumeWorkspaceAiAssessmentApprovalReceiptResponseSyntheticRefundOperationOneResultSha256RegExp),
+  "beforeStateSha256": zod.string().regex(consumeWorkspaceAiAssessmentApprovalReceiptResponseSyntheticRefundOperationOneBeforeStateSha256RegExp),
+  "afterStateSha256": zod.string().regex(consumeWorkspaceAiAssessmentApprovalReceiptResponseSyntheticRefundOperationOneAfterStateSha256RegExp)
+}),zod.null()])
+})
+
+
+/**
+ * Returns the complete workspace event chain and attaches the caller-held signed receipts. The server does not persist receipt payloads; an incomplete receipt archive is rejected rather than exporting partial history. Verify the result offline with a separately trusted public-key registry.
+ * @summary Export a portable signed approval ledger bundle
+ */
+export const ExportWorkspaceApprovalLedgerBundleParams = zod.object({
+  "workspaceId": zod.uuid()
+})
+
+export const exportWorkspaceApprovalLedgerBundleBodyReceiptsItemPayloadKeyIdMax = 64;
+
+
+export const exportWorkspaceApprovalLedgerBundleBodyReceiptsItemPayloadKeyIdRegExp = new RegExp('^[A-Za-z0-9._-]+$');
+export const exportWorkspaceApprovalLedgerBundleBodyReceiptsItemPayloadProposalBindingSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const exportWorkspaceApprovalLedgerBundleBodyReceiptsItemPayloadActionSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+
+
+export const exportWorkspaceApprovalLedgerBundleBodyReceiptsItemPayloadIssuedAtRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{3}Z$');
+export const exportWorkspaceApprovalLedgerBundleBodyReceiptsItemPayloadExpiresAtRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{3}Z$');
+export const exportWorkspaceApprovalLedgerBundleBodyReceiptsItemPayloadNonceMin = 32;
+export const exportWorkspaceApprovalLedgerBundleBodyReceiptsItemPayloadNonceMax = 128;
+
+
+export const exportWorkspaceApprovalLedgerBundleBodyReceiptsItemPayloadNonceRegExp = new RegExp('^[A-Za-z0-9_-]+$');
+export const exportWorkspaceApprovalLedgerBundleBodyReceiptsItemPayloadSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const exportWorkspaceApprovalLedgerBundleBodyReceiptsItemSignatureRegExp = new RegExp('^[A-Za-z0-9_-]{86}$');
+export const exportWorkspaceApprovalLedgerBundleBodyReceiptsMax = 5000;
+
+
+
+export const ExportWorkspaceApprovalLedgerBundleBody = zod.object({
+  "receipts": zod.array(zod.object({
+  "payload": zod.object({
+  "version": zod.literal(1),
+  "keyId": zod.string().min(1).max(exportWorkspaceApprovalLedgerBundleBodyReceiptsItemPayloadKeyIdMax).regex(exportWorkspaceApprovalLedgerBundleBodyReceiptsItemPayloadKeyIdRegExp),
+  "receiptId": zod.uuid(),
+  "workspaceId": zod.uuid(),
+  "approvalId": zod.uuid(),
+  "proposalBindingSha256": zod.string().regex(exportWorkspaceApprovalLedgerBundleBodyReceiptsItemPayloadProposalBindingSha256RegExp),
+  "actionSha256": zod.string().regex(exportWorkspaceApprovalLedgerBundleBodyReceiptsItemPayloadActionSha256RegExp),
+  "requestedBy": zod.string().min(1),
+  "approvedBy": zod.string().min(1),
+  "approvedByRole": zod.enum(['owner', 'admin']),
+  "issuedAt": zod.string().regex(exportWorkspaceApprovalLedgerBundleBodyReceiptsItemPayloadIssuedAtRegExp).describe('Canonical UTC ISO timestamp preserved byte-for-byte for receipt verification.'),
+  "expiresAt": zod.string().regex(exportWorkspaceApprovalLedgerBundleBodyReceiptsItemPayloadExpiresAtRegExp).describe('Canonical UTC ISO timestamp preserved byte-for-byte for receipt verification.'),
+  "nonce": zod.string().min(exportWorkspaceApprovalLedgerBundleBodyReceiptsItemPayloadNonceMin).max(exportWorkspaceApprovalLedgerBundleBodyReceiptsItemPayloadNonceMax).regex(exportWorkspaceApprovalLedgerBundleBodyReceiptsItemPayloadNonceRegExp)
+}),
+  "payloadSha256": zod.string().regex(exportWorkspaceApprovalLedgerBundleBodyReceiptsItemPayloadSha256RegExp),
+  "signature": zod.string().regex(exportWorkspaceApprovalLedgerBundleBodyReceiptsItemSignatureRegExp)
+})).max(exportWorkspaceApprovalLedgerBundleBodyReceiptsMax)
+})
+
+
+export const exportWorkspaceApprovalLedgerBundleResponseEventsItemEventPreviousEventSha256RegExp = new RegExp('^([a-f0-9]{64})?$');
+export const exportWorkspaceApprovalLedgerBundleResponseEventsItemEventOccurredAtRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{3}Z$');
+export const exportWorkspaceApprovalLedgerBundleResponseEventsItemEventPayloadReceiptSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const exportWorkspaceApprovalLedgerBundleResponseEventsItemEventPayloadNonceMin = 32;
+export const exportWorkspaceApprovalLedgerBundleResponseEventsItemEventPayloadNonceMax = 128;
+
+
+export const exportWorkspaceApprovalLedgerBundleResponseEventsItemEventPayloadNonceRegExp = new RegExp('^[A-Za-z0-9_-]+$');
+export const exportWorkspaceApprovalLedgerBundleResponseEventsItemEventPayloadConsumedAtRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{3}Z$');
+export const exportWorkspaceApprovalLedgerBundleResponseEventsItemEventSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const exportWorkspaceApprovalLedgerBundleResponseEventsItemSignatureRegExp = new RegExp('^[A-Za-z0-9_-]{86}$');
+export const exportWorkspaceApprovalLedgerBundleResponseEventsMax = 10000;
+
+export const exportWorkspaceApprovalLedgerBundleResponseReceiptsItemPayloadKeyIdMax = 64;
+
+
+export const exportWorkspaceApprovalLedgerBundleResponseReceiptsItemPayloadKeyIdRegExp = new RegExp('^[A-Za-z0-9._-]+$');
+export const exportWorkspaceApprovalLedgerBundleResponseReceiptsItemPayloadProposalBindingSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const exportWorkspaceApprovalLedgerBundleResponseReceiptsItemPayloadActionSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+
+
+export const exportWorkspaceApprovalLedgerBundleResponseReceiptsItemPayloadIssuedAtRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{3}Z$');
+export const exportWorkspaceApprovalLedgerBundleResponseReceiptsItemPayloadExpiresAtRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{3}Z$');
+export const exportWorkspaceApprovalLedgerBundleResponseReceiptsItemPayloadNonceMin = 32;
+export const exportWorkspaceApprovalLedgerBundleResponseReceiptsItemPayloadNonceMax = 128;
+
+
+export const exportWorkspaceApprovalLedgerBundleResponseReceiptsItemPayloadNonceRegExp = new RegExp('^[A-Za-z0-9_-]+$');
+export const exportWorkspaceApprovalLedgerBundleResponseReceiptsItemPayloadSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const exportWorkspaceApprovalLedgerBundleResponseReceiptsItemSignatureRegExp = new RegExp('^[A-Za-z0-9_-]{86}$');
+export const exportWorkspaceApprovalLedgerBundleResponseReceiptsMax = 5000;
+
+
+
+export const ExportWorkspaceApprovalLedgerBundleResponse = zod.object({
+  "version": zod.literal(1),
+  "events": zod.array(zod.object({
+  "event": zod.object({
+  "version": zod.literal(1),
+  "keyId": zod.string(),
+  "workspaceId": zod.uuid(),
+  "sequence": zod.int().min(1),
+  "eventId": zod.uuid(),
+  "eventType": zod.enum(['approval.approved', 'approval.receipt_consumed']),
+  "approvalId": zod.uuid(),
+  "previousEventSha256": zod.string().regex(exportWorkspaceApprovalLedgerBundleResponseEventsItemEventPreviousEventSha256RegExp),
+  "occurredAt": zod.string().regex(exportWorkspaceApprovalLedgerBundleResponseEventsItemEventOccurredAtRegExp).describe('Canonical UTC ISO timestamp.'),
+  "payload": zod.object({
+  "receiptId": zod.uuid(),
+  "receiptSha256": zod.string().regex(exportWorkspaceApprovalLedgerBundleResponseEventsItemEventPayloadReceiptSha256RegExp),
+  "nonce": zod.string().min(exportWorkspaceApprovalLedgerBundleResponseEventsItemEventPayloadNonceMin).max(exportWorkspaceApprovalLedgerBundleResponseEventsItemEventPayloadNonceMax).regex(exportWorkspaceApprovalLedgerBundleResponseEventsItemEventPayloadNonceRegExp).optional(),
+  "consumedAt": zod.string().regex(exportWorkspaceApprovalLedgerBundleResponseEventsItemEventPayloadConsumedAtRegExp).optional().describe('Canonical UTC ISO timestamp.')
+})
+}),
+  "eventSha256": zod.string().regex(exportWorkspaceApprovalLedgerBundleResponseEventsItemEventSha256RegExp),
+  "signature": zod.string().regex(exportWorkspaceApprovalLedgerBundleResponseEventsItemSignatureRegExp)
+})).max(exportWorkspaceApprovalLedgerBundleResponseEventsMax),
+  "receipts": zod.array(zod.object({
+  "payload": zod.object({
+  "version": zod.literal(1),
+  "keyId": zod.string().min(1).max(exportWorkspaceApprovalLedgerBundleResponseReceiptsItemPayloadKeyIdMax).regex(exportWorkspaceApprovalLedgerBundleResponseReceiptsItemPayloadKeyIdRegExp),
+  "receiptId": zod.uuid(),
+  "workspaceId": zod.uuid(),
+  "approvalId": zod.uuid(),
+  "proposalBindingSha256": zod.string().regex(exportWorkspaceApprovalLedgerBundleResponseReceiptsItemPayloadProposalBindingSha256RegExp),
+  "actionSha256": zod.string().regex(exportWorkspaceApprovalLedgerBundleResponseReceiptsItemPayloadActionSha256RegExp),
+  "requestedBy": zod.string().min(1),
+  "approvedBy": zod.string().min(1),
+  "approvedByRole": zod.enum(['owner', 'admin']),
+  "issuedAt": zod.string().regex(exportWorkspaceApprovalLedgerBundleResponseReceiptsItemPayloadIssuedAtRegExp).describe('Canonical UTC ISO timestamp preserved byte-for-byte for receipt verification.'),
+  "expiresAt": zod.string().regex(exportWorkspaceApprovalLedgerBundleResponseReceiptsItemPayloadExpiresAtRegExp).describe('Canonical UTC ISO timestamp preserved byte-for-byte for receipt verification.'),
+  "nonce": zod.string().min(exportWorkspaceApprovalLedgerBundleResponseReceiptsItemPayloadNonceMin).max(exportWorkspaceApprovalLedgerBundleResponseReceiptsItemPayloadNonceMax).regex(exportWorkspaceApprovalLedgerBundleResponseReceiptsItemPayloadNonceRegExp)
+}),
+  "payloadSha256": zod.string().regex(exportWorkspaceApprovalLedgerBundleResponseReceiptsItemPayloadSha256RegExp),
+  "signature": zod.string().regex(exportWorkspaceApprovalLedgerBundleResponseReceiptsItemSignatureRegExp)
+})).max(exportWorkspaceApprovalLedgerBundleResponseReceiptsMax)
 })
 
 

@@ -153,6 +153,23 @@ test("ALLOW reaches only the synthetic simulator after the decision", async () =
   assert.deepEqual(calls, ["simulate"]);
 });
 
+test("receipt-gated refund ALLOW does not call the simulator before receipt consumption", async () => {
+  const calls: string[] = [];
+  const result = await resolveSyntheticRefundDecision("allow", {
+    persistPendingApproval: async () => {
+      calls.push("persist");
+      return "pending";
+    },
+    simulateAllowedAction: async () => {
+      calls.push("simulate");
+      return "clone-result";
+    },
+    requireReceiptForSimulation: true,
+  });
+  assert.deepEqual(result, { kind: "receipt_required" });
+  assert.deepEqual(calls, []);
+});
+
 test("REQUIRE_APPROVAL persists pending and never calls the simulator", async () => {
   const calls: string[] = [];
   const result = await resolveSyntheticRefundDecision("require_approval", {

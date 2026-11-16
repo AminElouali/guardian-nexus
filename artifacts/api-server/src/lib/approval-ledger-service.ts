@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, isNull, sql } from "drizzle-orm";
 import {
   aiAssessmentApprovalRequestsTable,
   workspaceApprovalLedgerTable,
@@ -14,6 +14,7 @@ import {
   canonicalizeLedgerValue,
   signApprovalLedgerEventV1,
   signApprovalReceiptV1,
+  verifyApprovalLedgerEventChainV1,
   verifyApprovalReceiptV1,
   type ApprovalLedgerEventV1,
   type ApprovalReceiptV1Expectation,
@@ -176,7 +177,7 @@ export async function updateApprovedRequestAndAppendReceipt(
   return { approval: updated, receipt };
 }
 
-function parseStoredApprovedEvent(row: {
+function parseStoredLedgerEvent(row: {
   workspaceId: string;
   sequence: number;
   eventType: string;
@@ -216,6 +217,26 @@ function parseStoredApprovedEvent(row: {
   }
 }
 
+export async function readWorkspaceApprovalLedgerEvents(
+  tx: TenantTransaction,
+  workspaceId: string,
+): Promise<SignedApprovalLedgerEventV1[]> {
+  const rows = await tx
+    .select()
+    .from(workspaceApprovalLedgerTable)
+    .where(eq(workspaceApprovalLedgerTable.workspaceId, workspaceId))
+    .orderBy(asc(workspaceApprovalLedgerTable.sequence))
+    .limit(10_001);
+  if (rows.length > 10_000) {
+    throw new ApprovalLedgerError("ledger_export_too_large");
+  }
+  const events = rows.map(parseStoredLedgerEvent);
+  if (events.some((event) => event === null)) {
+    throw new ApprovalLedgerError("approval_event_invalid");
+  }
+  return events as SignedApprovalLedgerEventV1[];
+}
+
 export async function consumeApprovalReceipt(
   tx: TenantTransaction,
   input: {
@@ -244,21 +265,31 @@ export async function consumeApprovalReceipt(
   }
   const receipt = input.receipt as SignedApprovalReceiptV1;
   const head = await acquireWorkspaceLedgerLock(tx, input.workspaceId);
-  const [approvedRow] = await tx
-    .select()
-    .from(workspaceApprovalLedgerTable)
-    .where(
-      and(
-        eq(workspaceApprovalLedgerTable.workspaceId, input.workspaceId),
-        eq(workspaceApprovalLedgerTable.approvalId, input.approvalId),
-        eq(workspaceApprovalLedgerTable.receiptId, receipt.payload.receiptId),
-        eq(workspaceApprovalLedgerTable.eventType, "approval.approved"),
-      ),
-    )
-    .limit(1);
-  if (!approvedRow) throw new ApprovalLedgerError("approval_event_missing");
-  const approvedEvent = parseStoredApprovedEvent(approvedRow);
-  if (!approvedEvent) throw new ApprovalLedgerError("approval_event_invalid");
+  const events = await readWorkspaceApprovalLedgerEvents(
+    tx,
+    input.workspaceId,
+  );
+  const chainVerification = verifyApprovalLedgerEventChainV1(
+    events,
+    trustedKeys,
+  );
+  if (!chainVerification.valid) {
+    throw new ApprovalLedgerError("ledger_chain_invalid");
+  }
+  const approvedEvents = events.filter(
+    (signedEvent) =>
+      signedEvent.event.eventType === "approval.approved" &&
+      signedEvent.event.workspaceId === input.workspaceId &&
+      signedEvent.event.approvalId === input.approvalId &&
+      signedEvent.event.payload.receiptId === receipt.payload.receiptId,
+  );
+  if (approvedEvents.length === 0) {
+    throw new ApprovalLedgerError("approval_event_missing");
+  }
+  if (approvedEvents.length !== 1) {
+    throw new ApprovalLedgerError("approval_event_invalid");
+  }
+  const approvedEvent = approvedEvents[0];
   const verified = verifyApprovalReceiptV1(
     receipt,
     trustedKeys,

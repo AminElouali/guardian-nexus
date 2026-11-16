@@ -509,6 +509,88 @@ export function verifyApprovalReceiptV1(
   return { valid: true, code: "ok" };
 }
 
+/**
+ * Verify the signed event chain without requiring the receipt archive.
+ *
+ * The live consume gate uses this because receipts are client-held rather
+ * than persisted. The supplied receipt is verified separately against its
+ * approval event; portable bundle verification requires every receipt.
+ */
+export function verifyApprovalLedgerEventChainV1(
+  events: readonly SignedApprovalLedgerEventV1[],
+  trustedPublicKeys: ReadonlyMap<string, KeyObject>,
+): LedgerVerificationResult {
+  if (!Array.isArray(events)) return fail("invalid_bundle");
+
+  let previousHash = "";
+  let workspaceId: string | null = null;
+  const eventIds = new Set<string>();
+  const issued = new Map<string, { approvalId: string; receiptSha256: string }>();
+  const consumed = new Set<string>();
+
+  for (let index = 0; index < events.length; index += 1) {
+    const signedEvent = events[index];
+    if (!isSignedEvent(signedEvent) || !isLedgerEvent(signedEvent.event)) {
+      return fail("invalid_bundle");
+    }
+
+    const event = signedEvent.event;
+    if (
+      event.sequence !== index + 1 ||
+      event.previousEventSha256 !== previousHash ||
+      (workspaceId !== null && event.workspaceId !== workspaceId) ||
+      eventIds.has(event.eventId)
+    ) {
+      return fail("event_order_invalid");
+    }
+    workspaceId = event.workspaceId;
+    eventIds.add(event.eventId);
+
+    const key = getTrustedKey(event.keyId, trustedPublicKeys);
+    if (!key) return fail("unknown_key");
+    const signatureResult = resultForSignature(
+      verifySignedValue(
+        APPROVAL_LEDGER_EVENT_DOMAIN,
+        event,
+        signedEvent.eventSha256,
+        signedEvent.signature,
+        key,
+      ),
+      "event",
+    );
+    if (signatureResult) return signatureResult;
+
+    const receiptId = payloadString(event.payload, "receiptId");
+    const receiptSha256 = payloadString(event.payload, "receiptSha256");
+    if (!receiptId || !receiptSha256) {
+      return fail("receipt_reference_mismatch");
+    }
+
+    if (event.eventType === "approval.approved") {
+      if (issued.has(receiptId)) return fail("receipt_reference_mismatch");
+      issued.set(receiptId, {
+        approvalId: event.approvalId,
+        receiptSha256,
+      });
+    } else {
+      const approved = issued.get(receiptId);
+      if (
+        !approved ||
+        approved.approvalId !== event.approvalId ||
+        approved.receiptSha256 !== receiptSha256 ||
+        consumed.has(receiptId) ||
+        event.occurredAt !== event.payload.consumedAt
+      ) {
+        return fail(consumed.has(receiptId) ? "receipt_replay" : "receipt_reference_mismatch");
+      }
+      consumed.add(receiptId);
+    }
+    previousHash = signedEvent.eventSha256;
+  }
+
+  return { valid: true, code: "ok" };
+}
+
 export function verifyApprovalLedgerBundleV1(
   bundle: ApprovalLedgerBundleV1,
   trustedPublicKeys: ReadonlyMap<string, KeyObject>,

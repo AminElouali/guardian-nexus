@@ -93,30 +93,85 @@ that response. If the caller loses it, a new approval request is required.
 
 Receipt consumption is a separate owner/admin operation. The caller presents
 the signed receipt; the API verifies its signature, expiry, approval binding,
-actor fields, and the matching signed approval event's receipt digest. It then
+actor fields, the matching signed approval event's receipt digest, and the
+complete signed event chain currently stored for that workspace. It then
 appends one signed `approval.receipt_consumed` event in the same transaction.
 A fixed-namespace, workspace-derived transaction advisory lock serializes
 approval and consumption events; the partial unique index remains the
-one-consumer constraint. Consumption records the receipt event only and does
-not perform a financial or other external action.
+one-consumer constraint.
+
+The support synthetic-refund action is not simulated at proposal or approval
+time. It runs only in the in-memory clone after the receipt has passed the
+workspace-chain and approval checks and the consumed event has been inserted
+inside the same transaction. If the simulator cannot produce its deterministic
+result, the transaction fails and the consume event rolls back. The result
+returns hashes and a fixed result code; no refund, payment, customer record, or
+external system is touched. Non-refund approvals retain their existing
+phase-2 behavior.
+
+## Portable export and offline verification
+
+`POST /api/workspaces/{workspaceId}/ai-security-assessments/approval-ledger/export`
+requires an owner/admin and the caller-held signed receipts for every
+`approval.approved` event in that workspace. The server reads the complete
+signed event chain and returns a JSON `ApprovalLedgerBundleV1`; it does not
+store or reconstruct receipt bodies. The export fails rather than silently
+omitting history if a receipt is missing, extra, or mismatched. Exports are
+bounded to 10,000 events (at most 5,000 receipts).
+
+Run the independent verifier in a separate process:
+
+```sh
+pnpm --filter @workspace/api-server run verify:approval-ledger-bundle -- \
+  --bundle ./approval-ledger-bundle.json \
+  --trusted-keys ./trusted-approval-ledger-public-keys.json
+```
+
+The trusted-key file is a JSON object mapping `keyId` to an Ed25519 public-key
+PEM. Obtain and authenticate it independently; the bundle does not supply its
+own trust anchor. The CLI imports only the v1 cryptographic module and Node's
+standard filesystem/crypto libraries. It does not load the API, connect to a
+database, or make network requests. It prints only a fixed verification code
+and validity boolean. The shared TEST ONLY vectors exercise it in a clean
+child process with no database/API environment.
+
+The local end-to-end demonstration uses the repository's disposable,
+process-owned PostgreSQL lab:
+
+```sh
+env -i PATH="$PATH" HOME="$HOME" LANG=C LC_ALL=C pnpm run lab:local
+```
+
+It exercises the Python SDK proposal, approval by a different workspace
+administrator, caller-held receipt export, independent CLI verification before
+consumption, and the synthetic refund clone after valid consumption. Negative
+cases cover missing, altered, expired, wrong-workspace, wrong-action, replayed,
+and chain-corrupted authorizations. The verifier child process receives only
+its bundle, public-key registry, and a minimal environment; it has no database
+URL, API session, secret key, or network client.
+
+Since the server stores only receipt digests, callers must retain the signed
+receipts returned by approvals. If any receipt is lost, a complete portable
+bundle cannot be produced and a new approval is required; the exporter
+deliberately does not claim to recover it.
 
 ## Verification and trust boundaries
 
-The standalone Python verification function accepts a bundle, a trusted key
-map, and a verification time. It checks canonical values, event
+The existing Python verification function remains an independent
+TEST/consumer-side verifier. The Node CLI validates canonical values, event
 sequence/previous hashes, digests, Ed25519 signatures, receipt references,
-different actors, expiry, and duplicate/replayed receipt nonces. The CLI in
-this phase only validates the shared TEST ONLY vector; it is not yet a
-production JSONL exporter/verifier. Vector mode uses public test keys and the
-system OpenSSL executable. A production verifier must receive trusted public
-keys out of band. The Node canonicalizer takes already-parsed values; callers
-must not assume it can recover lexical distinctions such as `1` versus `1.0`
-after a normal `JSON.parse`.
+different actors, expiry, and duplicate/replayed receipt nonces. A
+production verifier must receive trusted public keys out of band. The Node
+canonicalizer takes already-parsed values; callers must not assume it can
+recover lexical distinctions such as `1` versus `1.0` after a normal
+`JSON.parse`.
 
 The application writes signed events through its approval transaction, but
 does not persist the receipt body or maintain a multi-key public registry.
-Signatures can expose edits,
-insertion, reordering, and interior deletion, but detecting tail truncation or
-rollback requires a separately retained trusted head/checkpoint. A signing key
-available to the API host also does not protect against compromise of that
-host.
+Signatures can expose edits, insertion, reordering, and interior deletion, but
+detecting tail truncation or rollback requires a separately retained trusted
+head/checkpoint. A signing key available to the API host also does not protect
+against compromise of that host. Live consumption verifies every stored event
+signature and link plus the presented receipt; it cannot verify old receipt
+bodies that are not stored. The complete offline bundle verifier checks every
+receipt supplied in the archive.
