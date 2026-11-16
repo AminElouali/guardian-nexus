@@ -866,6 +866,41 @@ paths:
           description: Approval not found in this workspace
         "409":
           description: Expired, stale, already decided, or proposal binding mismatch
+  /workspaces/{workspaceId}/ai-security-assessments/approvals/{approvalId}/receipt/consume:
+    post:
+      operationId: consumeWorkspaceAiAssessmentApprovalReceipt
+      tags: [ai-evaluations]
+      summary: Consume one signed approval receipt
+      description: Verifies a signed v1 receipt against its approval and the signed approval event, then appends one receipt-consumed event. No external or financial action is performed.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: approvalId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AiAssessmentApprovalReceiptConsumeRequest" }
+      responses:
+        "200":
+          description: Receipt consumed and its signed event appended to the workspace ledger
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AiAssessmentApprovalReceiptConsumeResponse" }
+        "400":
+          description: Malformed receipt request
+        "403":
+          description: Workspace owner or admin role required
+        "404":
+          description: Approval not found in this workspace
+        "409":
+          description: Receipt invalid, expired, already consumed, or not bound to this approval
 components:
   schemas:
     HealthStatus:
@@ -1420,7 +1455,51 @@ components:
       properties:
         approval: { $ref: "#/components/schemas/AiAssessmentApproval" }
         execution: { type: string, enum: [decision_only, not_performed_denied, synthetic_action_simulated_once] }
-      required: [approval, execution]
+        receipt:
+          anyOf:
+            - $ref: "#/components/schemas/SignedApprovalReceiptV1"
+            - type: "null"
+      required: [approval, execution, receipt]
+    SignedApprovalReceiptV1:
+      type: object
+      additionalProperties: false
+      properties:
+        payload: { $ref: "#/components/schemas/ApprovalReceiptPayloadV1" }
+        payloadSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        signature: { type: string, pattern: "^[A-Za-z0-9_-]{86}$" }
+      required: [payload, payloadSha256, signature]
+    ApprovalReceiptPayloadV1:
+      type: object
+      additionalProperties: false
+      properties:
+        version: { type: integer, const: 1 }
+        keyId: { type: string, minLength: 1, maxLength: 64, pattern: "^[A-Za-z0-9._-]+$" }
+        receiptId: { type: string, format: uuid }
+        workspaceId: { type: string, format: uuid }
+        approvalId: { type: string, format: uuid }
+        proposalBindingSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        actionSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        requestedBy: { type: string, minLength: 1 }
+        approvedBy: { type: string, minLength: 1 }
+        approvedByRole: { type: string, enum: [owner, admin] }
+        issuedAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+        nonce: { type: string, minLength: 32, maxLength: 128, pattern: "^[A-Za-z0-9_-]+$" }
+      required: [version, keyId, receiptId, workspaceId, approvalId, proposalBindingSha256, actionSha256, requestedBy, approvedBy, approvedByRole, issuedAt, expiresAt, nonce]
+    AiAssessmentApprovalReceiptConsumeRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        receipt: { $ref: "#/components/schemas/SignedApprovalReceiptV1" }
+      required: [receipt]
+    AiAssessmentApprovalReceiptConsumeResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        consumed: { type: boolean, const: true }
+        receiptId: { type: string, format: uuid }
+        consumedEventSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+      required: [consumed, receiptId, consumedEventSha256]
     SyntheticRefundProposalRequest:
       type: object
       additionalProperties: false

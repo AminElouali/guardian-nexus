@@ -4280,9 +4280,67 @@ export const AiAssessmentApprovalDecisionResponseExecution = {
   synthetic_action_simulated_once: 'synthetic_action_simulated_once',
 } as const;
 
+export type ApprovalReceiptPayloadV1ApprovedByRole = typeof ApprovalReceiptPayloadV1ApprovedByRole[keyof typeof ApprovalReceiptPayloadV1ApprovedByRole];
+
+
+export const ApprovalReceiptPayloadV1ApprovedByRole = {
+  owner: 'owner',
+  admin: 'admin',
+} as const;
+
+export interface ApprovalReceiptPayloadV1 {
+  version: 1;
+  /**
+     * @minLength 1
+     * @maxLength 64
+     * @pattern ^[A-Za-z0-9._-]+$
+     */
+  keyId: string;
+  receiptId: string;
+  workspaceId: string;
+  approvalId: string;
+  /** @pattern ^[a-f0-9]{64}$ */
+  proposalBindingSha256: string;
+  /** @pattern ^[a-f0-9]{64}$ */
+  actionSha256: string;
+  /** @minLength 1 */
+  requestedBy: string;
+  /** @minLength 1 */
+  approvedBy: string;
+  approvedByRole: ApprovalReceiptPayloadV1ApprovedByRole;
+  issuedAt: string;
+  expiresAt: string;
+  /**
+     * @minLength 32
+     * @maxLength 128
+     * @pattern ^[A-Za-z0-9_-]+$
+     */
+  nonce: string;
+}
+
+export interface SignedApprovalReceiptV1 {
+  payload: ApprovalReceiptPayloadV1;
+  /** @pattern ^[a-f0-9]{64}$ */
+  payloadSha256: string;
+  /** @pattern ^[A-Za-z0-9_-]{86}$ */
+  signature: string;
+}
+
 export interface AiAssessmentApprovalDecisionResponse {
   approval: AiAssessmentApproval;
   execution: AiAssessmentApprovalDecisionResponseExecution;
+  receipt: SignedApprovalReceiptV1 | null;
+}
+
+export interface AiAssessmentApprovalReceiptConsumeRequest {
+  receipt: SignedApprovalReceiptV1;
+}
+
+export interface AiAssessmentApprovalReceiptConsumeResponse {
+  consumed: true;
+  receiptId: string;
+  /** @pattern ^[a-f0-9]{64}$ */
+  consumedEventSha256: string;
 }
 
 export interface SyntheticRefundProposalRequest {

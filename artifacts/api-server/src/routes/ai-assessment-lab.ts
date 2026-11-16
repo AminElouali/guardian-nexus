@@ -23,6 +23,9 @@ import {
   ListWorkspaceAiAssessmentLabJobsResponse,
   ListWorkspaceAiAssessmentApprovalsParams,
   ListWorkspaceAiAssessmentApprovalsResponse,
+  ConsumeWorkspaceAiAssessmentApprovalReceiptBody,
+  ConsumeWorkspaceAiAssessmentApprovalReceiptParams,
+  ConsumeWorkspaceAiAssessmentApprovalReceiptResponse,
   RetryWorkspaceAiAssessmentLabJobParams,
   RetryWorkspaceAiAssessmentLabJobResponse,
 } from "@workspace/api-zod";
@@ -70,6 +73,12 @@ import {
 } from "../lib/assessment-worker-api-gate";
 import type { AssessmentProfileId } from "../lib/ai-assessment-sandbox";
 import { withWorkspaceUserTransaction } from "../lib/tenant-db";
+import {
+  consumeApprovalReceipt,
+  updateApprovedRequestAndAppendReceipt,
+} from "../lib/approval-ledger-service";
+import { ApprovalLedgerError } from "../lib/approval-ledger-keys";
+import type { SignedApprovalReceiptV1 } from "../lib/approval-ledger-crypto";
 import { UsageQuotaError, reserveWorkspaceUsageInTransaction } from "../lib/usage";
 import { logger } from "../lib/logger";
 import { requireAuth } from "../middlewares/requireAuth";
@@ -1502,7 +1511,7 @@ routes.post(
     }
     const { workspaceId, approvalId } = params.data;
     const now = new Date();
-    const access = await withWorkspaceUserTransaction(
+    const transactionResult = await withWorkspaceUserTransaction(
       req.authUserId!,
       workspaceId,
       async (tx, membership) => {
@@ -1598,9 +1607,7 @@ routes.post(
         ) {
           return { kind: "evidence_invalid" as const };
         }
-        const [updated] = await tx
-          .update(aiAssessmentApprovalRequestsTable)
-          .set({
+        const update = {
             status,
             decidedByUserId: req.authUserId!,
             decidedByRole: membership.role,
@@ -1610,21 +1617,56 @@ routes.post(
             simulationResultSha256: simulationReceipt?.resultSha256 ?? null,
             replayBindingSha256,
             updatedAt: now,
-          })
-          .where(
-            and(
-              eq(aiAssessmentApprovalRequestsTable.id, approvalId),
-              eq(aiAssessmentApprovalRequestsTable.workspaceId, workspaceId),
-              eq(aiAssessmentApprovalRequestsTable.status, "pending"),
-              eq(
-                aiAssessmentApprovalRequestsTable.proposalBindingSha256,
-                expectedBinding,
+          } as const;
+        let updated: typeof approval | undefined;
+        let signedReceipt: SignedApprovalReceiptV1 | null = null;
+        if (status === "approved") {
+          if (
+            !approval.actionSha256 ||
+            !/^[a-f0-9]{64}$/.test(approval.actionSha256) ||
+            (membership.role !== "owner" && membership.role !== "admin")
+          ) {
+            return { kind: "evidence_invalid" as const };
+          }
+          const ledgerDecision = await updateApprovedRequestAndAppendReceipt(
+            tx,
+            {
+              workspaceId,
+              approvalId,
+              expectedBindingSha256: expectedBinding,
+              now,
+              actorUserId: req.authUserId!,
+              actorRole: membership.role,
+              update,
+              approval: {
+                actionSha256: approval.actionSha256,
+                requestedByUserId: approval.requestedByUserId,
+              },
+            },
+          );
+          if (!ledgerDecision) return { kind: "already_decided" as const };
+          updated = ledgerDecision.approval;
+          signedReceipt = ledgerDecision.receipt;
+        } else {
+          const [denied] = await tx
+            .update(aiAssessmentApprovalRequestsTable)
+            .set(update)
+            .where(
+              and(
+                eq(aiAssessmentApprovalRequestsTable.id, approvalId),
+                eq(aiAssessmentApprovalRequestsTable.workspaceId, workspaceId),
+                eq(aiAssessmentApprovalRequestsTable.status, "pending"),
+                eq(
+                  aiAssessmentApprovalRequestsTable.proposalBindingSha256,
+                  expectedBinding,
+                ),
+                gt(aiAssessmentApprovalRequestsTable.expiresAt, now),
+                isNull(aiAssessmentApprovalRequestsTable.simulatedAt),
               ),
-              gt(aiAssessmentApprovalRequestsTable.expiresAt, now),
-              isNull(aiAssessmentApprovalRequestsTable.simulatedAt),
-            ),
-          )
-          .returning();
+            )
+            .returning();
+          updated = denied;
+        }
         if (!updated) return { kind: "already_decided" as const };
         await tx.insert(workspaceAuditEventsTable).values({
           workspaceId,
@@ -1650,6 +1692,7 @@ routes.post(
         return {
           kind: "decided" as const,
           approval: updated,
+          receipt: signedReceipt,
           execution: simulationReceipt
             ? "synthetic_action_simulated_once"
             : status === "denied"
@@ -1657,7 +1700,19 @@ routes.post(
               : "decision_only",
         };
       },
+    ).then(
+      (value) => ({ ok: true as const, value }),
+      () => ({ ok: false as const }),
     );
+    if (!transactionResult.ok) {
+      req.log?.error?.(
+        { errorCode: "approval_ledger_transaction_failed" },
+        "Approval decision could not be committed with its ledger event",
+      );
+      res.status(503).json({ error: "Approval ledger unavailable" });
+      return;
+    }
+    const access = transactionResult.value;
     if (!access.authorized) {
       res.status(403).json({ error: "Workspace membership required" });
       return;
@@ -1692,6 +1747,129 @@ routes.post(
             : "not_performed",
         ),
         execution: access.value.execution,
+        receipt: access.value.receipt,
+      }),
+    );
+  },
+);
+
+routes.post(
+  "/workspaces/:workspaceId/ai-security-assessments/approvals/:approvalId/receipt/consume",
+  async (req, res): Promise<void> => {
+    const params = ConsumeWorkspaceAiAssessmentApprovalReceiptParams.safeParse(
+      req.params,
+    );
+    const body = ConsumeWorkspaceAiAssessmentApprovalReceiptBody.safeParse(
+      req.body,
+    );
+    if (
+      !params.success ||
+      !body.success ||
+      !UUID_PATTERN.test(params.data.workspaceId) ||
+      !UUID_PATTERN.test(params.data.approvalId)
+    ) {
+      res.status(400).json({ error: "Invalid approval receipt request" });
+      return;
+    }
+    const { workspaceId, approvalId } = params.data;
+    const transactionResult = await withWorkspaceUserTransaction(
+      req.authUserId!,
+      workspaceId,
+      async (tx, membership) => {
+        if (
+          !canRunAiEvaluation(membership.role) ||
+          (membership.role !== "owner" && membership.role !== "admin")
+        ) {
+          return { kind: "forbidden" as const };
+        }
+        const [approval] = await tx
+          .select()
+          .from(aiAssessmentApprovalRequestsTable)
+          .where(
+            and(
+              eq(aiAssessmentApprovalRequestsTable.id, approvalId),
+              eq(aiAssessmentApprovalRequestsTable.workspaceId, workspaceId),
+            ),
+          )
+          .limit(1);
+        if (!approval) return { kind: "missing" as const };
+        if (approval.status !== "approved") {
+          return { kind: "not_approved" as const };
+        }
+        if (
+          !approval.actionSha256 ||
+          approval.proposalBindingSha256 !== computeApprovalBinding(approval) ||
+          !approval.decidedByUserId ||
+          (approval.decidedByRole !== "owner" &&
+            approval.decidedByRole !== "admin")
+        ) {
+          return { kind: "approval_binding_invalid" as const };
+        }
+        const consumed = await consumeApprovalReceipt(tx, {
+          workspaceId,
+          approvalId,
+          receipt: body.data.receipt,
+          expected: {
+            workspaceId,
+            approvalId,
+            proposalBindingSha256: approval.proposalBindingSha256,
+            actionSha256: approval.actionSha256,
+            requestedBy: approval.requestedByUserId,
+            approvedBy: approval.decidedByUserId,
+            approvedByRole: approval.decidedByRole,
+          },
+        });
+        return { kind: "consumed" as const, ...consumed };
+      },
+    ).then(
+      (value) => ({ ok: true as const, value }),
+      (error: unknown) => ({ ok: false as const, error }),
+    );
+    if (!transactionResult.ok) {
+      const error = transactionResult.error;
+      if (
+        error instanceof ApprovalLedgerError &&
+        [
+          "receipt_invalid",
+          "receipt_expired",
+          "receipt_already_consumed",
+          "approval_event_missing",
+          "approval_event_invalid",
+          "receipt_reference_mismatch",
+        ].includes(error.code)
+      ) {
+        res.status(409).json({ error: "Approval receipt rejected" });
+        return;
+      }
+      req.log?.error?.(
+        { errorCode: "approval_receipt_consume_failed" },
+        "Approval receipt could not be consumed",
+      );
+      res.status(503).json({ error: "Approval ledger unavailable" });
+      return;
+    }
+    const access = transactionResult.value;
+    if (!access.authorized) {
+      res.status(403).json({ error: "Workspace membership required" });
+      return;
+    }
+    if (access.value.kind === "forbidden") {
+      res.status(403).json({ error: "Workspace owner or admin role required" });
+      return;
+    }
+    if (access.value.kind === "missing") {
+      res.status(404).json({ error: "Approval not found in this workspace" });
+      return;
+    }
+    if (access.value.kind !== "consumed") {
+      res.status(409).json({ error: "Approval receipt cannot be consumed" });
+      return;
+    }
+    res.json(
+      ConsumeWorkspaceAiAssessmentApprovalReceiptResponse.parse({
+        consumed: true,
+        receiptId: access.value.receiptId,
+        consumedEventSha256: access.value.consumedEventSha256,
       }),
     );
   },

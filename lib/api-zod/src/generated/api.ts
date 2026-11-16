@@ -11336,6 +11336,21 @@ export const decideWorkspaceAiAssessmentApprovalResponseApprovalActionSha256RegE
 export const decideWorkspaceAiAssessmentApprovalResponseApprovalProposalBindingSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const decideWorkspaceAiAssessmentApprovalResponseApprovalSimulationResultSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const decideWorkspaceAiAssessmentApprovalResponseApprovalReplayBindingSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const decideWorkspaceAiAssessmentApprovalResponseReceiptOnePayloadKeyIdMax = 64;
+
+
+export const decideWorkspaceAiAssessmentApprovalResponseReceiptOnePayloadKeyIdRegExp = new RegExp('^[A-Za-z0-9._-]+$');
+export const decideWorkspaceAiAssessmentApprovalResponseReceiptOnePayloadProposalBindingSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const decideWorkspaceAiAssessmentApprovalResponseReceiptOnePayloadActionSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+
+
+export const decideWorkspaceAiAssessmentApprovalResponseReceiptOnePayloadNonceMin = 32;
+export const decideWorkspaceAiAssessmentApprovalResponseReceiptOnePayloadNonceMax = 128;
+
+
+export const decideWorkspaceAiAssessmentApprovalResponseReceiptOnePayloadNonceRegExp = new RegExp('^[A-Za-z0-9_-]+$');
+export const decideWorkspaceAiAssessmentApprovalResponseReceiptOnePayloadSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const decideWorkspaceAiAssessmentApprovalResponseReceiptOneSignatureRegExp = new RegExp('^[A-Za-z0-9_-]{86}$');
 
 
 export const DecideWorkspaceAiAssessmentApprovalResponse = zod.object({
@@ -11366,7 +11381,84 @@ export const DecideWorkspaceAiAssessmentApprovalResponse = zod.object({
   "replayBindingSha256": zod.string().regex(decideWorkspaceAiAssessmentApprovalResponseApprovalReplayBindingSha256RegExp).nullable(),
   "createdAt": zod.coerce.date()
 }),
-  "execution": zod.enum(['decision_only', 'not_performed_denied', 'synthetic_action_simulated_once'])
+  "execution": zod.enum(['decision_only', 'not_performed_denied', 'synthetic_action_simulated_once']),
+  "receipt": zod.union([zod.object({
+  "payload": zod.object({
+  "version": zod.literal(1),
+  "keyId": zod.string().min(1).max(decideWorkspaceAiAssessmentApprovalResponseReceiptOnePayloadKeyIdMax).regex(decideWorkspaceAiAssessmentApprovalResponseReceiptOnePayloadKeyIdRegExp),
+  "receiptId": zod.uuid(),
+  "workspaceId": zod.uuid(),
+  "approvalId": zod.uuid(),
+  "proposalBindingSha256": zod.string().regex(decideWorkspaceAiAssessmentApprovalResponseReceiptOnePayloadProposalBindingSha256RegExp),
+  "actionSha256": zod.string().regex(decideWorkspaceAiAssessmentApprovalResponseReceiptOnePayloadActionSha256RegExp),
+  "requestedBy": zod.string().min(1),
+  "approvedBy": zod.string().min(1),
+  "approvedByRole": zod.enum(['owner', 'admin']),
+  "issuedAt": zod.coerce.date(),
+  "expiresAt": zod.coerce.date(),
+  "nonce": zod.string().min(decideWorkspaceAiAssessmentApprovalResponseReceiptOnePayloadNonceMin).max(decideWorkspaceAiAssessmentApprovalResponseReceiptOnePayloadNonceMax).regex(decideWorkspaceAiAssessmentApprovalResponseReceiptOnePayloadNonceRegExp)
+}),
+  "payloadSha256": zod.string().regex(decideWorkspaceAiAssessmentApprovalResponseReceiptOnePayloadSha256RegExp),
+  "signature": zod.string().regex(decideWorkspaceAiAssessmentApprovalResponseReceiptOneSignatureRegExp)
+}),zod.null()])
+})
+
+
+/**
+ * Verifies a signed v1 receipt against its approval and the signed approval event, then appends one receipt-consumed event. No external or financial action is performed.
+ * @summary Consume one signed approval receipt
+ */
+export const ConsumeWorkspaceAiAssessmentApprovalReceiptParams = zod.object({
+  "workspaceId": zod.uuid(),
+  "approvalId": zod.uuid()
+})
+
+export const consumeWorkspaceAiAssessmentApprovalReceiptBodyReceiptPayloadKeyIdMax = 64;
+
+
+export const consumeWorkspaceAiAssessmentApprovalReceiptBodyReceiptPayloadKeyIdRegExp = new RegExp('^[A-Za-z0-9._-]+$');
+export const consumeWorkspaceAiAssessmentApprovalReceiptBodyReceiptPayloadProposalBindingSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const consumeWorkspaceAiAssessmentApprovalReceiptBodyReceiptPayloadActionSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+
+
+export const consumeWorkspaceAiAssessmentApprovalReceiptBodyReceiptPayloadNonceMin = 32;
+export const consumeWorkspaceAiAssessmentApprovalReceiptBodyReceiptPayloadNonceMax = 128;
+
+
+export const consumeWorkspaceAiAssessmentApprovalReceiptBodyReceiptPayloadNonceRegExp = new RegExp('^[A-Za-z0-9_-]+$');
+export const consumeWorkspaceAiAssessmentApprovalReceiptBodyReceiptPayloadSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const consumeWorkspaceAiAssessmentApprovalReceiptBodyReceiptSignatureRegExp = new RegExp('^[A-Za-z0-9_-]{86}$');
+
+
+export const ConsumeWorkspaceAiAssessmentApprovalReceiptBody = zod.object({
+  "receipt": zod.object({
+  "payload": zod.object({
+  "version": zod.literal(1),
+  "keyId": zod.string().min(1).max(consumeWorkspaceAiAssessmentApprovalReceiptBodyReceiptPayloadKeyIdMax).regex(consumeWorkspaceAiAssessmentApprovalReceiptBodyReceiptPayloadKeyIdRegExp),
+  "receiptId": zod.uuid(),
+  "workspaceId": zod.uuid(),
+  "approvalId": zod.uuid(),
+  "proposalBindingSha256": zod.string().regex(consumeWorkspaceAiAssessmentApprovalReceiptBodyReceiptPayloadProposalBindingSha256RegExp),
+  "actionSha256": zod.string().regex(consumeWorkspaceAiAssessmentApprovalReceiptBodyReceiptPayloadActionSha256RegExp),
+  "requestedBy": zod.string().min(1),
+  "approvedBy": zod.string().min(1),
+  "approvedByRole": zod.enum(['owner', 'admin']),
+  "issuedAt": zod.coerce.date(),
+  "expiresAt": zod.coerce.date(),
+  "nonce": zod.string().min(consumeWorkspaceAiAssessmentApprovalReceiptBodyReceiptPayloadNonceMin).max(consumeWorkspaceAiAssessmentApprovalReceiptBodyReceiptPayloadNonceMax).regex(consumeWorkspaceAiAssessmentApprovalReceiptBodyReceiptPayloadNonceRegExp)
+}),
+  "payloadSha256": zod.string().regex(consumeWorkspaceAiAssessmentApprovalReceiptBodyReceiptPayloadSha256RegExp),
+  "signature": zod.string().regex(consumeWorkspaceAiAssessmentApprovalReceiptBodyReceiptSignatureRegExp)
+})
+})
+
+export const consumeWorkspaceAiAssessmentApprovalReceiptResponseConsumedEventSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+
+
+export const ConsumeWorkspaceAiAssessmentApprovalReceiptResponse = zod.object({
+  "consumed": zod.literal(true),
+  "receiptId": zod.uuid(),
+  "consumedEventSha256": zod.string().regex(consumeWorkspaceAiAssessmentApprovalReceiptResponseConsumedEventSha256RegExp)
 })
 
 

@@ -39,6 +39,17 @@ export type SignedApprovalReceiptV1 = {
   signature: string;
 };
 
+export type ApprovalReceiptV1Expectation = Pick<
+  ApprovalReceiptPayloadV1,
+  | "workspaceId"
+  | "approvalId"
+  | "proposalBindingSha256"
+  | "actionSha256"
+  | "requestedBy"
+  | "approvedBy"
+  | "approvedByRole"
+>;
+
 export type ApprovalLedgerEventPayloadV1 = {
   receiptId: string;
   receiptSha256: string;
@@ -411,6 +422,91 @@ function payloadString(
 ): string | null {
   const value = payload[key];
   return typeof value === "string" ? value : null;
+}
+
+/**
+ * Verify one receipt against an out-of-band key map and the approval context.
+ * When supplied, the signed approval event must bind this exact receipt and
+ * context. This additive verifier shares the canonicalization and signature
+ * primitives used by the bundle verifier; bundle verification is unchanged.
+ */
+export function verifyApprovalReceiptV1(
+  signedReceipt: unknown,
+  trustedPublicKeys: ReadonlyMap<string, KeyObject>,
+  expected: ApprovalReceiptV1Expectation,
+  verificationTime: Date,
+  approvedEvent?: SignedApprovalLedgerEventV1,
+): LedgerVerificationResult {
+  if (!Number.isFinite(verificationTime.getTime())) return fail("invalid_bundle");
+  if (!isSignedReceipt(signedReceipt)) return fail("receipt_invalid");
+
+  const receipt = signedReceipt.payload;
+  const receiptKey = getTrustedKey(receipt.keyId, trustedPublicKeys);
+  if (!receiptKey) return fail("unknown_key");
+  const receiptSignature = resultForSignature(
+    verifySignedValue(
+      APPROVAL_RECEIPT_DOMAIN,
+      receipt,
+      signedReceipt.payloadSha256,
+      signedReceipt.signature,
+      receiptKey,
+    ),
+    "receipt",
+  );
+  if (receiptSignature) return receiptSignature;
+
+  if (
+    receipt.workspaceId !== expected.workspaceId ||
+    receipt.approvalId !== expected.approvalId ||
+    receipt.proposalBindingSha256 !== expected.proposalBindingSha256 ||
+    receipt.actionSha256 !== expected.actionSha256 ||
+    receipt.requestedBy !== expected.requestedBy ||
+    receipt.approvedBy !== expected.approvedBy ||
+    receipt.approvedByRole !== expected.approvedByRole
+  ) {
+    return fail("receipt_reference_mismatch");
+  }
+  if (verificationTime.getTime() >= Date.parse(receipt.expiresAt)) {
+    return fail("receipt_expired");
+  }
+  if (Date.parse(receipt.issuedAt) > verificationTime.getTime()) {
+    return fail("receipt_invalid");
+  }
+
+  if (approvedEvent !== undefined) {
+    if (
+      !isSignedEvent(approvedEvent) ||
+      !isLedgerEvent(approvedEvent.event) ||
+      approvedEvent.event.eventType !== "approval.approved"
+    ) {
+      return fail("unsupported_event");
+    }
+    const event = approvedEvent.event;
+    const eventKey = getTrustedKey(event.keyId, trustedPublicKeys);
+    if (!eventKey) return fail("unknown_key");
+    const eventSignature = resultForSignature(
+      verifySignedValue(
+        APPROVAL_LEDGER_EVENT_DOMAIN,
+        event,
+        approvedEvent.eventSha256,
+        approvedEvent.signature,
+        eventKey,
+      ),
+      "event",
+    );
+    if (eventSignature) return eventSignature;
+    if (
+      event.workspaceId !== receipt.workspaceId ||
+      event.approvalId !== receipt.approvalId ||
+      event.occurredAt !== receipt.issuedAt ||
+      event.payload.receiptId !== receipt.receiptId ||
+      event.payload.receiptSha256 !== signedReceipt.payloadSha256
+    ) {
+      return fail("receipt_reference_mismatch");
+    }
+  }
+
+  return { valid: true, code: "ok" };
 }
 
 export function verifyApprovalLedgerBundleV1(

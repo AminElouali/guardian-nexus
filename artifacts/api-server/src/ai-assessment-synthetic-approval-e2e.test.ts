@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, generateKeyPairSync, randomUUID } from "node:crypto";
+import { createPrivateKey } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
@@ -10,6 +11,7 @@ import { test } from "node:test";
 import express, { type RequestHandler } from "express";
 import pg from "pg";
 import {
+  ConsumeWorkspaceAiAssessmentApprovalReceiptResponse,
   DecideWorkspaceAiAssessmentApprovalResponse,
   ListWorkspaceAiAssessmentApprovalsResponse,
   PreviewWorkspaceAiAssessmentPolicyLabResponse,
@@ -26,6 +28,7 @@ import {
   POLICY_LAB_PROFILE_IDS,
   QWEN_POLICY_LAB_PROFILE_IDS,
 } from "./lib/ai-assessment-sandbox";
+import { signApprovalReceiptV1 } from "./lib/approval-ledger-crypto";
 
 /*
  * This is an explicitly fixture-only integration harness. It executes the
@@ -42,12 +45,14 @@ const workspaceAAdmin = `synthetic-e2e-admin-${randomUUID()}`;
 const workspaceAAdmin2 = `synthetic-e2e-admin2-${randomUUID()}`;
 const workspaceAViewer = `synthetic-e2e-viewer-${randomUUID()}`;
 const workspaceBOwner = `synthetic-e2e-other-owner-${randomUUID()}`;
+const workspaceBAdmin = `synthetic-e2e-other-admin-${randomUUID()}`;
 const authorizedUsers = new Set([
   workspaceAOwner,
   workspaceAAdmin,
   workspaceAAdmin2,
   workspaceAViewer,
   workspaceBOwner,
+  workspaceBAdmin,
 ]);
 const authForTest: RequestHandler = (req, res, next) => {
   const userId = req.get("x-guardian-test-user");
@@ -437,14 +442,24 @@ test(
       );
       return;
     }
+    const ephemeralLedgerKey = generateKeyPairSync("ed25519").privateKey.export({
+      format: "pem",
+      type: "pkcs8",
+    }).toString();
+    process.env.APPROVAL_LEDGER_ED25519_PRIVATE_KEY = ephemeralLedgerKey;
     const databaseUrl = process.env.DATABASE_URL;
     const runtimeDatabaseUrl = process.env.APP_RUNTIME_DATABASE_URL;
     assert.ok(databaseUrl);
     assert.ok(runtimeDatabaseUrl);
     const { assertRlsRuntimeReady, pool: appPool } =
       await import("@workspace/db");
+    const { workspaceApprovalLedgerTable } = await import("@workspace/db");
     const { createAiAssessmentLabRouter } =
       await import("./routes/ai-assessment-lab");
+    const { withWorkspaceUserTransaction } =
+      await import("./lib/tenant-db");
+    const { updateApprovedRequestAndAppendReceipt } =
+      await import("./lib/approval-ledger-service");
     await assertRlsRuntimeReady();
     const fixturePool = new pg.Pool({ connectionString: databaseUrl });
     const runtimePool = new pg.Pool({
@@ -465,11 +480,19 @@ test(
         });
       }
       if (workspaceA) {
+        await fixturePool.query(
+          "DELETE FROM public.workspace_approval_ledger WHERE workspace_id = $1",
+          [workspaceA],
+        );
         await fixturePool.query("DELETE FROM public.workspaces WHERE id = $1", [
           workspaceA,
         ]);
       }
       if (workspaceB) {
+        await fixturePool.query(
+          "DELETE FROM public.workspace_approval_ledger WHERE workspace_id = $1",
+          [workspaceB],
+        );
         await fixturePool.query("DELETE FROM public.workspaces WHERE id = $1", [
           workspaceB,
         ]);
@@ -495,7 +518,7 @@ test(
     await fixturePool.query(
       `INSERT INTO public.workspace_memberships (workspace_id, user_id, role)
        VALUES ($1, $2, 'owner'), ($1, $3, 'admin'), ($1, $4, 'admin'),
-              ($1, $5, 'viewer'), ($6, $7, 'owner')`,
+              ($1, $5, 'viewer'), ($6, $7, 'owner'), ($6, $8, 'admin')`,
       [
         workspaceA,
         workspaceAOwner,
@@ -504,6 +527,7 @@ test(
         workspaceAViewer,
         workspaceB,
         workspaceBOwner,
+        workspaceBAdmin,
       ],
     );
 
@@ -1197,6 +1221,117 @@ test(
       }
     }
 
+    const signingFailure = await seedApproval(fixturePool, {
+      workspaceId: workspaceA,
+      requesterId: workspaceAOwner,
+      profileId: "guardian-agent-lab-finance-v1",
+      caseId: "finance_trusted_bank_change_requires_approval",
+      expiry: expireFuture(),
+      idempotencyKey: `synthetic-signing-failure-${randomUUID()}`,
+    });
+    const signingFailurePath =
+      `${approvalPath}/${signingFailure.approvalId}/decision`;
+    const ephemeralSigningKey =
+      process.env.APPROVAL_LEDGER_ED25519_PRIVATE_KEY;
+    assert.ok(ephemeralSigningKey);
+    process.env.APPROVAL_LEDGER_ED25519_PRIVATE_KEY = "TEST ONLY malformed key";
+    let signingFailureResponse: Response;
+    try {
+      signingFailureResponse = await request(
+        workspaceAAdmin,
+        signingFailurePath,
+        "POST",
+        {
+          decision: "approve",
+          proposalBindingSha256: signingFailure.binding,
+        },
+      );
+    } finally {
+      process.env.APPROVAL_LEDGER_ED25519_PRIVATE_KEY = ephemeralSigningKey;
+    }
+    assert.equal(signingFailureResponse.status, 503);
+    const signingFailureState = await fixturePool.query<{
+      status: string;
+      ledger_count: string;
+    }>(
+      `SELECT approval.status,
+              (SELECT count(*)::text
+                 FROM public.workspace_approval_ledger AS ledger
+                WHERE ledger.workspace_id = approval.workspace_id
+                  AND ledger.approval_id = approval.id::text) AS ledger_count
+         FROM public.ai_assessment_approval_requests AS approval
+        WHERE approval.id = $1`,
+      [signingFailure.approvalId],
+    );
+    assert.equal(signingFailureState.rows[0]?.status, "pending");
+    assert.equal(signingFailureState.rows[0]?.ledger_count, "0");
+
+    const insertFailure = await seedApproval(fixturePool, {
+      workspaceId: workspaceA,
+      requesterId: workspaceAOwner,
+      profileId: "guardian-agent-lab-finance-v1",
+      caseId: "finance_trusted_bank_change_requires_approval",
+      expiry: expireFuture(),
+      idempotencyKey: `synthetic-insert-failure-${randomUUID()}`,
+    });
+    const insertFailureNow = new Date();
+    await assert.rejects(
+      withWorkspaceUserTransaction(
+        workspaceAAdmin,
+        workspaceA,
+        async (tx) =>
+          updateApprovedRequestAndAppendReceipt(
+            tx,
+            {
+              workspaceId: workspaceA,
+              approvalId: insertFailure.approvalId,
+              expectedBindingSha256: insertFailure.binding,
+              now: insertFailureNow,
+              actorUserId: workspaceAAdmin,
+              actorRole: "admin",
+              update: {
+                status: "approved",
+                decidedByUserId: workspaceAAdmin,
+                decidedByRole: "admin",
+                decidedAt: insertFailureNow,
+                simulatedAt: insertFailureNow,
+                simulationResultCode:
+                  "synthetic_bank_change_approved_in_clone",
+                simulationResultSha256: "a".repeat(64),
+                replayBindingSha256: "b".repeat(64),
+                updatedAt: insertFailureNow,
+              },
+              approval: {
+                actionSha256:
+                  "a".repeat(64),
+                requestedByUserId: workspaceAOwner,
+              },
+            },
+            async (tx, row) => {
+              await tx.insert(workspaceApprovalLedgerTable).values({
+                ...row,
+                signature: "invalid",
+              });
+            },
+          ),
+      ),
+    );
+    const insertFailureState = await fixturePool.query<{
+      status: string;
+      ledger_count: string;
+    }>(
+      `SELECT approval.status,
+              (SELECT count(*)::text
+                 FROM public.workspace_approval_ledger AS ledger
+                WHERE ledger.workspace_id = approval.workspace_id
+                  AND ledger.approval_id = approval.id::text) AS ledger_count
+         FROM public.ai_assessment_approval_requests AS approval
+        WHERE approval.id = $1`,
+      [insertFailure.approvalId],
+    );
+    assert.equal(insertFailureState.rows[0]?.status, "pending");
+    assert.equal(insertFailureState.rows[0]?.ledger_count, "0");
+
     const finance = approvals[0]!;
     const financeDecisionPath = `${approvalPath}/${finance.approvalId}/decision`;
     const concurrent = await Promise.all([
@@ -1217,6 +1352,7 @@ test(
     const approvedResponse = DecideWorkspaceAiAssessmentApprovalResponse.parse(
       await concurrent.find((response) => response.status === 200)!.json(),
     );
+    assert.ok(approvedResponse.receipt, "approval returns one signed receipt");
     assert.equal(
       approvedResponse.execution,
       "synthetic_action_simulated_once",
@@ -1228,6 +1364,115 @@ test(
     assert.match(
       approvedResponse.approval.simulationResultSha256 ?? "",
       /^[a-f0-9]{64}$/,
+    );
+    const financeReceipt = approvedResponse.receipt!;
+    assert.equal(financeReceipt.payload.workspaceId, workspaceA);
+    assert.equal(financeReceipt.payload.approvalId, finance.approvalId);
+    assert.equal(
+      financeReceipt.payload.proposalBindingSha256,
+      finance.binding,
+    );
+    const financeApprovedLedger = await fixturePool.query<{
+      payload_canonical: string;
+      receipt_id: string;
+      event_hash: string;
+    }>(
+      `SELECT payload_canonical, receipt_id, event_hash
+         FROM public.workspace_approval_ledger
+        WHERE workspace_id = $1 AND approval_id = $2
+          AND event_type = 'approval.approved'`,
+      [workspaceA, finance.approvalId],
+    );
+    assert.equal(financeApprovedLedger.rowCount, 1);
+    assert.equal(
+      financeApprovedLedger.rows[0]?.receipt_id,
+      financeReceipt.payload.receiptId,
+    );
+    assert.match(financeApprovedLedger.rows[0]?.event_hash ?? "", /^[a-f0-9]{64}$/);
+    const approvedEventEnvelope = JSON.parse(
+      financeApprovedLedger.rows[0]!.payload_canonical,
+    ) as {
+      payload: Record<string, unknown>;
+    };
+    assert.deepEqual(
+      Object.keys(approvedEventEnvelope.payload).sort(),
+      ["receiptId", "receiptSha256"],
+      "the ledger stores only the receipt reference and digest, not the receipt",
+    );
+    assert.equal(
+      approvedEventEnvelope.payload.receiptSha256,
+      financeReceipt.payloadSha256,
+    );
+    const consumePath =
+      `/api/workspaces/${workspaceA}/ai-security-assessments/approvals/${finance.approvalId}/receipt/consume`;
+    const expiredAt = Date.now() - 60_000;
+    const expiredReceipt = signApprovalReceiptV1(
+      {
+        ...financeReceipt.payload,
+        receiptId: randomUUID(),
+        issuedAt: new Date(expiredAt - 60_000).toISOString(),
+        expiresAt: new Date(expiredAt).toISOString(),
+      },
+      createPrivateKey(
+        process.env.APPROVAL_LEDGER_ED25519_PRIVATE_KEY!,
+      ),
+    );
+    assert.equal(
+      (
+        await request(workspaceAAdmin, consumePath, "POST", {
+          receipt: expiredReceipt,
+        })
+      ).status,
+      409,
+      "expired signed receipts are rejected before any ledger append",
+    );
+    const alteredReceipt = structuredClone(financeReceipt);
+    alteredReceipt.signature = `${alteredReceipt.signature.slice(0, -1)}A`;
+    assert.equal(
+      (
+        await request(workspaceAAdmin, consumePath, "POST", {
+          receipt: alteredReceipt,
+        })
+      ).status,
+      409,
+      "a tampered receipt signature is rejected",
+    );
+    const concurrentConsumption = await Promise.all([
+      request(workspaceAAdmin, consumePath, "POST", {
+        receipt: financeReceipt,
+      }),
+      request(workspaceAAdmin2, consumePath, "POST", {
+        receipt: financeReceipt,
+      }),
+    ]);
+    assert.deepEqual(
+      concurrentConsumption.map((response) => response.status).sort(),
+      [200, 409],
+      "workspace lock and unique index permit exactly one receipt consumer",
+    );
+    const consumedResponse =
+      ConsumeWorkspaceAiAssessmentApprovalReceiptResponse.parse(
+        await concurrentConsumption
+          .find((response) => response.status === 200)!
+          .json(),
+      );
+    assert.equal(consumedResponse.consumed, true);
+    const consumedLedger = await fixturePool.query<{ count: string }>(
+      `SELECT count(*)::text AS count
+         FROM public.workspace_approval_ledger
+        WHERE workspace_id = $1 AND receipt_id = $2
+          AND event_type = 'approval.receipt_consumed'`,
+      [workspaceA, financeReceipt.payload.receiptId],
+    );
+    assert.equal(consumedLedger.rows[0]?.count, "1");
+    assert.equal(
+      (
+        await request(workspaceAAdmin, consumePath, "POST", {
+          receipt: financeReceipt,
+        })
+      ).status,
+      409,
+      "consumed receipts cannot be replayed",
     );
     assert.equal(
       (
@@ -1263,6 +1508,8 @@ test(
       dashboardDecision.approval.simulationResultCode,
       "synthetic_refund_approved_in_clone",
     );
+    assert.ok(dashboardDecision.receipt);
+    const supportReceipt = dashboardDecision.receipt!;
     const visibleAfterApproval = ListWorkspaceAiAssessmentApprovalsResponse.parse(
       await (await request(workspaceAAdmin, approvalPath)).json(),
     );
@@ -1285,6 +1532,108 @@ test(
       409,
       "support approval replay is rejected",
     );
+    assert.equal(
+      (
+        await request(
+          workspaceAAdmin,
+          `/api/workspaces/${workspaceA}/ai-security-assessments/approvals/${support.approvalId}/receipt/consume`,
+          "POST",
+          { receipt: supportReceipt },
+        )
+      ).status,
+      200,
+      "a valid unconsumed support receipt can be consumed",
+    );
+
+    const concurrentWorkspaceAApprovals = await Promise.all([
+      seedApproval(fixturePool, {
+        workspaceId: workspaceA,
+        requesterId: workspaceAOwner,
+        profileId: "guardian-agent-lab-finance-v1",
+        caseId: "finance_trusted_bank_change_requires_approval",
+        expiry: expireFuture(),
+        idempotencyKey: `synthetic-ledger-concurrent-a1-${randomUUID()}`,
+      }),
+      seedApproval(fixturePool, {
+        workspaceId: workspaceA,
+        requesterId: workspaceAOwner,
+        profileId: "guardian-agent-lab-finance-v1",
+        caseId: "finance_trusted_bank_change_requires_approval",
+        expiry: expireFuture(),
+        idempotencyKey: `synthetic-ledger-concurrent-a2-${randomUUID()}`,
+      }),
+    ]);
+    const concurrentWorkspaceBApproval = await seedApproval(fixturePool, {
+      workspaceId: workspaceB,
+      requesterId: workspaceBOwner,
+      profileId: "guardian-agent-lab-finance-v1",
+      caseId: "finance_trusted_bank_change_requires_approval",
+      expiry: expireFuture(),
+      idempotencyKey: `synthetic-ledger-concurrent-b-${randomUUID()}`,
+    });
+    const crossWorkspaceDecisions = await Promise.all([
+      request(
+        workspaceAAdmin,
+        `${approvalPath}/${concurrentWorkspaceAApprovals[0].approvalId}/decision`,
+        "POST",
+        {
+          decision: "approve",
+          proposalBindingSha256: concurrentWorkspaceAApprovals[0].binding,
+        },
+      ),
+      request(
+        workspaceAAdmin2,
+        `${approvalPath}/${concurrentWorkspaceAApprovals[1].approvalId}/decision`,
+        "POST",
+        {
+          decision: "approve",
+          proposalBindingSha256: concurrentWorkspaceAApprovals[1].binding,
+        },
+      ),
+      request(
+        workspaceBAdmin,
+        `/api/workspaces/${workspaceB}/ai-security-assessments/approvals/${concurrentWorkspaceBApproval.approvalId}/decision`,
+        "POST",
+        {
+          decision: "approve",
+          proposalBindingSha256: concurrentWorkspaceBApproval.binding,
+        },
+      ),
+    ]);
+    assert.deepEqual(
+      crossWorkspaceDecisions.map((response) => response.status),
+      [200, 200, 200],
+      "independent workspaces and same-workspace approval writers can proceed concurrently",
+    );
+    for (const response of crossWorkspaceDecisions) {
+      const parsed = DecideWorkspaceAiAssessmentApprovalResponse.parse(
+        await response.json(),
+      );
+      assert.ok(parsed.receipt);
+    }
+    for (const [workspaceId, expectedCount] of [
+      [workspaceA, 6],
+      [workspaceB, 1],
+    ] as const) {
+      const chain = await fixturePool.query<{
+        sequence: string;
+        previous_hash: string;
+        event_hash: string;
+      }>(
+        `SELECT sequence::text, previous_hash, event_hash
+           FROM public.workspace_approval_ledger
+          WHERE workspace_id = $1
+          ORDER BY sequence`,
+        [workspaceId],
+      );
+      assert.equal(chain.rowCount, expectedCount);
+      let previousHash = "";
+      chain.rows.forEach((event, index) => {
+        assert.equal(event.sequence, String(index + 1));
+        assert.equal(event.previous_hash, previousHash);
+        previousHash = event.event_hash;
+      });
+    }
 
     const supportDenied = await seedApproval(fixturePool, {
       workspaceId: workspaceA,
@@ -1310,6 +1659,14 @@ test(
     assert.equal(denied.approval.status, "denied");
     assert.equal(denied.execution, "not_performed_denied");
     assert.equal(denied.approval.simulatedAt, null);
+    assert.equal(denied.receipt, null, "denials never issue receipts");
+    const deniedLedger = await fixturePool.query<{ count: string }>(
+      `SELECT count(*)::text AS count
+         FROM public.workspace_approval_ledger
+        WHERE workspace_id = $1 AND approval_id = $2`,
+      [workspaceA, supportDenied.approvalId],
+    );
+    assert.equal(deniedLedger.rows[0]?.count, "0");
 
     const expired = await seedApproval(fixturePool, {
       workspaceId: workspaceA,

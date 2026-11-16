@@ -1,11 +1,13 @@
 # Approval ledger and receipt: wire format v1
 
-**Status:** the v1 serialization/signature module and the isolated PostgreSQL
-ledger schema are implemented. The schema is declared in Drizzle and the RLS
-SQL, and the local disposable lab exercises it as `app_runtime`. No development
-or production database was changed. The ledger is not connected to the
-approval API or dispatch path; durable application writes, key management, and
-external chain-head anchoring remain projected.
+**Status:** the v1 serialization/signature module, isolated PostgreSQL ledger
+schema, approval write path, and separate receipt-consumption path are
+implemented in code. The local disposable lab exercises the application flow
+as `app_runtime`; it does not use the development or production database. An
+approval receipt is returned once to the caller and is not stored in the
+server. The ledger stores only its digest in the signed approval event.
+Production key provisioning, a multi-key public-key registry, external
+chain-head anchoring, and independent security review remain outstanding.
 
 ## Canonical values
 
@@ -31,6 +33,19 @@ The digest is SHA-256 over the ASCII domain label
 `canonical(payload)`. The Ed25519
 signature covers those same bytes. `keyId` is inside the signed payload and
 selects a public key supplied by a trusted registry, never by an export.
+
+The application signing key is supplied at runtime through
+`APPROVAL_LEDGER_ED25519_PRIVATE_KEY`. Its public key ID is the stable code
+identifier `guardian-nexus-approval-ledger-v1`. Missing, malformed, or
+non-Ed25519 material fails closed. The disposable approval E2E creates an
+ephemeral test-only Ed25519 key after its database guard passes. Receipts
+expire five minutes after issuance.
+
+The receipt commits to `proposalBindingSha256` and `actionSha256`. Under the
+current binding contract, the synthetic amount is covered indirectly by
+`actionSha256`; the idempotency key is linked only indirectly through the bound
+job ID. There is no currency field in the current action/receipt contract, so
+the receipt does not commit to currency.
 
 ## Signed ledger event
 
@@ -65,8 +80,25 @@ scopes reads to members of the configured workspace and permits inserts only
 for its owner/admin members. RLS is enabled and forced by the canonical SQL.
 The database checks formats and field bindings; it does **not** verify Ed25519
 signatures, event hashes, sequence continuity, or canonical byte encoding.
-Those checks remain the responsibility of the standalone verifier until a
-separately reviewed application integration exists.
+The API verifies receipts/events on the application write and consume paths;
+the standalone bundle verifier remains the independent offline verifier.
+
+On approval, the API conditionally updates the pending request, then creates
+the v1 receipt and signed `approval.approved` event and inserts that event
+inside the same workspace transaction. Key, signing, or insert failures roll
+back the approval update. Denials do not issue receipts. The event payload is
+exactly `receiptId` and `receiptSha256`; the complete signed receipt is returned
+once in the decision response and is not recoverable from server storage after
+that response. If the caller loses it, a new approval request is required.
+
+Receipt consumption is a separate owner/admin operation. The caller presents
+the signed receipt; the API verifies its signature, expiry, approval binding,
+actor fields, and the matching signed approval event's receipt digest. It then
+appends one signed `approval.receipt_consumed` event in the same transaction.
+A fixed-namespace, workspace-derived transaction advisory lock serializes
+approval and consumption events; the partial unique index remains the
+one-consumer constraint. Consumption records the receipt event only and does
+not perform a financial or other external action.
 
 ## Verification and trust boundaries
 
@@ -81,10 +113,9 @@ keys out of band. The Node canonicalizer takes already-parsed values; callers
 must not assume it can recover lexical distinctions such as `1` versus `1.0`
 after a normal `JSON.parse`.
 
-The storage schema can persist synthetic ledger events in the isolated lab,
-but the application does not yet persist receipts/events through its approval
-flow, issue keys, create a key registry, or establish an external chain-head
-anchor. Signatures can expose edits,
+The application writes signed events through its approval transaction, but
+does not persist the receipt body or maintain a multi-key public registry.
+Signatures can expose edits,
 insertion, reordering, and interior deletion, but detecting tail truncation or
 rollback requires a separately retained trusted head/checkpoint. A signing key
 available to the API host also does not protect against compromise of that

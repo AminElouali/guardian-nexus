@@ -12,6 +12,7 @@ import {
   canonicalizeLedgerValue,
   signApprovalLedgerEventV1,
   signApprovalReceiptV1,
+  verifyApprovalReceiptV1,
   verifyApprovalLedgerBundleV1,
   type ApprovalLedgerBundleV1,
   type ApprovalLedgerEventV1,
@@ -61,6 +62,15 @@ const testPrivateKeyA = privateKeyFromTestSeed(TEST_SEED_A);
 const testPrivateKeyB = privateKeyFromTestSeed(TEST_SEED_B);
 const testPublicKeyA = createPublicKey(testPrivateKeyA);
 const trustedKeysA = new Map([[TEST_KEY_ID, testPublicKeyA]]);
+const receiptExpectation = {
+  workspaceId: "workspace-test",
+  approvalId: "approval-test",
+  proposalBindingSha256: "0".repeat(64),
+  actionSha256: "1".repeat(64),
+  requestedBy: "requester-test",
+  approvedBy: "approver-test",
+  approvedByRole: "owner" as "owner" | "admin",
+};
 
 function cloneBundle(): ApprovalLedgerBundleV1 {
   return structuredClone(vectors.bundle);
@@ -167,6 +177,189 @@ test("shared JSON vector has stable canonical bytes and valid Ed25519 signatures
       verificationTime,
     ),
     { valid: true, code: "ok" },
+  );
+});
+
+test("single receipt verifier accepts a valid unexpired receipt", () => {
+  const receipt = signApprovalReceiptV1(
+    createTestReceipt(),
+    testPrivateKeyA,
+  );
+  assert.deepEqual(
+    verifyApprovalReceiptV1(
+      receipt,
+      trustedKeysA,
+      receiptExpectation,
+      new Date("2026-11-16T10:01:00.000Z"),
+    ),
+    { valid: true, code: "ok" },
+  );
+});
+
+test("single receipt verifier rejects an altered signature", () => {
+  const receipt = signApprovalReceiptV1(
+    createTestReceipt(),
+    testPrivateKeyA,
+  );
+  receipt.signature = `${receipt.signature.slice(0, -1)}A`;
+  assert.deepEqual(
+    verifyApprovalReceiptV1(
+      receipt,
+      trustedKeysA,
+      receiptExpectation,
+      new Date("2026-11-16T10:01:00.000Z"),
+    ),
+    { valid: false, code: "receipt_signature_invalid" },
+  );
+});
+
+test("single receipt verifier rejects a signature made with the wrong domain", () => {
+  const receipt = signApprovalReceiptV1(
+    createTestReceipt(),
+    testPrivateKeyA,
+  );
+  receipt.signature = cryptoSign(
+    null,
+    Buffer.from(
+      `${APPROVAL_LEDGER_EVENT_DOMAIN}${canonicalizeLedgerValue(receipt.payload)}`,
+      "utf8",
+    ),
+    testPrivateKeyA,
+  ).toString("base64url");
+  assert.deepEqual(
+    verifyApprovalReceiptV1(
+      receipt,
+      trustedKeysA,
+      receiptExpectation,
+      new Date("2026-11-16T10:01:00.000Z"),
+    ),
+    { valid: false, code: "receipt_signature_invalid" },
+  );
+});
+
+test("single receipt verifier rejects expired receipts", () => {
+  const receipt = signApprovalReceiptV1(
+    createTestReceipt(),
+    testPrivateKeyA,
+  );
+  assert.deepEqual(
+    verifyApprovalReceiptV1(
+      receipt,
+      trustedKeysA,
+      receiptExpectation,
+      new Date("2026-11-16T10:05:00.000Z"),
+    ),
+    { valid: false, code: "receipt_expired" },
+  );
+});
+
+test("single receipt verifier rejects a mismatched digest", () => {
+  const receipt = signApprovalReceiptV1(
+    createTestReceipt(),
+    testPrivateKeyA,
+  );
+  receipt.payloadSha256 = "f".repeat(64);
+  assert.deepEqual(
+    verifyApprovalReceiptV1(
+      receipt,
+      trustedKeysA,
+      receiptExpectation,
+      new Date("2026-11-16T10:01:00.000Z"),
+    ),
+    { valid: false, code: "receipt_hash_mismatch" },
+  );
+});
+
+test("single receipt verifier rejects an unknown key ID", () => {
+  const receipt = signApprovalReceiptV1(
+    createTestReceipt({ keyId: "other-test-key" }),
+    testPrivateKeyA,
+  );
+  assert.deepEqual(
+    verifyApprovalReceiptV1(
+      receipt,
+      trustedKeysA,
+      receiptExpectation,
+      new Date("2026-11-16T10:01:00.000Z"),
+    ),
+    { valid: false, code: "unknown_key" },
+  );
+});
+
+test("single receipt verifier binds workspace, approval, action, requester, and approver", () => {
+  const receipt = signApprovalReceiptV1(
+    createTestReceipt(),
+    testPrivateKeyA,
+  );
+  const mismatches: Array<Partial<typeof receiptExpectation>> = [
+    { workspaceId: "other-workspace" },
+    { approvalId: "other-approval" },
+    { actionSha256: "2".repeat(64) },
+    { proposalBindingSha256: "3".repeat(64) },
+    { requestedBy: "other-requester" },
+    { approvedBy: "other-approver" },
+    { approvedByRole: "admin" },
+  ];
+  for (const mismatch of mismatches) {
+    assert.deepEqual(
+      verifyApprovalReceiptV1(
+        receipt,
+        trustedKeysA,
+        { ...receiptExpectation, ...mismatch },
+        new Date("2026-11-16T10:01:00.000Z"),
+      ),
+      { valid: false, code: "receipt_reference_mismatch" },
+    );
+  }
+});
+
+test("single receipt verifier checks the signed approval event reference", () => {
+  const receipt = signApprovalReceiptV1(
+    createTestReceipt(),
+    testPrivateKeyA,
+  );
+  const eventBase: ApprovalLedgerEventV1 = {
+    version: 1,
+    keyId: TEST_KEY_ID,
+    workspaceId: receipt.payload.workspaceId,
+    sequence: 1,
+    eventId: "event-for-receipt",
+    eventType: "approval.approved",
+    approvalId: receipt.payload.approvalId,
+    previousEventSha256: "",
+    occurredAt: receipt.payload.issuedAt,
+    payload: {
+      receiptId: receipt.payload.receiptId,
+      receiptSha256: receipt.payloadSha256,
+    },
+  };
+  const signedEvent = signApprovalLedgerEventV1(eventBase, testPrivateKeyA);
+  assert.deepEqual(
+    verifyApprovalReceiptV1(
+      receipt,
+      trustedKeysA,
+      receiptExpectation,
+      new Date("2026-11-16T10:01:00.000Z"),
+      signedEvent,
+    ),
+    { valid: true, code: "ok" },
+  );
+  const mismatchedEvent = signApprovalLedgerEventV1(
+    {
+      ...eventBase,
+      payload: { ...eventBase.payload, receiptSha256: "f".repeat(64) },
+    },
+    testPrivateKeyA,
+  );
+  assert.deepEqual(
+    verifyApprovalReceiptV1(
+      receipt,
+      trustedKeysA,
+      receiptExpectation,
+      new Date("2026-11-16T10:01:00.000Z"),
+      mismatchedEvent,
+    ),
+    { valid: false, code: "receipt_reference_mismatch" },
   );
 });
 

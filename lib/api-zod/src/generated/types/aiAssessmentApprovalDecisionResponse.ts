@@ -7,8 +7,10 @@
  */
 import type { AiAssessmentApproval } from './aiAssessmentApproval';
 import type { AiAssessmentApprovalDecisionResponseExecution } from './aiAssessmentApprovalDecisionResponseExecution';
+import type { SignedApprovalReceiptV1 } from './signedApprovalReceiptV1';
 
 export interface AiAssessmentApprovalDecisionResponse {
   approval: AiAssessmentApproval;
   execution: AiAssessmentApprovalDecisionResponseExecution;
+  receipt: SignedApprovalReceiptV1 | null;
 }
