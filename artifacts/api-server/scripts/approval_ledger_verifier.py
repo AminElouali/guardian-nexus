@@ -33,6 +33,15 @@ def _reject_float(_: str) -> None:
     raise CanonicalizationError("canonical_integer_invalid")
 
 
+def _parse_integer(token: str) -> int:
+    if token == "-0":
+        raise CanonicalizationError("canonical_integer_invalid")
+    value = int(token)
+    if not -(2**53 - 1) <= value <= (2**53 - 1):
+        raise CanonicalizationError("canonical_integer_invalid")
+    return value
+
+
 def _reject_constant(_: str) -> None:
     raise CanonicalizationError("canonical_number_invalid")
 
@@ -50,6 +59,7 @@ def parse_json_strict(raw: str) -> Any:
     try:
         return json.loads(
             raw,
+            parse_int=_parse_integer,
             parse_float=_reject_float,
             parse_constant=_reject_constant,
             object_pairs_hook=_object_without_duplicate_keys,

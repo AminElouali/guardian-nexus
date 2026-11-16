@@ -83,6 +83,12 @@ class ApprovalLedgerVerifierTests(unittest.TestCase):
             vector["canonical"],
         )
 
+    def test_strict_json_parser_rejects_decimal_negative_zero_and_duplicates(self) -> None:
+        for raw in ('{"n":1.0}', '{"n":-0}', '{"x":1,"x":2}'):
+            with self.subTest(raw=raw):
+                with self.assertRaises(verifier.CanonicalizationError):
+                    verifier.parse_json_strict(raw)
+
     def test_edited_event_field_is_rejected(self) -> None:
         bundle = copy.deepcopy(self.document["bundle"])
         bundle["events"][0]["event"]["approvalId"] = "edited"
