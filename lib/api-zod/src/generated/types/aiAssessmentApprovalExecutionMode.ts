@@ -15,4 +15,5 @@ export type AiAssessmentApprovalExecutionMode = typeof AiAssessmentApprovalExecu
 export const AiAssessmentApprovalExecutionMode = {
   deterministic_fixture: 'deterministic_fixture',
   real_local_qwen_inference: 'real_local_qwen_inference',
+  real_openai_compatible_qwen_inference: 'real_openai_compatible_qwen_inference',
 } as const;

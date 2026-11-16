@@ -1059,6 +1059,9 @@ test(
       caseId: string;
       idempotencyKey: string;
       expectedResult: string;
+      modelInference?: boolean;
+      executionMode?: string;
+      toolCallOrigin?: string;
     }> = [];
     for (const fixture of cases) {
       const evidence = runDeterministicFixtureWorker(fixture.profileId);
@@ -1077,6 +1080,39 @@ test(
 
     const refundPath =
       `/api/workspaces/${workspaceA}/ai-security-assessments/synthetic-refund-proposals`;
+    const qwenProviderStatusPath =
+      `/api/workspaces/${workspaceA}/ai-security-assessments/qwen-provider/status`;
+    const savedQwenProviderEnvironment = {
+      QWEN_PROVIDER_BASE_URL: process.env.QWEN_PROVIDER_BASE_URL,
+      QWEN_PROVIDER_MODEL: process.env.QWEN_PROVIDER_MODEL,
+      QWEN_PROVIDER_API_KEY: process.env.QWEN_PROVIDER_API_KEY,
+    };
+    delete process.env.QWEN_PROVIDER_BASE_URL;
+    delete process.env.QWEN_PROVIDER_MODEL;
+    delete process.env.QWEN_PROVIDER_API_KEY;
+    try {
+      const status = await request(workspaceAOwner, qwenProviderStatusPath);
+      assert.equal(status.status, 200);
+      assert.deepEqual(await status.json(), {
+        status: "not_configured",
+        provider: "openai_compatible_qwen",
+        modelId: null,
+        missing: ["base_url", "model", "api_key"],
+      });
+    } finally {
+      if (savedQwenProviderEnvironment.QWEN_PROVIDER_BASE_URL !== undefined) {
+        process.env.QWEN_PROVIDER_BASE_URL =
+          savedQwenProviderEnvironment.QWEN_PROVIDER_BASE_URL;
+      }
+      if (savedQwenProviderEnvironment.QWEN_PROVIDER_MODEL !== undefined) {
+        process.env.QWEN_PROVIDER_MODEL =
+          savedQwenProviderEnvironment.QWEN_PROVIDER_MODEL;
+      }
+      if (savedQwenProviderEnvironment.QWEN_PROVIDER_API_KEY !== undefined) {
+        process.env.QWEN_PROVIDER_API_KEY =
+          savedQwenProviderEnvironment.QWEN_PROVIDER_API_KEY;
+      }
+    }
     assert.equal(
       (await request(null, refundPath, "POST", {
         scenarioId: "guardian.synthetic.support.refund.v1",
@@ -1152,6 +1188,127 @@ test(
       caseId: "support_trusted_refund_requires_approval",
       idempotencyKey: refundIdempotencyKey,
       expectedResult: "synthetic_refund_approved_in_clone",
+      modelInference: false,
+      executionMode: "deterministic_fixture",
+      toolCallOrigin: "controlled_fixture_not_llm",
+    });
+
+    const qwenProviderKey = "synthetic-e2e-provider-key-never-valid";
+    const qwenProviderBaseUrl = "https://qwen-mock.invalid/v1";
+    process.env.QWEN_PROVIDER_BASE_URL = qwenProviderBaseUrl;
+    process.env.QWEN_PROVIDER_MODEL = "Qwen/Qwen3-Synthetic-Test";
+    process.env.QWEN_PROVIDER_API_KEY = qwenProviderKey;
+    const originalFetch = globalThis.fetch;
+    const providerEndpoint = `${qwenProviderBaseUrl}/chat/completions`;
+    globalThis.fetch = (async (input, init) => {
+      const requestUrl =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+      if (requestUrl === providerEndpoint) {
+        assert.equal(
+          new Headers(init?.headers).get("authorization"),
+          `Bearer ${qwenProviderKey}`,
+        );
+        return new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  tool_calls: [
+                    {
+                      type: "function",
+                      function: {
+                        name: "propose_synthetic_refund",
+                        arguments:
+                          '{"ticket_id":"TICKET-SYNTH-001","amount_cents":500}',
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      if (requestUrl.startsWith(apiBase)) {
+        return originalFetch(input, init);
+      }
+      throw new Error("test-only provider network mock blocked an unexpected URL");
+    }) as typeof fetch;
+    let qwenProposalResponse: Response;
+    try {
+      qwenProposalResponse = await request(
+        workspaceAOwner,
+        refundPath,
+        "POST",
+        {
+          scenarioId: "guardian.synthetic.support.refund.v1",
+          idempotencyKey: `synthetic-qwen-refund-${randomUUID()}`,
+          proposalSource: "qwen_provider",
+        },
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+      if (savedQwenProviderEnvironment.QWEN_PROVIDER_BASE_URL === undefined) {
+        delete process.env.QWEN_PROVIDER_BASE_URL;
+      } else {
+        process.env.QWEN_PROVIDER_BASE_URL =
+          savedQwenProviderEnvironment.QWEN_PROVIDER_BASE_URL;
+      }
+      if (savedQwenProviderEnvironment.QWEN_PROVIDER_MODEL === undefined) {
+        delete process.env.QWEN_PROVIDER_MODEL;
+      } else {
+        process.env.QWEN_PROVIDER_MODEL =
+          savedQwenProviderEnvironment.QWEN_PROVIDER_MODEL;
+      }
+      if (savedQwenProviderEnvironment.QWEN_PROVIDER_API_KEY === undefined) {
+        delete process.env.QWEN_PROVIDER_API_KEY;
+      } else {
+        process.env.QWEN_PROVIDER_API_KEY =
+          savedQwenProviderEnvironment.QWEN_PROVIDER_API_KEY;
+      }
+    }
+    assert.equal(qwenProposalResponse.status, 201);
+    const qwenProposalBody = CreateWorkspaceSyntheticRefundProposalResponse.parse(
+      await qwenProposalResponse.json(),
+    );
+    assert.equal(qwenProposalBody.decision, "require_approval");
+    assert.equal(qwenProposalBody.execution, "not_performed");
+    assert.equal(qwenProposalBody.approval?.modelInference, true);
+    assert.equal(
+      qwenProposalBody.approval?.executionMode,
+      "real_openai_compatible_qwen_inference",
+    );
+    assert.equal(
+      qwenProposalBody.approval?.toolCallOrigin,
+      "openai_compatible_provider_tool_call",
+    );
+    assert.equal(
+      qwenProposalBody.providerInference?.status,
+      "real_inference_completed",
+    );
+    assert.equal(
+      qwenProposalBody.providerInference?.modelId,
+      "Qwen/Qwen3-Synthetic-Test",
+    );
+    assert.equal(qwenProposalBody.externalSideEffect, false);
+    const qwenApproval = qwenProposalBody.approval;
+    assert.ok(qwenApproval);
+    approvals.splice(1, 0, {
+      approvalId: qwenApproval.id,
+      jobId: qwenApproval.jobId,
+      binding: qwenApproval.proposalBindingSha256,
+      profileId: "guardian-agent-lab-customer-service-v1",
+      caseId: "support_trusted_refund_requires_approval",
+      idempotencyKey: "synthetic-qwen-provider",
+      expectedResult: "synthetic_refund_approved_in_clone",
+      modelInference: true,
+      executionMode: "real_openai_compatible_qwen_inference",
+      toolCallOrigin: "openai_compatible_provider_tool_call",
     });
 
     const concurrentRefundKey = `synthetic-refund-${randomUUID()}`;
@@ -1234,11 +1391,14 @@ test(
         (item) => item.id === approval.approvalId,
       );
       assert.equal(pendingApproval?.status, "pending");
-      assert.equal(pendingApproval?.modelInference, false);
-      assert.equal(pendingApproval?.executionMode, "deterministic_fixture");
+      assert.equal(pendingApproval?.modelInference, approval.modelInference ?? false);
+      assert.equal(
+        pendingApproval?.executionMode,
+        approval.executionMode ?? "deterministic_fixture",
+      );
       assert.equal(
         pendingApproval?.toolCallOrigin,
-        "controlled_fixture_not_llm",
+        approval.toolCallOrigin ?? "controlled_fixture_not_llm",
       );
       if (approval === approvals[0]) {
         const [persisted] = (
@@ -1603,7 +1763,7 @@ test(
     assert.equal(
       dashboardDecision.approval.status,
       "approved",
-      "a different workspace admin can decide the SDK-created proposal",
+      "a different workspace admin can decide the externally generated proposal",
     );
     assert.equal(
       dashboardDecision.execution,

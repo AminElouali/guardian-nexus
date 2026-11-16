@@ -19,6 +19,8 @@ import {
   CreateWorkspaceSyntheticRefundProposalResponse,
   GetWorkspaceAiAssessmentLabAvailabilityParams,
   GetWorkspaceAiAssessmentLabAvailabilityResponse,
+  GetWorkspaceQwenProviderStatusParams,
+  GetWorkspaceQwenProviderStatusResponse,
   ListWorkspaceAiAssessmentLabJobsParams,
   ListWorkspaceAiAssessmentLabJobsResponse,
   ListWorkspaceAiAssessmentApprovalsParams,
@@ -38,6 +40,7 @@ import {
   workspaceAuditEventsTable,
   type AiAssessmentJobEvidence,
   type AiAssessmentJob,
+  type ExternalQwenProviderApprovalEvidence,
 } from "@workspace/db";
 import {
   canonicalApprovalJson,
@@ -105,6 +108,19 @@ import {
   SYNTHETIC_REFUND_TOOL_NAME,
   validateSyntheticRefundPolicyEvidence,
 } from "../lib/synthetic-refund-gateway";
+import {
+  createExternalQwenApprovalEvidence,
+  getQwenProviderStatus,
+  parseQwenProviderConfig,
+  providerProposalMatchesAllowlistedAction,
+  QWEN_PROVIDER_ENGINE,
+  QWEN_PROVIDER_EXECUTION_MODE,
+  QWEN_PROVIDER_TOOL_CALL_ORIGIN,
+  QwenProviderError,
+  requestQwenRefundProposal,
+  validateExternalQwenApprovalEvidence,
+  type QwenRefundProposal,
+} from "../lib/qwen-openai-provider";
 
 const routes: IRouter = Router();
 const UUID_PATTERN =
@@ -477,7 +493,9 @@ function computeApprovalBinding(approval: {
   ) {
     const provenance = resolveApprovalEvidenceProvenance({
       engine:
-        approval.modelInference === true
+        approval.executionMode === QWEN_PROVIDER_EXECUTION_MODE
+          ? QWEN_PROVIDER_ENGINE
+          : approval.modelInference === true
           ? "guardian_qwen_policy_lab"
           : "guardian_policy_lab",
       executionMode: approval.executionMode,
@@ -557,6 +575,53 @@ function verifyPersistedApprovalEvidence(
     return null;
   }
   const raw = job.result as unknown as Record<string, unknown>;
+  if (raw.engine === QWEN_PROVIDER_ENGINE) {
+    if (
+      approval.bindingVersion !== 3 ||
+      job.profileId !== SYNTHETIC_REFUND_PROFILE_ID ||
+      job.engineVersion !== raw.engineVersion ||
+      raw.profileId !== job.profileId ||
+      raw.caseId !== approval.caseId ||
+      raw.proposedTool !== SYNTHETIC_REFUND_TOOL_NAME ||
+      !validateExternalQwenApprovalEvidence(raw) ||
+      approval.modelInference !== true ||
+      approval.executionMode !== QWEN_PROVIDER_EXECUTION_MODE ||
+      approval.toolCallOrigin !== QWEN_PROVIDER_TOOL_CALL_ORIGIN ||
+      raw.proposalSha256 !== approval.proposalSha256 ||
+      raw.actionSha256 !== approval.actionSha256
+    ) {
+      return null;
+    }
+    const policyCase = validateSyntheticRefundPolicyEvidence(
+      raw.guardianPolicyEvidence,
+      [SYNTHETIC_REFUND_REQUIRED_PERMISSION],
+    );
+    const proof = getAllowlistedSyntheticApprovalAction(
+      approval.syntheticActionRef,
+      job.profileId,
+      approval.caseId,
+      raw.proposedTool,
+    );
+    const provenance = resolveApprovalEvidenceProvenance({
+      engine: raw.engine,
+      executionMode: raw.executionMode,
+      modelInference: raw.modelInference,
+      toolCallOrigin: raw.toolCallOrigin,
+    });
+    if (
+      !policyCase ||
+      policyCase.decision !== "require_approval" ||
+      !proof ||
+      !provenance ||
+      raw.argumentsSha256 !== proof.argumentsSha256 ||
+      raw.actionSha256 !== proof.actionSha256 ||
+      approval.actionSha256 !== proof.actionSha256 ||
+      approval.toolCallOrigin !== provenance.toolCallOrigin
+    ) {
+      return null;
+    }
+    return proof;
+  }
   const isQwenEvidence = raw.engine === "guardian_qwen_policy_lab";
   const isDeterministicPolicyEvidence =
     raw.engine === "guardian_policy_lab" &&
@@ -710,6 +775,60 @@ function verifyPersistedApprovalEvidence(
     return null;
   }
   return proof;
+}
+
+function isExternalQwenRefundEvidence(value: unknown): boolean {
+  if (!validateExternalQwenApprovalEvidence(value)) return false;
+  const policyCase = validateSyntheticRefundPolicyEvidence(
+    value.guardianPolicyEvidence,
+    [SYNTHETIC_REFUND_REQUIRED_PERMISSION],
+  );
+  const proof = getAllowlistedSyntheticApprovalAction(
+    value.syntheticActionRef,
+    value.profileId,
+    value.caseId,
+    value.proposedTool,
+  );
+  return Boolean(
+    policyCase?.decision === "require_approval" &&
+      proof &&
+      value.argumentsSha256 === proof.argumentsSha256 &&
+      value.actionSha256 === proof.actionSha256,
+  );
+}
+
+function isSyntheticRefundJobEvidence(
+  value: unknown,
+  source: "fixture" | "qwen_provider",
+): boolean {
+  return source === "qwen_provider"
+    ? isExternalQwenRefundEvidence(value)
+    : Boolean(
+        validateSyntheticRefundPolicyEvidence(value, [
+          SYNTHETIC_REFUND_REQUIRED_PERMISSION,
+        ]),
+      );
+}
+
+function providerInferenceSummary(
+  value: unknown,
+): {
+  status: "real_inference_completed";
+  provider: "openai_compatible_qwen";
+  modelId: string;
+  proposalSha256: string;
+  argumentsSha256: string;
+  toolName: typeof SYNTHETIC_REFUND_TOOL_NAME;
+} | null {
+  if (!validateExternalQwenApprovalEvidence(value)) return null;
+  return {
+    status: "real_inference_completed",
+    provider: "openai_compatible_qwen",
+    modelId: value.provider.modelId,
+    proposalSha256: value.proposalSha256,
+    argumentsSha256: value.argumentsSha256,
+    toolName: value.proposedTool,
+  };
 }
 
 routes.post(
@@ -1076,6 +1195,33 @@ routes.get(
   },
 );
 
+routes.get(
+  "/workspaces/:workspaceId/ai-security-assessments/qwen-provider/status",
+  async (req, res): Promise<void> => {
+    const params = GetWorkspaceQwenProviderStatusParams.safeParse(req.params);
+    if (!params.success || !UUID_PATTERN.test(params.data.workspaceId)) {
+      res.status(400).json({ error: "Invalid workspace ID" });
+      return;
+    }
+    const access = await withWorkspaceUserTransaction(
+      req.authUserId!,
+      params.data.workspaceId,
+      async (_tx, membership) => canRunAiEvaluation(membership.role),
+    );
+    if (!access.authorized) {
+      res.status(403).json({ error: "Workspace membership required" });
+      return;
+    }
+    if (!access.value) {
+      res.status(403).json({ error: "Workspace owner or admin role required" });
+      return;
+    }
+    res.json(GetWorkspaceQwenProviderStatusResponse.parse(
+      getQwenProviderStatus(process.env),
+    ));
+  },
+);
+
 routes.post(
   "/workspaces/:workspaceId/ai-security-assessments/synthetic-refund-proposals",
   async (req, res): Promise<void> => {
@@ -1087,7 +1233,11 @@ routes.post(
       !params.success ||
       !UUID_PATTERN.test(params.data.workspaceId) ||
       !body.success ||
-      !bodyHasOnlyKeys(req.body, ["scenarioId", "idempotencyKey"]) ||
+      !bodyHasOnlyKeys(req.body, [
+        "scenarioId",
+        "idempotencyKey",
+        "proposalSource",
+      ]) ||
       body.data.scenarioId !== SYNTHETIC_REFUND_SCENARIO_ID
     ) {
       res.status(400).json({ error: "Invalid synthetic refund proposal request" });
@@ -1097,7 +1247,8 @@ routes.post(
     const { workspaceId } = params.data;
     const userId = req.authUserId!;
     const idempotencyKey = body.data.idempotencyKey;
-    const inFlightKey = `${workspaceId}:${userId}:${idempotencyKey}`;
+    const proposalSource = body.data.proposalSource ?? "fixture";
+    const inFlightKey = `${workspaceId}:${userId}:${idempotencyKey}:${proposalSource}`;
     try {
       const coalesced = await coalesceSyntheticRefundRequest(
         inFlightKey,
@@ -1126,9 +1277,9 @@ routes.post(
                 existingJob.requestedByUserId !== userId ||
                 existingJob.profileId !== SYNTHETIC_REFUND_PROFILE_ID ||
                 existingJob.status !== "succeeded" ||
-                !validateSyntheticRefundPolicyEvidence(
+                !isSyntheticRefundJobEvidence(
                   existingJob.result,
-                  [SYNTHETIC_REFUND_REQUIRED_PERMISSION],
+                  proposalSource,
                 )
               ) {
                 return { kind: "idempotency_conflict" as const };
@@ -1145,7 +1296,11 @@ routes.post(
                 )
                 .limit(1);
               return existingApproval
-                ? { kind: "existing" as const, approval: existingApproval }
+                 ? {
+                     kind: "existing" as const,
+                     approval: existingApproval,
+                     jobResult: existingJob.result,
+                   }
                 : { kind: "idempotency_conflict" as const };
             },
           );
@@ -1175,6 +1330,13 @@ routes.post(
                     | null,
                 simulationResultSha256:
                   preflight.value.approval.simulationResultSha256,
+                  ...(providerInferenceSummary(preflight.value.jobResult)
+                    ? {
+                        providerInference: providerInferenceSummary(
+                          preflight.value.jobResult,
+                        ),
+                      }
+                    : {}),
                 idempotent: true,
                 externalSideEffect: false as const,
               },
@@ -1188,6 +1350,10 @@ routes.post(
             return { kind: "forbidden" as const };
           }
 
+          const providerConfig =
+            proposalSource === "qwen_provider"
+              ? parseQwenProviderConfig(process.env)
+              : null;
           const policyEvidence = await runPolicyLabPreview(
             SYNTHETIC_REFUND_PROFILE_ID,
           );
@@ -1196,6 +1362,28 @@ routes.post(
             actorPermissions,
           );
           if (!policyCase) return { kind: "policy_evidence_invalid" as const };
+          let externalProposal: QwenRefundProposal | null = null;
+          let externalEvidence: ExternalQwenProviderApprovalEvidence | null = null;
+          if (proposalSource === "qwen_provider") {
+            if (!providerConfig) {
+              return { kind: "provider_not_configured" as const };
+            }
+            externalProposal = await requestQwenRefundProposal(providerConfig);
+            if (
+              !providerProposalMatchesAllowlistedAction(
+                externalProposal,
+                policyCase.proof.argumentsSha256,
+              )
+            ) {
+              return { kind: "provider_proposal_rejected" as const };
+            }
+            externalEvidence = createExternalQwenApprovalEvidence({
+              proposal: externalProposal,
+              actionSha256: policyCase.proof.actionSha256,
+              guardianPolicyEvidence:
+                policyEvidence as unknown as Record<string, unknown>,
+            });
+          }
 
           const resolution = await resolveSyntheticRefundDecision(
             policyCase.decision,
@@ -1226,9 +1414,9 @@ routes.post(
                         existingJob.requestedByUserId !== userId ||
                         existingJob.profileId !== SYNTHETIC_REFUND_PROFILE_ID ||
                         existingJob.status !== "succeeded" ||
-                        !validateSyntheticRefundPolicyEvidence(
+                        !isSyntheticRefundJobEvidence(
                           existingJob.result,
-                          [SYNTHETIC_REFUND_REQUIRED_PERMISSION],
+                          proposalSource,
                         )
                       ) {
                         return { kind: "idempotency_conflict" as const };
@@ -1245,7 +1433,11 @@ routes.post(
                         )
                         .limit(1);
                       return existingApproval
-                        ? { kind: "existing" as const, approval: existingApproval }
+                        ? {
+                            kind: "existing" as const,
+                            approval: existingApproval,
+                            jobResult: existingJob.result,
+                          }
                         : { kind: "idempotency_conflict" as const };
                     }
 
@@ -1267,10 +1459,18 @@ routes.post(
                       now.getTime() + SYNTHETIC_REFUND_APPROVAL_TTL_MS,
                     );
                     const bindingProvenance = resolveApprovalEvidenceProvenance({
-                      engine: policyEvidence.engine,
-                      executionMode: policyEvidence.executionMode,
-                      modelInference: policyEvidence.modelInference,
-                      toolCallOrigin: "controlled_fixture_not_llm",
+                      engine: externalEvidence
+                        ? QWEN_PROVIDER_ENGINE
+                        : policyEvidence.engine,
+                      executionMode: externalEvidence
+                        ? QWEN_PROVIDER_EXECUTION_MODE
+                        : policyEvidence.executionMode,
+                      modelInference: externalEvidence
+                        ? true
+                        : policyEvidence.modelInference,
+                      toolCallOrigin: externalEvidence
+                        ? QWEN_PROVIDER_TOOL_CALL_ORIGIN
+                        : "controlled_fixture_not_llm",
                     });
                     if (!bindingProvenance) {
                       return { kind: "policy_evidence_invalid" as const };
@@ -1283,11 +1483,14 @@ routes.post(
                         idempotencyKey,
                         profileId: SYNTHETIC_REFUND_PROFILE_ID,
                         status: "succeeded",
-                        workerVersion: "guardian-synthetic-refund-gateway-v1",
-                        engineVersion: policyEvidence.engineVersion,
-                        // JSONB can store the validated API-preview v3 evidence;
-                        // the legacy TypeScript union still describes persisted v1/v2 worker evidence.
-                        result: policyEvidence as unknown as AiAssessmentJobEvidence,
+                        workerVersion: externalEvidence
+                          ? "guardian-external-qwen-refund-gateway-v1"
+                          : "guardian-synthetic-refund-gateway-v1",
+                        engineVersion: externalEvidence
+                          ? externalEvidence.engineVersion
+                          : policyEvidence.engineVersion,
+                        result: (externalEvidence ??
+                          policyEvidence) as unknown as AiAssessmentJobEvidence,
                         startedAt: now,
                         completedAt: now,
                       })
@@ -1300,12 +1503,15 @@ routes.post(
                       .returning();
                     if (!job) return { kind: "idempotency_conflict" as const };
 
+                    const proposalSha256 =
+                      externalEvidence?.proposalSha256 ??
+                      policyCase.proof.proposalSha256;
                     const proposalBindingSha256 =
                       computeApprovalProposalBindingV3({
                         workspaceId,
                         jobId: job.id,
                         caseId: SYNTHETIC_REFUND_CASE_ID,
-                        proposalSha256: policyCase.proof.proposalSha256,
+                        proposalSha256,
                         actionSha256: policyCase.proof.actionSha256,
                         syntheticActionRef: SYNTHETIC_REFUND_SCENARIO_ID,
                         requestedByUserId: userId,
@@ -1319,16 +1525,22 @@ routes.post(
                         workspaceId,
                         jobId: job.id,
                         caseId: SYNTHETIC_REFUND_CASE_ID,
-                        proposalSha256: policyCase.proof.proposalSha256,
+                        proposalSha256:
+                          externalEvidence?.proposalSha256 ??
+                          policyCase.proof.proposalSha256,
                         actionSha256: policyCase.proof.actionSha256,
                         proposalBindingSha256,
                         requestedByUserId: userId,
                         requestedByRole: membership.role,
                         bindingVersion: 3,
                         syntheticActionRef: SYNTHETIC_REFUND_SCENARIO_ID,
-                        modelInference: false,
-                        executionMode: "deterministic_fixture",
-                        toolCallOrigin: "controlled_fixture_not_llm",
+                        modelInference: externalEvidence !== null,
+                        executionMode: externalEvidence
+                          ? QWEN_PROVIDER_EXECUTION_MODE
+                          : "deterministic_fixture",
+                        toolCallOrigin: externalEvidence
+                          ? QWEN_PROVIDER_TOOL_CALL_ORIGIN
+                          : "controlled_fixture_not_llm",
                         status: "pending",
                         expiresAt,
                       })
@@ -1343,14 +1555,28 @@ routes.post(
                       metadata: {
                         jobId: job.id,
                         caseId: SYNTHETIC_REFUND_CASE_ID,
-                        proposalSha256: policyCase.proof.proposalSha256,
+                        proposalSha256,
                         actionSha256: policyCase.proof.actionSha256,
                         proposalBindingSha256,
                         syntheticActionRef: SYNTHETIC_REFUND_SCENARIO_ID,
                         decision: "require_approval",
-                        modelInference: false,
-                        executionMode: "deterministic_fixture",
-                        toolCallOrigin: "controlled_fixture_not_llm",
+                        modelInference: externalEvidence !== null,
+                        executionMode: externalEvidence
+                          ? QWEN_PROVIDER_EXECUTION_MODE
+                          : "deterministic_fixture",
+                        toolCallOrigin: externalEvidence
+                          ? QWEN_PROVIDER_TOOL_CALL_ORIGIN
+                          : "controlled_fixture_not_llm",
+                        ...(externalEvidence
+                          ? {
+                              providerId: externalEvidence.provider.id,
+                              providerModelId: externalEvidence.provider.modelId,
+                              providerProposalSha256:
+                                externalEvidence.proposalSha256,
+                              providerArgumentsSha256:
+                                externalEvidence.argumentsSha256,
+                            }
+                          : {}),
                         execution: "not_performed",
                         externalSideEffect: false,
                       },
@@ -1379,6 +1605,18 @@ routes.post(
                   execution: "not_performed" as const,
                   simulationResultCode: null,
                   simulationResultSha256: null,
+                  ...(externalEvidence
+                    ? {
+                        providerInference: {
+                          status: "real_inference_completed" as const,
+                          provider: externalEvidence.provider.id,
+                          modelId: externalEvidence.provider.modelId,
+                          proposalSha256: externalEvidence.proposalSha256,
+                          argumentsSha256: externalEvidence.argumentsSha256,
+                          toolName: externalEvidence.proposedTool,
+                        },
+                      }
+                    : {}),
                   idempotent: false,
                   externalSideEffect: false as const,
                 },
@@ -1406,6 +1644,15 @@ routes.post(
                       | null,
                   simulationResultSha256:
                     resolution.approval.approval.simulationResultSha256,
+                  ...(providerInferenceSummary(
+                    resolution.approval.jobResult,
+                  )
+                    ? {
+                        providerInference: providerInferenceSummary(
+                          resolution.approval.jobResult,
+                        ),
+                      }
+                    : {}),
                   idempotent: true,
                   externalSideEffect: false as const,
                 },
@@ -1468,6 +1715,20 @@ routes.post(
         res.status(409).json({ error: "Idempotency key is bound to a different request" });
         return;
       }
+      if (coalesced.value.kind === "provider_proposal_rejected") {
+        res.status(422).json({
+          error: "Provider proposal did not match the fixed synthetic action",
+          code: "provider_proposal_rejected",
+        });
+        return;
+      }
+      if (coalesced.value.kind === "provider_not_configured") {
+        res.status(503).json({
+          error: "External Qwen provider is not configured",
+          code: "provider_not_configured",
+        });
+        return;
+      }
       if (coalesced.value.kind === "pending_limit") {
         res.status(409).json({ error: "Workspace pending approval limit reached" });
         return;
@@ -1496,16 +1757,30 @@ routes.post(
         .json(CreateWorkspaceSyntheticRefundProposalResponse.parse(responseBody));
     } catch (error) {
       const errorCode =
-        error instanceof PolicyLabPreviewError
+        error instanceof QwenProviderError
+          ? error.code
+          : error instanceof PolicyLabPreviewError
           ? error.code
           : "synthetic_refund_proposal_failed";
       req.log?.error?.(
         { errorCode },
         "Synthetic refund proposal could not be created",
       );
-      res.status(
-        error instanceof PolicyLabPreviewError ? 503 : 500,
-      ).json({ error: "Synthetic refund proposal failed" });
+      if (error instanceof QwenProviderError) {
+        res.status(
+          error.code === "provider_proposal_invalid" ||
+            error.code === "provider_proposal_mismatch"
+            ? 422
+            : 503,
+        ).json({
+          error: "External Qwen proposal could not be accepted",
+          code: error.code,
+        });
+        return;
+      }
+      res.status(error instanceof PolicyLabPreviewError ? 503 : 500).json({
+        error: "Synthetic refund proposal failed",
+      });
     }
   },
 );
@@ -1843,12 +2118,22 @@ routes.post(
             )
             .limit(1);
           const persistedProof = verifyPersistedApprovalEvidence(approval, job);
+          const externalEvidence =
+            job &&
+            validateExternalQwenApprovalEvidence(job.result)
+              ? job.result
+              : null;
           const refundEvidence = job
             ? validateSyntheticRefundPolicyEvidence(
-                job.result,
+                externalEvidence
+                  ? externalEvidence.guardianPolicyEvidence
+                  : job.result,
                 [SYNTHETIC_REFUND_REQUIRED_PERMISSION],
               )
             : null;
+          const expectedProposalSha256 =
+            externalEvidence?.proposalSha256 ??
+            refundEvidence?.proof.proposalSha256;
           if (
             !job ||
             job.profileId !== SYNTHETIC_REFUND_PROFILE_ID ||
@@ -1856,7 +2141,7 @@ routes.post(
             !refundEvidence ||
             refundEvidence.decision !== "require_approval" ||
             refundEvidence.proof.actionSha256 !== approval.actionSha256 ||
-            refundEvidence.proof.proposalSha256 !== approval.proposalSha256
+            expectedProposalSha256 !== approval.proposalSha256
           ) {
             return { kind: "refund_evidence_invalid" as const };
           }

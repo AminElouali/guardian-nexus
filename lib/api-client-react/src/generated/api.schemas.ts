@@ -3928,6 +3928,56 @@ export interface GuardianQwenPolicyLabEvidence {
   evidenceSha256: string;
 }
 
+export type ExternalQwenProviderApprovalEvidenceProvider = {
+  id: 'openai_compatible_qwen';
+  /**
+     * @minLength 1
+     * @maxLength 128
+     * @pattern ^[A-Za-z0-9._:/-]+$
+     */
+  modelId: string;
+};
+
+export type ExternalQwenProviderApprovalEvidenceToolEventsItem = { [key: string]: unknown };
+
+export interface ExternalQwenProviderApprovalEvidence {
+  evidenceVersion: 1;
+  source: 'external_qwen_provider';
+  engine: 'guardian_qwen_external_provider';
+  engineVersion: 'guardian-qwen-openai-compatible-v1';
+  profileId: 'guardian-agent-lab-customer-service-v1';
+  caseId: 'support_trusted_refund_requires_approval';
+  taskId: 'synthetic_refund_demo_v1';
+  executionMode: 'real_openai_compatible_qwen_inference';
+  modelInference: true;
+  provider: ExternalQwenProviderApprovalEvidenceProvider;
+  toolCallOrigin: 'openai_compatible_provider_tool_call';
+  toolCallCount: 1;
+  proposedTool: 'propose_synthetic_refund';
+  /** @pattern ^[a-f0-9]{64}$ */
+  argumentsSha256: string;
+  /** @pattern ^[a-f0-9]{64}$ */
+  proposalSha256: string;
+  syntheticActionRef: 'guardian.synthetic.support.refund.v1';
+  /** @pattern ^[a-f0-9]{64}$ */
+  actionSha256: string;
+  decision: 'require_approval';
+  reasonCode: 'human_approval_required';
+  dispatchStatus: 'approval_required_before_dispatch';
+  /** @maxItems 0 */
+  toolEvents: ExternalQwenProviderApprovalEvidenceToolEventsItem[];
+  unauthorizedActionExecuted: false;
+  rawPromptStored: false;
+  rawResponseStored: false;
+  rawToolArgumentsStored: false;
+  externalInferenceCalls: 1;
+  externalOperations: 0;
+  actualOperations: 0;
+  guardianPolicyEvidence: GuardianAgentPolicyLabEvidence;
+  /** @pattern ^[a-f0-9]{64}$ */
+  evidenceSha256: string;
+}
+
 export interface AiAssessmentLabJob {
   id: string;
   status: AiAssessmentLabJobStatus;
@@ -3936,7 +3986,7 @@ export interface AiAssessmentLabJob {
   attempts: number;
   /** @nullable */
   engineVersion: string | null;
-  result: AiAssessmentEvidence | GuardianLocalLlmEvidence | GuardianLocalLlmNativeToolSuiteEvidence | GuardianLocalLlmAutonomousToolSelectionEvidence | GuardianAgentPolicyLabEvidence | GuardianQwenPolicyLabEvidence | null;
+  result: AiAssessmentEvidence | GuardianLocalLlmEvidence | GuardianLocalLlmNativeToolSuiteEvidence | GuardianLocalLlmAutonomousToolSelectionEvidence | GuardianAgentPolicyLabEvidence | GuardianQwenPolicyLabEvidence | ExternalQwenProviderApprovalEvidence | null;
   /** @nullable */
   errorCode: string | null;
   createdAt: string;
@@ -4143,6 +4193,7 @@ export type AiAssessmentApprovalExecutionMode = typeof AiAssessmentApprovalExecu
 export const AiAssessmentApprovalExecutionMode = {
   deterministic_fixture: 'deterministic_fixture',
   real_local_qwen_inference: 'real_local_qwen_inference',
+  real_openai_compatible_qwen_inference: 'real_openai_compatible_qwen_inference',
 } as const;
 
 /**
@@ -4155,6 +4206,7 @@ export const AiAssessmentApprovalToolCallOrigin = {
   controlled_fixture_not_llm: 'controlled_fixture_not_llm',
   guardian_qwen_native_markup_adapter: 'guardian_qwen_native_markup_adapter',
   runtime_message_tool_calls: 'runtime_message_tool_calls',
+  openai_compatible_provider_tool_call: 'openai_compatible_provider_tool_call',
 } as const;
 
 export type AiAssessmentApprovalStatus = typeof AiAssessmentApprovalStatus[keyof typeof AiAssessmentApprovalStatus];
@@ -4443,6 +4495,14 @@ export interface AiAssessmentApprovalLedgerExportRequest {
   receipts: SignedApprovalReceiptV1[];
 }
 
+export type SyntheticRefundProposalRequestProposalSource = typeof SyntheticRefundProposalRequestProposalSource[keyof typeof SyntheticRefundProposalRequestProposalSource];
+
+
+export const SyntheticRefundProposalRequestProposalSource = {
+  fixture: 'fixture',
+  qwen_provider: 'qwen_provider',
+} as const;
+
 export interface SyntheticRefundProposalRequest {
   scenarioId: 'guardian.synthetic.support.refund.v1';
   /**
@@ -4451,6 +4511,51 @@ export interface SyntheticRefundProposalRequest {
      * @pattern ^[A-Za-z0-9._:-]+$
      */
   idempotencyKey: string;
+  proposalSource?: SyntheticRefundProposalRequestProposalSource;
+}
+
+export type QwenProviderStatusResponseStatus = typeof QwenProviderStatusResponseStatus[keyof typeof QwenProviderStatusResponseStatus];
+
+
+export const QwenProviderStatusResponseStatus = {
+  not_configured: 'not_configured',
+  invalid_configuration: 'invalid_configuration',
+  configured_not_tested: 'configured_not_tested',
+} as const;
+
+export type QwenProviderStatusResponseMissingItem = typeof QwenProviderStatusResponseMissingItem[keyof typeof QwenProviderStatusResponseMissingItem];
+
+
+export const QwenProviderStatusResponseMissingItem = {
+  base_url: 'base_url',
+  model: 'model',
+  api_key: 'api_key',
+} as const;
+
+export interface QwenProviderStatusResponse {
+  status: QwenProviderStatusResponseStatus;
+  provider: 'openai_compatible_qwen';
+  /**
+     * @maxLength 128
+     * @nullable
+     */
+  modelId: string | null;
+  missing: QwenProviderStatusResponseMissingItem[];
+}
+
+export interface QwenProviderInferenceSummary {
+  status: 'real_inference_completed';
+  provider: 'openai_compatible_qwen';
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  modelId: string;
+  /** @pattern ^[a-f0-9]{64}$ */
+  proposalSha256: string;
+  /** @pattern ^[a-f0-9]{64}$ */
+  argumentsSha256: string;
+  toolName: 'propose_synthetic_refund';
 }
 
 export type SyntheticRefundProposalResponseDecision = typeof SyntheticRefundProposalResponseDecision[keyof typeof SyntheticRefundProposalResponseDecision];
@@ -4504,6 +4609,7 @@ export interface SyntheticRefundProposalResponse {
   simulationResultSha256: string | null;
   idempotent: boolean;
   externalSideEffect: false;
+  providerInference?: QwenProviderInferenceSummary;
 }
 
 export type MicrosoftOAuthCallbackParams = {

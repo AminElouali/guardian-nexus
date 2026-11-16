@@ -16,4 +16,5 @@ export const AiAssessmentApprovalToolCallOrigin = {
   controlled_fixture_not_llm: 'controlled_fixture_not_llm',
   guardian_qwen_native_markup_adapter: 'guardian_qwen_native_markup_adapter',
   runtime_message_tool_calls: 'runtime_message_tool_calls',
+  openai_compatible_provider_tool_call: 'openai_compatible_provider_tool_call',
 } as const;

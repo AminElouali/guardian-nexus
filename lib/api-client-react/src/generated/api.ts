@@ -58,6 +58,7 @@ import type {
   MicrosoftIntegrationSetupInput,
   MicrosoftOAuthCallbackParams,
   Plan,
+  QwenProviderStatusResponse,
   SyntheticRefundProposalRequest,
   SyntheticRefundProposalResponse,
   Workspace,
@@ -3112,6 +3113,108 @@ export const useCreateWorkspaceSyntheticRefundProposal = <TError = ErrorType<voi
       > => {
       return useMutation(getCreateWorkspaceSyntheticRefundProposalMutationOptions(options), queryClient);
     }
+
+export const getGetWorkspaceQwenProviderStatusUrl = (workspaceId: string,) => {
+
+
+
+
+  return `/api/workspaces/${workspaceId}/ai-security-assessments/qwen-provider/status`
+}
+
+/**
+ * Reports only whether server-side provider configuration is present and syntactically valid. It never tests connectivity or returns the endpoint or API key.
+ * @summary Read configuration state for the external Qwen proposal demo
+ */
+export const getWorkspaceQwenProviderStatus = async (workspaceId: string, options?: Parameters<typeof customFetch>[1]): Promise<QwenProviderStatusResponse> => {
+
+  return customFetch<QwenProviderStatusResponse>(getGetWorkspaceQwenProviderStatusUrl(workspaceId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetWorkspaceQwenProviderStatusQueryKey = (workspaceId: string,) => {
+    return [
+    `/api/workspaces/${workspaceId}/ai-security-assessments/qwen-provider/status`
+    ] as const;
+    }
+
+
+export const getGetWorkspaceQwenProviderStatusQueryOptions = <TData = Awaited<ReturnType<typeof getWorkspaceQwenProviderStatus>>, TError = ErrorType<void>>(workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWorkspaceQwenProviderStatus>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetWorkspaceQwenProviderStatusQueryKey(workspaceId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getWorkspaceQwenProviderStatus>>> = ({ signal }) => getWorkspaceQwenProviderStatus(workspaceId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: workspaceId !== null && workspaceId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getWorkspaceQwenProviderStatus>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetWorkspaceQwenProviderStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getWorkspaceQwenProviderStatus>>>
+export type GetWorkspaceQwenProviderStatusQueryError = ErrorType<void>
+
+
+export function useGetWorkspaceQwenProviderStatus<TData = Awaited<ReturnType<typeof getWorkspaceQwenProviderStatus>>, TError = ErrorType<void>>(
+ workspaceId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWorkspaceQwenProviderStatus>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getWorkspaceQwenProviderStatus>>,
+          TError,
+          Awaited<ReturnType<typeof getWorkspaceQwenProviderStatus>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetWorkspaceQwenProviderStatus<TData = Awaited<ReturnType<typeof getWorkspaceQwenProviderStatus>>, TError = ErrorType<void>>(
+ workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWorkspaceQwenProviderStatus>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getWorkspaceQwenProviderStatus>>,
+          TError,
+          Awaited<ReturnType<typeof getWorkspaceQwenProviderStatus>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetWorkspaceQwenProviderStatus<TData = Awaited<ReturnType<typeof getWorkspaceQwenProviderStatus>>, TError = ErrorType<void>>(
+ workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWorkspaceQwenProviderStatus>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Read configuration state for the external Qwen proposal demo
+ */
+
+export function useGetWorkspaceQwenProviderStatus<TData = Awaited<ReturnType<typeof getWorkspaceQwenProviderStatus>>, TError = ErrorType<void>>(
+ workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWorkspaceQwenProviderStatus>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetWorkspaceQwenProviderStatusQueryOptions(workspaceId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getDecideWorkspaceAiAssessmentApprovalUrl = (workspaceId: string,
     approvalId: string,) => {

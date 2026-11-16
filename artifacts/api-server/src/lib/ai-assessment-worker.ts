@@ -3566,6 +3566,21 @@ function extractApprovalCandidates(
       modelInference,
       toolCallOrigin: item.toolCallOrigin ?? evidence.proposalOrigin,
     });
+    const workerProvenance =
+      provenance &&
+      provenance.executionMode !==
+        "real_openai_compatible_qwen_inference"
+        ? {
+            modelInference: provenance.modelInference,
+            executionMode: provenance.executionMode as
+              | "deterministic_fixture"
+              | "real_local_qwen_inference",
+            toolCallOrigin: provenance.toolCallOrigin as
+              | "controlled_fixture_not_llm"
+              | "guardian_qwen_native_markup_adapter"
+              | "runtime_message_tool_calls",
+          }
+        : null;
     if (
       decision !== "require_approval" ||
       dispatchStatus !== "approval_required_before_dispatch" ||
@@ -3577,7 +3592,7 @@ function extractApprovalCandidates(
       typeof actionSha256 !== "string" ||
       !/^[a-f0-9]{64}$/.test(actionSha256) ||
       !syntheticActionRef ||
-      !provenance
+      !workerProvenance
     ) {
       return [];
     }
@@ -3587,7 +3602,7 @@ function extractApprovalCandidates(
         proposalSha256,
         actionSha256,
         syntheticActionRef,
-        ...provenance,
+        ...workerProvenance,
       },
     ];
   });

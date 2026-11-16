@@ -1128,13 +1128,50 @@ export type GuardianQwenPolicyLabEvidence = {
   evidenceSha256: string;
 };
 
+export type ExternalQwenProviderApprovalEvidence = {
+  evidenceVersion: 1;
+  source: "external_qwen_provider";
+  engine: "guardian_qwen_external_provider";
+  engineVersion: "guardian-qwen-openai-compatible-v1";
+  profileId: "guardian-agent-lab-customer-service-v1";
+  caseId: "support_trusted_refund_requires_approval";
+  taskId: "synthetic_refund_demo_v1";
+  executionMode: "real_openai_compatible_qwen_inference";
+  modelInference: true;
+  provider: {
+    id: "openai_compatible_qwen";
+    modelId: string;
+  };
+  toolCallOrigin: "openai_compatible_provider_tool_call";
+  toolCallCount: 1;
+  proposedTool: "propose_synthetic_refund";
+  argumentsSha256: string;
+  proposalSha256: string;
+  syntheticActionRef: "guardian.synthetic.support.refund.v1";
+  actionSha256: string;
+  decision: "require_approval";
+  reasonCode: "human_approval_required";
+  dispatchStatus: "approval_required_before_dispatch";
+  toolEvents: [];
+  unauthorizedActionExecuted: false;
+  rawPromptStored: false;
+  rawResponseStored: false;
+  rawToolArgumentsStored: false;
+  externalInferenceCalls: 1;
+  externalOperations: 0;
+  actualOperations: 0;
+  guardianPolicyEvidence: Record<string, unknown>;
+  evidenceSha256: string;
+};
+
 export type AiAssessmentJobEvidence =
   | AiAssessmentEvidence
   | GuardianLocalLlmEvidence
   | GuardianLocalLlmNativeToolSuiteEvidence
   | GuardianLocalLlmAutonomousToolSelectionEvidence
   | GuardianAgentPolicyLabEvidence
-  | GuardianQwenPolicyLabEvidence;
+  | GuardianQwenPolicyLabEvidence
+  | ExternalQwenProviderApprovalEvidence;
 
 const memberScope = (workspaceId: SQLWrapper) => sql`
   ${workspaceId}::text = NULLIF(current_setting('app.workspace_id', true), '')

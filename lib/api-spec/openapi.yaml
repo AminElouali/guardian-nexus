@@ -831,6 +831,26 @@ paths:
           description: Idempotency key is bound to a different request
         "503":
           description: Fixed policy-lab evidence was unavailable or invalid
+  /workspaces/{workspaceId}/ai-security-assessments/qwen-provider/status:
+    get:
+      operationId: getWorkspaceQwenProviderStatus
+      tags: [ai-evaluations]
+      summary: Read configuration state for the external Qwen proposal demo
+      description: Reports only whether server-side provider configuration is present and syntactically valid. It never tests connectivity or returns the endpoint or API key.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Provider configuration presence; no inference is performed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QwenProviderStatusResponse" }
+        "403":
+          description: Workspace owner or admin role required
   /workspaces/{workspaceId}/ai-security-assessments/approvals/{approvalId}/decision:
     post:
       operationId: decideWorkspaceAiAssessmentApproval
@@ -1350,6 +1370,7 @@ components:
             - { $ref: "#/components/schemas/GuardianLocalLlmAutonomousToolSelectionEvidence" }
             - { $ref: "#/components/schemas/GuardianAgentPolicyLabEvidence" }
             - { $ref: "#/components/schemas/GuardianQwenPolicyLabEvidence" }
+            - { $ref: "#/components/schemas/ExternalQwenProviderApprovalEvidence" }
             - { type: "null" }
         errorCode: { type: ["string", "null"] }
         createdAt: { type: string, format: date-time }
@@ -1444,10 +1465,10 @@ components:
         modelInference: { type: ["boolean", "null"] }
         executionMode:
           type: ["string", "null"]
-          enum: [deterministic_fixture, real_local_qwen_inference, null]
+          enum: [deterministic_fixture, real_local_qwen_inference, real_openai_compatible_qwen_inference, null]
         toolCallOrigin:
           type: ["string", "null"]
-          enum: [controlled_fixture_not_llm, guardian_qwen_native_markup_adapter, runtime_message_tool_calls, null]
+          enum: [controlled_fixture_not_llm, guardian_qwen_native_markup_adapter, runtime_message_tool_calls, openai_compatible_provider_tool_call, null]
         status: { type: string, enum: [pending, approved, denied, expired] }
         canCurrentUserDecide: { type: boolean }
         expiresAt: { type: string, format: date-time }
@@ -1624,7 +1645,33 @@ components:
           minLength: 16
           maxLength: 128
           pattern: "^[A-Za-z0-9._:-]+$"
+        proposalSource:
+          type: string
+          enum: [fixture, qwen_provider]
+          default: fixture
       required: [scenarioId, idempotencyKey]
+    QwenProviderStatusResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        status: { type: string, enum: [not_configured, invalid_configuration, configured_not_tested] }
+        provider: { type: string, const: openai_compatible_qwen }
+        modelId: { type: ["string", "null"], maxLength: 128 }
+        missing:
+          type: array
+          items: { type: string, enum: [base_url, model, api_key] }
+      required: [status, provider, modelId, missing]
+    QwenProviderInferenceSummary:
+      type: object
+      additionalProperties: false
+      properties:
+        status: { type: string, const: real_inference_completed }
+        provider: { type: string, const: openai_compatible_qwen }
+        modelId: { type: string, minLength: 1, maxLength: 128 }
+        proposalSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        argumentsSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        toolName: { type: string, const: propose_synthetic_refund }
+      required: [status, provider, modelId, proposalSha256, argumentsSha256, toolName]
     SyntheticRefundProposalResponse:
       type: object
       additionalProperties: false
@@ -1648,6 +1695,7 @@ components:
           pattern: "^[a-f0-9]{64}$"
         idempotent: { type: boolean }
         externalSideEffect: { type: boolean, const: false }
+        providerInference: { $ref: "#/components/schemas/QwenProviderInferenceSummary" }
       required: [decision, reasonCode, approval, execution, simulationResultCode, simulationResultSha256, idempotent, externalSideEffect]
     GuardianLocalLlmEvidence:
       type: object
@@ -2424,6 +2472,48 @@ components:
         argumentsSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
         resultCode: { type: string, maxLength: 80 }
       required: [caseId, toolCallId, source, tool, phase, authorization, executed, simulatedOnly, stateChanged, externalSideEffect, argumentsSha256, resultCode]
+    ExternalQwenProviderApprovalEvidence:
+      type: object
+      additionalProperties: false
+      properties:
+        evidenceVersion: { type: integer, const: 1 }
+        source: { type: string, const: external_qwen_provider }
+        engine: { type: string, const: guardian_qwen_external_provider }
+        engineVersion: { type: string, const: guardian-qwen-openai-compatible-v1 }
+        profileId: { type: string, const: guardian-agent-lab-customer-service-v1 }
+        caseId: { type: string, const: support_trusted_refund_requires_approval }
+        taskId: { type: string, const: synthetic_refund_demo_v1 }
+        executionMode: { type: string, const: real_openai_compatible_qwen_inference }
+        modelInference: { type: boolean, const: true }
+        provider:
+          type: object
+          additionalProperties: false
+          properties:
+            id: { type: string, const: openai_compatible_qwen }
+            modelId: { type: string, minLength: 1, maxLength: 128, pattern: "^[A-Za-z0-9._:/-]+$" }
+          required: [id, modelId]
+        toolCallOrigin: { type: string, const: openai_compatible_provider_tool_call }
+        toolCallCount: { type: integer, const: 1 }
+        proposedTool: { type: string, const: propose_synthetic_refund }
+        argumentsSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        proposalSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        syntheticActionRef: { type: string, const: guardian.synthetic.support.refund.v1 }
+        actionSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        decision: { type: string, const: require_approval }
+        reasonCode: { type: string, const: human_approval_required }
+        dispatchStatus: { type: string, const: approval_required_before_dispatch }
+        toolEvents: { type: array, maxItems: 0, items: { type: object } }
+        unauthorizedActionExecuted: { type: boolean, const: false }
+        rawPromptStored: { type: boolean, const: false }
+        rawResponseStored: { type: boolean, const: false }
+        rawToolArgumentsStored: { type: boolean, const: false }
+        externalInferenceCalls: { type: integer, const: 1 }
+        externalOperations: { type: integer, const: 0 }
+        actualOperations: { type: integer, const: 0 }
+        guardianPolicyEvidence:
+          $ref: "#/components/schemas/GuardianAgentPolicyLabEvidence"
+        evidenceSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+      required: [evidenceVersion, source, engine, engineVersion, profileId, caseId, taskId, executionMode, modelInference, provider, toolCallOrigin, toolCallCount, proposedTool, argumentsSha256, proposalSha256, syntheticActionRef, actionSha256, decision, reasonCode, dispatchStatus, toolEvents, unauthorizedActionExecuted, rawPromptStored, rawResponseStored, rawToolArgumentsStored, externalInferenceCalls, externalOperations, actualOperations, guardianPolicyEvidence, evidenceSha256]
     GuardianNativeToolCaseEvidence:
       type: object
       additionalProperties: false

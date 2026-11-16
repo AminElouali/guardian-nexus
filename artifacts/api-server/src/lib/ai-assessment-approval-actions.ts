@@ -6,11 +6,15 @@ export type SyntheticApprovalActionRef =
 
 export type ApprovalEvidenceProvenance = {
   modelInference: boolean;
-  executionMode: "deterministic_fixture" | "real_local_qwen_inference";
+  executionMode:
+    | "deterministic_fixture"
+    | "real_local_qwen_inference"
+    | "real_openai_compatible_qwen_inference";
   toolCallOrigin:
     | "controlled_fixture_not_llm"
     | "guardian_qwen_native_markup_adapter"
-    | "runtime_message_tool_calls";
+    | "runtime_message_tool_calls"
+    | "openai_compatible_provider_tool_call";
 };
 
 export function isApprovalDecisionWindowOpen(
@@ -50,6 +54,18 @@ export function resolveApprovalEvidenceProvenance(input: {
       modelInference: true,
       executionMode: "real_local_qwen_inference",
       toolCallOrigin: input.toolCallOrigin,
+    };
+  }
+  if (
+    input.engine === "guardian_qwen_external_provider" &&
+    input.executionMode === "real_openai_compatible_qwen_inference" &&
+    input.modelInference === true &&
+    input.toolCallOrigin === "openai_compatible_provider_tool_call"
+  ) {
+    return {
+      modelInference: true,
+      executionMode: "real_openai_compatible_qwen_inference",
+      toolCallOrigin: "openai_compatible_provider_tool_call",
     };
   }
   return null;

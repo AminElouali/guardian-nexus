@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { SyntheticRefundProposalRequestProposalSource } from './syntheticRefundProposalRequestProposalSource';
 
 export interface SyntheticRefundProposalRequest {
   scenarioId: 'guardian.synthetic.support.refund.v1';
@@ -14,4 +15,5 @@ export interface SyntheticRefundProposalRequest {
      * @pattern ^[A-Za-z0-9._:-]+$
      */
   idempotencyKey: string;
+  proposalSource?: SyntheticRefundProposalRequestProposalSource;
 }

@@ -1,6 +1,6 @@
 import React, { useState, type KeyboardEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Activity, AlertTriangle, Check, Clock3, FlaskConical, LockKeyhole, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { Activity, AlertTriangle, Check, Clock3, FlaskConical, LockKeyhole, ShieldAlert, ShieldCheck, Sparkles, WifiOff } from 'lucide-react';
 import {
   getListWorkspaceAiAssessmentApprovalsQueryKey,
   getListWorkspaceAiAssessmentLabJobsQueryKey,
@@ -9,6 +9,7 @@ import {
   useCreateWorkspaceAiAssessmentLabJob,
   useCreateWorkspaceSyntheticRefundProposal,
   useGetWorkspaceAiAssessmentLabAvailability,
+  useGetWorkspaceQwenProviderStatus,
   useListWorkspaceAiAssessmentApprovals,
   useListWorkspaceAiAssessmentLabJobs,
   useListWorkspaceAiEvaluations,
@@ -19,6 +20,7 @@ import {
   type AiAssessmentLabJobRequestProfileId,
   type AiEvaluationRun,
   type GuardianPolicyLabPreviewResponse,
+  type SyntheticRefundProposalResponse,
   type Workspace,
 } from '@workspace/api-client-react';
 import { Button } from '@/components/ui/button';
@@ -887,10 +889,46 @@ export function AiEvaluationSectionNav({
   );
 }
 
+const qwenDemoStyles = `
+.ai-qwen-demo{position:relative;overflow:hidden;margin:1.35rem 0 1.6rem;padding:clamp(1.05rem,2.4vw,1.7rem);color:#273735;border:1px solid #cbd9d4;border-radius:14px;background:radial-gradient(ellipse at 90% 0%,rgba(211,225,215,.66),transparent 35%),#f5f7f1;box-shadow:0 12px 30px rgba(41,62,55,.055)}
+.ai-qwen-demo:after{position:absolute;top:-58px;right:11%;width:1px;height:178px;content:"";background:linear-gradient(180deg,transparent,rgba(75,110,97,.25),transparent);transform:rotate(35deg);pointer-events:none}
+.ai-qwen-demo-topline{display:flex;align-items:flex-start;gap:1rem;position:relative;z-index:1}
+.ai-qwen-orbit{display:grid;width:42px;height:42px;flex:0 0 42px;place-items:center;color:#315f53;border:1px solid #b7cbc1;border-radius:50%;background:#e3ede5}
+.ai-qwen-demo-heading{min-width:0;flex:1}.ai-qwen-demo-heading .panel-kicker{color:#54766a;letter-spacing:.105em}
+.ai-qwen-demo-heading h2{margin:.22rem 0 .38rem;color:#223a34;font-family:var(--font-display,inherit);font-size:clamp(1.2rem,2.2vw,1.55rem);letter-spacing:-.035em}
+.ai-qwen-demo-heading p{max-width:760px;margin:0;color:#5c6b65;font-size:.9rem;line-height:1.55}
+.ai-qwen-status{display:inline-flex;flex:0 0 auto;align-items:center;gap:.45rem;padding:.42rem .65rem;color:#59635d;border:1px solid #d2d9d2;border-radius:999px;background:rgba(255,255,255,.56);font-size:.74rem;font-weight:650;white-space:nowrap}
+.ai-qwen-status i{width:7px;height:7px;border-radius:50%;background:#87928b}.ai-qwen-status.is-configured{color:#355c4d;border-color:#b9d0c1;background:#e8f0e8}.ai-qwen-status.is-configured i{background:#4b806a}
+.ai-qwen-demo-body{display:grid;grid-template-columns:minmax(0,.88fr) minmax(0,1.12fr);gap:1.1rem;margin-top:1.25rem;position:relative;z-index:1}
+.ai-qwen-case{min-width:0;padding:1rem 1.05rem;border:1px solid #d5dfd7;border-radius:10px;background:rgba(255,255,255,.62)}
+.ai-qwen-step{display:block;margin-bottom:.62rem;color:#738079;font-size:.65rem;font-weight:750;letter-spacing:.12em}
+.ai-qwen-case strong{display:block;color:#2e433d;font-size:.98rem}.ai-qwen-case p{margin:.38rem 0 .95rem;color:#69766f;font-size:.78rem;line-height:1.5}
+.ai-qwen-sample-amount{display:flex;align-items:baseline;gap:.55rem;padding-top:.65rem;border-top:1px solid #dbe3dc}
+.ai-qwen-sample-amount span{color:#6a7770;font-size:.73rem}.ai-qwen-sample-amount b{color:#304f43;font-family:var(--font-mono,monospace);font-size:1.12rem;letter-spacing:-.04em}
+.ai-qwen-sample-amount small{padding:.15rem .3rem;color:#65776d;border:1px solid #d2ddd4;border-radius:3px;font-size:.58rem;font-weight:750;letter-spacing:.07em}
+.ai-qwen-controls{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:.68rem;min-width:0;padding:.25rem 0}
+.ai-qwen-connection-note{width:100%;min-height:52px;color:#52625a}.ai-qwen-connection-note p{display:flex;align-items:flex-start;gap:.45rem;margin:0;font-size:.79rem;line-height:1.5}
+.ai-qwen-connection-note p svg{flex:0 0 auto;margin-top:2px;color:#537868}.ai-qwen-connection-note p b{color:#364c42}
+.ai-qwen-connection-note>small{display:block;margin:.45rem 0 0 1.4rem;color:#77827b;font-size:.7rem}
+.ai-qwen-controls .button,.ai-qwen-controls button{min-height:40px}.ai-qwen-controls>small{color:#79847d;font-size:.72rem}.ai-qwen-controls .ai-qwen-no-secrets{max-width:430px;color:#758078}
+.ai-qwen-skeleton{width:min(100%,340px);height:38px;border-radius:6px;background:linear-gradient(90deg,#e4eae4 20%,#edf1eb 45%,#e4eae4 70%);background-size:220% 100%;animation:ai-qwen-skeleton-sheen 1.4s ease-in-out infinite}
+.ai-qwen-result{display:flex;gap:.7rem;margin-top:1rem;padding:.85rem .95rem;color:#355347;border:1px solid #bfd5c6;border-radius:9px;background:#eaf2e9;position:relative;z-index:1}
+.ai-qwen-result-mark{display:grid;width:27px;height:27px;flex:0 0 27px;place-items:center;border-radius:50%;background:#d4e6d8}
+.ai-qwen-result b{font-size:.82rem}.ai-qwen-result p{margin:.2rem 0 .55rem;color:#536a5e;font-size:.78rem;line-height:1.5}.ai-qwen-result small{display:block;margin-top:.55rem;color:#60756a;font-size:.72rem}
+.ai-qwen-result-tags{display:flex;flex-wrap:wrap;gap:.4rem}.ai-qwen-result-tags span{padding:.22rem .44rem;color:#4b6759;border:1px solid #c8d9cb;border-radius:999px;background:rgba(255,255,255,.48);font-size:.67rem;font-weight:650}
+.ai-qwen-error{margin-top:.8rem;padding:.7rem .8rem;color:#863f39;border:1px solid #e7c6bd;border-radius:7px;background:#fbefea;font-size:.8rem;line-height:1.45;position:relative;z-index:1}
+@keyframes ai-qwen-skeleton-sheen{to{background-position:-220% 0}}
+@media(max-width:700px){.ai-qwen-demo-topline{flex-wrap:wrap}.ai-qwen-status{margin-left:58px}.ai-qwen-demo-body{grid-template-columns:1fr;gap:.85rem}.ai-qwen-controls{padding:.2rem .1rem}.ai-qwen-connection-note{min-height:0}}
+@media(prefers-reduced-motion:reduce){.ai-qwen-skeleton{animation:none}}
+`;
+
 export default function AiEvaluationPage({ workspace }: { workspace: Workspace }) {
   const cache = useQueryClient();
   const history = useListWorkspaceAiEvaluations(workspace.id);
   const runEvaluation = useRunWorkspaceMockAiEvaluation();
+  const qwenProviderStatus = useGetWorkspaceQwenProviderStatus(workspace.id, {
+    query: { refetchOnWindowFocus: false },
+  });
   const availability = useGetWorkspaceAiAssessmentLabAvailability(workspace.id, {
     query: { refetchInterval: 5_000 },
   });
@@ -920,6 +958,9 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
   } | null>(null);
   const [approvalMessage, setApprovalMessage] = useState('');
   const [approvalError, setApprovalError] = useState('');
+  const [qwenProposal, setQwenProposal] = useState<SyntheticRefundProposalResponse | null>(null);
+  const [qwenProposalError, setQwenProposalError] = useState('');
+  const [qwenProposalMessage, setQwenProposalMessage] = useState('');
   const [activeSection, setActiveSection] = useState<AiEvaluationSection>('lab');
   const canRun = workspace.role === 'owner' || workspace.role === 'admin';
   const garakAvailable = availability.data?.profiles.some(
@@ -1017,9 +1058,10 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
         data: {
           scenarioId: 'guardian.synthetic.support.refund.v1',
           idempotencyKey: crypto.randomUUID(),
+          proposalSource: 'fixture',
         },
       });
-      if (result.decision === 'require_approval' && result.approval) {
+      if (result.decision === 'require_approval') {
         setApprovalMessage(
           result.idempotent
             ? 'La solicitud ya estaba registrada. El solicitante no puede aprobarla.'
@@ -1070,7 +1112,66 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
     }
   }
 
+  async function requestQwenSyntheticRefund() {
+    setQwenProposal(null);
+    setQwenProposalError('');
+    setQwenProposalMessage('');
+    setApprovalMessage('');
+    setApprovalError('');
+    try {
+      const result = await createSyntheticRefund.mutateAsync({
+        workspaceId: workspace.id,
+        data: {
+          scenarioId: 'guardian.synthetic.support.refund.v1',
+          idempotencyKey: crypto.randomUUID(),
+          proposalSource: 'qwen_provider',
+        },
+      });
+      setQwenProposal(result);
+      if (result.decision === 'require_approval' && result.approval) {
+        const pendingMessage = result.providerInference?.status === 'real_inference_completed'
+          ? 'Inferencia Qwen confirmada; propuesta sintética pendiente de revisión por otra persona elegible. No se ejecutó.'
+          : 'Propuesta sintética pendiente de revisión por otra persona elegible. No se ejecutó.';
+        setQwenProposalMessage(pendingMessage);
+        setApprovalMessage(pendingMessage);
+        setActiveSection('approvals');
+        await cache.invalidateQueries({
+          queryKey: getListWorkspaceAiAssessmentApprovalsQueryKey(workspace.id),
+        });
+      } else if (result.decision === 'deny') {
+        setQwenProposalMessage('La política denegó la propuesta sintética. No se ejecutó.');
+      } else {
+        setQwenProposalMessage(
+          result.execution === 'synthetic_action_simulated_once'
+            ? 'La respuesta indica una simulación única en estado sintético; no hubo efectos externos.'
+            : 'La política permitió la propuesta. No se ejecutó una acción real.',
+        );
+      }
+      await cache.invalidateQueries({
+        queryKey: getListWorkspaceAiAssessmentLabJobsQueryKey(workspace.id),
+      });
+    } catch {
+      setQwenProposalError(
+        'No se pudo completar la demostración con el proveedor. La configuración declarada no confirma conectividad y no se muestra información técnica sensible.',
+      );
+    }
+  }
+
+  const qwenStatusLabel = qwenProviderStatus.data?.status === 'configured_not_tested'
+    ? 'Configurado · sin probar'
+    : qwenProviderStatus.data?.status === 'invalid_configuration'
+      ? 'Configuración no válida'
+      : qwenProviderStatus.data?.status === 'not_configured'
+        ? 'No configurado'
+        : 'Estado no disponible';
+  const qwenMissingLabels: Record<string, string> = {
+    base_url: 'destino del proveedor',
+    model: 'identificador del modelo',
+    api_key: 'credencial del proveedor',
+  };
+
   return <div className="ai-evaluation-page">
+    <style>{qwenDemoStyles}</style>
     <div className="page-heading">
       <div>
         <div className="eyebrow">GUARDIAN AI SECURITY ASSESSMENT · LABORATORIO</div>
@@ -1082,7 +1183,7 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
 
     <div className="ai-evaluation-disclaimer" role="note" data-testid="ai-evaluation-disclaimer">
       <ShieldAlert size={18} />
-      <div><b>Solo se usan datos y herramientas sintéticos.</b><p>La demostración consulta el motor de autorización y no inicia modelos, contenedores ni conexiones externas. Esta previsualización no constituye una frontera de aislamiento ni está disponible como servicio para clientes.</p></div>
+      <div><b>Solo se usan datos y herramientas sintéticos.</b><p>Las fixtures deterministas no inician modelos ni conexiones externas. La demostración Qwen, cuando está configurada, envía únicamente una tarea sintética al proveedor; Guardian conserva la autorización y la revisión humana. Esta previsualización no constituye una frontera de aislamiento ni está disponible como servicio para clientes.</p></div>
     </div>
 
     <AiEvaluationSectionNav activeSection={activeSection} onSelect={setActiveSection} />
@@ -1131,6 +1232,73 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
             setLabError('');
           }}
        />
+        <section className="ai-qwen-demo" data-testid="qwen-refund-demo" aria-labelledby="qwen-demo-title">
+          <div className="ai-qwen-demo-topline">
+            <div className="ai-qwen-orbit" aria-hidden="true"><Sparkles size={19} /></div>
+            <div className="ai-qwen-demo-heading">
+              <span className="panel-kicker">PROPUESTA DE PROVEEDOR · DATOS SINTÉTICOS</span>
+              <h2 id="qwen-demo-title">Qwen · reembolso de laboratorio</h2>
+              <p>Una inferencia externa, cuando está configurada, solo puede proponer el caso fijo. Guardian evalúa la propuesta; una aprobación humana independiente sigue siendo necesaria.</p>
+            </div>
+            <span className={`ai-qwen-status ${qwenProviderStatus.data?.status === 'configured_not_tested' ? 'is-configured' : ''}`}>
+              <i aria-hidden="true" />{qwenProviderStatus.isLoading ? 'Consultando estado' : qwenStatusLabel}
+            </span>
+          </div>
+          <div className="ai-qwen-demo-body">
+            <div className="ai-qwen-case">
+              <span className="ai-qwen-step">CASO FIJO · SIMULACIÓN</span>
+              <strong>Solicitud de reembolso sintético</strong>
+              <p>Importe e identificadores son ficticios. No se contactan sistemas de pagos ni se modifican cuentas reales.</p>
+              <div className="ai-qwen-sample-amount"><span>Importe de muestra</span><b>€5,00</b><small>SINTÉTICO</small></div>
+            </div>
+            <div className="ai-qwen-controls">
+              <div className="ai-qwen-connection-note">
+                {qwenProviderStatus.isLoading
+                  ? <div className="ai-qwen-skeleton" role="status" aria-label="Cargando estado del proveedor" />
+                  : qwenProviderStatus.isError
+                    ? <WorkspaceQueryError
+                        error={qwenProviderStatus.error}
+                        onRetry={() => void qwenProviderStatus.refetch()}
+                        isRetrying={qwenProviderStatus.isFetching}
+                        compact
+                        testId="qwen-provider-status-error"
+                        buttonTestId="button-retry-qwen-provider-status"
+                      />
+                    : qwenProviderStatus.data?.status === 'configured_not_tested'
+                      ? <p><ShieldCheck size={15} /> El servidor declara una configuración presente. <b>No se ha probado la conectividad con Qwen.</b> La inferencia solo se confirma si la respuesta de esta demostración la registra.</p>
+                      : qwenProviderStatus.data?.status === 'invalid_configuration'
+                        ? <p><WifiOff size={15} /> El servidor informa una configuración no válida. No se muestran valores ni detalles de configuración.</p>
+                        : <p><LockKeyhole size={15} /> El proveedor no está configurado. La ruta de fixtures deterministas sigue disponible en Aprobaciones.</p>}
+                {!qwenProviderStatus.isLoading && !qwenProviderStatus.isError && !!qwenProviderStatus.data?.missing.length && (
+                  <small>Requisitos no disponibles: {qwenProviderStatus.data.missing.map((item) => qwenMissingLabels[item] ?? 'requisito de configuración').join(', ')}.</small>
+                )}
+              </div>
+              <Button
+                onClick={() => void requestQwenSyntheticRefund()}
+                disabled={!canRun || qwenProviderStatus.data?.status !== 'configured_not_tested' || createSyntheticRefund.isPending}
+                data-testid="button-run-qwen-refund-proposal"
+              >
+                {createSyntheticRefund.isPending ? <Activity className="spin" size={15} /> : <Sparkles size={15} />}
+                {createSyntheticRefund.isPending ? 'Solicitando propuesta…' : 'Probar propuesta de Qwen'}
+              </Button>
+              {!canRun && <small>Solo owner/admin puede iniciar esta demostración.</small>}
+              <small className="ai-qwen-no-secrets">El estado de configuración no verifica disponibilidad, autenticación ni respuesta del proveedor.</small>
+            </div>
+          </div>
+          {qwenProposalMessage && <div className="ai-qwen-result" role="status" data-testid="qwen-proposal-result">
+            <span className="ai-qwen-result-mark"><ShieldCheck size={16} /></span>
+            <div>
+              <b>{qwenProposal?.providerInference?.status === 'real_inference_completed' ? 'Inferencia externa confirmada en esta solicitud' : 'Resultado de la política'}</b>
+              <p>{qwenProposalMessage}</p>
+              <div className="ai-qwen-result-tags">
+                <span>{qwenProposal?.decision === 'require_approval' ? 'Pendiente de revisión independiente' : qwenProposal?.decision === 'deny' ? 'Denegada' : 'Permitida por política'}</span>
+                <span>{qwenProposal?.externalSideEffect === false ? 'Sin efectos externos' : 'Efectos externos no confirmados'}</span>
+              </div>
+              {qwenProposal?.decision === 'require_approval' && <small>La aceptación no ejecuta la propuesta. Debe decidirla otra persona elegible del espacio.</small>}
+            </div>
+          </div>}
+          {qwenProposalError && <div className="ai-qwen-error" role="alert" data-testid="qwen-proposal-error">{qwenProposalError}</div>}
+        </section>
         {canRun && <details className="ai-lab-advanced-details" data-testid="ai-lab-advanced-details">
           <summary>Evaluaciones técnicas y estado del worker</summary>
           <div className="ai-lab-advanced-content">

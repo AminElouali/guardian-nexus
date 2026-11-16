@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AiAssessmentApproval } from './aiAssessmentApproval';
+import type { QwenProviderInferenceSummary } from './qwenProviderInferenceSummary';
 import type { SyntheticRefundProposalResponseDecision } from './syntheticRefundProposalResponseDecision';
 import type { SyntheticRefundProposalResponseExecution } from './syntheticRefundProposalResponseExecution';
 import type { SyntheticRefundProposalResponseReasonCode } from './syntheticRefundProposalResponseReasonCode';
@@ -25,4 +26,5 @@ export interface SyntheticRefundProposalResponse {
   simulationResultSha256: string | null;
   idempotent: boolean;
   externalSideEffect: false;
+  providerInference?: QwenProviderInferenceSummary;
 }
