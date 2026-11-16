@@ -17,6 +17,7 @@ from typing import Any
 
 EVENT_DOMAIN = b"guardian-nexus:approval-ledger-event:v1\n"
 RECEIPT_DOMAIN = b"guardian-nexus:approval-receipt:v1\n"
+CHECKPOINT_DOMAIN = b"guardian-nexus:approval-ledger-checkpoint:v1\n"
 HASH_RE = re.compile(r"^[a-f0-9]{64}$")
 KEY_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 SIGNATURE_RE = re.compile(r"^[A-Za-z0-9_-]+$")
@@ -191,14 +192,63 @@ def _verify_signed(
     digest: Any,
     signature: Any,
     key_id: Any,
-    trusted_keys: dict[str, str],
+    trusted_keys: dict[str, Any],
     prefix: str,
+    signed_at: Any,
 ) -> str:
     if not isinstance(key_id, str) or not KEY_ID_RE.fullmatch(key_id):
         return "unknown_key"
-    public_pem = trusted_keys.get(key_id)
-    if not public_pem:
+    configured = trusted_keys.get(key_id)
+    if not configured:
         return "unknown_key"
+    if isinstance(configured, str):
+        # Legacy v1 trust maps remain valid without temporal bounds.
+        public_pem = configured
+    elif isinstance(configured, dict):
+        allowed = {
+            "publicKeyPem", "validFrom", "status", "validUntil", "revokedAt"
+        }
+        if (
+            set(configured) - allowed
+            or not {"publicKeyPem", "validFrom", "status"} <= set(configured)
+            or not isinstance(configured.get("publicKeyPem"), str)
+        ):
+            return "trusted_key_invalid"
+        valid_from = _timestamp(configured.get("validFrom"))
+        signed_time = _timestamp(signed_at)
+        valid_until_value = configured.get("validUntil")
+        revoked_at_value = configured.get("revokedAt")
+        valid_until = (
+            _timestamp(valid_until_value) if valid_until_value is not None else None
+        )
+        revoked_at = (
+            _timestamp(revoked_at_value) if revoked_at_value is not None else None
+        )
+        status = configured.get("status")
+        if (
+            valid_from is None
+            or signed_time is None
+            or status not in ("active", "retired", "revoked")
+            or (valid_until_value is not None and valid_until is None)
+            or (revoked_at_value is not None and revoked_at is None)
+            or (status == "retired" and valid_until is None)
+            or (status == "revoked" and revoked_at is None)
+            or (status != "revoked" and revoked_at is not None)
+            or (valid_until is not None and valid_until <= valid_from)
+            or (revoked_at is not None and revoked_at < valid_from)
+        ):
+            return "trusted_key_invalid"
+        if signed_time < valid_from or (
+            valid_until is not None and signed_time >= valid_until
+        ):
+            return "key_not_valid_at_signing_time"
+        if status == "revoked" and signed_time >= revoked_at:
+            return "key_revoked_at_signing_time"
+        public_pem = configured["publicKeyPem"]
+    else:
+        return "trusted_key_invalid"
+    if not public_pem.startswith("-----BEGIN PUBLIC KEY-----") or "PRIVATE KEY" in public_pem:
+        return "trusted_key_invalid"
     if not isinstance(digest, str) or not HASH_RE.fullmatch(digest):
         return f"{prefix}_hash_mismatch"
     decoded = _decode_signature(signature)
@@ -256,7 +306,24 @@ def _is_receipt_payload(payload: Any) -> bool:
     )
 
 
-def verify_bundle(bundle: Any, trusted_keys: dict[str, str], verification_time: datetime) -> str:
+def _key_entries(trusted_keys: Any) -> dict[str, Any] | None:
+    if not isinstance(trusted_keys, dict):
+        return None
+    if "version" in trusted_keys or "keys" in trusted_keys:
+        if (
+            set(trusted_keys) != {"version", "keys"}
+            or trusted_keys.get("version") != 1
+            or not isinstance(trusted_keys.get("keys"), dict)
+        ):
+            return None
+        return trusted_keys["keys"]
+    return trusted_keys
+
+
+def verify_bundle(bundle: Any, trusted_keys: dict[str, Any], verification_time: datetime) -> str:
+    trusted_keys = _key_entries(trusted_keys)
+    if trusted_keys is None:
+        return "trusted_key_invalid"
     if (
         not isinstance(bundle, dict)
         or set(bundle) != {"version", "events", "receipts"}
@@ -288,6 +355,7 @@ def verify_bundle(bundle: Any, trusted_keys: dict[str, str], verification_time: 
             payload["keyId"],
             trusted_keys,
             "receipt",
+            payload["issuedAt"],
         )
         if result != "ok":
             return result
@@ -341,6 +409,7 @@ def verify_bundle(bundle: Any, trusted_keys: dict[str, str], verification_time: 
             event["keyId"],
             trusted_keys,
             "event",
+            event["occurredAt"],
         )
         if result != "ok":
             return result
@@ -393,6 +462,73 @@ def verify_bundle(bundle: Any, trusted_keys: dict[str, str], verification_time: 
     for receipt_id, signed in receipts.items():
         if receipt_id not in consumed and now >= _timestamp(signed["payload"]["expiresAt"]):
             return "receipt_expired"
+    return "ok"
+
+
+def verify_bundle_with_checkpoint(
+    bundle: Any,
+    ledger_trusted_keys: dict[str, Any],
+    verification_time: datetime,
+    signed_checkpoint: Any,
+    checkpoint_trusted_keys: dict[str, Any],
+) -> str:
+    result = verify_bundle(bundle, ledger_trusted_keys, verification_time)
+    if result != "ok":
+        return result
+    checkpoint_keys = _key_entries(checkpoint_trusted_keys)
+    if (
+        not isinstance(signed_checkpoint, dict)
+        or set(signed_checkpoint) != {"checkpoint", "checkpointSha256", "signature"}
+    ):
+        return "checkpoint_invalid"
+    checkpoint = signed_checkpoint["checkpoint"]
+    expected_fields = {
+        "version", "keyId", "workspaceId", "sequence", "headEventSha256", "issuedAt"
+    }
+    if (
+        not isinstance(checkpoint, dict)
+        or set(checkpoint) != expected_fields
+        or type(checkpoint.get("version")) is not int
+        or checkpoint.get("version") != 1
+        or not isinstance(checkpoint.get("keyId"), str)
+        or not KEY_ID_RE.fullmatch(checkpoint["keyId"])
+        or not isinstance(checkpoint.get("workspaceId"), str)
+        or not checkpoint["workspaceId"]
+        or type(checkpoint.get("sequence")) is not int
+        or checkpoint["sequence"] < 1
+        or not isinstance(checkpoint.get("headEventSha256"), str)
+        or not HASH_RE.fullmatch(checkpoint["headEventSha256"])
+        or _timestamp(checkpoint.get("issuedAt")) is None
+        or _timestamp(checkpoint["issuedAt"]) > verification_time
+        or not isinstance(signed_checkpoint.get("checkpointSha256"), str)
+        or not isinstance(signed_checkpoint.get("signature"), str)
+        or checkpoint_keys is None
+    ):
+        return "checkpoint_invalid"
+    result = _verify_signed(
+        CHECKPOINT_DOMAIN,
+        checkpoint,
+        signed_checkpoint["checkpointSha256"],
+        signed_checkpoint["signature"],
+        checkpoint["keyId"],
+        checkpoint_keys,
+        "checkpoint",
+        checkpoint["issuedAt"],
+    )
+    if result != "ok":
+        return result
+    events = bundle["events"]
+    if not events:
+        return "checkpoint_head_mismatch"
+    head = events[-1]
+    if (
+        len(events) != checkpoint["sequence"]
+        or head["event"]["sequence"] != checkpoint["sequence"]
+        or head["event"]["workspaceId"] != checkpoint["workspaceId"]
+        or head["eventSha256"] != checkpoint["headEventSha256"]
+        or checkpoint["issuedAt"] < head["event"]["occurredAt"]
+    ):
+        return "checkpoint_head_mismatch"
     return "ok"
 
 

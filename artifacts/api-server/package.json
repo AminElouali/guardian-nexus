@@ -11,6 +11,7 @@
     "test": "tsx --test src/security.test.ts src/connector-utils.test.ts src/ai-security.test.ts src/lib/ai-assessment-qwen-evidence.test.ts src/lib/assessment-broker-grant.test.ts src/lib/assessment-worker-mode.test.ts src/lib/ai-assessment-sandbox.test.ts src/lib/guardian-agent-action-adapter.test.ts src/lib/assessment-container-control.test.ts src/lib/assessment-output-limit.test.ts src/lib/policy-lab-preview.test.ts src/middlewares/ai-assessment-json.test.ts",
     "test:approval-ledger-phase3": "tsx --test src/lib/approval-ledger-crypto.test.ts src/lib/approval-ledger-export.test.ts src/scripts/verify-approval-ledger-bundle.test.ts src/lib/synthetic-refund-gateway.test.ts",
     "verify:approval-ledger-bundle": "tsx src/scripts/verify-approval-ledger-bundle.ts",
+    "create:approval-ledger-checkpoint": "tsx src/scripts/create-approval-ledger-checkpoint.ts",
     "test:assessment-container-integration": "NODE_ENV=development tsx --test src/lib/assessment-container-hardening.integration.test.ts",
     "test:ai-assessment-synthetic-e2e": "NODE_ENV=development tsx --test src/ai-assessment-synthetic-approval-e2e.test.ts",
     "test:ai-assessment-e2e": "node ./scripts/run-ai-assessment-e2e.mjs"

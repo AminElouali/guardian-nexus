@@ -76,6 +76,145 @@ class ApprovalLedgerVerifierTests(unittest.TestCase):
         passed, failed = verifier.verify_vector_file(VECTORS_PATH)
         self.assertEqual((passed, failed), (2, 0))
 
+    def test_dated_key_registry_verifies_historical_signatures_after_rotation(self) -> None:
+        registry = {
+            "version": 1,
+            "keys": {
+                "fixture-key-1": {
+                    "publicKeyPem": self.keys["fixture-key-1"],
+                    "validFrom": "2026-11-16T09:00:00.000Z",
+                    "validUntil": "2026-11-16T11:00:00.000Z",
+                    "status": "retired",
+                },
+                "future-key": {
+                    "publicKeyPem": self.document["untrustedPublicKeys"]["fixture-key-2"],
+                    "validFrom": "2026-11-16T11:00:00.000Z",
+                    "status": "active",
+                },
+            },
+        }
+        self.assertEqual(
+            verifier.verify_bundle(self.document["bundle"], registry, self.now),
+            "ok",
+        )
+
+    def test_dated_key_registry_rejects_out_of_window_and_revoked_signatures(self) -> None:
+        for record, expected in (
+            (
+                {
+                    "publicKeyPem": self.keys["fixture-key-1"],
+                    "validFrom": "2026-11-16T10:00:01.000Z",
+                    "status": "active",
+                },
+                "key_not_valid_at_signing_time",
+            ),
+            (
+                {
+                    "publicKeyPem": self.keys["fixture-key-1"],
+                    "validFrom": "2026-11-16T09:00:00.000Z",
+                    "status": "revoked",
+                    "revokedAt": "2026-11-16T10:00:30.000Z",
+                },
+                "key_revoked_at_signing_time",
+            ),
+        ):
+            registry = {"version": 1, "keys": {"fixture-key-1": record}}
+            self.assertEqual(
+                verifier.verify_bundle(self.document["bundle"], registry, self.now),
+                expected,
+            )
+
+    def test_signed_checkpoint_detects_tail_truncation_with_separate_trust(self) -> None:
+        bundle = copy.deepcopy(self.document["bundle"])
+        head = bundle["events"][-1]
+        checkpoint = {
+            "version": 1,
+            "keyId": "checkpoint-fixture-key",
+            "workspaceId": head["event"]["workspaceId"],
+            "sequence": head["event"]["sequence"],
+            "headEventSha256": head["eventSha256"],
+            "issuedAt": self.document["verificationTime"],
+        }
+        digest, signature = sign_for_test(
+            verifier.CHECKPOINT_DOMAIN,
+            checkpoint,
+            OTHER_TEST_SEED,
+        )
+        signed_checkpoint = {
+            "checkpoint": checkpoint,
+            "checkpointSha256": digest,
+            "signature": signature,
+        }
+        checkpoint_keys = {
+            "checkpoint-fixture-key":
+                self.document["untrustedPublicKeys"]["fixture-key-2"]
+        }
+        self.assertEqual(
+            verifier.verify_bundle_with_checkpoint(
+                bundle,
+                self.keys,
+                self.now,
+                signed_checkpoint,
+                checkpoint_keys,
+            ),
+            "ok",
+        )
+
+        bundle["events"].pop()
+        self.assertEqual(
+            verifier.verify_bundle_with_checkpoint(
+                bundle,
+                self.keys,
+                self.now,
+                signed_checkpoint,
+                checkpoint_keys,
+            ),
+            "checkpoint_head_mismatch",
+        )
+
+    def test_checkpoint_signature_and_key_are_checked_separately(self) -> None:
+        bundle = copy.deepcopy(self.document["bundle"])
+        head = bundle["events"][-1]
+        checkpoint = {
+            "version": 1,
+            "keyId": "checkpoint-fixture-key",
+            "workspaceId": head["event"]["workspaceId"],
+            "sequence": head["event"]["sequence"],
+            "headEventSha256": head["eventSha256"],
+            "issuedAt": self.document["verificationTime"],
+        }
+        digest, signature = sign_for_test(
+            verifier.CHECKPOINT_DOMAIN, checkpoint, OTHER_TEST_SEED
+        )
+        signed_checkpoint = {
+            "checkpoint": checkpoint,
+            "checkpointSha256": digest,
+            "signature": signature,
+        }
+        self.assertEqual(
+            verifier.verify_bundle_with_checkpoint(
+                bundle,
+                self.keys,
+                self.now,
+                signed_checkpoint,
+                self.keys,
+            ),
+            "unknown_key",
+        )
+        self.assertEqual(
+            verifier.verify_bundle_with_checkpoint(
+                bundle,
+                self.keys,
+                self.now,
+                {**signed_checkpoint, "signature": "A" * 86},
+                {
+                    "checkpoint-fixture-key":
+                        self.document["untrustedPublicKeys"]["fixture-key-2"]
+                },
+            ),
+            "checkpoint_signature_invalid",
+        )
+
     def test_python_canonicalization_matches_shared_vector(self) -> None:
         vector = self.document["canonicalizationVector"]
         self.assertEqual(

@@ -12,14 +12,19 @@ import {
   APPROVAL_RECEIPT_DOMAIN,
   canonicalizeLedgerValue,
   signApprovalLedgerEventV1,
+  signApprovalLedgerCheckpointV1,
   signApprovalReceiptV1,
   verifyApprovalReceiptV1,
+  verifyApprovalLedgerCheckpointV1,
+  verifyApprovalLedgerBundleWithCheckpointV1,
   verifyApprovalLedgerBundleV1,
   verifyApprovalLedgerEventChainV1,
   type ApprovalLedgerBundleV1,
   type ApprovalLedgerEventV1,
+  type ApprovalLedgerCheckpointV1,
   type ApprovalReceiptPayloadV1,
   type SignedApprovalLedgerEventV1,
+  type TrustedApprovalLedgerPublicKey,
 } from "./approval-ledger-crypto.js";
 
 type VectorFile = {
@@ -206,6 +211,312 @@ test("event-chain verifier rejects reordering, missing events, and invalid signa
   assert.deepEqual(
     verifyApprovalLedgerEventChainV1(badSignature, trustedKeysA),
     { valid: false, code: "event_signature_invalid" },
+  );
+});
+
+test("bundle verifier accepts historical signatures under a multi-key dated registry", () => {
+  const receipt = signApprovalReceiptV1(
+    createTestReceipt({ keyId: "fixture-key-2" }),
+    testPrivateKeyB,
+  );
+  const datedKeys = new Map<string, TrustedApprovalLedgerPublicKey>([
+    [
+      TEST_KEY_ID,
+      {
+        publicKey: testPublicKeyA,
+        validFrom: "2026-11-16T09:00:00.000Z",
+        validUntil: "2026-11-16T11:00:00.000Z",
+        status: "retired",
+      },
+    ],
+    [
+      "fixture-key-2",
+      {
+        publicKey: createPublicKey(testPrivateKeyB),
+        validFrom: "2026-11-16T10:00:00.000Z",
+        status: "active",
+      },
+    ],
+  ]);
+  assert.deepEqual(
+    verifyApprovalReceiptV1(
+      receipt,
+      datedKeys,
+      receiptExpectation,
+      new Date("2026-11-16T10:01:00.000Z"),
+    ),
+    { valid: true, code: "ok" },
+  );
+});
+
+test("bundle verifier supports an event chain spanning a planned key rotation", () => {
+  const signedReceipt = signApprovalReceiptV1(
+    createTestReceipt(),
+    testPrivateKeyA,
+  );
+  const approved = signApprovalLedgerEventV1({
+    version: 1,
+    keyId: TEST_KEY_ID,
+    workspaceId: signedReceipt.payload.workspaceId,
+    sequence: 1,
+    eventId: "rotation-approved",
+    eventType: "approval.approved",
+    approvalId: signedReceipt.payload.approvalId,
+    previousEventSha256: "",
+    occurredAt: signedReceipt.payload.issuedAt,
+    payload: {
+      receiptId: signedReceipt.payload.receiptId,
+      receiptSha256: signedReceipt.payloadSha256,
+    },
+  }, testPrivateKeyA);
+  const consumedEvent: ApprovalLedgerEventV1 = {
+    version: 1,
+    keyId: "fixture-key-2",
+    workspaceId: signedReceipt.payload.workspaceId,
+    sequence: 2,
+    eventId: "rotation-consumed",
+    eventType: "approval.receipt_consumed",
+    approvalId: signedReceipt.payload.approvalId,
+    previousEventSha256: approved.eventSha256,
+    occurredAt: "2026-11-16T10:01:00.000Z",
+    payload: {
+      receiptId: signedReceipt.payload.receiptId,
+      receiptSha256: signedReceipt.payloadSha256,
+      nonce: signedReceipt.payload.nonce,
+      consumedAt: "2026-11-16T10:01:00.000Z",
+    },
+  };
+  const consumed = signApprovalLedgerEventV1(
+    consumedEvent,
+    testPrivateKeyB,
+  );
+  const registry = new Map<string, TrustedApprovalLedgerPublicKey>([
+    [
+      TEST_KEY_ID,
+      {
+        publicKey: testPublicKeyA,
+        validFrom: "2026-11-16T09:00:00.000Z",
+        validUntil: "2026-11-16T10:00:30.000Z",
+        status: "retired",
+      },
+    ],
+    [
+      "fixture-key-2",
+      {
+        publicKey: createPublicKey(testPrivateKeyB),
+        validFrom: "2026-11-16T10:00:30.000Z",
+        status: "active",
+      },
+    ],
+  ]);
+  assert.deepEqual(
+    verifyApprovalLedgerBundleV1(
+      {
+        version: 1,
+        receipts: [signedReceipt],
+        events: [approved, consumed],
+      },
+      registry,
+      new Date("2026-11-16T10:02:00.000Z"),
+    ),
+    { valid: true, code: "ok" },
+  );
+});
+
+test("dated key validity and revocation are evaluated at signature time", () => {
+  const receipt = signApprovalReceiptV1(
+    createTestReceipt(),
+    testPrivateKeyA,
+  );
+  const tooNew = new Map<string, TrustedApprovalLedgerPublicKey>([
+    [
+      TEST_KEY_ID,
+      {
+        publicKey: testPublicKeyA,
+        validFrom: "2026-11-16T10:00:01.000Z",
+        status: "active",
+      },
+    ],
+  ]);
+  assert.deepEqual(
+    verifyApprovalReceiptV1(
+      receipt,
+      tooNew,
+      receiptExpectation,
+      new Date("2026-11-16T10:01:00.000Z"),
+    ),
+    { valid: false, code: "key_not_valid_at_signing_time" },
+  );
+
+  const revokedAfterSignature = new Map<string, TrustedApprovalLedgerPublicKey>([
+    [
+      TEST_KEY_ID,
+      {
+        publicKey: testPublicKeyA,
+        validFrom: "2026-11-16T09:00:00.000Z",
+        status: "revoked",
+        revokedAt: "2026-11-16T10:00:30.000Z",
+      },
+    ],
+  ]);
+  assert.deepEqual(
+    verifyApprovalReceiptV1(
+      receipt,
+      revokedAfterSignature,
+      receiptExpectation,
+      new Date("2026-11-16T10:01:00.000Z"),
+    ),
+    { valid: true, code: "ok" },
+  );
+
+  const revokedBeforeSignature = new Map<string, TrustedApprovalLedgerPublicKey>([
+    [
+      TEST_KEY_ID,
+      {
+        publicKey: testPublicKeyA,
+        validFrom: "2026-11-16T09:00:00.000Z",
+        status: "revoked",
+        revokedAt: "2026-11-16T09:59:59.000Z",
+      },
+    ],
+  ]);
+  assert.deepEqual(
+    verifyApprovalReceiptV1(
+      receipt,
+      revokedBeforeSignature,
+      receiptExpectation,
+      new Date("2026-11-16T10:01:00.000Z"),
+    ),
+    { valid: false, code: "key_revoked_at_signing_time" },
+  );
+});
+
+function createSignedCheckpoint(
+  overrides: Partial<ApprovalLedgerCheckpointV1> = {},
+  signer = testPrivateKeyB,
+) {
+  const lastEvent = vectors.bundle.events.at(-1)!;
+  return signApprovalLedgerCheckpointV1({
+    version: 1,
+    keyId: "checkpoint-fixture-key",
+    workspaceId: lastEvent.event.workspaceId,
+    sequence: lastEvent.event.sequence,
+    headEventSha256: lastEvent.eventSha256,
+    issuedAt: "2026-11-16T10:02:00.000Z",
+    ...overrides,
+  }, signer);
+}
+
+const checkpointKeys = new Map([
+  ["checkpoint-fixture-key", createPublicKey(testPrivateKeyB)],
+]);
+
+test("separately trusted signed checkpoint verifies the exact v1 bundle head", () => {
+  const checkpoint = createSignedCheckpoint();
+  assert.deepEqual(
+    verifyApprovalLedgerCheckpointV1(checkpoint, checkpointKeys),
+    { valid: true, code: "ok" },
+  );
+  assert.deepEqual(
+    verifyApprovalLedgerBundleWithCheckpointV1(
+      vectors.bundle,
+      trustedKeysA,
+      verificationTime,
+      checkpoint,
+      checkpointKeys,
+    ),
+    { valid: true, code: "ok" },
+  );
+});
+
+test("head checkpoint detects truncated, extended, reordered, or different-workspace exports", () => {
+  const checkpoint = createSignedCheckpoint();
+  const truncated = structuredClone(vectors.bundle);
+  (truncated.events as SignedApprovalLedgerEventV1[]).pop();
+  assert.deepEqual(
+    verifyApprovalLedgerBundleWithCheckpointV1(
+      truncated,
+      trustedKeysA,
+      verificationTime,
+      checkpoint,
+      checkpointKeys,
+    ),
+    { valid: false, code: "checkpoint_head_mismatch" },
+  );
+
+  const mismatchedWorkspace = createSignedCheckpoint({
+    workspaceId: "another-workspace",
+  });
+  assert.deepEqual(
+    verifyApprovalLedgerBundleWithCheckpointV1(
+      vectors.bundle,
+      trustedKeysA,
+      verificationTime,
+      mismatchedWorkspace,
+      checkpointKeys,
+    ),
+    { valid: false, code: "checkpoint_head_mismatch" },
+  );
+
+  const wrongHead = createSignedCheckpoint({
+    headEventSha256: "f".repeat(64),
+  });
+  assert.deepEqual(
+    verifyApprovalLedgerBundleWithCheckpointV1(
+      vectors.bundle,
+      trustedKeysA,
+      verificationTime,
+      wrongHead,
+      checkpointKeys,
+    ),
+    { valid: false, code: "checkpoint_head_mismatch" },
+  );
+
+  const wrongSequence = createSignedCheckpoint({ sequence: 1 });
+  assert.deepEqual(
+    verifyApprovalLedgerBundleWithCheckpointV1(
+      vectors.bundle,
+      trustedKeysA,
+      verificationTime,
+      wrongSequence,
+      checkpointKeys,
+    ),
+    { valid: false, code: "checkpoint_head_mismatch" },
+  );
+
+  const futureCheckpoint = createSignedCheckpoint({
+    issuedAt: "2026-11-16T10:03:00.000Z",
+  });
+  assert.deepEqual(
+    verifyApprovalLedgerBundleWithCheckpointV1(
+      vectors.bundle,
+      trustedKeysA,
+      verificationTime,
+      futureCheckpoint,
+      checkpointKeys,
+    ),
+    { valid: false, code: "checkpoint_invalid" },
+  );
+});
+
+test("checkpoint verification rejects bad signature, unknown key, and untrusted checkpoint signer", () => {
+  const checkpoint = createSignedCheckpoint();
+  const invalidSignature = {
+    ...checkpoint,
+    signature: `${checkpoint.signature[0] === "A" ? "B" : "A"}${checkpoint.signature.slice(1)}`,
+  };
+  assert.deepEqual(
+    verifyApprovalLedgerCheckpointV1(invalidSignature, checkpointKeys),
+    { valid: false, code: "checkpoint_signature_invalid" },
+  );
+  assert.deepEqual(
+    verifyApprovalLedgerCheckpointV1(checkpoint, trustedKeysA),
+    { valid: false, code: "unknown_key" },
+  );
+  const alteredKeyId = createSignedCheckpoint({ keyId: "unknown-checkpoint-key" });
+  assert.deepEqual(
+    verifyApprovalLedgerCheckpointV1(alteredKeyId, checkpointKeys),
+    { valid: false, code: "unknown_key" },
   );
 });
 

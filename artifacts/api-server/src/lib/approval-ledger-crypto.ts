@@ -81,12 +81,50 @@ export type ApprovalLedgerBundleV1 = {
   receipts: readonly SignedApprovalReceiptV1[];
 };
 
+export const APPROVAL_LEDGER_CHECKPOINT_DOMAIN =
+  "guardian-nexus:approval-ledger-checkpoint:v1\n";
+
+export type ApprovalLedgerCheckpointV1 = {
+  version: 1;
+  keyId: string;
+  workspaceId: string;
+  sequence: number;
+  headEventSha256: string;
+  issuedAt: string;
+};
+
+export type SignedApprovalLedgerCheckpointV1 = {
+  checkpoint: ApprovalLedgerCheckpointV1;
+  checkpointSha256: string;
+  signature: string;
+};
+
+export type TrustedApprovalLedgerPublicKey = {
+  publicKey: KeyObject;
+  validFrom: string;
+  status: "active" | "retired" | "revoked";
+  validUntil?: string;
+  revokedAt?: string;
+};
+
+/**
+ * A bare KeyObject is the legacy v1 trust-store form and remains valid for
+ * historical verification. New registries should use dated key records.
+ */
+export type ApprovalLedgerTrustedKeys = ReadonlyMap<
+  string,
+  KeyObject | TrustedApprovalLedgerPublicKey
+>;
+
 export type LedgerVerificationCode =
   | "ok"
   | "invalid_bundle"
   | "unsupported_version"
   | "canonicalization_invalid"
   | "unknown_key"
+  | "trusted_key_invalid"
+  | "key_not_valid_at_signing_time"
+  | "key_revoked_at_signing_time"
   | "event_order_invalid"
   | "event_hash_mismatch"
   | "event_signature_invalid"
@@ -97,7 +135,11 @@ export type LedgerVerificationCode =
   | "receipt_nonce_reused"
   | "receipt_replay"
   | "receipt_reference_mismatch"
-  | "unsupported_event";
+  | "unsupported_event"
+  | "checkpoint_invalid"
+  | "checkpoint_hash_mismatch"
+  | "checkpoint_signature_invalid"
+  | "checkpoint_head_mismatch";
 
 export type LedgerVerificationResult =
   | { valid: true; code: "ok" }
@@ -225,6 +267,24 @@ export function signApprovalLedgerEventV1(
   };
 }
 
+export function signApprovalLedgerCheckpointV1(
+  checkpoint: ApprovalLedgerCheckpointV1,
+  privateKey: KeyObject,
+): SignedApprovalLedgerCheckpointV1 {
+  if (
+    privateKey.asymmetricKeyType !== "ed25519" ||
+    !isLedgerCheckpoint(checkpoint)
+  ) {
+    throw new TypeError("checkpoint_signing_input_invalid");
+  }
+  const bytes = signingBytes(APPROVAL_LEDGER_CHECKPOINT_DOMAIN, checkpoint);
+  return {
+    checkpoint,
+    checkpointSha256: sha256(bytes),
+    signature: encodeSignature(cryptoSign(null, bytes, privateKey)),
+  };
+}
+
 function decodeSignature(value: unknown): Buffer | null {
   if (typeof value !== "string" || !BASE64URL.test(value)) return null;
   const decoded = Buffer.from(value, "base64url");
@@ -306,10 +366,126 @@ function isLedgerEvent(value: unknown): value is ApprovalLedgerEventV1 {
 
 function getTrustedKey(
   keyId: unknown,
-  trustedPublicKeys: ReadonlyMap<string, KeyObject>,
-): KeyObject | null {
-  if (!isKeyId(keyId)) return null;
-  return trustedPublicKeys.get(keyId) ?? null;
+  trustedPublicKeys: ApprovalLedgerTrustedKeys,
+  signedAt: unknown,
+): { key: KeyObject } | {
+  error:
+    | "unknown_key"
+    | "trusted_key_invalid"
+    | "key_not_valid_at_signing_time"
+    | "key_revoked_at_signing_time";
+} {
+  if (!isKeyId(keyId)) return { error: "unknown_key" };
+  const configured = trustedPublicKeys.get(keyId);
+  if (!configured) return { error: "unknown_key" };
+
+  // Legacy v1 registries map key IDs directly to KeyObjects. They retain the
+  // historical unbounded validity semantics for backwards compatibility.
+  if (
+    typeof configured === "object" &&
+    configured !== null &&
+    "asymmetricKeyType" in configured
+  ) {
+    return configured.asymmetricKeyType === "ed25519" &&
+        configured.type === "public"
+      ? { key: configured }
+      : { error: "trusted_key_invalid" };
+  }
+
+  if (
+    !configured ||
+    typeof configured !== "object" ||
+    !hasExactKeys(configured as unknown as Record<string, unknown>, [
+      "publicKey",
+      "validFrom",
+      "status",
+      ...("validUntil" in configured ? ["validUntil"] : []),
+      ...("revokedAt" in configured ? ["revokedAt"] : []),
+    ])
+  ) {
+    return { error: "trusted_key_invalid" };
+  }
+  const record = configured as TrustedApprovalLedgerPublicKey;
+  if (
+    !record.publicKey ||
+    record.publicKey.asymmetricKeyType !== "ed25519" ||
+    record.publicKey.type !== "public" ||
+    !isCanonicalTimestamp(record.validFrom) ||
+    !["active", "retired", "revoked"].includes(record.status) ||
+    (record.validUntil !== undefined &&
+      !isCanonicalTimestamp(record.validUntil)) ||
+    (record.revokedAt !== undefined &&
+      !isCanonicalTimestamp(record.revokedAt)) ||
+    (record.status === "retired" && record.validUntil === undefined) ||
+    (record.status === "revoked" && record.revokedAt === undefined) ||
+    (record.status !== "revoked" && record.revokedAt !== undefined) ||
+    (record.validUntil !== undefined &&
+      Date.parse(record.validUntil) <= Date.parse(record.validFrom)) ||
+    (record.revokedAt !== undefined &&
+      Date.parse(record.revokedAt) < Date.parse(record.validFrom)) ||
+    !isCanonicalTimestamp(signedAt)
+  ) {
+    return { error: "trusted_key_invalid" };
+  }
+  const signingTime = Date.parse(signedAt);
+  if (
+    signingTime < Date.parse(record.validFrom) ||
+    (record.validUntil !== undefined &&
+      signingTime >= Date.parse(record.validUntil))
+  ) {
+    return { error: "key_not_valid_at_signing_time" };
+  }
+  if (
+    record.status === "revoked" &&
+    signingTime >= Date.parse(record.revokedAt!)
+  ) {
+    return { error: "key_revoked_at_signing_time" };
+  }
+  return { key: record.publicKey };
+}
+
+function isLedgerCheckpoint(value: unknown): value is ApprovalLedgerCheckpointV1 {
+  if (!value || typeof value !== "object" || Array.isArray(value) ||
+      !isPlainRecord(value)) return false;
+  const checkpoint = value as Record<string, unknown>;
+  return hasExactKeys(checkpoint, [
+    "version",
+    "keyId",
+    "workspaceId",
+    "sequence",
+    "headEventSha256",
+    "issuedAt",
+  ]) &&
+    checkpoint.version === 1 &&
+    isKeyId(checkpoint.keyId) &&
+    typeof checkpoint.workspaceId === "string" &&
+    checkpoint.workspaceId.length > 0 &&
+    Number.isSafeInteger(checkpoint.sequence) &&
+    (checkpoint.sequence as number) > 0 &&
+    isHash(checkpoint.headEventSha256) &&
+    isCanonicalTimestamp(checkpoint.issuedAt);
+}
+
+function isSignedCheckpoint(
+  value: unknown,
+): value is SignedApprovalLedgerCheckpointV1 {
+  if (!value || typeof value !== "object" || Array.isArray(value) ||
+      !isPlainRecord(value)) return false;
+  const signed = value as Record<string, unknown>;
+  return hasExactKeys(signed, [
+    "checkpoint",
+    "checkpointSha256",
+    "signature",
+  ]) &&
+    isLedgerCheckpoint(signed.checkpoint) &&
+    isHash(signed.checkpointSha256) &&
+    typeof signed.signature === "string";
+}
+
+function trustedKeyError(
+  resolution: Exclude<ReturnType<typeof getTrustedKey>, { key: KeyObject }>,
+): LedgerVerificationResult {
+  return fail(resolution.error);
 }
 
 function verifySignedValue(
@@ -432,7 +608,7 @@ function payloadString(
  */
 export function verifyApprovalReceiptV1(
   signedReceipt: unknown,
-  trustedPublicKeys: ReadonlyMap<string, KeyObject>,
+  trustedPublicKeys: ApprovalLedgerTrustedKeys,
   expected: ApprovalReceiptV1Expectation,
   verificationTime: Date,
   approvedEvent?: SignedApprovalLedgerEventV1,
@@ -441,15 +617,19 @@ export function verifyApprovalReceiptV1(
   if (!isSignedReceipt(signedReceipt)) return fail("receipt_invalid");
 
   const receipt = signedReceipt.payload;
-  const receiptKey = getTrustedKey(receipt.keyId, trustedPublicKeys);
-  if (!receiptKey) return fail("unknown_key");
+  const receiptKey = getTrustedKey(
+    receipt.keyId,
+    trustedPublicKeys,
+    receipt.issuedAt,
+  );
+  if ("error" in receiptKey) return trustedKeyError(receiptKey);
   const receiptSignature = resultForSignature(
     verifySignedValue(
       APPROVAL_RECEIPT_DOMAIN,
       receipt,
       signedReceipt.payloadSha256,
       signedReceipt.signature,
-      receiptKey,
+      receiptKey.key,
     ),
     "receipt",
   );
@@ -482,15 +662,19 @@ export function verifyApprovalReceiptV1(
       return fail("unsupported_event");
     }
     const event = approvedEvent.event;
-    const eventKey = getTrustedKey(event.keyId, trustedPublicKeys);
-    if (!eventKey) return fail("unknown_key");
+    const eventKey = getTrustedKey(
+      event.keyId,
+      trustedPublicKeys,
+      event.occurredAt,
+    );
+    if ("error" in eventKey) return trustedKeyError(eventKey);
     const eventSignature = resultForSignature(
       verifySignedValue(
         APPROVAL_LEDGER_EVENT_DOMAIN,
         event,
         approvedEvent.eventSha256,
         approvedEvent.signature,
-        eventKey,
+        eventKey.key,
       ),
       "event",
     );
@@ -518,7 +702,7 @@ export function verifyApprovalReceiptV1(
  */
 export function verifyApprovalLedgerEventChainV1(
   events: readonly SignedApprovalLedgerEventV1[],
-  trustedPublicKeys: ReadonlyMap<string, KeyObject>,
+  trustedPublicKeys: ApprovalLedgerTrustedKeys,
 ): LedgerVerificationResult {
   if (!Array.isArray(events)) return fail("invalid_bundle");
 
@@ -546,15 +730,19 @@ export function verifyApprovalLedgerEventChainV1(
     workspaceId = event.workspaceId;
     eventIds.add(event.eventId);
 
-    const key = getTrustedKey(event.keyId, trustedPublicKeys);
-    if (!key) return fail("unknown_key");
+    const key = getTrustedKey(
+      event.keyId,
+      trustedPublicKeys,
+      event.occurredAt,
+    );
+    if ("error" in key) return trustedKeyError(key);
     const signatureResult = resultForSignature(
       verifySignedValue(
         APPROVAL_LEDGER_EVENT_DOMAIN,
         event,
         signedEvent.eventSha256,
         signedEvent.signature,
-        key,
+        key.key,
       ),
       "event",
     );
@@ -593,7 +781,7 @@ export function verifyApprovalLedgerEventChainV1(
 
 export function verifyApprovalLedgerBundleV1(
   bundle: ApprovalLedgerBundleV1,
-  trustedPublicKeys: ReadonlyMap<string, KeyObject>,
+  trustedPublicKeys: ApprovalLedgerTrustedKeys,
   verificationTime: Date,
 ): LedgerVerificationResult {
   if (!bundle || typeof bundle !== "object" || bundle.version !== 1 ||
@@ -616,15 +804,19 @@ export function verifyApprovalLedgerBundleV1(
     }
     receiptIds.add(receipt.receiptId);
     receiptNonces.add(receipt.nonce);
-    const key = getTrustedKey(receipt.keyId, trustedPublicKeys);
-    if (!key) return fail("unknown_key");
+    const key = getTrustedKey(
+      receipt.keyId,
+      trustedPublicKeys,
+      receipt.issuedAt,
+    );
+    if ("error" in key) return trustedKeyError(key);
     const signatureResult = resultForSignature(
       verifySignedValue(
         APPROVAL_RECEIPT_DOMAIN,
         receipt,
         signedReceipt.payloadSha256,
         signedReceipt.signature,
-        key,
+        key.key,
       ),
       "receipt",
     );
@@ -649,15 +841,19 @@ export function verifyApprovalLedgerBundleV1(
     }
     workspaceId = event.workspaceId;
     eventIds.add(event.eventId);
-    const key = getTrustedKey(event.keyId, trustedPublicKeys);
-    if (!key) return fail("unknown_key");
+    const key = getTrustedKey(
+      event.keyId,
+      trustedPublicKeys,
+      event.occurredAt,
+    );
+    if ("error" in key) return trustedKeyError(key);
     const signatureResult = resultForSignature(
       verifySignedValue(
         APPROVAL_LEDGER_EVENT_DOMAIN,
         event,
         signedEvent.eventSha256,
         signedEvent.signature,
-        key,
+        key.key,
       ),
       "event",
     );
@@ -714,6 +910,76 @@ export function verifyApprovalLedgerBundleV1(
         verificationTime.getTime() >= Date.parse(signedReceipt.payload.expiresAt)) {
       return fail("receipt_expired");
     }
+  }
+  return { valid: true, code: "ok" };
+}
+
+export function verifyApprovalLedgerCheckpointV1(
+  signedCheckpoint: unknown,
+  checkpointTrustedKeys: ApprovalLedgerTrustedKeys,
+): LedgerVerificationResult {
+  if (!isSignedCheckpoint(signedCheckpoint)) return fail("checkpoint_invalid");
+  const { checkpoint } = signedCheckpoint;
+  const resolution = getTrustedKey(
+    checkpoint.keyId,
+    checkpointTrustedKeys,
+    checkpoint.issuedAt,
+  );
+  if ("error" in resolution) return trustedKeyError(resolution);
+  const result = verifySignedValue(
+    APPROVAL_LEDGER_CHECKPOINT_DOMAIN,
+    checkpoint,
+    signedCheckpoint.checkpointSha256,
+    signedCheckpoint.signature,
+    resolution.key,
+  );
+  if (result === "canonicalization_invalid") {
+    return fail("canonicalization_invalid");
+  }
+  if (result === "hash_mismatch") return fail("checkpoint_hash_mismatch");
+  if (result !== "ok") return fail("checkpoint_signature_invalid");
+  return { valid: true, code: "ok" };
+}
+
+/**
+ * Verify a v1 bundle against a separately supplied, independently trusted
+ * signed chain-head checkpoint. The bundle must end exactly at that head.
+ */
+export function verifyApprovalLedgerBundleWithCheckpointV1(
+  bundle: ApprovalLedgerBundleV1,
+  ledgerTrustedKeys: ApprovalLedgerTrustedKeys,
+  verificationTime: Date,
+  signedCheckpoint: unknown,
+  checkpointTrustedKeys: ApprovalLedgerTrustedKeys,
+): LedgerVerificationResult {
+  const bundleResult = verifyApprovalLedgerBundleV1(
+    bundle,
+    ledgerTrustedKeys,
+    verificationTime,
+  );
+  if (!bundleResult.valid) return bundleResult;
+
+  const checkpointResult = verifyApprovalLedgerCheckpointV1(
+    signedCheckpoint,
+    checkpointTrustedKeys,
+  );
+  if (!checkpointResult.valid) return checkpointResult;
+
+  const checkpoint = (signedCheckpoint as SignedApprovalLedgerCheckpointV1)
+    .checkpoint;
+  if (Date.parse(checkpoint.issuedAt) > verificationTime.getTime()) {
+    return fail("checkpoint_invalid");
+  }
+  const head = bundle.events.at(-1);
+  if (
+    !head ||
+    Date.parse(checkpoint.issuedAt) < Date.parse(head.event.occurredAt) ||
+    bundle.events.length !== checkpoint.sequence ||
+    head.event.workspaceId !== checkpoint.workspaceId ||
+    head.event.sequence !== checkpoint.sequence ||
+    head.eventSha256 !== checkpoint.headEventSha256
+  ) {
+    return fail("checkpoint_head_mismatch");
   }
   return { valid: true, code: "ok" };
 }
