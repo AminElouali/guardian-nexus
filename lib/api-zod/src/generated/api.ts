@@ -487,6 +487,8 @@ export const CreateWorkspaceHostAttestationChallengeParams = zod.object({
 })
 
 export const createWorkspaceHostAttestationChallengeResponseNonceRegExp = new RegExp('^[A-Za-z0-9_-]{43}$');
+export const createWorkspaceHostAttestationChallengeResponseIssuedAtRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{3}Z$');
+export const createWorkspaceHostAttestationChallengeResponseExpiresAtRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{3}Z$');
 export const createWorkspaceHostAttestationChallengeResponseRuntimeCommitRegExp = new RegExp('^(?:[a-f0-9]{40}|[a-f0-9]{64})$');
 export const createWorkspaceHostAttestationChallengeResponseRuntimeDigestSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 
@@ -495,8 +497,8 @@ export const CreateWorkspaceHostAttestationChallengeResponse = zod.object({
   "id": zod.uuid(),
   "workspaceId": zod.uuid(),
   "nonce": zod.string().regex(createWorkspaceHostAttestationChallengeResponseNonceRegExp),
-  "issuedAt": zod.coerce.date(),
-  "expiresAt": zod.coerce.date(),
+  "issuedAt": zod.string().regex(createWorkspaceHostAttestationChallengeResponseIssuedAtRegExp).describe('Canonical UTC ISO timestamp preserved byte-for-byte for receipt verification.'),
+  "expiresAt": zod.string().regex(createWorkspaceHostAttestationChallengeResponseExpiresAtRegExp).describe('Canonical UTC ISO timestamp preserved byte-for-byte for receipt verification.'),
   "runtimeCommit": zod.string().regex(createWorkspaceHostAttestationChallengeResponseRuntimeCommitRegExp),
   "runtimeDigestSha256": zod.string().regex(createWorkspaceHostAttestationChallengeResponseRuntimeDigestSha256RegExp),
   "hostBoundaryReady": zod.literal(false),

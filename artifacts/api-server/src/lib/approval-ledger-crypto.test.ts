@@ -6,6 +6,7 @@ import {
 } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
+import { ConsumeWorkspaceAiAssessmentApprovalReceiptBody } from "@workspace/api-zod";
 import {
   APPROVAL_LEDGER_EVENT_DOMAIN,
   APPROVAL_RECEIPT_DOMAIN,
@@ -193,6 +194,47 @@ test("single receipt verifier accepts a valid unexpired receipt", () => {
       new Date("2026-11-16T10:01:00.000Z"),
     ),
     { valid: true, code: "ok" },
+  );
+});
+
+test("consume body schema preserves and verifies issuer-signed canonical timestamp strings", () => {
+  const payload = createTestReceipt({
+    receiptId: "00000000-0000-4000-8000-000000000001",
+    workspaceId: "00000000-0000-4000-8000-000000000002",
+    approvalId: "00000000-0000-4000-8000-000000000003",
+  });
+  const signedReceipt = signApprovalReceiptV1(payload, testPrivateKeyA);
+  const parsed = ConsumeWorkspaceAiAssessmentApprovalReceiptBody.parse({
+    receipt: signedReceipt,
+  });
+
+  assert.equal(typeof parsed.receipt.payload.issuedAt, "string");
+  assert.equal(typeof parsed.receipt.payload.expiresAt, "string");
+  assert.deepEqual(parsed.receipt, signedReceipt);
+  assert.deepEqual(
+    verifyApprovalReceiptV1(
+      parsed.receipt,
+      trustedKeysA,
+      {
+        workspaceId: payload.workspaceId,
+        approvalId: payload.approvalId,
+        proposalBindingSha256: payload.proposalBindingSha256,
+        actionSha256: payload.actionSha256,
+        requestedBy: payload.requestedBy,
+        approvedBy: payload.approvedBy,
+        approvedByRole: payload.approvedByRole,
+      },
+      new Date("2026-11-16T10:01:00.000Z"),
+    ),
+    { valid: true, code: "ok" },
+  );
+
+  const nonCanonical = structuredClone(signedReceipt);
+  nonCanonical.payload.issuedAt = "2026-11-16T10:00:00Z";
+  assert.throws(() =>
+    ConsumeWorkspaceAiAssessmentApprovalReceiptBody.parse({
+      receipt: nonCanonical,
+    }),
   );
 });
 
