@@ -980,19 +980,6 @@ async function main(): Promise<void> {
       e2eEnv,
       currentStage,
     );
-    if (
-      process.env.GUARDIAN_LOCAL_LAB_E2E_DIAGNOSTIC === "1" &&
-      e2eOutput.exitCode !== 0
-    ) {
-      const diagnostic = `${e2eOutput.stdout}\n${e2eOutput.stderr}`
-        .replace(/postgres(?:ql)?:\/\/[^\s"'`]+/gi, "[connection-redacted]")
-        .replace(
-          /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g,
-          "[private-key-redacted]",
-        )
-        .slice(-8_000);
-      console.error(`Local isolated E2E diagnostic:\n${diagnostic}`);
-    }
     const nodeTestSummary = parseNodeTestSummary(
       `${e2eOutput.stdout}\n${e2eOutput.stderr}`,
     );

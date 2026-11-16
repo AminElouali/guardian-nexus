@@ -1721,6 +1721,65 @@ test(
       "a separate process verifies the exported signed history before operation",
     );
 
+    const supportApprovedEvent = await fixturePool.query<{
+      signature: string;
+    }>(
+      `SELECT signature
+         FROM public.workspace_approval_ledger
+        WHERE workspace_id = $1 AND approval_id = $2
+          AND event_type = 'approval.approved'`,
+      [workspaceA, supportReceipt.payload.approvalId],
+    );
+    assert.equal(supportApprovedEvent.rowCount, 1);
+    const originalSupportSignature = supportApprovedEvent.rows[0]!.signature;
+    const invalidButWellFormedSignature = Buffer.alloc(64, 1).toString(
+      "base64url",
+    );
+    const tamperedLedgerUpdate = await fixturePool.query(
+      `UPDATE public.workspace_approval_ledger
+          SET signature = $3
+        WHERE workspace_id = $1 AND approval_id = $2
+          AND event_type = 'approval.approved'
+       RETURNING 1`,
+      [
+        workspaceA,
+        supportReceipt.payload.approvalId,
+        invalidButWellFormedSignature,
+      ],
+    );
+    assert.equal(tamperedLedgerUpdate.rowCount, 1);
+    const tamperedChainConsume = await request(
+      workspaceAAdmin,
+      supportConsumePath,
+      "POST",
+      { receipt: supportReceipt },
+    );
+    assert.equal(tamperedChainConsume.status, 503);
+    assert.deepEqual(await tamperedChainConsume.json(), {
+      error: "Approval ledger unavailable",
+    });
+    const tamperedChainConsumptionCount = await fixturePool.query<{
+      count: string;
+    }>(
+      `SELECT count(*)::text AS count
+         FROM public.workspace_approval_ledger
+        WHERE workspace_id = $1 AND receipt_id = $2
+          AND event_type = 'approval.receipt_consumed'`,
+      [workspaceA, supportReceipt.payload.receiptId],
+    );
+    assert.equal(tamperedChainConsumptionCount.rows[0]?.count, "0");
+    await fixturePool.query(
+      `UPDATE public.workspace_approval_ledger
+          SET signature = $3
+        WHERE workspace_id = $1 AND approval_id = $2
+          AND event_type = 'approval.approved'`,
+      [
+        workspaceA,
+        supportReceipt.payload.approvalId,
+        originalSupportSignature,
+      ],
+    );
+
     const supportConsumptions = await Promise.all([
       request(workspaceAAdmin, supportConsumePath, "POST", {
         receipt: supportReceipt,
@@ -2123,63 +2182,6 @@ test(
       "a revoked approver cannot create an approval audit/simulation event",
     );
 
-    const chainTamperApproval = await seedApproval(fixturePool, {
-      workspaceId: workspaceB,
-      requesterId: workspaceBOwner,
-      profileId: support.profileId,
-      caseId: support.caseId,
-      expiry: expireFuture(),
-      idempotencyKey: `synthetic-chain-tamper-${randomUUID()}`,
-    });
-    const chainTamperDecision =
-      DecideWorkspaceAiAssessmentApprovalResponse.parse(
-        await (
-          await request(
-            workspaceBAdmin,
-            `/api/workspaces/${workspaceB}/ai-security-assessments/approvals/${chainTamperApproval.approvalId}/decision`,
-            "POST",
-            {
-              decision: "approve",
-              proposalBindingSha256: chainTamperApproval.binding,
-            },
-          )
-        ).json(),
-      );
-    assert.ok(chainTamperDecision.receipt);
-    assert.equal(chainTamperDecision.execution, "decision_only");
-    await fixturePool.query(
-      `UPDATE public.workspace_approval_ledger
-          SET signature = 'invalid'
-        WHERE workspace_id = $1 AND approval_id = $2
-          AND event_type = 'approval.approved'`,
-      [workspaceB, chainTamperApproval.approvalId],
-    );
-    const tamperedChainConsume = await request(
-      workspaceBAdmin,
-      `/api/workspaces/${workspaceB}/ai-security-assessments/approvals/${chainTamperApproval.approvalId}/receipt/consume`,
-      "POST",
-      { receipt: chainTamperDecision.receipt },
-    );
-    assert.equal(
-      tamperedChainConsume.status,
-      503,
-      "a damaged signed event chain blocks the refund simulator",
-    );
-    const tamperedChainConsumptionCount = await fixturePool.query<{
-      count: string;
-    }>(
-      `SELECT count(*)::text AS count
-         FROM public.workspace_approval_ledger
-        WHERE workspace_id = $1 AND receipt_id = $2
-          AND event_type = 'approval.receipt_consumed'`,
-      [workspaceB, chainTamperDecision.receipt.payload.receiptId],
-    );
-    assert.equal(
-      tamperedChainConsumptionCount.rows[0]?.count,
-      "0",
-      "chain failure appends no consumption event and runs no operation",
-    );
-
     const summary = {
       source: "deterministic_fixture_worker_harness",
       evidenceVersion: 1,
@@ -2209,10 +2211,10 @@ test(
           authorizationChecks: queueAuthorizationChecks,
         },
       },
-      approvalRequests: approvals.length + 4,
+      approvalRequests: approvals.length + 3,
       approvalDecisions: {
         approvedOnce: 2,
-        chainTamperProbeApproval: 1,
+        tamperedChainRejected: 1,
         deniedWithoutSimulation: 1,
         expiredWithoutSimulation: 1,
         concurrentSingleWinner: 1,

@@ -140,3 +140,9 @@ description: Product boundaries for security integrations, claims, and productio
 **Why:** A local inference artifact and an API approval fixture can each be valid while still representing different proposals or different execution paths.
 
 **How to apply:** Verify artifact hashes and per-case provenance, preserve `NO_PROPOSAL` without fabricating action hashes, compare finance/support proposal and action hashes against the exact allowlist entry, and report static binding tests separately from persisted approval tests.
+
+**Rule:** To test cryptographic ledger rejection through PostgreSQL, mutate a stored signature to a correctly encoded but cryptographically invalid value so database CHECK constraints do not intercept the test first.
+
+**Why:** In the disposable approval lab, a malformed signature string was rejected by the table's format constraint before the event-chain verifier ran, producing a misleading result about the application guard.
+
+**How to apply:** Assert that exactly the intended row changed, exercise the verifier, then restore the original signature before continuing later test steps; keep the whole probe inside the disposable database.
