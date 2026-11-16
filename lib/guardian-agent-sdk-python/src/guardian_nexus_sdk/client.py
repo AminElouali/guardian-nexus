@@ -250,16 +250,24 @@ class GuardianNexusClient:
             raise GuardianNexusSdkError("invalid_approval_list_response")
         return [dict(approval) for approval in approvals]
 
-    def propose_synthetic_refund(self, *, idempotency_key: str) -> dict[str, Any]:
+    def propose_synthetic_refund(
+        self,
+        *,
+        idempotency_key: str,
+        proposal_source: Literal["fixture", "qwen_provider"] | None = None,
+    ) -> dict[str, Any]:
         """Request the one fixed synthetic refund scenario for human review."""
         _validate_idempotency_key(idempotency_key)
+        body: dict[str, Any] = {
+            "scenarioId": SYNTHETIC_REFUND_SCENARIO_ID,
+            "idempotencyKey": idempotency_key,
+        }
+        if proposal_source is not None:
+            body["proposalSource"] = proposal_source
         value = self._request(
             f"/workspaces/{self.workspace_id}/ai-security-assessments/synthetic-refund-proposals",
             method="POST",
-            body={
-                "scenarioId": SYNTHETIC_REFUND_SCENARIO_ID,
-                "idempotencyKey": idempotency_key,
-            },
+            body=body,
             retryable=True,
         )
         if not _is_valid_synthetic_refund_response(value):
@@ -453,13 +461,21 @@ def _is_valid_approval_summary(value: Any) -> bool:
 def _is_valid_synthetic_refund_approval(value: Any) -> bool:
     if not _is_valid_approval_summary(value):
         return False
+    deterministic_provenance = (
+        value.get("modelInference") is False
+        and value.get("executionMode") == "deterministic_fixture"
+        and value.get("toolCallOrigin") == "controlled_fixture_not_llm"
+    )
+    external_qwen_provenance = (
+        value.get("modelInference") is True
+        and value.get("executionMode") == "real_openai_compatible_qwen_inference"
+        and value.get("toolCallOrigin") == "openai_compatible_provider_tool_call"
+    )
     if (
         value.get("caseId") != "support_trusted_refund_requires_approval"
         or value.get("syntheticActionRef") != SYNTHETIC_REFUND_SCENARIO_ID
         or value.get("bindingVersion") != 3
-        or value.get("modelInference") is not False
-        or value.get("executionMode") != "deterministic_fixture"
-        or value.get("toolCallOrigin") != "controlled_fixture_not_llm"
+        or not (deterministic_provenance or external_qwen_provenance)
         or value.get("requestedByRole") not in {"owner", "admin"}
     ):
         return False

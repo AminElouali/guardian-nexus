@@ -216,6 +216,58 @@ class GuardianNexusClientTests(unittest.TestCase):
             )
         self.assertEqual(error.exception.code, "invalid_synthetic_refund_response")
 
+    def test_synthetic_refund_sdk_accepts_external_qwen_provenance(self) -> None:
+        transport = FakeTransport(
+            [
+                response(
+                    201,
+                    {
+                        "decision": "require_approval",
+                        "reasonCode": "human_approval_required",
+                        "approval": {
+                            "id": APPROVAL,
+                            "jobId": WORKSPACE,
+                            "caseId": "support_trusted_refund_requires_approval",
+                            "proposalBindingSha256": BINDING,
+                            "status": "pending",
+                            "expiresAt": "2026-11-14T12:15:00Z",
+                            "syntheticActionRef": SYNTHETIC_REFUND_SCENARIO_ID,
+                            "bindingVersion": 3,
+                            "modelInference": True,
+                            "executionMode": "real_openai_compatible_qwen_inference",
+                            "toolCallOrigin": "openai_compatible_provider_tool_call",
+                            "requestedByRole": "owner",
+                            "execution": "not_performed",
+                            "simulatedAt": None,
+                            "simulationResultCode": None,
+                            "simulationResultSha256": None,
+                            "replayBindingSha256": None,
+                            "canCurrentUserDecide": False,
+                        },
+                        "execution": "not_performed",
+                        "simulationResultCode": None,
+                        "simulationResultSha256": None,
+                        "idempotent": False,
+                        "externalSideEffect": False,
+                    },
+                )
+            ]
+        )
+        result = self.client(transport).propose_synthetic_refund(
+            idempotency_key="refund-request-000003",
+            proposal_source="qwen_provider",
+        )
+        self.assertEqual(result["decision"], "require_approval")
+        _, _, _, body = transport.calls[0]
+        self.assertEqual(
+            json.loads(body),
+            {
+                "scenarioId": SYNTHETIC_REFUND_SCENARIO_ID,
+                "idempotencyKey": "refund-request-000003",
+                "proposalSource": "qwen_provider",
+            },
+        )
+
     def test_bounded_retry_reuses_same_idempotency_body_and_refreshes_token(self) -> None:
         transport = FakeTransport(
             [

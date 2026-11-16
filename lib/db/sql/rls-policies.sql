@@ -162,6 +162,9 @@ CREATE TABLE IF NOT EXISTS public.ai_assessment_approval_requests (
         'guardian_qwen_native_markup_adapter',
         'runtime_message_tool_calls'
       ))
+    OR (model_inference = true
+      AND execution_mode = 'real_openai_compatible_qwen_inference'
+      AND tool_call_origin = 'openai_compatible_provider_tool_call')
   ),
   CONSTRAINT ai_assessment_approval_action_ref_check CHECK (
     (synthetic_action_ref IS NULL AND action_sha256 IS NULL)
@@ -229,6 +232,9 @@ ALTER TABLE public.ai_assessment_approval_requests
         'guardian_qwen_native_markup_adapter',
         'runtime_message_tool_calls'
       ))
+    OR (model_inference = true
+      AND execution_mode = 'real_openai_compatible_qwen_inference'
+      AND tool_call_origin = 'openai_compatible_provider_tool_call')
   );
 CREATE UNIQUE INDEX IF NOT EXISTS ai_assessment_approval_job_case_idx
   ON public.ai_assessment_approval_requests (workspace_id, job_id, case_id);

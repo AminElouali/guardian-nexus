@@ -1373,7 +1373,7 @@ export const aiAssessmentApprovalRequestsTable = pgTable(
     ),
     check(
       "ai_assessment_approval_provenance_check",
-      sql`(${table.modelInference} IS NULL AND ${table.executionMode} IS NULL AND ${table.toolCallOrigin} IS NULL) OR (${table.modelInference} = false AND ${table.executionMode} = 'deterministic_fixture' AND ${table.toolCallOrigin} = 'controlled_fixture_not_llm') OR (${table.modelInference} = true AND ${table.executionMode} = 'real_local_qwen_inference' AND ${table.toolCallOrigin} IN ('guardian_qwen_native_markup_adapter', 'runtime_message_tool_calls'))`,
+      sql`(${table.modelInference} IS NULL AND ${table.executionMode} IS NULL AND ${table.toolCallOrigin} IS NULL) OR (${table.modelInference} = false AND ${table.executionMode} = 'deterministic_fixture' AND ${table.toolCallOrigin} = 'controlled_fixture_not_llm') OR (${table.modelInference} = true AND ${table.executionMode} = 'real_local_qwen_inference' AND ${table.toolCallOrigin} IN ('guardian_qwen_native_markup_adapter', 'runtime_message_tool_calls')) OR (${table.modelInference} = true AND ${table.executionMode} = 'real_openai_compatible_qwen_inference' AND ${table.toolCallOrigin} = 'openai_compatible_provider_tool_call')`,
     ),
     check(
       "ai_assessment_approval_action_ref_check",

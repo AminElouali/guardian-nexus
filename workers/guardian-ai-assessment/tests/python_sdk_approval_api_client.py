@@ -48,8 +48,15 @@ def main() -> int:
         idempotency_key = os.environ.get("GUARDIAN_REFUND_IDEMPOTENCY_KEY")
         if not idempotency_key:
             return 2
-        first = client.propose_synthetic_refund(idempotency_key=idempotency_key)
-        replay = client.propose_synthetic_refund(idempotency_key=idempotency_key)
+        proposal_source = os.environ.get("GUARDIAN_PROPOSAL_SOURCE")
+        first = client.propose_synthetic_refund(
+            idempotency_key=idempotency_key,
+            proposal_source=proposal_source,
+        )
+        replay = client.propose_synthetic_refund(
+            idempotency_key=idempotency_key,
+            proposal_source=proposal_source,
+        )
         first_approval = first["approval"]
         replay_approval = replay["approval"]
         if (
@@ -72,6 +79,15 @@ def main() -> int:
                     "proposalBindingSha256": first_approval[
                         "proposalBindingSha256"
                     ],
+                    "modelInference": first_approval["modelInference"],
+                    "executionMode": first_approval["executionMode"],
+                    "toolCallOrigin": first_approval["toolCallOrigin"],
+                    "providerInferenceStatus": first.get("providerInference", {}).get(
+                        "status"
+                    ),
+                    "providerModelId": first.get("providerInference", {}).get(
+                        "modelId"
+                    ),
                     "idempotentReplay": replay["idempotent"],
                 },
                 separators=(",", ":"),

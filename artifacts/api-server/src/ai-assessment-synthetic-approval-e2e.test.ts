@@ -180,6 +180,7 @@ function runPythonSdkRefundProposalClient(input: {
   workspaceId: string;
   testUser: string;
   idempotencyKey: string;
+  proposalSource?: "fixture" | "qwen_provider";
 }): Promise<string> {
   const sdkSource = resolve(
     workerRoot,
@@ -202,6 +203,9 @@ function runPythonSdkRefundProposalClient(input: {
         GUARDIAN_WORKSPACE_ID: input.workspaceId,
         GUARDIAN_TEST_USER: input.testUser,
         GUARDIAN_REFUND_IDEMPOTENCY_KEY: input.idempotencyKey,
+        ...(input.proposalSource
+          ? { GUARDIAN_PROPOSAL_SOURCE: input.proposalSource }
+          : {}),
       },
     });
     let stdout = "";
@@ -236,6 +240,70 @@ function runPythonSdkRefundProposalClient(input: {
       }
     });
   });
+}
+
+async function withMockedQwenProvider<T>(
+  apiBase: string,
+  run: () => Promise<T>,
+): Promise<T> {
+  const syntheticKey = "synthetic-e2e-provider-key-never-valid";
+  const baseUrl = "https://qwen-mock.invalid/v1";
+  const endpoint = `${baseUrl}/chat/completions`;
+  const savedEnvironment = {
+    QWEN_PROVIDER_BASE_URL: process.env.QWEN_PROVIDER_BASE_URL,
+    QWEN_PROVIDER_MODEL: process.env.QWEN_PROVIDER_MODEL,
+    QWEN_PROVIDER_API_KEY: process.env.QWEN_PROVIDER_API_KEY,
+  };
+  const originalFetch = globalThis.fetch;
+  process.env.QWEN_PROVIDER_BASE_URL = baseUrl;
+  process.env.QWEN_PROVIDER_MODEL = "Qwen/Qwen3-Synthetic-Test";
+  process.env.QWEN_PROVIDER_API_KEY = syntheticKey;
+  globalThis.fetch = (async (input, init) => {
+    const requestUrl =
+      typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.toString()
+          : input.url;
+    if (requestUrl === endpoint) {
+      assert.equal(
+        new Headers(init?.headers).get("authorization"),
+        `Bearer ${syntheticKey}`,
+      );
+      return new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                tool_calls: [
+                  {
+                    type: "function",
+                    function: {
+                      name: "propose_synthetic_refund",
+                      arguments:
+                        '{"ticket_id":"TICKET-SYNTH-001","amount_cents":500}',
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
+    if (requestUrl.startsWith(apiBase)) return originalFetch(input, init);
+    throw new Error("test-only provider network mock blocked an unexpected URL");
+  }) as typeof fetch;
+  try {
+    return await run();
+  } finally {
+    globalThis.fetch = originalFetch;
+    for (const [name, value] of Object.entries(savedEnvironment)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
 }
 
 type SyntheticWorkerEvidence = {
@@ -1148,16 +1216,24 @@ test(
     );
     const refundIdempotencyKey = `synthetic-refund-${randomUUID()}`;
     const refundProposalResponse = JSON.parse(
-      await runPythonSdkRefundProposalClient({
-        apiBase,
-        workspaceId: workspaceA,
-        testUser: workspaceAOwner,
-        idempotencyKey: refundIdempotencyKey,
-      }),
+      await withMockedQwenProvider(apiBase, () =>
+        runPythonSdkRefundProposalClient({
+          apiBase,
+          workspaceId: workspaceA,
+          testUser: workspaceAOwner,
+          idempotencyKey: refundIdempotencyKey,
+          proposalSource: "qwen_provider",
+        }),
+      ),
     ) as {
       approvalId: string;
       jobId: string;
       proposalBindingSha256: string;
+      modelInference: boolean;
+      executionMode: string;
+      toolCallOrigin: string;
+      providerInferenceStatus: string;
+      providerModelId: string;
       idempotentReplay: boolean;
     };
     assert.match(
@@ -1169,12 +1245,30 @@ test(
       /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
     );
     assert.match(refundProposalResponse.proposalBindingSha256, /^[a-f0-9]{64}$/);
+    assert.equal(refundProposalResponse.modelInference, true);
+    assert.equal(
+      refundProposalResponse.executionMode,
+      "real_openai_compatible_qwen_inference",
+    );
+    assert.equal(
+      refundProposalResponse.toolCallOrigin,
+      "openai_compatible_provider_tool_call",
+    );
+    assert.equal(
+      refundProposalResponse.providerInferenceStatus,
+      "real_inference_completed",
+    );
+    assert.equal(
+      refundProposalResponse.providerModelId,
+      "Qwen/Qwen3-Synthetic-Test",
+    );
     assert.equal(refundProposalResponse.idempotentReplay, true);
     assert.equal(
       (
         await request(workspaceAAdmin, refundPath, "POST", {
           scenarioId: "guardian.synthetic.support.refund.v1",
           idempotencyKey: refundIdempotencyKey,
+          proposalSource: "qwen_provider",
         })
       ).status,
       409,
@@ -1188,127 +1282,13 @@ test(
       caseId: "support_trusted_refund_requires_approval",
       idempotencyKey: refundIdempotencyKey,
       expectedResult: "synthetic_refund_approved_in_clone",
-      modelInference: false,
-      executionMode: "deterministic_fixture",
-      toolCallOrigin: "controlled_fixture_not_llm",
-    });
-
-    const qwenProviderKey = "synthetic-e2e-provider-key-never-valid";
-    const qwenProviderBaseUrl = "https://qwen-mock.invalid/v1";
-    process.env.QWEN_PROVIDER_BASE_URL = qwenProviderBaseUrl;
-    process.env.QWEN_PROVIDER_MODEL = "Qwen/Qwen3-Synthetic-Test";
-    process.env.QWEN_PROVIDER_API_KEY = qwenProviderKey;
-    const originalFetch = globalThis.fetch;
-    const providerEndpoint = `${qwenProviderBaseUrl}/chat/completions`;
-    globalThis.fetch = (async (input, init) => {
-      const requestUrl =
-        typeof input === "string"
-          ? input
-          : input instanceof URL
-            ? input.toString()
-            : input.url;
-      if (requestUrl === providerEndpoint) {
-        assert.equal(
-          new Headers(init?.headers).get("authorization"),
-          `Bearer ${qwenProviderKey}`,
-        );
-        return new Response(
-          JSON.stringify({
-            choices: [
-              {
-                message: {
-                  tool_calls: [
-                    {
-                      type: "function",
-                      function: {
-                        name: "propose_synthetic_refund",
-                        arguments:
-                          '{"ticket_id":"TICKET-SYNTH-001","amount_cents":500}',
-                      },
-                    },
-                  ],
-                },
-              },
-            ],
-          }),
-          { status: 200, headers: { "content-type": "application/json" } },
-        );
-      }
-      if (requestUrl.startsWith(apiBase)) {
-        return originalFetch(input, init);
-      }
-      throw new Error("test-only provider network mock blocked an unexpected URL");
-    }) as typeof fetch;
-    let qwenProposalResponse: Response;
-    try {
-      qwenProposalResponse = await request(
-        workspaceAOwner,
-        refundPath,
-        "POST",
-        {
-          scenarioId: "guardian.synthetic.support.refund.v1",
-          idempotencyKey: `synthetic-qwen-refund-${randomUUID()}`,
-          proposalSource: "qwen_provider",
-        },
-      );
-    } finally {
-      globalThis.fetch = originalFetch;
-      if (savedQwenProviderEnvironment.QWEN_PROVIDER_BASE_URL === undefined) {
-        delete process.env.QWEN_PROVIDER_BASE_URL;
-      } else {
-        process.env.QWEN_PROVIDER_BASE_URL =
-          savedQwenProviderEnvironment.QWEN_PROVIDER_BASE_URL;
-      }
-      if (savedQwenProviderEnvironment.QWEN_PROVIDER_MODEL === undefined) {
-        delete process.env.QWEN_PROVIDER_MODEL;
-      } else {
-        process.env.QWEN_PROVIDER_MODEL =
-          savedQwenProviderEnvironment.QWEN_PROVIDER_MODEL;
-      }
-      if (savedQwenProviderEnvironment.QWEN_PROVIDER_API_KEY === undefined) {
-        delete process.env.QWEN_PROVIDER_API_KEY;
-      } else {
-        process.env.QWEN_PROVIDER_API_KEY =
-          savedQwenProviderEnvironment.QWEN_PROVIDER_API_KEY;
-      }
-    }
-    assert.equal(qwenProposalResponse.status, 201);
-    const qwenProposalBody = CreateWorkspaceSyntheticRefundProposalResponse.parse(
-      await qwenProposalResponse.json(),
-    );
-    assert.equal(qwenProposalBody.decision, "require_approval");
-    assert.equal(qwenProposalBody.execution, "not_performed");
-    assert.equal(qwenProposalBody.approval?.modelInference, true);
-    assert.equal(
-      qwenProposalBody.approval?.executionMode,
-      "real_openai_compatible_qwen_inference",
-    );
-    assert.equal(
-      qwenProposalBody.approval?.toolCallOrigin,
-      "openai_compatible_provider_tool_call",
-    );
-    assert.equal(
-      qwenProposalBody.providerInference?.status,
-      "real_inference_completed",
-    );
-    assert.equal(
-      qwenProposalBody.providerInference?.modelId,
-      "Qwen/Qwen3-Synthetic-Test",
-    );
-    assert.equal(qwenProposalBody.externalSideEffect, false);
-    const qwenApproval = qwenProposalBody.approval;
-    assert.ok(qwenApproval);
-    approvals.splice(1, 0, {
-      approvalId: qwenApproval.id,
-      jobId: qwenApproval.jobId,
-      binding: qwenApproval.proposalBindingSha256,
-      profileId: "guardian-agent-lab-customer-service-v1",
-      caseId: "support_trusted_refund_requires_approval",
-      idempotencyKey: "synthetic-qwen-provider",
-      expectedResult: "synthetic_refund_approved_in_clone",
-      modelInference: true,
-      executionMode: "real_openai_compatible_qwen_inference",
-      toolCallOrigin: "openai_compatible_provider_tool_call",
+      modelInference: refundProposalResponse.modelInference,
+      executionMode: refundProposalResponse.executionMode as
+        | "real_openai_compatible_qwen_inference"
+        | "deterministic_fixture",
+      toolCallOrigin: refundProposalResponse.toolCallOrigin as
+        | "openai_compatible_provider_tool_call"
+        | "controlled_fixture_not_llm",
     });
 
     const concurrentRefundKey = `synthetic-refund-${randomUUID()}`;
