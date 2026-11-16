@@ -487,8 +487,6 @@ export const CreateWorkspaceHostAttestationChallengeParams = zod.object({
 })
 
 export const createWorkspaceHostAttestationChallengeResponseNonceRegExp = new RegExp('^[A-Za-z0-9_-]{43}$');
-export const createWorkspaceHostAttestationChallengeResponseIssuedAtRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{3}Z$');
-export const createWorkspaceHostAttestationChallengeResponseExpiresAtRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{3}Z$');
 export const createWorkspaceHostAttestationChallengeResponseRuntimeCommitRegExp = new RegExp('^(?:[a-f0-9]{40}|[a-f0-9]{64})$');
 export const createWorkspaceHostAttestationChallengeResponseRuntimeDigestSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 
@@ -497,8 +495,8 @@ export const CreateWorkspaceHostAttestationChallengeResponse = zod.object({
   "id": zod.uuid(),
   "workspaceId": zod.uuid(),
   "nonce": zod.string().regex(createWorkspaceHostAttestationChallengeResponseNonceRegExp),
-  "issuedAt": zod.string().regex(createWorkspaceHostAttestationChallengeResponseIssuedAtRegExp).describe('Canonical UTC ISO timestamp preserved byte-for-byte for receipt verification.'),
-  "expiresAt": zod.string().regex(createWorkspaceHostAttestationChallengeResponseExpiresAtRegExp).describe('Canonical UTC ISO timestamp preserved byte-for-byte for receipt verification.'),
+  "issuedAt": zod.coerce.date(),
+  "expiresAt": zod.coerce.date(),
   "runtimeCommit": zod.string().regex(createWorkspaceHostAttestationChallengeResponseRuntimeCommitRegExp),
   "runtimeDigestSha256": zod.string().regex(createWorkspaceHostAttestationChallengeResponseRuntimeDigestSha256RegExp),
   "hostBoundaryReady": zod.literal(false),
@@ -11346,6 +11344,8 @@ export const decideWorkspaceAiAssessmentApprovalResponseReceiptOnePayloadProposa
 export const decideWorkspaceAiAssessmentApprovalResponseReceiptOnePayloadActionSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 
 
+export const decideWorkspaceAiAssessmentApprovalResponseReceiptOnePayloadIssuedAtRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{3}Z$');
+export const decideWorkspaceAiAssessmentApprovalResponseReceiptOnePayloadExpiresAtRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{3}Z$');
 export const decideWorkspaceAiAssessmentApprovalResponseReceiptOnePayloadNonceMin = 32;
 export const decideWorkspaceAiAssessmentApprovalResponseReceiptOnePayloadNonceMax = 128;
 
@@ -11396,8 +11396,8 @@ export const DecideWorkspaceAiAssessmentApprovalResponse = zod.object({
   "requestedBy": zod.string().min(1),
   "approvedBy": zod.string().min(1),
   "approvedByRole": zod.enum(['owner', 'admin']),
-  "issuedAt": zod.coerce.date(),
-  "expiresAt": zod.coerce.date(),
+  "issuedAt": zod.string().regex(decideWorkspaceAiAssessmentApprovalResponseReceiptOnePayloadIssuedAtRegExp).describe('Canonical UTC ISO timestamp preserved byte-for-byte for receipt verification.'),
+  "expiresAt": zod.string().regex(decideWorkspaceAiAssessmentApprovalResponseReceiptOnePayloadExpiresAtRegExp).describe('Canonical UTC ISO timestamp preserved byte-for-byte for receipt verification.'),
   "nonce": zod.string().min(decideWorkspaceAiAssessmentApprovalResponseReceiptOnePayloadNonceMin).max(decideWorkspaceAiAssessmentApprovalResponseReceiptOnePayloadNonceMax).regex(decideWorkspaceAiAssessmentApprovalResponseReceiptOnePayloadNonceRegExp)
 }),
   "payloadSha256": zod.string().regex(decideWorkspaceAiAssessmentApprovalResponseReceiptOnePayloadSha256RegExp),
@@ -11423,6 +11423,8 @@ export const consumeWorkspaceAiAssessmentApprovalReceiptBodyReceiptPayloadPropos
 export const consumeWorkspaceAiAssessmentApprovalReceiptBodyReceiptPayloadActionSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 
 
+export const consumeWorkspaceAiAssessmentApprovalReceiptBodyReceiptPayloadIssuedAtRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{3}Z$');
+export const consumeWorkspaceAiAssessmentApprovalReceiptBodyReceiptPayloadExpiresAtRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{3}Z$');
 export const consumeWorkspaceAiAssessmentApprovalReceiptBodyReceiptPayloadNonceMin = 32;
 export const consumeWorkspaceAiAssessmentApprovalReceiptBodyReceiptPayloadNonceMax = 128;
 
@@ -11445,8 +11447,8 @@ export const ConsumeWorkspaceAiAssessmentApprovalReceiptBody = zod.object({
   "requestedBy": zod.string().min(1),
   "approvedBy": zod.string().min(1),
   "approvedByRole": zod.enum(['owner', 'admin']),
-  "issuedAt": zod.coerce.date(),
-  "expiresAt": zod.coerce.date(),
+  "issuedAt": zod.string().regex(consumeWorkspaceAiAssessmentApprovalReceiptBodyReceiptPayloadIssuedAtRegExp).describe('Canonical UTC ISO timestamp preserved byte-for-byte for receipt verification.'),
+  "expiresAt": zod.string().regex(consumeWorkspaceAiAssessmentApprovalReceiptBodyReceiptPayloadExpiresAtRegExp).describe('Canonical UTC ISO timestamp preserved byte-for-byte for receipt verification.'),
   "nonce": zod.string().min(consumeWorkspaceAiAssessmentApprovalReceiptBodyReceiptPayloadNonceMin).max(consumeWorkspaceAiAssessmentApprovalReceiptBodyReceiptPayloadNonceMax).regex(consumeWorkspaceAiAssessmentApprovalReceiptBodyReceiptPayloadNonceRegExp)
 }),
   "payloadSha256": zod.string().regex(consumeWorkspaceAiAssessmentApprovalReceiptBodyReceiptPayloadSha256RegExp),

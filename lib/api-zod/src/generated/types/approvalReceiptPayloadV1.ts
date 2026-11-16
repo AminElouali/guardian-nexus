@@ -27,8 +27,16 @@ export interface ApprovalReceiptPayloadV1 {
   /** @minLength 1 */
   approvedBy: string;
   approvedByRole: ApprovalReceiptPayloadV1ApprovedByRole;
-  issuedAt: Date;
-  expiresAt: Date;
+  /**
+     * Canonical UTC ISO timestamp preserved byte-for-byte for receipt verification.
+     * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{3}Z$
+     */
+  issuedAt: string;
+  /**
+     * Canonical UTC ISO timestamp preserved byte-for-byte for receipt verification.
+     * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{3}Z$
+     */
+  expiresAt: string;
   /**
      * @minLength 32
      * @maxLength 128

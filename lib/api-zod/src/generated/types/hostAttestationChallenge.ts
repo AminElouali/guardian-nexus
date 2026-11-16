@@ -11,16 +11,8 @@ export interface HostAttestationChallenge {
   workspaceId: string;
   /** @pattern ^[A-Za-z0-9_-]{43}$ */
   nonce: string;
-  /**
-     * Canonical UTC ISO timestamp preserved byte-for-byte for receipt verification.
-     * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{3}Z$
-     */
-  issuedAt: string;
-  /**
-     * Canonical UTC ISO timestamp preserved byte-for-byte for receipt verification.
-     * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{3}Z$
-     */
-  expiresAt: string;
+  issuedAt: Date;
+  expiresAt: Date;
   /** @pattern ^(?:[a-f0-9]{40}|[a-f0-9]{64})$ */
   runtimeCommit: string;
   /** @pattern ^[a-f0-9]{64}$ */
