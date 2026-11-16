@@ -1,0 +1,317 @@
+import assert from "node:assert/strict";
+import {
+  createPrivateKey,
+  createPublicKey,
+  sign as cryptoSign,
+} from "node:crypto";
+import { readFileSync } from "node:fs";
+import { test } from "node:test";
+import {
+  APPROVAL_LEDGER_EVENT_DOMAIN,
+  APPROVAL_RECEIPT_DOMAIN,
+  canonicalizeLedgerValue,
+  signApprovalLedgerEventV1,
+  signApprovalReceiptV1,
+  verifyApprovalLedgerBundleV1,
+  type ApprovalLedgerBundleV1,
+  type ApprovalLedgerEventV1,
+  type ApprovalReceiptPayloadV1,
+  type SignedApprovalLedgerEventV1,
+} from "./approval-ledger-crypto.js";
+
+type VectorFile = {
+  testOnly: true;
+  verificationTime: string;
+  canonicalizationVector: {
+    value: unknown;
+    canonical: string;
+  };
+  trustedPublicKeys: Record<string, string>;
+  bundle: ApprovalLedgerBundleV1;
+};
+
+const vectors = JSON.parse(
+  readFileSync(new URL("./approval-ledger-v1.vectors.json", import.meta.url), "utf8"),
+) as VectorFile;
+const verificationTime = new Date(vectors.verificationTime);
+const TEST_KEY_ID = "fixture-key-1";
+
+// RFC 8032 test seed: intentionally public and TEST ONLY.
+const TEST_SEED_A =
+  "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60";
+const TEST_SEED_B =
+  "4ccd089b28ff96da9db6c346ec114e0f5b8a319f35aba624da8cf6ed4fb8a6fb";
+const PKCS8_ED25519_SEED_PREFIX = Buffer.from(
+  "302e020100300506032b657004220420",
+  "hex",
+);
+
+function privateKeyFromTestSeed(seed: string) {
+  return createPrivateKey({
+    key: Buffer.concat([
+      PKCS8_ED25519_SEED_PREFIX,
+      Buffer.from(seed, "hex"),
+    ]),
+    format: "der",
+    type: "pkcs8",
+  });
+}
+
+const testPrivateKeyA = privateKeyFromTestSeed(TEST_SEED_A);
+const testPrivateKeyB = privateKeyFromTestSeed(TEST_SEED_B);
+const testPublicKeyA = createPublicKey(testPrivateKeyA);
+const trustedKeysA = new Map([[TEST_KEY_ID, testPublicKeyA]]);
+
+function cloneBundle(): ApprovalLedgerBundleV1 {
+  return structuredClone(vectors.bundle);
+}
+
+function createTestReceipt(
+  overrides: Partial<ApprovalReceiptPayloadV1> = {},
+): ApprovalReceiptPayloadV1 {
+  return {
+    version: 1,
+    keyId: TEST_KEY_ID,
+    receiptId: "receipt-test",
+    workspaceId: "workspace-test",
+    approvalId: "approval-test",
+    proposalBindingSha256: "0".repeat(64),
+    actionSha256: "1".repeat(64),
+    requestedBy: "requester-test",
+    approvedBy: "approver-test",
+    approvedByRole: "owner",
+    issuedAt: "2026-11-16T10:00:00.000Z",
+    expiresAt: "2026-11-16T10:05:00.000Z",
+    nonce: "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+    ...overrides,
+  };
+}
+
+function createSignedBundle(
+  receiptPayloads: readonly ApprovalReceiptPayloadV1[],
+  consumedAt: string,
+): ApprovalLedgerBundleV1 {
+  const receipts = receiptPayloads.map((payload) =>
+    signApprovalReceiptV1(payload, testPrivateKeyA),
+  );
+  const events: SignedApprovalLedgerEventV1[] = [];
+  let previousEventSha256 = "";
+  let sequence = 0;
+  for (const signedReceipt of receipts) {
+    const receipt = signedReceipt.payload;
+    const eventBase = {
+      version: 1 as const,
+      keyId: TEST_KEY_ID,
+      workspaceId: receipt.workspaceId,
+      approvalId: receipt.approvalId,
+    };
+    const approved: ApprovalLedgerEventV1 = {
+      ...eventBase,
+      sequence: ++sequence,
+      eventId: `event-${sequence}`,
+      eventType: "approval.approved",
+      previousEventSha256,
+      occurredAt: receipt.issuedAt,
+      payload: {
+        receiptId: receipt.receiptId,
+        receiptSha256: signedReceipt.payloadSha256,
+      },
+    };
+    const signedApproved = signApprovalLedgerEventV1(
+      approved,
+      testPrivateKeyA,
+    );
+    events.push(signedApproved);
+    previousEventSha256 = signedApproved.eventSha256;
+
+    const consumed: ApprovalLedgerEventV1 = {
+      ...eventBase,
+      sequence: ++sequence,
+      eventId: `event-${sequence}`,
+      eventType: "approval.receipt_consumed",
+      previousEventSha256,
+      occurredAt: consumedAt,
+      payload: {
+        receiptId: receipt.receiptId,
+        receiptSha256: signedReceipt.payloadSha256,
+        nonce: receipt.nonce,
+        consumedAt,
+      },
+    };
+    const signedConsumed = signApprovalLedgerEventV1(
+      consumed,
+      testPrivateKeyA,
+    );
+    events.push(signedConsumed);
+    previousEventSha256 = signedConsumed.eventSha256;
+  }
+  return { version: 1, events, receipts };
+}
+
+test("shared JSON vector has stable canonical bytes and valid Ed25519 signatures", () => {
+  assert.equal(vectors.testOnly, true);
+  assert.equal(
+    canonicalizeLedgerValue(
+      vectors.canonicalizationVector.value as never,
+    ),
+    vectors.canonicalizationVector.canonical,
+  );
+  assert.equal(
+    createPublicKey(testPrivateKeyA).export({ format: "pem", type: "spki" }),
+    vectors.trustedPublicKeys[TEST_KEY_ID],
+  );
+  assert.deepEqual(
+    verifyApprovalLedgerBundleV1(
+      vectors.bundle,
+      trustedKeysA,
+      verificationTime,
+    ),
+    { valid: true, code: "ok" },
+  );
+});
+
+test("canonicalization rejects nulls, decimals, unsafe integers and negative zero", () => {
+  for (const invalid of [null, 1.5, Number.MAX_SAFE_INTEGER + 1, -0]) {
+    assert.throws(() => canonicalizeLedgerValue(invalid as never));
+  }
+});
+
+test("editing a signed event field invalidates its digest", () => {
+  const bundle = cloneBundle();
+  (bundle.events[0]!.event.payload as Record<string, string>).receiptId =
+    "receipt-edited";
+  assert.deepEqual(
+    verifyApprovalLedgerBundleV1(bundle, trustedKeysA, verificationTime),
+    { valid: false, code: "event_hash_mismatch" },
+  );
+});
+
+test("reordering signed events breaks the sequence and previous-hash chain", () => {
+  const bundle = cloneBundle();
+  (bundle.events as SignedApprovalLedgerEventV1[]).reverse();
+  assert.deepEqual(
+    verifyApprovalLedgerBundleV1(bundle, trustedKeysA, verificationTime),
+    { valid: false, code: "event_order_invalid" },
+  );
+});
+
+test("a valid signature made by a different key is rejected", () => {
+  const bundle = cloneBundle();
+  const original = bundle.events[0]!.event;
+  const signedByOtherKey = signApprovalLedgerEventV1(
+    original,
+    testPrivateKeyB,
+  );
+  (bundle.events as SignedApprovalLedgerEventV1[])[0] = signedByOtherKey;
+  assert.deepEqual(
+    verifyApprovalLedgerBundleV1(bundle, trustedKeysA, verificationTime),
+    { valid: false, code: "event_signature_invalid" },
+  );
+});
+
+test("a signature using the receipt domain cannot authenticate a ledger event", () => {
+  const bundle = cloneBundle();
+  const event = bundle.events[0]!.event;
+  const wrongDomainBytes = Buffer.from(
+    `${APPROVAL_RECEIPT_DOMAIN}${canonicalizeLedgerValue(event)}`,
+    "utf8",
+  );
+  const wrongDomainSignature = cryptoSign(
+    null,
+    wrongDomainBytes,
+    testPrivateKeyA,
+  ).toString("base64url");
+  (bundle.events as SignedApprovalLedgerEventV1[])[0] = {
+    ...bundle.events[0]!,
+    signature: wrongDomainSignature,
+  };
+  assert.deepEqual(
+    verifyApprovalLedgerBundleV1(bundle, trustedKeysA, verificationTime),
+    { valid: false, code: "event_signature_invalid" },
+  );
+  assert.notEqual(
+    APPROVAL_LEDGER_EVENT_DOMAIN,
+    APPROVAL_RECEIPT_DOMAIN,
+  );
+});
+
+test("a receipt consumed after its expiry is rejected", () => {
+  const bundle = createSignedBundle(
+    [
+      createTestReceipt({
+        expiresAt: "2026-11-16T10:00:30.000Z",
+      }),
+    ],
+    "2026-11-16T10:01:00.000Z",
+  );
+  assert.deepEqual(
+    verifyApprovalLedgerBundleV1(bundle, trustedKeysA, verificationTime),
+    { valid: false, code: "receipt_expired" },
+  );
+});
+
+test("a nonce repeated across receipts is rejected", () => {
+  const repeatedNonce = "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC";
+  const bundle = createSignedBundle(
+    [
+      createTestReceipt({
+        receiptId: "receipt-one",
+        approvalId: "approval-one",
+        nonce: repeatedNonce,
+      }),
+      createTestReceipt({
+        receiptId: "receipt-two",
+        approvalId: "approval-two",
+        nonce: repeatedNonce,
+      }),
+    ],
+    "2026-11-16T10:01:00.000Z",
+  );
+  assert.deepEqual(
+    verifyApprovalLedgerBundleV1(bundle, trustedKeysA, verificationTime),
+    { valid: false, code: "receipt_nonce_reused" },
+  );
+});
+
+test("a second consumption of the same receipt is rejected", () => {
+  const bundle = cloneBundle();
+  const firstReceipt = bundle.receipts[0]!;
+  const previous = bundle.events.at(-1)!;
+  const replayEvent: ApprovalLedgerEventV1 = {
+    version: 1,
+    keyId: TEST_KEY_ID,
+    workspaceId: firstReceipt.payload.workspaceId,
+    sequence: 3,
+    eventId: "event-replay",
+    eventType: "approval.receipt_consumed",
+    approvalId: firstReceipt.payload.approvalId,
+    previousEventSha256: previous.eventSha256,
+    occurredAt: "2026-11-16T10:01:30.000Z",
+    payload: {
+      receiptId: firstReceipt.payload.receiptId,
+      receiptSha256: firstReceipt.payloadSha256,
+      nonce: firstReceipt.payload.nonce,
+      consumedAt: "2026-11-16T10:01:30.000Z",
+    },
+  };
+  (bundle.events as SignedApprovalLedgerEventV1[]).push(
+    signApprovalLedgerEventV1(replayEvent, testPrivateKeyA),
+  );
+  assert.deepEqual(
+    verifyApprovalLedgerBundleV1(bundle, trustedKeysA, verificationTime),
+    { valid: false, code: "receipt_replay" },
+  );
+});
+
+test("an unconsumed receipt is rejected after its validity window", () => {
+  const bundle = cloneBundle();
+  (bundle.events as SignedApprovalLedgerEventV1[]).pop();
+  assert.deepEqual(
+    verifyApprovalLedgerBundleV1(
+      bundle,
+      trustedKeysA,
+      new Date("2026-11-16T10:06:00.000Z"),
+    ),
+    { valid: false, code: "receipt_expired" },
+  );
+});

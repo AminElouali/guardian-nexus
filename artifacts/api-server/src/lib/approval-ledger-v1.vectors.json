@@ -1,0 +1,85 @@
+{
+  "testOnly": true,
+  "verificationTime": "2026-11-16T10:02:00.000Z",
+  "canonicalizationVector": {
+    "value": {
+      "z": 2,
+      "a": [true, "line\nnext"],
+      "": "bmp",
+      "𐀀": "astral"
+    },
+    "canonical": "{\"a\":[true,\"line\\nnext\"],\"z\":2,\"𐀀\":\"astral\",\"\":\"bmp\"}"
+  },
+  "trustedPublicKeys": {
+    "fixture-key-1": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo=\n-----END PUBLIC KEY-----\n"
+  },
+  "untrustedPublicKeys": {
+    "fixture-key-2": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAPUAXw+hDiVqStwqnTRt+vJyYLM8uxJaMwM1V8Sr0Zgw=\n-----END PUBLIC KEY-----\n"
+  },
+  "bundle": {
+    "version": 1,
+    "events": [
+      {
+        "event": {
+          "version": 1,
+          "keyId": "fixture-key-1",
+          "workspaceId": "workspace-test",
+          "sequence": 1,
+          "eventId": "event-001",
+          "eventType": "approval.approved",
+          "approvalId": "approval-001",
+          "previousEventSha256": "",
+          "occurredAt": "2026-11-16T10:00:00.000Z",
+          "payload": {
+            "receiptId": "receipt-001",
+            "receiptSha256": "bd82120bc07a86743b600eb34f82897d633bc46cc7e18daa880e84bd9d6dd34d"
+          }
+        },
+        "eventSha256": "72ecd0401f058b34966965a2d028743d580d95c0b56fb193ecf97182547ce52e",
+        "signature": "Wk1niTZBSF5LUt8GDWDuK7vUUveMKkGE8uXkwJGj8WQSyTo-qCpcSbh3Ai69Sxo5o4Bp4ZmRjIcSNDTtnLc3Ag"
+      },
+      {
+        "event": {
+          "version": 1,
+          "keyId": "fixture-key-1",
+          "workspaceId": "workspace-test",
+          "sequence": 2,
+          "eventId": "event-002",
+          "eventType": "approval.receipt_consumed",
+          "approvalId": "approval-001",
+          "previousEventSha256": "72ecd0401f058b34966965a2d028743d580d95c0b56fb193ecf97182547ce52e",
+          "occurredAt": "2026-11-16T10:01:00.000Z",
+          "payload": {
+            "receiptId": "receipt-001",
+            "receiptSha256": "bd82120bc07a86743b600eb34f82897d633bc46cc7e18daa880e84bd9d6dd34d",
+            "nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "consumedAt": "2026-11-16T10:01:00.000Z"
+          }
+        },
+        "eventSha256": "fe0713a1ff0d21fe332a054e963118270462be4fa6258b9db05fae5d645f27d3",
+        "signature": "1Ag2riS2WzeIKMNHx4UFRXjE0VYNgrNqNPayD4qBuqu2_hiQk-44oWYIc-gbvKFzcMEgaA7Z5uP4CgAxl9MTDQ"
+      }
+    ],
+    "receipts": [
+      {
+        "payload": {
+          "version": 1,
+          "keyId": "fixture-key-1",
+          "receiptId": "receipt-001",
+          "workspaceId": "workspace-test",
+          "approvalId": "approval-001",
+          "proposalBindingSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "actionSha256": "1111111111111111111111111111111111111111111111111111111111111111",
+          "requestedBy": "requester-test",
+          "approvedBy": "approver-test",
+          "approvedByRole": "owner",
+          "issuedAt": "2026-11-16T10:00:00.000Z",
+          "expiresAt": "2026-11-16T10:05:00.000Z",
+          "nonce": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        "payloadSha256": "bd82120bc07a86743b600eb34f82897d633bc46cc7e18daa880e84bd9d6dd34d",
+        "signature": "yxvh0w7NH2utBSGa0dAjVYDBeagfHK7JgpV3-kYwV41vBvi0Qyz1Cb8ByOCGo8EOOgkY5XQ2uEpn8xMknYgjCw"
+      }
+    ]
+  }
+}
