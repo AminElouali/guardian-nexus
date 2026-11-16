@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   createPrivateKey,
   createPublicKey,
+  generateKeyPairSync,
 } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import {
@@ -50,6 +51,7 @@ const checkpointPublicPem = createPublicKey(checkpointPrivateKey).export({
 }).toString();
 
 function runIndependentVerifier(input: {
+  directory: string;
   bundlePath: string;
   trustedKeysPath: string;
   checkpointPath: string;
@@ -175,6 +177,45 @@ test("offline CLI rejects altered bundles with a fixed diagnostic only", () => {
   }
 });
 
+test("offline CLI refuses to verify an archive without an external checkpoint", () => {
+  const directory = mkdtempSync(resolve(tmpdir(), "guardian-ledger-verifier-"));
+  try {
+    const input = writeVerifierInputs(directory);
+    const result = spawnSync(
+      process.execPath,
+      [
+        "--import",
+        "tsx",
+        scriptPath,
+        "--bundle",
+        input.bundlePath,
+        "--trusted-keys",
+        input.trustedKeysPath,
+        "--at",
+        input.verificationTime,
+      ],
+      {
+        cwd: packageRoot,
+        encoding: "utf8",
+        env: {
+          PATH: process.env.PATH ?? "",
+          HOME: directory,
+          LANG: "C",
+          LC_ALL: "C",
+        },
+      },
+    );
+    assert.equal(result.status, 1);
+    assert.equal(result.stderr, "");
+    assert.deepEqual(JSON.parse(result.stdout), {
+      valid: false,
+      code: "invalid_bundle",
+    });
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("offline CLI rejects a key id absent from the out-of-band trust store", () => {
   const directory = mkdtempSync(resolve(tmpdir(), "guardian-ledger-verifier-"));
   try {
@@ -240,6 +281,10 @@ test("offline CLI accepts dated historical and rotated ledger keys", () => {
   try {
     const input = writeVerifierInputs(directory);
     const source = input.trustedPublicKeys["fixture-key-1"]!;
+    const futureLedgerKey = generateKeyPairSync("ed25519").publicKey.export({
+      format: "pem",
+      type: "spki",
+    }).toString();
     writeFileSync(
       input.trustedKeysPath,
       JSON.stringify({
@@ -252,7 +297,7 @@ test("offline CLI accepts dated historical and rotated ledger keys", () => {
             status: "retired",
           },
           "unused-new-key": {
-            publicKeyPem: checkpointPublicPem,
+            publicKeyPem: futureLedgerKey,
             validFrom: "2026-11-16T11:00:00.000Z",
             status: "active",
           },

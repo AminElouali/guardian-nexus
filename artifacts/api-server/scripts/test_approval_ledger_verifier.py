@@ -215,6 +215,30 @@ class ApprovalLedgerVerifierTests(unittest.TestCase):
             "checkpoint_signature_invalid",
         )
 
+        digest, same_key_signature = sign_for_test(
+            verifier.CHECKPOINT_DOMAIN,
+            checkpoint,
+            TEST_SEED,
+        )
+        same_key_checkpoint = {
+            "checkpoint": checkpoint,
+            "checkpointSha256": digest,
+            "signature": same_key_signature,
+        }
+        self.assertEqual(
+            verifier.verify_bundle_with_checkpoint(
+                bundle,
+                self.keys,
+                self.now,
+                same_key_checkpoint,
+                {
+                    "checkpoint-fixture-key":
+                        self.keys["fixture-key-1"]
+                },
+            ),
+            "checkpoint_key_not_independent",
+        )
+
     def test_python_canonicalization_matches_shared_vector(self) -> None:
         vector = self.document["canonicalizationVector"]
         self.assertEqual(

@@ -520,6 +520,27 @@ test("checkpoint verification rejects bad signature, unknown key, and untrusted 
   );
 });
 
+test("bundle checkpoint verifier rejects reuse of a ledger signing key", () => {
+  const checkpoint = signApprovalLedgerCheckpointV1({
+    version: 1,
+    keyId: "checkpoint-alias",
+    workspaceId: vectors.bundle.events.at(-1)!.event.workspaceId,
+    sequence: vectors.bundle.events.length,
+    headEventSha256: vectors.bundle.events.at(-1)!.eventSha256,
+    issuedAt: "2026-11-16T10:02:00.000Z",
+  }, testPrivateKeyA);
+  assert.deepEqual(
+    verifyApprovalLedgerBundleWithCheckpointV1(
+      vectors.bundle,
+      trustedKeysA,
+      verificationTime,
+      checkpoint,
+      new Map([["checkpoint-alias", testPublicKeyA]]),
+    ),
+    { valid: false, code: "checkpoint_key_not_independent" },
+  );
+});
+
 test("single receipt verifier accepts a valid unexpired receipt", () => {
   const receipt = signApprovalReceiptV1(
     createTestReceipt(),

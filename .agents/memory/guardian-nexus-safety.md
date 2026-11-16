@@ -146,3 +146,9 @@ description: Product boundaries for security integrations, claims, and productio
 **Why:** In the disposable approval lab, a malformed signature string was rejected by the table's format constraint before the event-chain verifier ran, producing a misleading result about the application guard.
 
 **How to apply:** Assert that exactly the intended row changed, exercise the verifier, then restore the original signature before continuing later test steps; keep the whole probe inside the disposable database.
+
+**Rule:** Offline approval-ledger archives require a separately signed, out-of-band chain-head checkpoint; validate ledger keys at the signed object time and treat `revokedAt` as a non-retroactive cutoff.
+
+**Why:** A valid self-contained signed chain cannot prove it has no later tail, and historical signatures need explicit, reproducible key-rotation semantics.
+
+**How to apply:** Distribute the latest checkpoint and checkpoint trust store independently of the bundle, use a distinct checkpoint signing key, and document that embedded timestamps are not trusted timestamp-service evidence.

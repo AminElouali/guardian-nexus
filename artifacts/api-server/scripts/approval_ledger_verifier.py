@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import binascii
 import hashlib
 import json
 import re
@@ -320,6 +321,22 @@ def _key_entries(trusted_keys: Any) -> dict[str, Any] | None:
     return trusted_keys
 
 
+def _public_key_der(config: Any) -> bytes | None:
+    pem = config if isinstance(config, str) else (
+        config.get("publicKeyPem") if isinstance(config, dict) else None
+    )
+    if not isinstance(pem, str):
+        return None
+    if not pem.startswith("-----BEGIN PUBLIC KEY-----") or "PRIVATE KEY" in pem:
+        return None
+    body = pem.replace("-----BEGIN PUBLIC KEY-----", "")
+    body = body.replace("-----END PUBLIC KEY-----", "")
+    try:
+        return base64.b64decode("".join(body.split()), validate=True)
+    except (ValueError, binascii.Error):
+        return None
+
+
 def verify_bundle(bundle: Any, trusted_keys: dict[str, Any], verification_time: datetime) -> str:
     trusted_keys = _key_entries(trusted_keys)
     if trusted_keys is None:
@@ -517,6 +534,19 @@ def verify_bundle_with_checkpoint(
     )
     if result != "ok":
         return result
+    checkpoint_public_key = _public_key_der(
+        checkpoint_keys.get(checkpoint["keyId"])
+    )
+    ledger_public_keys = [
+        _public_key_der(config) for config in _key_entries(ledger_trusted_keys).values()
+    ]
+    if checkpoint_public_key is None:
+        return "trusted_key_invalid"
+    if any(
+        key_bytes is not None and key_bytes == checkpoint_public_key
+        for key_bytes in ledger_public_keys
+    ):
+        return "checkpoint_key_not_independent"
     events = bundle["events"]
     if not events:
         return "checkpoint_head_mismatch"

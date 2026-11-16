@@ -40,7 +40,11 @@ import {
   POLICY_LAB_PROFILE_IDS,
   QWEN_POLICY_LAB_PROFILE_IDS,
 } from "./lib/ai-assessment-sandbox";
-import { signApprovalReceiptV1 } from "./lib/approval-ledger-crypto";
+import {
+  signApprovalLedgerCheckpointV1,
+  signApprovalReceiptV1,
+  type ApprovalLedgerBundleV1,
+} from "./lib/approval-ledger-crypto";
 
 /*
  * This is an explicitly fixture-only integration harness. It executes the
@@ -90,12 +94,43 @@ function verifyBundleWithOfflineCli(input: {
 }): { status: number | null; stdout: string; stderr: string } {
   const directory = mkdtempSync(resolve(tmpdir(), "guardian-ledger-e2e-"));
   try {
+    const bundle = input.bundle as ApprovalLedgerBundleV1;
+    const head = bundle.events.at(-1);
+    if (!head) {
+      return { status: 1, stdout: '{"valid":false,"code":"invalid_bundle"}\n', stderr: "" };
+    }
+    const checkpointPair = generateKeyPairSync("ed25519");
+    const checkpointKeyId = `e2e-checkpoint-${randomUUID()}`;
+    const checkpoint = signApprovalLedgerCheckpointV1({
+      version: 1,
+      keyId: checkpointKeyId,
+      workspaceId: head.event.workspaceId,
+      sequence: head.event.sequence,
+      headEventSha256: head.eventSha256,
+      issuedAt: input.verificationTime,
+    }, checkpointPair.privateKey);
     const bundlePath = resolve(directory, "bundle.json");
     const trustedKeysPath = resolve(directory, "trusted-public-keys.json");
+    const checkpointPath = resolve(directory, "checkpoint.json");
+    const checkpointTrustedKeysPath = resolve(
+      directory,
+      "checkpoint-trusted-public-keys.json",
+    );
     writeFileSync(bundlePath, JSON.stringify(input.bundle), { mode: 0o600 });
     writeFileSync(
       trustedKeysPath,
       JSON.stringify({ [input.keyId]: input.publicKeyPem }),
+      { mode: 0o600 },
+    );
+    writeFileSync(checkpointPath, JSON.stringify(checkpoint), { mode: 0o600 });
+    writeFileSync(
+      checkpointTrustedKeysPath,
+      JSON.stringify({
+        [checkpointKeyId]: checkpointPair.publicKey.export({
+          format: "pem",
+          type: "spki",
+        }).toString(),
+      }),
       { mode: 0o600 },
     );
     const cli = resolve(
@@ -112,6 +147,10 @@ function verifyBundleWithOfflineCli(input: {
         bundlePath,
         "--trusted-keys",
         trustedKeysPath,
+        "--checkpoint",
+        checkpointPath,
+        "--checkpoint-trusted-keys",
+        checkpointTrustedKeysPath,
         "--at",
         input.verificationTime,
       ],

@@ -139,6 +139,7 @@ export type LedgerVerificationCode =
   | "checkpoint_invalid"
   | "checkpoint_hash_mismatch"
   | "checkpoint_signature_invalid"
+  | "checkpoint_key_not_independent"
   | "checkpoint_head_mismatch";
 
 export type LedgerVerificationResult =
@@ -486,6 +487,38 @@ function trustedKeyError(
   resolution: Exclude<ReturnType<typeof getTrustedKey>, { key: KeyObject }>,
 ): LedgerVerificationResult {
   return fail(resolution.error);
+}
+
+function publicKeyBytes(key: KeyObject): Buffer | null {
+  if (key.type !== "public" || key.asymmetricKeyType !== "ed25519") return null;
+  try {
+    return key.export({ format: "der", type: "spki" });
+  } catch {
+    return null;
+  }
+}
+
+function checkpointKeyIndependence(
+  candidate: KeyObject,
+  keys: ApprovalLedgerTrustedKeys,
+): "independent" | "same_key" | "invalid_registry" {
+  const candidateBytes = publicKeyBytes(candidate);
+  if (!candidateBytes) return "invalid_registry";
+  for (const value of keys.values()) {
+    if (!value || typeof value !== "object") return "invalid_registry";
+    const key = "asymmetricKeyType" in value
+      ? value as KeyObject
+      : "publicKey" in value
+      ? value.publicKey
+      : null;
+    if (!key || typeof key !== "object" || !("asymmetricKeyType" in key)) {
+      return "invalid_registry";
+    }
+    const bytes = publicKeyBytes(key as KeyObject);
+    if (!bytes) return "invalid_registry";
+    if (bytes.equals(candidateBytes)) return "same_key";
+  }
+  return "independent";
 }
 
 function verifySignedValue(
@@ -967,6 +1000,18 @@ export function verifyApprovalLedgerBundleWithCheckpointV1(
 
   const checkpoint = (signedCheckpoint as SignedApprovalLedgerCheckpointV1)
     .checkpoint;
+  const checkpointKey = getTrustedKey(
+    checkpoint.keyId,
+    checkpointTrustedKeys,
+    checkpoint.issuedAt,
+  );
+  if ("error" in checkpointKey) return trustedKeyError(checkpointKey);
+  const independent = checkpointKeyIndependence(
+    checkpointKey.key,
+    ledgerTrustedKeys,
+  );
+  if (independent === "same_key") return fail("checkpoint_key_not_independent");
+  if (independent === "invalid_registry") return fail("trusted_key_invalid");
   if (Date.parse(checkpoint.issuedAt) > verificationTime.getTime()) {
     return fail("checkpoint_invalid");
   }

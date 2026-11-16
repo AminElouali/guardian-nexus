@@ -185,6 +185,8 @@ exactly. A missing, old-length, extended, or altered bundle therefore fails
 against that checkpoint. The checkpoint signing key should be administered
 separately from the application event-signing key; its public key must be
 authenticated out of band and must never be accepted from the bundle.
+The verifier also rejects reuse of the same Ed25519 public-key material across
+the ledger and checkpoint trust stores.
 
 Generate a checkpoint only after independently obtaining the current
 workspace, sequence, and event hash from the authoritative ledger/export
