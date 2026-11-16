@@ -5,9 +5,13 @@ import {
 } from "@workspace/db/rls-catalog-audit";
 import {
   auditRlsPostPushCatalog,
+  deriveRlsCatalogPhaseSnapshot,
+  type RlsCatalogQueryRunner,
+  type RlsCatalogQueryStep,
   type RlsCatalogPhaseSnapshot,
 } from "@workspace/db/rls-catalog-phase-audit";
 import { appendOnlyRuntimeGrantsAllowed } from "@workspace/db/rls-runtime-readiness";
+import type { PoolClient } from "pg";
 
 const safeViolationCodes = new Set([
   "append_only_runtime_privilege_mismatch",
@@ -67,6 +71,14 @@ const safeViolationCodes = new Set([
   "role_inventory_mismatch",
   "role_membership_mismatch",
   "table_missing",
+  "table_unexpected",
+  "index_missing",
+  "index_unexpected",
+  "constraint_missing",
+  "constraint_unexpected",
+  "policy_missing",
+  "policy_unexpected",
+  "provenance_constraint_outdated",
   "table_owner_mismatch",
   "table_rls_not_enabled",
   "table_rls_not_forced",
@@ -87,6 +99,8 @@ export type DevelopmentRlsCatalogAudit = {
   actualPolicyCount: number;
   actualRoleCount: number;
   actualConstraintCount: number;
+  objectDiffs: DevelopmentCatalogObjectDiff;
+  provenanceConstraintOutdated: boolean;
   violationCodes: string[];
 };
 
@@ -104,23 +118,8 @@ export type DevelopmentRlsCatalogPartialCounts = {
 };
 
 export type DevelopmentCatalogQueryStep =
+  | RlsCatalogQueryStep
   | "connection"
-  | "transaction"
-  | "identity"
-  | "rls_flags"
-  | "tables"
-  | "columns"
-  | "column_inventory"
-  | "indexes"
-  | "constraints"
-  | "policies"
-  | "roles"
-  | "memberships"
-  | "role_membership"
-  | "privileges"
-  | "column_privileges"
-  | "append_only_privileges"
-  | "settings"
   | "catalog";
 
 export type SafeCatalogQueryFailure = {
@@ -134,6 +133,103 @@ export type DevelopmentCatalogReadProgress = {
   actual: DevelopmentRlsCatalogPartialCounts;
 };
 
+export type DevelopmentCatalogObjectKind =
+  | "tables"
+  | "indexes"
+  | "constraints"
+  | "policies";
+export type DevelopmentCatalogObjectInventory = Record<
+  DevelopmentCatalogObjectKind,
+  string[]
+>;
+export type DevelopmentCatalogObjectDiff = {
+  missing: DevelopmentCatalogObjectInventory;
+  unexpected: DevelopmentCatalogObjectInventory;
+};
+
+const objectKinds: DevelopmentCatalogObjectKind[] = [
+  "tables",
+  "indexes",
+  "constraints",
+  "policies",
+];
+
+export function emptyDevelopmentCatalogObjectDiff():
+  DevelopmentCatalogObjectDiff {
+  return {
+    missing: { tables: [], indexes: [], constraints: [], policies: [] },
+    unexpected: { tables: [], indexes: [], constraints: [], policies: [] },
+  };
+}
+
+export function developmentCatalogObjectInventoryFromRows(
+  rows: readonly Record<string, unknown>[],
+): DevelopmentCatalogObjectInventory {
+  const inventory = emptyDevelopmentCatalogObjectDiff().missing;
+  for (const row of rows) {
+    const kind = row.kind;
+    if (
+      kind !== "tables" &&
+      kind !== "indexes" &&
+      kind !== "constraints" &&
+      kind !== "policies"
+    ) continue;
+    const objectName = typeof row.objectName === "string"
+      ? row.objectName
+      : null;
+    if (objectName === null) continue;
+    const identity = kind === "tables"
+      ? typeof row.schemaName === "string"
+        ? `${row.schemaName}.${objectName}`
+        : null
+      : typeof row.tableName === "string"
+        ? `${row.tableName}.${objectName}`
+        : null;
+    if (identity !== null) inventory[kind].push(identity);
+  }
+  for (const kind of objectKinds) {
+    inventory[kind] = [...new Set(inventory[kind])].sort();
+  }
+  return inventory;
+}
+
+export function compareDevelopmentCatalogObjects(
+  contract: RlsCatalogContract,
+  actual: DevelopmentCatalogObjectInventory,
+  maxIdentifierLength: number,
+): DevelopmentCatalogObjectDiff {
+  const expected = deriveRlsCatalogPhaseSnapshot(
+    contract,
+    "final",
+    maxIdentifierLength,
+  );
+  const expectedObjects: DevelopmentCatalogObjectInventory = {
+    tables: expected.tables.map((item) =>
+      `${item.schemaName}.${item.tableName}`
+    ),
+    indexes: expected.indexes.map((item) =>
+      `${item.tableName}.${item.indexName}`
+    ),
+    constraints: expected.constraints.map((item) =>
+      `${item.tableName}.${item.constraintName}`
+    ),
+    policies: expected.policies.map((item) =>
+      `${item.tableName}.${item.policyName}`
+    ),
+  };
+  const diff = emptyDevelopmentCatalogObjectDiff();
+  for (const kind of objectKinds) {
+    const expectedSet = new Set(expectedObjects[kind]);
+    const actualSet = new Set(actual[kind]);
+    diff.missing[kind] = [...expectedSet].filter((name) => !actualSet.has(name))
+      .sort();
+    diff.unexpected[kind] = [...actualSet].filter((name) =>
+      !expectedSet.has(name)
+    ).sort();
+  }
+  return diff;
+}
+
 export function createDevelopmentCatalogReadProgress(): DevelopmentCatalogReadProgress {
   return {
     completedSteps: [],
@@ -146,35 +242,6 @@ export function createDevelopmentCatalogReadProgress(): DevelopmentCatalogReadPr
       roles: null,
     },
   };
-}
-
-function queryStepForSql(sql: string): DevelopmentCatalogQueryStep {
-  const normalized = sql.toLowerCase();
-  if (
-    normalized.includes("workspace_approval_ledger") &&
-    normalized.includes("has_table_privilege")
-  ) return "append_only_privileges";
-  if (normalized.includes("begin transaction read only")) return "transaction";
-  if (normalized.includes("current_database()")) return "identity";
-  if (normalized.includes("pg_auth_members")) return "memberships";
-  if (normalized.includes("pg_has_role")) return "role_membership";
-  if (normalized.includes("has_column_privilege")) return "column_privileges";
-  if (normalized.includes("has_table_privilege")) return "privileges";
-  if (normalized.includes("pg_policies")) return "policies";
-  if (normalized.includes("pg_constraint")) return "constraints";
-  if (normalized.includes("pg_index")) return "indexes";
-  if (normalized.includes("format_type(")) return "columns";
-  if (
-    normalized.includes("array_agg(attribute.attname") &&
-    normalized.includes("pg_attribute")
-  ) return "column_inventory";
-  if (normalized.includes("relrowsecurity")) return "rls_flags";
-  if (normalized.includes("pg_roles")) return "roles";
-  if (
-    normalized.includes("max_identifier_length") ||
-    normalized.includes("server_version_num")
-  ) return "settings";
-  return "catalog";
 }
 
 function resultRowCount(result: unknown): number {
@@ -268,46 +335,30 @@ export class SafeCatalogQueryError extends Error {
  * Serializes catalog reads so a PostgreSQL transaction stops at its first
  * failed query. Only fixed steps, counts, SQLSTATE, and mapped classes remain.
  */
-export function monitorDevelopmentCatalogReads<T extends object>(
-  client: T,
+export function createDevelopmentCatalogQueryRunner(
+  client: Pick<PoolClient, "query">,
   progress: DevelopmentCatalogReadProgress,
-): T {
+): RlsCatalogQueryRunner {
   let queue: Promise<void> = Promise.resolve();
   let firstFailure: SafeCatalogQueryFailure | null = null;
-  return new Proxy(client, {
-    get(target, property, receiver) {
-      if (property !== "query") return Reflect.get(target, property, receiver);
-      return (queryInput: unknown, values?: unknown[]) => {
-        const sql = typeof queryInput === "string"
-          ? queryInput
-          : typeof queryInput === "object" && queryInput !== null &&
-              "text" in queryInput &&
-              typeof (queryInput as { text?: unknown }).text === "string"
-            ? (queryInput as { text: string }).text
-            : "";
-        const step = queryStepForSql(sql);
-        const operation = queue.then(async () => {
-          if (firstFailure) throw new SafeCatalogQueryError(firstFailure);
-          try {
-            const query = (target as unknown as {
-              query: (
-                query: unknown,
-                parameters?: unknown[],
-              ) => Promise<unknown>;
-            }).query;
-            const result = await query.call(target, queryInput, values);
-            recordCatalogReadProgress(progress, step, result);
-            return result;
-          } catch (error) {
-            firstFailure ??= sanitizeCatalogQueryFailure(step, error);
-            throw new SafeCatalogQueryError(firstFailure);
-          }
-        });
-        queue = operation.then(() => undefined, () => undefined);
-        return operation;
-      };
-    },
-  });
+  return (step, sql, values) => {
+    const operation = queue.then(async () => {
+      if (firstFailure) throw new SafeCatalogQueryError(firstFailure);
+      try {
+        const result = await client.query(
+          sql,
+          values as unknown as never[],
+        );
+        recordCatalogReadProgress(progress, step, result);
+        return result;
+      } catch (error) {
+        firstFailure ??= sanitizeCatalogQueryFailure(step, error);
+        throw new SafeCatalogQueryError(firstFailure);
+      }
+    });
+    queue = operation.then(() => undefined, () => undefined);
+    return operation;
+  };
 }
 
 function safeCode(value: string): string {
@@ -322,6 +373,7 @@ export function auditDevelopmentRlsCatalog(input: {
   phaseSnapshot: RlsCatalogPhaseSnapshot;
   catalogSnapshot: RlsCatalogSnapshot;
   appendOnlyGrantRows: readonly Record<string, unknown>[];
+  objectInventory: DevelopmentCatalogObjectInventory;
 }): DevelopmentRlsCatalogAudit {
   const structuralAudit = auditRlsPostPushCatalog(
     input.contract,
@@ -332,6 +384,32 @@ export function auditDevelopmentRlsCatalog(input: {
   const appendOnlyPrivilegesPassed = appendOnlyRuntimeGrantsAllowed(
     input.appendOnlyGrantRows,
   );
+  const objectDiffs = compareDevelopmentCatalogObjects(
+    input.contract,
+    input.objectInventory,
+    input.phaseSnapshot.maxIdentifierLength,
+  );
+  const provenanceConstraintName =
+    "ai_assessment_approval_provenance_check";
+  const expectedPhase = deriveRlsCatalogPhaseSnapshot(
+    input.contract,
+    "final",
+    input.phaseSnapshot.maxIdentifierLength,
+  );
+  const expectedProvenance = expectedPhase.constraints.find((constraint) =>
+    constraint.constraintName === provenanceConstraintName
+  );
+  const actualProvenance = input.phaseSnapshot.constraints.find((constraint) =>
+    constraint.constraintName === provenanceConstraintName
+  );
+  const provenanceDiagnosticPrefix =
+    "ai_assessment_approval_requests.ai_assessment_approval_provenance_check";
+  const provenanceConstraintOutdated = !expectedProvenance ||
+    !actualProvenance ||
+    structuralAudit.diagnostics.some((diagnostic) =>
+      diagnostic.startsWith("constraint_") &&
+      diagnostic.includes(provenanceDiagnosticPrefix)
+    );
   const violations = new Set<string>();
   for (const violation of structuralAudit.violations) {
     violations.add(safeCode(violation));
@@ -342,9 +420,31 @@ export function auditDevelopmentRlsCatalog(input: {
   if (!appendOnlyPrivilegesPassed) {
     violations.add("append_only_runtime_privilege_mismatch");
   }
+  for (const kind of objectKinds) {
+    if (objectDiffs.missing[kind].length > 0) {
+      violations.add(kind === "tables"
+        ? "table_missing"
+        : kind === "indexes"
+        ? "index_missing"
+        : kind === "constraints"
+        ? "constraint_missing"
+        : "policy_missing");
+    }
+    if (objectDiffs.unexpected[kind].length > 0) {
+      violations.add(kind === "tables"
+        ? "table_unexpected"
+        : kind === "indexes"
+        ? "index_unexpected"
+        : kind === "constraints"
+        ? "constraint_unexpected"
+        : "policy_unexpected");
+    }
+  }
+  if (provenanceConstraintOutdated) {
+    violations.add("provenance_constraint_outdated");
+  }
   return {
-    passed: structuralAudit.passed && grantAudit.passed &&
-      appendOnlyPrivilegesPassed,
+    passed: violations.size === 0,
     expectedTableCount: structuralAudit.expectedTableCount,
     expectedColumnCount: structuralAudit.expectedColumnCount,
     expectedIndexCount: structuralAudit.expectedIndexCount,
@@ -357,6 +457,8 @@ export function auditDevelopmentRlsCatalog(input: {
     actualPolicyCount: input.phaseSnapshot.policies.length,
     actualRoleCount: input.phaseSnapshot.roles.length,
     actualConstraintCount: input.phaseSnapshot.constraints.length,
+    objectDiffs,
+    provenanceConstraintOutdated,
     violationCodes: [...violations].sort(),
   };
 }
@@ -377,6 +479,7 @@ export type DevelopmentRlsCatalogReport = {
   actual: DevelopmentRlsCatalogPartialCounts;
   completedSteps: DevelopmentCatalogQueryStep[];
   failedQuery: SafeCatalogQueryFailure | null;
+  objectDiffs: DevelopmentCatalogObjectDiff | null;
   violationCodes: string[];
 };
 
@@ -384,6 +487,7 @@ export function createDevelopmentRlsCatalogReport(input: {
   audit?: DevelopmentRlsCatalogAudit;
   expectedCounts: DevelopmentRlsCatalogCounts;
   progress?: DevelopmentCatalogReadProgress;
+  objectDiffs?: DevelopmentCatalogObjectDiff | null;
   failedQuery?: SafeCatalogQueryFailure | null;
   generatedAt: string;
   databaseNameMatched: boolean;
@@ -438,6 +542,7 @@ export function createDevelopmentRlsCatalogReport(input: {
     },
     completedSteps: input.progress?.completedSteps ?? [],
     failedQuery: input.failedQuery ?? null,
+    objectDiffs: input.audit?.objectDiffs ?? input.objectDiffs ?? null,
     violationCodes: refusalCode
       ? [refusalCode]
       : audit?.violationCodes ?? [],

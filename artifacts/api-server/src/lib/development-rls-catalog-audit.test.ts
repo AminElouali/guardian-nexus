@@ -3,6 +3,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
+import type { PoolClient } from "pg";
 import {
   expectedRlsTableNames,
   appendOnlyRlsTableNames,
@@ -13,16 +14,20 @@ import {
 } from "@workspace/db/rls-catalog-audit";
 import {
   deriveRlsCatalogPhaseSnapshot,
+  readRlsCatalogPhaseSnapshot,
   type RlsCatalogPhaseSnapshot,
 } from "@workspace/db/rls-catalog-phase-audit";
 import {
   createDevelopmentCatalogReadProgress,
   auditDevelopmentRlsCatalog,
+  createDevelopmentCatalogQueryRunner,
+  developmentCatalogObjectInventoryFromRows,
+  type DevelopmentCatalogObjectInventory,
   createDevelopmentRlsCatalogReport,
-  monitorDevelopmentCatalogReads,
   parseDevelopmentRlsAuditArguments,
   SafeCatalogQueryError,
 } from "./development-rls-catalog-audit";
+import { readCatalogSnapshot } from "../scripts/verify-rls-catalog";
 
 const repositoryRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -76,6 +81,7 @@ function makeSnapshots(): {
   phaseSnapshot: RlsCatalogPhaseSnapshot;
   catalogSnapshot: RlsCatalogSnapshot;
   appendOnlyGrantRows: Record<string, unknown>[];
+  objectInventory: DevelopmentCatalogObjectInventory;
 } {
   const phaseSnapshot = deriveRlsCatalogPhaseSnapshot(contract, "final");
   const roleNames = Object.keys(contract.roles);
@@ -158,7 +164,26 @@ function makeSnapshots(): {
     column_update: false,
     column_references: false,
   }));
-  return { phaseSnapshot, catalogSnapshot, appendOnlyGrantRows };
+  const objectInventory: DevelopmentCatalogObjectInventory = {
+    tables: phaseSnapshot.tables.map((table) =>
+      `${table.schemaName}.${table.tableName}`
+    ),
+    indexes: phaseSnapshot.indexes.map((index) =>
+      `${index.tableName}.${index.indexName}`
+    ),
+    constraints: phaseSnapshot.constraints.map((constraint) =>
+      `${constraint.tableName}.${constraint.constraintName}`
+    ),
+    policies: phaseSnapshot.policies.map((policy) =>
+      `${policy.tableName}.${policy.policyName}`
+    ),
+  };
+  return {
+    phaseSnapshot,
+    catalogSnapshot,
+    appendOnlyGrantRows,
+    objectInventory,
+  };
 }
 
 test("development RLS audit accepts the complete canonical catalog snapshot", () => {
@@ -182,10 +207,207 @@ test("development RLS audit fails when the approval ledger is missing", () => {
     snapshots.catalogSnapshot.tables.filter(
       (table) => table.tableName !== "workspace_approval_ledger",
     );
+  snapshots.objectInventory.tables = snapshots.objectInventory.tables.filter(
+    (name) => name !== "public.workspace_approval_ledger",
+  );
+  snapshots.objectInventory.indexes = snapshots.objectInventory.indexes.filter(
+    (name) => !name.startsWith("workspace_approval_ledger."),
+  );
+  snapshots.objectInventory.constraints =
+    snapshots.objectInventory.constraints.filter(
+      (name) => !name.startsWith("workspace_approval_ledger."),
+    );
+  snapshots.objectInventory.policies = snapshots.objectInventory.policies.filter(
+    (name) => !name.startsWith("workspace_approval_ledger."),
+  );
   const audit = auditDevelopmentRlsCatalog({ contract, ...snapshots });
   assert.equal(audit.passed, false);
+  assert.ok(audit.violationCodes.includes("table_missing"));
+  assert.ok(audit.violationCodes.includes("index_missing"));
+  assert.ok(audit.violationCodes.includes("constraint_missing"));
+  assert.ok(audit.violationCodes.includes("policy_missing"));
+  assert.deepEqual(audit.objectDiffs.missing.tables, [
+    "public.workspace_approval_ledger",
+  ]);
+  assert.ok(audit.objectDiffs.missing.indexes.length > 0);
+  assert.ok(audit.objectDiffs.missing.constraints.length > 0);
+  assert.ok(audit.objectDiffs.missing.policies.length > 0);
   assert.ok(audit.violationCodes.includes("table_inventory_mismatch"));
   assert.ok(audit.violationCodes.includes("protected_table_set_mismatch"));
+});
+
+test("missing ledger is listed while catalog and privilege reads complete", async () => {
+  const source = makeSnapshots();
+  source.phaseSnapshot.tables = source.phaseSnapshot.tables.filter(
+    (table) => table.tableName !== "workspace_approval_ledger",
+  );
+  source.phaseSnapshot.columns = source.phaseSnapshot.columns.filter(
+    (column) => column.tableName !== "workspace_approval_ledger",
+  );
+  source.phaseSnapshot.indexes = source.phaseSnapshot.indexes.filter(
+    (index) => index.tableName !== "workspace_approval_ledger",
+  );
+  source.phaseSnapshot.constraints =
+    source.phaseSnapshot.constraints.filter(
+      (constraint) => constraint.tableName !== "workspace_approval_ledger",
+    );
+  source.phaseSnapshot.policies = source.phaseSnapshot.policies.filter(
+    (policy) => policy.tableName !== "workspace_approval_ledger",
+  );
+  source.catalogSnapshot.tables = source.catalogSnapshot.tables.filter(
+    (table) => table.tableName !== "workspace_approval_ledger",
+  );
+  source.catalogSnapshot.tablePrivileges =
+    source.catalogSnapshot.tablePrivileges.map((privilege) =>
+      privilege.tableName === "workspace_approval_ledger"
+        ? { ...privilege, granted: false }
+        : privilege
+    );
+  source.catalogSnapshot.updateColumns =
+    source.catalogSnapshot.updateColumns.filter(
+      (column) => column.tableName !== "workspace_approval_ledger",
+    );
+  source.catalogSnapshot.tableColumns =
+    source.catalogSnapshot.tableColumns.filter(
+      (table) => table.tableName !== "workspace_approval_ledger",
+    );
+  source.objectInventory.tables = source.objectInventory.tables.filter(
+    (name) => name !== "public.workspace_approval_ledger",
+  );
+  source.objectInventory.indexes = source.objectInventory.indexes.filter(
+    (name) => !name.startsWith("workspace_approval_ledger."),
+  );
+  source.objectInventory.constraints =
+    source.objectInventory.constraints.filter(
+      (name) => !name.startsWith("workspace_approval_ledger."),
+    );
+  source.objectInventory.policies = source.objectInventory.policies.filter(
+    (name) => !name.startsWith("workspace_approval_ledger."),
+  );
+
+  const calls: string[] = [];
+  const pendingResults = [
+    { rows: [], rowCount: 0 },
+    { rows: [{ database_name: "synthetic", read_only: "on" }], rowCount: 1 },
+    { rows: source.phaseSnapshot.tables, rowCount: source.phaseSnapshot.tables.length },
+    { rows: source.phaseSnapshot.columns, rowCount: source.phaseSnapshot.columns.length },
+    { rows: source.phaseSnapshot.indexes, rowCount: source.phaseSnapshot.indexes.length },
+    { rows: source.phaseSnapshot.constraints, rowCount: source.phaseSnapshot.constraints.length },
+    { rows: source.phaseSnapshot.policies, rowCount: source.phaseSnapshot.policies.length },
+    { rows: source.phaseSnapshot.roles, rowCount: source.phaseSnapshot.roles.length },
+    { rows: source.phaseSnapshot.memberships, rowCount: source.phaseSnapshot.memberships.length },
+    { rows: [{ maxIdentifierLength: source.phaseSnapshot.maxIdentifierLength }], rowCount: 1 },
+    {
+      rows: [
+        ...source.objectInventory.tables.map((name) => {
+          const [schemaName, objectName] = name.split(".");
+          return { kind: "tables", schemaName, tableName: objectName, objectName };
+        }),
+        ...source.objectInventory.indexes.map((name) => {
+          const [tableName, objectName] = name.split(".");
+          return { kind: "indexes", schemaName: "public", tableName, objectName };
+        }),
+        ...source.objectInventory.constraints.map((name) => {
+          const [tableName, objectName] = name.split(".");
+          return { kind: "constraints", schemaName: "public", tableName, objectName };
+        }),
+        ...source.objectInventory.policies.map((name) => {
+          const [tableName, objectName] = name.split(".");
+          return { kind: "policies", schemaName: "public", tableName, objectName };
+        }),
+      ],
+      rowCount: 0,
+    },
+    { rows: source.catalogSnapshot.tables, rowCount: source.catalogSnapshot.tables.length },
+    { rows: source.catalogSnapshot.policies, rowCount: source.catalogSnapshot.policies.length },
+    { rows: source.catalogSnapshot.roles, rowCount: source.catalogSnapshot.roles.length },
+    { rows: source.catalogSnapshot.memberships, rowCount: source.catalogSnapshot.memberships.length },
+    { rows: source.catalogSnapshot.pgHasRole, rowCount: source.catalogSnapshot.pgHasRole.length },
+    {
+      rows: source.catalogSnapshot.tablePrivileges,
+      rowCount: source.catalogSnapshot.tablePrivileges.length,
+    },
+    { rows: source.catalogSnapshot.updateColumns, rowCount: source.catalogSnapshot.updateColumns.length },
+    { rows: source.catalogSnapshot.tableColumns, rowCount: source.catalogSnapshot.tableColumns.length },
+    { rows: [{ version: 160000 }], rowCount: 1 },
+    {
+      rows: [{
+        table_name: "workspace_approval_ledger",
+        can_select: false,
+        can_insert: false,
+        can_update: false,
+        can_delete: false,
+        can_truncate: false,
+        can_references: false,
+        can_trigger: false,
+        can_maintain: false,
+        maintain_supported: false,
+        column_update: false,
+        column_references: false,
+      }],
+      rowCount: 1,
+    },
+    { rows: [], rowCount: 0 },
+  ];
+  const client = {
+    async query(sql: string) {
+      calls.push(sql);
+      const result = pendingResults.shift();
+      assert.ok(result, "the read-only audit should complete every catalog query");
+      return result;
+    },
+  };
+  const pgClient = client as unknown as Pick<PoolClient, "query">;
+  const progress = createDevelopmentCatalogReadProgress();
+  const query = createDevelopmentCatalogQueryRunner(pgClient, progress);
+  await query("transaction", "BEGIN TRANSACTION READ ONLY");
+  await query("identity", "SELECT current_database()");
+  const phase = await readRlsCatalogPhaseSnapshot(
+    pgClient,
+    expectedRlsTableNames,
+    Object.keys(contract.roles),
+    query,
+  );
+  const objectRows = await query("object_inventory", "SELECT public catalog names");
+  const objectInventory = developmentCatalogObjectInventoryFromRows(
+    objectRows.rows,
+  );
+  const { snapshot, postgresMajor } = await readCatalogSnapshot(
+    pgClient,
+    expectedRlsTableNames,
+    Object.keys(contract.roles),
+    query,
+  );
+  const appendOnlyGrantRows = await query(
+    "append_only_privileges",
+    "SELECT append-only privilege matrix",
+  );
+  await query("transaction", "COMMIT");
+
+  const privilegeSql = calls.find((sql) => sql.includes("has_table_privilege"));
+  assert.match(privilegeSql ?? "", /to_regclass/);
+  assert.equal(postgresMajor, 16);
+  assert.equal(
+    snapshot.tablePrivileges.filter((row) =>
+      row.tableName === "workspace_approval_ledger"
+    ).every((row) => !row.granted),
+    true,
+  );
+  const audit = auditDevelopmentRlsCatalog({
+    contract,
+    phaseSnapshot: phase,
+    catalogSnapshot: snapshot,
+    appendOnlyGrantRows: appendOnlyGrantRows.rows,
+    objectInventory,
+  });
+  assert.ok(audit.violationCodes.includes("table_missing"));
+  assert.deepEqual(audit.objectDiffs.missing.tables, [
+    "public.workspace_approval_ledger",
+  ]);
+  assert.ok(progress.completedSteps.includes("columns"));
+  assert.ok(progress.completedSteps.includes("privileges"));
+  assert.ok(progress.completedSteps.includes("append_only_privileges"));
+  assert.equal(pendingResults.length, 0);
 });
 
 test("development RLS audit fails if runtime receives table-level UPDATE", () => {
@@ -218,6 +440,54 @@ test("development RLS audit fails when FORCE ROW LEVEL SECURITY is absent", () =
   const audit = auditDevelopmentRlsCatalog({ contract, ...snapshots });
   assert.equal(audit.passed, false);
   assert.ok(audit.violationCodes.includes("table_rls_not_forced"));
+});
+
+test("catalog object comparison lists unexpected public object names", () => {
+  const snapshots = makeSnapshots();
+  snapshots.objectInventory.tables.push("public.unexpected_table");
+  snapshots.objectInventory.indexes.push(
+    "workspace_memberships.unexpected_index",
+  );
+  snapshots.objectInventory.constraints.push(
+    "workspace_memberships.unexpected_constraint",
+  );
+  snapshots.objectInventory.policies.push(
+    "workspace_memberships.unexpected_policy",
+  );
+  const audit = auditDevelopmentRlsCatalog({ contract, ...snapshots });
+  assert.equal(audit.passed, false);
+  assert.deepEqual(audit.objectDiffs.unexpected, {
+    tables: ["public.unexpected_table"],
+    indexes: ["workspace_memberships.unexpected_index"],
+    constraints: ["workspace_memberships.unexpected_constraint"],
+    policies: ["workspace_memberships.unexpected_policy"],
+  });
+  assert.ok(audit.violationCodes.includes("table_unexpected"));
+  assert.ok(audit.violationCodes.includes("index_unexpected"));
+  assert.ok(audit.violationCodes.includes("constraint_unexpected"));
+  assert.ok(audit.violationCodes.includes("policy_unexpected"));
+});
+
+test("development RLS audit flags an outdated approval provenance constraint", () => {
+  const snapshots = makeSnapshots();
+  const expectedConstraint = snapshots.phaseSnapshot.constraints.find(
+    (constraint) =>
+      constraint.constraintName === "ai_assessment_approval_provenance_check",
+  );
+  assert.ok(expectedConstraint?.expression);
+  assert.match(
+    expectedConstraint.expression,
+    /real_openai_compatible_qwen_inference/,
+  );
+  const actualConstraint = snapshots.phaseSnapshot.constraints.find(
+    (constraint) =>
+      constraint.constraintName === "ai_assessment_approval_provenance_check",
+  );
+  assert.ok(actualConstraint);
+  actualConstraint.expression = "model_inference IS NULL";
+  const audit = auditDevelopmentRlsCatalog({ contract, ...snapshots });
+  assert.equal(audit.provenanceConstraintOutdated, true);
+  assert.ok(audit.violationCodes.includes("provenance_constraint_outdated"));
 });
 
 test("read-only audit CLI requires explicit confirmation and a database name", () => {
@@ -319,16 +589,22 @@ test("catalog failure reports its fixed step and sanitized SQLSTATE with prior c
       return { rows: [], rowCount: 0 };
     },
   };
-  const monitored = monitorDevelopmentCatalogReads(client, progress);
-  await monitored.query(
+  const query = createDevelopmentCatalogQueryRunner(
+    client as unknown as Pick<PoolClient, "query">,
+    progress,
+  );
+  await query(
+    "rls_flags",
     "SELECT relrowsecurity FROM pg_class",
   );
-  await monitored.query(
-    "SELECT format_type(atttypid, atttypmod) FROM pg_attribute",
+  await query(
+    "columns",
+    "SELECT format_type(atttypid, atttypmod) FROM pg_attribute " +
+      "WHERE EXISTS (SELECT 1 FROM pg_constraint)",
   );
   let failure: SafeCatalogQueryError | undefined;
   await assert.rejects(
-    monitored.query("SELECT * FROM pg_auth_members"),
+    query("memberships", "SELECT * FROM pg_auth_members"),
     (error) => {
       assert.ok(error instanceof SafeCatalogQueryError);
       failure = error;
@@ -341,7 +617,7 @@ test("catalog failure reports its fixed step and sanitized SQLSTATE with prior c
     },
   );
   await assert.rejects(
-    monitored.query("SELECT * FROM pg_roles"),
+    query("roles", "SELECT * FROM pg_roles"),
     (error) => error instanceof SafeCatalogQueryError &&
       error.failure.step === "memberships",
   );

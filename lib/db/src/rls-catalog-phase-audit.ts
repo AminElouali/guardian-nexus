@@ -113,6 +113,32 @@ export type RlsCatalogPhaseAudit = {
 const dialect = new PgDialect();
 
 export type RlsCatalogAuditStage = "post-schema" | "final";
+export type RlsCatalogQueryStep =
+  | "transaction"
+  | "identity"
+  | "rls_flags"
+  | "tables"
+  | "columns"
+  | "column_inventory"
+  | "indexes"
+  | "constraints"
+  | "policies"
+  | "roles"
+  | "memberships"
+  | "role_membership"
+  | "privileges"
+  | "column_privileges"
+  | "append_only_privileges"
+  | "settings"
+  | "object_inventory";
+export type RlsCatalogQueryRunner = (
+  step: RlsCatalogQueryStep,
+  text: string,
+  values?: unknown[],
+) => Promise<{
+  rows: Array<Record<string, unknown>>;
+  rowCount: number | null;
+}>;
 const defaultPostgresMaxIdentifierLength = 63;
 
 export function postgresIdentifier(
@@ -1267,7 +1293,11 @@ export async function readRlsCatalogPhaseSnapshot(
   client: Pick<PoolClient, "query">,
   tableNames: string[],
   roleNames: string[],
+  queryRunner?: RlsCatalogQueryRunner,
 ): Promise<RlsCatalogPhaseSnapshot> {
+  const runQuery: RlsCatalogQueryRunner = queryRunner ??
+    (async (_step, text, values) =>
+      client.query(text, values as unknown as never[]));
   const [
     tables,
     columns,
@@ -1278,7 +1308,8 @@ export async function readRlsCatalogPhaseSnapshot(
     memberships,
     settings,
   ] = await Promise.all([
-    client.query(
+    runQuery(
+      "rls_flags",
       `SELECT n.nspname AS "schemaName",
               c.relname AS "tableName",
               pg_get_userbyid(c.relowner) AS owner,
@@ -1291,7 +1322,8 @@ export async function readRlsCatalogPhaseSnapshot(
         ORDER BY n.nspname, c.relname`,
       [tableNames],
     ),
-    client.query(
+    runQuery(
+      "columns",
       `SELECT c.relname AS "tableName",
               a.attname AS "columnName",
               format_type(a.atttypid, a.atttypmod) AS "dataType",
@@ -1313,7 +1345,8 @@ export async function readRlsCatalogPhaseSnapshot(
         ORDER BY c.relname, a.attnum`,
       [tableNames],
     ),
-    client.query(
+    runQuery(
+      "indexes",
       `SELECT table_class.relname AS "tableName",
               index_class.relname AS "indexName",
               index_info.indisunique AS "unique",
@@ -1341,7 +1374,8 @@ export async function readRlsCatalogPhaseSnapshot(
         ORDER BY table_class.relname, index_class.relname`,
       [tableNames],
     ),
-    client.query(
+    runQuery(
+      "constraints",
       `SELECT table_class.relname AS "tableName",
               constraint_info.conname AS "constraintName",
               CASE constraint_info.contype
@@ -1408,7 +1442,8 @@ export async function readRlsCatalogPhaseSnapshot(
         ORDER BY table_class.relname, constraint_info.conname`,
       [tableNames],
     ),
-    client.query(
+    runQuery(
+      "policies",
       `SELECT tablename AS "tableName",
               policyname AS "policyName",
               permissive,
@@ -1422,7 +1457,8 @@ export async function readRlsCatalogPhaseSnapshot(
         ORDER BY tablename, policyname`,
       [tableNames],
     ),
-    client.query(
+    runQuery(
+      "roles",
       `SELECT rolname AS "roleName",
               rolcanlogin, rolsuper, rolcreatedb, rolcreaterole,
               rolinherit, rolreplication, rolbypassrls
@@ -1431,7 +1467,8 @@ export async function readRlsCatalogPhaseSnapshot(
         ORDER BY rolname`,
       [roleNames],
     ),
-    client.query(
+    runQuery(
+      "memberships",
       `SELECT granted.rolname AS "grantedRole",
               member.rolname AS "memberRole",
               membership.admin_option AS "adminOption",
@@ -1445,7 +1482,8 @@ export async function readRlsCatalogPhaseSnapshot(
         ORDER BY granted.rolname, member.rolname`,
       [roleNames],
     ),
-    client.query(
+    runQuery(
+      "settings",
       `SELECT current_setting('max_identifier_length')::integer
          AS "maxIdentifierLength"`,
     ),

@@ -8,6 +8,7 @@ import {
   auditRlsPostPushCatalog,
   expectedPostPushRoleNames,
   readRlsCatalogPhaseSnapshot,
+  type RlsCatalogQueryRunner,
   type RlsCatalogAuditStage,
 } from "@workspace/db/rls-catalog-phase-audit";
 import {
@@ -70,7 +71,11 @@ export async function readCatalogSnapshot(
   client: QueryClient,
   tableNames: string[],
   roleNames: string[],
+  queryRunner?: RlsCatalogQueryRunner,
 ): Promise<{ snapshot: RlsCatalogSnapshot; postgresMajor: number }> {
+  const runQuery: RlsCatalogQueryRunner = queryRunner ??
+    (async (_step, text, values) =>
+      client.query(text, values as unknown as never[]));
   const [
     tableResult,
     policyResult,
@@ -82,7 +87,8 @@ export async function readCatalogSnapshot(
     columnResult,
     versionResult,
   ] = await Promise.all([
-    client.query(
+    runQuery(
+      "tables",
       `SELECT c.relname AS "tableName",
                 pg_get_userbyid(c.relowner) AS owner,
                 c.relrowsecurity AS "rlsEnabled",
@@ -95,7 +101,8 @@ export async function readCatalogSnapshot(
           ORDER BY c.relname`,
       [tableNames],
     ),
-    client.query(
+    runQuery(
+      "policies",
       `SELECT tablename AS "tableName",
                 policyname AS "policyName",
                 permissive,
@@ -109,7 +116,8 @@ export async function readCatalogSnapshot(
           ORDER BY tablename, policyname`,
       [tableNames],
     ),
-    client.query(
+    runQuery(
+      "roles",
       `SELECT rolname AS "roleName",
                 rolsuper, rolbypassrls, rolcanlogin, rolcreatedb,
                 rolcreaterole, rolreplication, rolinherit
@@ -118,7 +126,8 @@ export async function readCatalogSnapshot(
           ORDER BY rolname`,
       [roleNames],
     ),
-    client.query(
+    runQuery(
+      "memberships",
       `SELECT granted.rolname AS "grantedRole",
                 member.rolname AS "memberRole",
                 membership.admin_option AS "adminOption",
@@ -132,7 +141,8 @@ export async function readCatalogSnapshot(
           ORDER BY granted.rolname, member.rolname`,
       [roleNames],
     ),
-    client.query(
+    runQuery(
+      "role_membership",
       `SELECT member.rolname AS "memberRole",
                 target.rolname AS "targetRole",
                 pg_has_role(member.oid, target.oid, 'MEMBER') AS member,
@@ -144,23 +154,29 @@ export async function readCatalogSnapshot(
           ORDER BY member.rolname, target.rolname`,
       [roleNames],
     ),
-    client.query(
+    runQuery(
+      "privileges",
       `SELECT role.rolname AS "roleName",
                 table_names.table_name AS "tableName",
                 privilege.name AS privilege,
-                has_table_privilege(
+                COALESCE(has_table_privilege(
                   role.oid,
-                  format('public.%I', table_names.table_name),
+                  protected_table.oid,
                   privilege.name
-                ) AS granted
+                ), false) AS granted
            FROM pg_roles AS role
            CROSS JOIN unnest($1::text[]) AS table_names(table_name)
+            LEFT JOIN pg_class AS protected_table
+              ON protected_table.oid = to_regclass(
+                format('public.%I', table_names.table_name)
+              )
            CROSS JOIN unnest($2::text[]) AS privilege(name)
           WHERE role.rolname = ANY($3::text[])
           ORDER BY role.rolname, table_names.table_name, privilege.name`,
       [tableNames, privilegeNames, roleNames],
     ),
-    client.query(
+    runQuery(
+      "column_privileges",
       `SELECT role.rolname AS "roleName",
                 c.relname AS "tableName",
                 attribute.attname AS "columnName",
@@ -179,7 +195,8 @@ export async function readCatalogSnapshot(
           ORDER BY role.rolname, c.relname, attribute.attnum`,
       [roleNames, specialUpdateTables],
     ),
-    client.query(
+    runQuery(
+      "column_inventory",
       `SELECT c.relname AS "tableName",
                 array_agg(attribute.attname::text ORDER BY attribute.attnum)::text[]
                   AS "columnNames"
@@ -194,7 +211,8 @@ export async function readCatalogSnapshot(
           ORDER BY c.relname`,
       [specialUpdateTables],
     ),
-    client.query(
+    runQuery(
+      "settings",
       `SELECT current_setting('server_version_num')::integer AS version`,
     ),
   ]);
