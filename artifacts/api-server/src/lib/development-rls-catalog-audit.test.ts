@@ -229,6 +229,14 @@ test("read-only audit CLI requires explicit confirmation and a database name", (
     ]),
     { ok: true, expectedDatabase: "guardian_dev" },
   );
+  assert.deepEqual(
+    parseDevelopmentRlsAuditArguments([
+      "--",
+      "--confirm-read-only",
+      "--expected-database=guardian_dev",
+    ]),
+    { ok: true, expectedDatabase: "guardian_dev" },
+  );
   assert.equal(
     parseDevelopmentRlsAuditArguments([
       "--confirm-read-only",

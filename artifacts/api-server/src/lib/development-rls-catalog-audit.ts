@@ -211,16 +211,19 @@ export function parseDevelopmentRlsAuditArguments(
 ):
   | { ok: true; expectedDatabase: string }
   | { ok: false; code: "read_only_confirmation_required" | "expected_database_required" | "invalid_arguments" } {
-  if (!args.includes("--confirm-read-only")) {
+  const normalizedArgs = args[0] === "--" ? args.slice(1) : args;
+  if (!normalizedArgs.includes("--confirm-read-only")) {
     return { ok: false, code: "read_only_confirmation_required" };
   }
-  const databaseArguments = args.filter((arg) =>
+  const databaseArguments = normalizedArgs.filter((arg) =>
     arg.startsWith("--expected-database="),
   );
   if (databaseArguments.length !== 1) {
     return { ok: false, code: "expected_database_required" };
   }
-  if (args.length !== 2) return { ok: false, code: "invalid_arguments" };
+  if (normalizedArgs.length !== 2) {
+    return { ok: false, code: "invalid_arguments" };
+  }
   const expectedDatabase = databaseArguments[0]!.slice(
     "--expected-database=".length,
   );
