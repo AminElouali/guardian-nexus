@@ -28,7 +28,10 @@ import {
   parseRlsCatalogContract,
   auditRlsCatalog,
 } from "@workspace/db/rls-catalog-audit";
-import { runApprovalLedgerRlsProbes } from "./approval-ledger-rls-probes";
+import {
+  runApprovalLedgerRlsProbes,
+  safeApprovalLedgerRlsProbeFailureCode,
+} from "./approval-ledger-rls-probes";
 import { readCatalogSnapshot } from "./verify-rls-catalog";
 
 const { Client, Pool } = pg;
@@ -81,6 +84,12 @@ type SafeReport = {
   runtimeLoginAuthenticated?: boolean;
   approvalLedgerRlsProbesPassed?: boolean;
   approvalLedgerRlsProbeCount?: number;
+  approvalLedgerRlsProbeFailureCode?: string;
+  approvalE2eSummary?: NodeTestSummary;
+  approvalE2eFailureLocations?: string[];
+  approvalE2eFailureErrorName?: string;
+  approvalE2eFailureErrorCode?: string;
+  approvalE2eFailureType?: string;
   approvalE2ePassed?: boolean;
   failureStage?: Stage;
 };
@@ -165,7 +174,12 @@ function runAndCapture(
   env: NodeJS.ProcessEnv,
   stage: Stage,
   timeoutMs = 240_000,
-): Promise<{ stdout: string; stderr: string }> {
+): Promise<{
+  stdout: string;
+  stderr: string;
+  exitCode: number | null;
+  signal: NodeJS.Signals | null;
+}> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd,
@@ -207,14 +221,12 @@ function runAndCapture(
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
-      if (code === 0 && signal === null) {
-        resolve({
-          stdout: Buffer.concat(stdout).toString("utf8"),
-          stderr: Buffer.concat(stderr).toString("utf8"),
-        });
-      } else {
-        reject(new Error(`child_failed:${stage}`));
-      }
+      resolve({
+        stdout: Buffer.concat(stdout).toString("utf8"),
+        stderr: Buffer.concat(stderr).toString("utf8"),
+        exitCode: code,
+        signal,
+      });
     });
   });
 }
@@ -242,6 +254,76 @@ function parseNodeTestSummary(output: string): NodeTestSummary {
     throw new Error("approval_e2e_summary_invalid");
   }
   return summary as NodeTestSummary;
+}
+
+function parseSafeFailedTestLabels(output: string): string[] {
+  return [...output.matchAll(/^not ok \d+ - (.{1,160})$/gm)]
+    .map((match) => match[1] ?? "")
+    .filter((label) => /^[A-Za-z0-9][A-Za-z0-9 .:_/-]{0,159}$/.test(label))
+    .slice(0, 20);
+}
+
+function parseSafeFailureLocations(output: string): string[] {
+  const stackLocations = [
+    ...output.matchAll(/^\s+at .*?\/([A-Za-z0-9._-]+\.ts):(\d+):\d+/gm),
+  ].map((match) => `${match[1]}:${match[2]}`);
+  const tapLocations = [
+    ...output.matchAll(
+      /^\s*location:\s*['"]?(?:file:\/\/)?[^'"\n]*\/([A-Za-z0-9._-]+\.ts):(\d+):\d+['"]?\s*$/gm,
+    ),
+  ].map((match) => `${match[1]}:${match[2]}`);
+  return [
+    ...new Set(
+      [...stackLocations, ...tapLocations].filter((location) =>
+        /^[A-Za-z0-9._-]+\.ts:\d+$/.test(location),
+      ),
+    ),
+  ].slice(0, 8);
+}
+
+function parseSafeFailureError(output: string): {
+  name?: string;
+  code?: string;
+  type?: string;
+} {
+  const name = output.match(
+    /^\s*error:\s*['"]?(AssertionError|Error|TypeError|RangeError|ReferenceError|SyntaxError|TimeoutError)\b/m,
+  )?.[1];
+  const candidateCode = output.match(
+    /^\s*code:\s*['"]([A-Z0-9_]{1,64})['"]\s*$/m,
+  )?.[1];
+  const candidateType = output.match(
+    /^\s*failureType:\s*['"]([A-Za-z]+)['"]\s*$/m,
+  )?.[1];
+  const safeCodes = new Set([
+    "ERR_ASSERTION",
+    "ERR_TEST_FAILURE",
+    "ERR_MODULE_NOT_FOUND",
+    "ERR_PACKAGE_PATH_NOT_EXPORTED",
+    "ERR_INVALID_ARG_TYPE",
+    "ERR_STREAM_PREMATURE_CLOSE",
+    "23503",
+    "23505",
+    "42501",
+    "42703",
+    "42P01",
+    "28P01",
+  ]);
+  const safeTypes = new Set([
+    "testCodeFailure",
+    "testTimeoutFailure",
+    "hookFailed",
+    "subtestsFailed",
+  ]);
+  return {
+    ...(name ? { name } : {}),
+    ...(candidateCode && safeCodes.has(candidateCode)
+      ? { code: candidateCode }
+      : {}),
+    ...(candidateType && safeTypes.has(candidateType)
+      ? { type: candidateType }
+      : {}),
+  };
 }
 
 function binaryPath(name: string): string {
@@ -479,6 +561,12 @@ async function main(): Promise<void> {
   let runtimeLoginAuthenticated = false;
   let approvalLedgerRlsProbesPassed = false;
   let approvalLedgerRlsProbeCount = 0;
+  let approvalLedgerRlsProbeFailureCode: string | undefined;
+  let approvalE2eSummary: NodeTestSummary | undefined;
+  let approvalE2eFailureLocations: string[] = [];
+  let approvalE2eFailureErrorName: string | undefined;
+  let approvalE2eFailureErrorCode: string | undefined;
+  let approvalE2eFailureType: string | undefined;
   let approvalE2ePassed = false;
   let postSchemaCounts = {
     tables: 0,
@@ -895,18 +983,52 @@ async function main(): Promise<void> {
     const nodeTestSummary = parseNodeTestSummary(
       `${e2eOutput.stdout}\n${e2eOutput.stderr}`,
     );
+    approvalE2eSummary = nodeTestSummary;
+    console.log(
+      `node:test approval E2E: tests=${nodeTestSummary.tests} pass=${nodeTestSummary.pass} fail=${nodeTestSummary.fail} skipped=${nodeTestSummary.skipped}`,
+    );
+    const failedTestLabels = parseSafeFailedTestLabels(
+      `${e2eOutput.stdout}\n${e2eOutput.stderr}`,
+    );
+    approvalE2eFailureLocations = parseSafeFailureLocations(
+      `${e2eOutput.stdout}\n${e2eOutput.stderr}`,
+    );
+    const failureError = parseSafeFailureError(
+      `${e2eOutput.stdout}\n${e2eOutput.stderr}`,
+    );
+    approvalE2eFailureErrorName = failureError.name;
+    approvalE2eFailureErrorCode = failureError.code;
+    approvalE2eFailureType = failureError.type;
     if (
+      e2eOutput.exitCode !== 0 ||
+      e2eOutput.signal !== null ||
       nodeTestSummary.pass < 1 ||
       nodeTestSummary.skipped !== 0 ||
       nodeTestSummary.fail !== 0 ||
       nodeTestSummary.cancelled !== 0
     ) {
+      if (failedTestLabels.length > 0) {
+        console.error(
+          `node:test failed cases: ${failedTestLabels.join(" | ")}`,
+        );
+      }
+      if (approvalE2eFailureLocations.length > 0) {
+        console.error(
+          `node:test failure locations: ${approvalE2eFailureLocations.join(" | ")}`,
+        );
+      }
+      if (
+        approvalE2eFailureErrorName ||
+        approvalE2eFailureErrorCode ||
+        approvalE2eFailureType
+      ) {
+        console.error(
+          `node:test failure class: type=${approvalE2eFailureType ?? "unknown"} name=${approvalE2eFailureErrorName ?? "unknown"} code=${approvalE2eFailureErrorCode ?? "unknown"}`,
+        );
+      }
       throw new Error("approval_e2e_summary_rejected");
     }
     approvalE2ePassed = true;
-    console.log(
-      `node:test approval E2E: tests=${nodeTestSummary.tests} pass=${nodeTestSummary.pass} fail=${nodeTestSummary.fail} skipped=${nodeTestSummary.skipped}`,
-    );
 
     await writeSafeReport(reportDirectory, {
       version: 1,
@@ -920,10 +1042,15 @@ async function main(): Promise<void> {
       runtimeLoginAuthenticated,
       approvalLedgerRlsProbesPassed,
       approvalLedgerRlsProbeCount,
+      approvalE2eSummary,
       approvalE2ePassed,
     });
     console.log("Disposable PostgreSQL lab passed; sanitized reports were written.");
-  } catch {
+  } catch (error) {
+    if (currentStage === "approval_ledger_rls_probes") {
+      approvalLedgerRlsProbeFailureCode =
+        safeApprovalLedgerRlsProbeFailureCode(error);
+    }
     const status = `Disposable PostgreSQL lab failed at stage: ${currentStage}.`;
     if (reportDirectory) {
       await writeSafeReport(reportDirectory, {
@@ -941,11 +1068,22 @@ async function main(): Promise<void> {
         runtimeLoginAuthenticated,
         approvalLedgerRlsProbesPassed,
         approvalLedgerRlsProbeCount,
+        approvalLedgerRlsProbeFailureCode,
+        approvalE2eSummary,
+        approvalE2eFailureLocations,
+        approvalE2eFailureErrorName,
+        approvalE2eFailureErrorCode,
+        approvalE2eFailureType,
         approvalE2ePassed,
         failureStage: currentStage,
       }).catch(() => undefined);
     }
     console.error(status);
+    if (approvalLedgerRlsProbeFailureCode) {
+      console.error(
+        `Approval ledger RLS probe failure code: ${approvalLedgerRlsProbeFailureCode}.`,
+      );
+    }
     if (expectedObjectDiagnostics.length > 0) {
       console.error(
         `Expected schema object identifiers with mismatches: ${expectedObjectDiagnostics.join(", ")}`,

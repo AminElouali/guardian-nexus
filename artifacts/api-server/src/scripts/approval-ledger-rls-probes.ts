@@ -13,6 +13,26 @@ import {
 
 const TEST_DIGEST = "a".repeat(64);
 const TEST_KEY_ID = "local-ledger-probe";
+const SAFE_PROBE_FAILURE_CODES = new Set([
+  "approval_ledger_probe_fixture_seed_failed",
+  "approval_ledger_probe_other_workspace_seed_failed",
+  "approval_ledger_probe_runtime_setup_failed",
+  "approval_ledger_probe_owner_approval_insert_failed",
+  "approval_ledger_probe_owner_receipt_consumed_insert_failed",
+  "approval_ledger_probe_owner_select_failed",
+  "approval_ledger_probe_cross_tenant_read_failed",
+  "approval_ledger_probe_cross_tenant_insert_failed",
+  "approval_ledger_probe_duplicate_sequence_failed",
+  "approval_ledger_probe_duplicate_consumption_failed",
+  "approval_ledger_probe_admin_insert_failed",
+  "approval_ledger_probe_update_denied_failed",
+  "approval_ledger_probe_delete_denied_failed",
+  "approval_ledger_probe_truncate_denied_failed",
+  "approval_ledger_probe_viewer_insert_failed",
+  "approval_ledger_probe_workspace_delete_protected_failed",
+  "approval_ledger_probe_count_failed",
+  "approval_ledger_probe_failed",
+]);
 
 type LedgerRow = {
   workspaceId: string;
@@ -161,6 +181,18 @@ async function insertWorkspaceFixture(
   }
 }
 
+export function safeApprovalLedgerRlsProbeFailureCode(
+  error: unknown,
+): string {
+  if (
+    error instanceof Error &&
+    SAFE_PROBE_FAILURE_CODES.has(error.message)
+  ) {
+    return error.message;
+  }
+  return "approval_ledger_probe_failed";
+}
+
 /**
  * Runs only against the caller-verified, disposable local lab database.
  * It returns counts only; no fixture identifiers or row contents are logged.
@@ -180,8 +212,10 @@ export async function runApprovalLedgerRlsProbes(
   const otherReceiptId = randomUUID();
   const keyPair = generateKeyPairSync("ed25519");
   let probeCount = 0;
+  let currentProbe = "fixture_seed";
 
   try {
+    currentProbe = "fixture_seed";
     await insertWorkspaceFixture(pool, workspaceId, ownerUserId, [
       { userId: ownerUserId, role: "owner" },
       { userId: adminUserId, role: "admin" },
@@ -191,6 +225,7 @@ export async function runApprovalLedgerRlsProbes(
       { userId: otherOwnerUserId, role: "owner" },
     ]);
 
+    currentProbe = "other_workspace_seed";
     const otherWorkspaceRow = makeLedgerRow({
       workspaceId: otherWorkspaceId,
       sequence: 1,
@@ -206,12 +241,21 @@ export async function runApprovalLedgerRlsProbes(
     } finally {
       seedClient.release();
     }
+    const seededOtherRows = await pool.query(
+      `SELECT count(*)::integer AS count
+         FROM public.workspace_approval_ledger
+        WHERE workspace_id = $1`,
+      [otherWorkspaceId],
+    );
+    assert.equal(seededOtherRows.rows[0]?.count, 1);
 
     const client = await pool.connect();
     try {
+      currentProbe = "runtime_setup";
       await client.query("BEGIN");
       await client.query("SET LOCAL ROLE app_runtime");
       await setRuntimeContext(client, ownerUserId, workspaceId);
+      currentProbe = "owner_approval_insert";
       const firstApproved = makeLedgerRow({
         workspaceId,
         sequence: 1,
@@ -224,6 +268,7 @@ export async function runApprovalLedgerRlsProbes(
       await insertLedgerRow(client, firstApproved);
       probeCount += 1;
 
+      currentProbe = "owner_receipt_consumed_insert";
       const firstConsumed = makeLedgerRow({
         workspaceId,
         sequence: 2,
@@ -236,6 +281,7 @@ export async function runApprovalLedgerRlsProbes(
       await insertLedgerRow(client, firstConsumed);
       probeCount += 1;
 
+      currentProbe = "owner_select";
       const ownRows = await client.query(
         `SELECT count(*)::integer AS count
            FROM public.workspace_approval_ledger
@@ -245,13 +291,7 @@ export async function runApprovalLedgerRlsProbes(
       assert.equal(ownRows.rows[0]?.count, 2);
       probeCount += 1;
 
-      const seededOtherRows = await pool.query(
-        `SELECT count(*)::integer AS count
-           FROM public.workspace_approval_ledger
-          WHERE workspace_id = $1`,
-        [otherWorkspaceId],
-      );
-      assert.equal(seededOtherRows.rows[0]?.count, 1);
+      currentProbe = "cross_tenant_read";
       const hiddenOtherRows = await client.query(
         `SELECT sequence
            FROM public.workspace_approval_ledger
@@ -261,6 +301,7 @@ export async function runApprovalLedgerRlsProbes(
       assert.equal(hiddenOtherRows.rowCount, 0);
       probeCount += 1;
 
+      currentProbe = "cross_tenant_insert";
       const crossTenantInsert = makeLedgerRow({
         workspaceId: otherWorkspaceId,
         sequence: 2,
@@ -275,6 +316,7 @@ export async function runApprovalLedgerRlsProbes(
       );
       probeCount += 1;
 
+      currentProbe = "duplicate_sequence";
       const duplicateSequence = makeLedgerRow({
         workspaceId,
         sequence: 1,
@@ -289,6 +331,7 @@ export async function runApprovalLedgerRlsProbes(
       );
       probeCount += 1;
 
+      currentProbe = "duplicate_consumption";
       const duplicateConsumption = makeLedgerRow({
         workspaceId,
         sequence: 3,
@@ -303,6 +346,7 @@ export async function runApprovalLedgerRlsProbes(
       );
       probeCount += 1;
 
+      currentProbe = "admin_insert";
       const forbiddenRow = makeLedgerRow({
         workspaceId,
         sequence: 3,
@@ -316,6 +360,23 @@ export async function runApprovalLedgerRlsProbes(
       await insertLedgerRow(client, forbiddenRow);
       probeCount += 1;
 
+      currentProbe = "viewer_insert";
+      const viewerRow = makeLedgerRow({
+        workspaceId,
+        sequence: 4,
+        eventType: "approval.approved",
+        approvalId,
+        receiptId: randomUUID(),
+        previousHash: forbiddenRow.eventHash,
+        keyPair,
+      });
+      await setRuntimeContext(client, viewerUserId, workspaceId);
+      await expectSqlState(client, "42501", () =>
+        insertLedgerRow(client, viewerRow),
+      );
+      probeCount += 1;
+
+      currentProbe = "update_denied";
       await setRuntimeContext(client, ownerUserId, workspaceId);
       await expectSqlState(client, "42501", () =>
         client.query(
@@ -326,6 +387,7 @@ export async function runApprovalLedgerRlsProbes(
         ),
       );
       probeCount += 1;
+      currentProbe = "delete_denied";
       await expectSqlState(client, "42501", () =>
         client.query(
           "DELETE FROM public.workspace_approval_ledger WHERE workspace_id = $1",
@@ -333,19 +395,22 @@ export async function runApprovalLedgerRlsProbes(
         ),
       );
       probeCount += 1;
+      currentProbe = "truncate_denied";
       await expectSqlState(client, "42501", () =>
         client.query("TRUNCATE TABLE public.workspace_approval_ledger"),
       );
       probeCount += 1;
 
+      currentProbe = "runtime_setup";
       await client.query("COMMIT");
     } catch {
       await client.query("ROLLBACK").catch(() => undefined);
-      throw new Error("approval_ledger_runtime_probes_failed");
+      throw new Error(`approval_ledger_probe_${currentProbe}_failed`);
     } finally {
       client.release();
     }
 
+    currentProbe = "workspace_delete_protected";
     const deleteClient = await pool.connect();
     try {
       await deleteClient.query("BEGIN");
@@ -364,9 +429,13 @@ export async function runApprovalLedgerRlsProbes(
       deleteClient.release();
     }
 
-    assert.equal(probeCount, 12);
+    currentProbe = "probe_count";
+    assert.equal(probeCount, 13);
     return { passed: true, probeCount };
   } catch {
-    throw new Error("approval_ledger_rls_probe_failed");
+    const code = `approval_ledger_probe_${currentProbe}_failed`;
+    throw new Error(SAFE_PROBE_FAILURE_CODES.has(code)
+      ? code
+      : "approval_ledger_probe_failed");
   }
 }

@@ -156,6 +156,52 @@ function tableNameOf(
   );
 }
 
+function expandPostgresVariadicJsonPath(expression: string): string {
+  const invocation =
+    /\bjsonb_extract_path_text\s*\(\s*([^,]+),\s*VARIADIC\s+ARRAY\s*\[([^\]]*)\]\s*\)/gi;
+  return expression.replace(
+    invocation,
+    (original, jsonValue: string, arrayBody: string) => {
+      const pathArguments: string[] = [];
+      let offset = 0;
+      while (offset < arrayBody.length) {
+        while (/\s/.test(arrayBody[offset] ?? "")) offset += 1;
+        if (arrayBody[offset] !== "'") return original;
+        const literalStart = offset;
+        offset += 1;
+        let closed = false;
+        while (offset < arrayBody.length) {
+          if (arrayBody[offset] === "'" && arrayBody[offset + 1] === "'") {
+            offset += 2;
+            continue;
+          }
+          if (arrayBody[offset] === "'") {
+            offset += 1;
+            closed = true;
+            break;
+          }
+          offset += 1;
+        }
+        if (!closed) return original;
+        const literal = arrayBody.slice(literalStart, offset);
+        while (/\s/.test(arrayBody[offset] ?? "")) offset += 1;
+        if (arrayBody.slice(offset, offset + 6).toLowerCase() !== "::text") {
+          return original;
+        }
+        offset += 6;
+        pathArguments.push(literal);
+        while (/\s/.test(arrayBody[offset] ?? "")) offset += 1;
+        if (offset === arrayBody.length) break;
+        if (arrayBody[offset] !== ",") return original;
+        offset += 1;
+        if (arrayBody.slice(offset).trim().length === 0) return original;
+      }
+      if (pathArguments.length === 0) return original;
+      return `jsonb_extract_path_text(${jsonValue.trim()}, ${pathArguments.join(", ")})`;
+    },
+  );
+}
+
 function normalizeAst(value: unknown, baseTable: string): unknown {
   if (Array.isArray(value)) {
     return value.map((item) => normalizeAst(item, baseTable));
@@ -272,7 +318,7 @@ export function canonicalizeRlsExpression(
   baseTable: string,
 ): string | null {
   if (expression === null) return null;
-  const ast = parse(expression, "expr");
+  const ast = parse(expandPostgresVariadicJsonPath(expression), "expr");
   return JSON.stringify(normalizeAst(ast, baseTable));
 }
 
@@ -299,9 +345,23 @@ function expressionMismatchCategories(
   if (expected === null || actual === null) {
     return expected === actual ? [] : ["presence"];
   }
+  let left: unknown;
   try {
-    const left = JSON.parse(canonicalizeRlsExpression(expected, tableName) ?? "null");
-    const right = JSON.parse(canonicalizeRlsExpression(actual, tableName) ?? "null");
+    left = JSON.parse(
+      canonicalizeRlsExpression(expected, tableName) ?? "null",
+    );
+  } catch {
+    return ["schema_unparseable"];
+  }
+  let right: unknown;
+  try {
+    right = JSON.parse(
+      canonicalizeRlsExpression(actual, tableName) ?? "null",
+    );
+  } catch {
+    return ["catalog_unparseable"];
+  }
+  try {
     const categories = new Set<string>();
     const compare = (
       a: unknown,

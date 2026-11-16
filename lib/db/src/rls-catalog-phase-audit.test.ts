@@ -334,6 +334,30 @@ test("predicate canonicalization rejects unparsable catalog expressions", () => 
   assert.throws(() => canonicalizeRlsExpression("invalid (", "assets"));
 });
 
+test("predicate canonicalization handles PostgreSQL variadic JSON path output", () => {
+  const drizzleExpression =
+    "jsonb_extract_path_text(payload_canonical::jsonb, 'workspaceId') = workspace_id::text";
+  const catalogExpression =
+    "jsonb_extract_path_text((payload_canonical)::jsonb, VARIADIC ARRAY['workspaceId'::text]) = (workspace_id)::text";
+  assert.equal(
+    canonicalizeRlsExpression(drizzleExpression, "workspace_approval_ledger"),
+    canonicalizeRlsExpression(catalogExpression, "workspace_approval_ledger"),
+  );
+  assert.notEqual(
+    canonicalizeRlsExpression(drizzleExpression, "workspace_approval_ledger"),
+    canonicalizeRlsExpression(
+      "jsonb_extract_path_text((payload_canonical)::jsonb, VARIADIC ARRAY['approvalId'::text]) = (workspace_id)::text",
+      "workspace_approval_ledger",
+    ),
+  );
+  assert.throws(() =>
+    canonicalizeRlsExpression(
+      "jsonb_extract_path_text(payload_canonical::jsonb, VARIADIC ARRAY[1]) = workspace_id::text",
+      "workspace_approval_ledger",
+    ),
+  );
+});
+
 test("predicate canonicalization handles PostgreSQL IN-to-ANY rewrites", () => {
   assert.equal(
     canonicalizeRlsExpression(
