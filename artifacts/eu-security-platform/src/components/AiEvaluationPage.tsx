@@ -3,14 +3,18 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Activity, AlertTriangle, Check, Clock3, FlaskConical, LockKeyhole, ShieldAlert, ShieldCheck, Sparkles, WifiOff } from 'lucide-react';
 import {
   getListWorkspaceAiAssessmentApprovalsQueryKey,
+  getListWorkspaceApprovalLedgerEventsQueryKey,
   getListWorkspaceAiAssessmentLabJobsQueryKey,
   getListWorkspaceAiEvaluationsQueryKey,
   useDecideWorkspaceAiAssessmentApproval,
+  useConsumeWorkspaceAiAssessmentApprovalReceipt,
+  useExportWorkspaceApprovalLedgerBundle,
   useCreateWorkspaceAiAssessmentLabJob,
   useCreateWorkspaceSyntheticRefundProposal,
   useGetWorkspaceAiAssessmentLabAvailability,
   useGetWorkspaceQwenProviderStatus,
   useListWorkspaceAiAssessmentApprovals,
+  useListWorkspaceApprovalLedgerEvents,
   useListWorkspaceAiAssessmentLabJobs,
   useListWorkspaceAiEvaluations,
   usePreviewWorkspaceAiAssessmentPolicyLab,
@@ -21,6 +25,9 @@ import {
   type AiEvaluationRun,
   type GuardianPolicyLabPreviewResponse,
   type SyntheticRefundProposalResponse,
+  type SignedApprovalReceiptV1,
+  type AiAssessmentApprovalReceiptConsumeResponse,
+  type ApprovalLedgerBundleV1,
   type Workspace,
 } from '@workspace/api-client-react';
 import { Button } from '@/components/ui/button';
@@ -28,7 +35,14 @@ import {
   deriveQwenBankChangeFinding,
   downloadQwenExecutiveReport,
 } from './qwenExecutiveReport';
-import { GuardianApprovalInbox } from './GuardianApprovalInbox';
+import {
+  GuardianApprovalInbox,
+  isFixtureOnlySyntheticRefundApproval,
+} from './GuardianApprovalInbox';
+import {
+  ApprovalLedgerDemo,
+  type ReceiptConsumeDisplay,
+} from './ApprovalLedgerDemo';
 import { WorkspaceQueryError } from './WorkspaceQueryError';
 import {
   AgentPolicyLabCatalog,
@@ -924,6 +938,8 @@ const qwenDemoStyles = `
 
 export default function AiEvaluationPage({ workspace }: { workspace: Workspace }) {
   const cache = useQueryClient();
+  const [activeSection, setActiveSection] = useState<AiEvaluationSection>('lab');
+  const canRun = workspace.role === 'owner' || workspace.role === 'admin';
   const history = useListWorkspaceAiEvaluations(workspace.id);
   const runEvaluation = useRunWorkspaceMockAiEvaluation();
   const qwenProviderStatus = useGetWorkspaceQwenProviderStatus(workspace.id, {
@@ -938,10 +954,19 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
   const approvalList = useListWorkspaceAiAssessmentApprovals(workspace.id, {
     query: { refetchInterval: 10_000 },
   });
+  const ledgerEvents = useListWorkspaceApprovalLedgerEvents(workspace.id, {
+    query: {
+      enabled: canRun && activeSection === 'approvals',
+      refetchOnWindowFocus: false,
+    },
+  });
   const createLabJob = useCreateWorkspaceAiAssessmentLabJob();
   const previewPolicyLab = usePreviewWorkspaceAiAssessmentPolicyLab();
   const retryLabJob = useRetryWorkspaceAiAssessmentLabJob();
   const decideApproval = useDecideWorkspaceAiAssessmentApproval();
+  const consumeApprovalReceipt =
+    useConsumeWorkspaceAiAssessmentApprovalReceipt();
+  const exportApprovalLedgerMutation = useExportWorkspaceApprovalLedgerBundle();
   const createSyntheticRefund = useCreateWorkspaceSyntheticRefundProposal();
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -958,11 +983,25 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
   } | null>(null);
   const [approvalMessage, setApprovalMessage] = useState('');
   const [approvalError, setApprovalError] = useState('');
+  const [approvalLedgerClientState, setApprovalLedgerClientState] = useState<{
+    workspaceId: string;
+    receipts: Record<string, SignedApprovalReceiptV1>;
+    consumeResults: Record<string, ReceiptConsumeDisplay>;
+  } | null>(null);
+  const [ledgerExportErrorStatus, setLedgerExportErrorStatus] = useState<
+    number | null | undefined
+  >();
   const [qwenProposal, setQwenProposal] = useState<SyntheticRefundProposalResponse | null>(null);
   const [qwenProposalError, setQwenProposalError] = useState('');
   const [qwenProposalMessage, setQwenProposalMessage] = useState('');
-  const [activeSection, setActiveSection] = useState<AiEvaluationSection>('lab');
-  const canRun = workspace.role === 'owner' || workspace.role === 'admin';
+  const currentLedgerState: {
+    workspaceId: string;
+    receipts: Record<string, SignedApprovalReceiptV1>;
+    consumeResults: Record<string, ReceiptConsumeDisplay>;
+  } =
+    approvalLedgerClientState?.workspaceId === workspace.id
+      ? approvalLedgerClientState
+      : { workspaceId: workspace.id, receipts: {}, consumeResults: {} };
   const garakAvailable = availability.data?.profiles.some(
     (profile) => profile.profileId === 'guardian-local-agent-v1' && profile.status === 'ready',
   ) ?? false;
@@ -1034,18 +1073,138 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
     setApprovalMessage('');
     setApprovalError('');
     try {
-      await decideApproval.mutateAsync({
+      const approval = approvalList.data?.approvals.find(
+        (candidate) => candidate.id === approvalId,
+      );
+      const eligibleSyntheticRefund = approval
+        ? isFixtureOnlySyntheticRefundApproval(approval)
+        : false;
+      const result = await decideApproval.mutateAsync({
         workspaceId: workspace.id,
         approvalId,
         data: { decision, proposalBindingSha256 },
       });
-      setApprovalMessage('Decisión registrada. No se ejecutó ni reanudó ninguna herramienta.');
+      if (decision === 'approve' && eligibleSyntheticRefund) {
+        const receipt = result.receipt;
+        if (
+          !receipt ||
+          receipt.payload.workspaceId !== workspace.id ||
+          receipt.payload.approvalId !== approvalId
+        ) {
+          setApprovalError(
+            'La aprobación sintética no devolvió el recibo esperado; no se ofrece su consumo desde esta sesión.',
+          );
+          await approvalList.refetch();
+          return;
+        }
+        setApprovalLedgerClientState((current) => {
+          const sameWorkspace = current?.workspaceId === workspace.id;
+          return {
+            workspaceId: workspace.id,
+            receipts: {
+              ...(sameWorkspace ? current.receipts : {}),
+              [approvalId]: receipt,
+            },
+            consumeResults: sameWorkspace ? current.consumeResults : {},
+          };
+        });
+        setApprovalMessage(
+          'Aprobación sintética registrada y recibo firmado recibido. El servidor no conserva el recibo.',
+        );
+      } else {
+        setApprovalMessage(
+          'Decisión registrada. No se ejecutó ni reanudó ninguna herramienta.',
+        );
+      }
       await cache.invalidateQueries({
         queryKey: getListWorkspaceAiAssessmentApprovalsQueryKey(workspace.id),
+      });
+      await cache.invalidateQueries({
+        queryKey: getListWorkspaceApprovalLedgerEventsQueryKey(workspace.id),
       });
     } catch {
       setApprovalError('No se pudo registrar la decisión. La operación simulada no se ejecutó.');
       await approvalList.refetch();
+    }
+  }
+
+  async function consumeSyntheticApprovalReceipt(
+    approvalId: string,
+    receipt: SignedApprovalReceiptV1,
+  ) {
+    setApprovalError('');
+    try {
+      const response: AiAssessmentApprovalReceiptConsumeResponse =
+        await consumeApprovalReceipt.mutateAsync({
+          workspaceId: workspace.id,
+          approvalId,
+          data: { receipt },
+        });
+      setApprovalLedgerClientState((current) => {
+        if (current?.workspaceId !== workspace.id) return current;
+        return {
+          ...current,
+          consumeResults: {
+            ...current.consumeResults,
+            [approvalId]: { httpStatus: 200, response },
+          },
+        };
+      });
+      await cache.invalidateQueries({
+        queryKey: getListWorkspaceApprovalLedgerEventsQueryKey(workspace.id),
+      });
+      await cache.invalidateQueries({
+        queryKey: getListWorkspaceAiAssessmentApprovalsQueryKey(workspace.id),
+      });
+    } catch (caught) {
+      const status = caught &&
+          typeof caught === 'object' &&
+          'status' in caught &&
+          typeof caught.status === 'number' &&
+          Number.isInteger(caught.status)
+        ? caught.status
+        : undefined;
+      setApprovalLedgerClientState((current) => {
+        if (current?.workspaceId !== workspace.id) return current;
+        return {
+          ...current,
+          consumeResults: {
+            ...current.consumeResults,
+            [approvalId]: { httpStatus: status ?? null },
+          },
+        };
+      });
+    }
+  }
+
+  async function exportApprovalLedger(receipts: SignedApprovalReceiptV1[]) {
+    setLedgerExportErrorStatus(undefined);
+    try {
+      const bundle: ApprovalLedgerBundleV1 =
+        await exportApprovalLedgerMutation.mutateAsync({
+          workspaceId: workspace.id,
+          data: { receipts },
+        });
+      const blob = new Blob([`${JSON.stringify(bundle, null, 2)}\n`], {
+        type: 'application/json',
+      });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `guardian-approval-ledger-${workspace.id}.json`;
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    } catch (caught) {
+      const status = caught &&
+          typeof caught === 'object' &&
+          'status' in caught &&
+          typeof caught.status === 'number' &&
+          Number.isInteger(caught.status)
+        ? caught.status
+        : null;
+      setLedgerExportErrorStatus(status);
     }
   }
 
@@ -1397,6 +1556,26 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
         void recordApprovalDecision(approvalId, binding, decision)
       }
     />
+    {canRun && (
+      <ApprovalLedgerDemo
+        receipts={Object.entries(currentLedgerState.receipts).map(
+          ([approvalId, receipt]) => ({ approvalId, receipt }),
+        )}
+        consumeResults={currentLedgerState.consumeResults}
+        events={ledgerEvents.data?.events ?? []}
+        eventsLoading={ledgerEvents.isLoading}
+        eventsError={ledgerEvents.isError}
+        eventsErrorDetail={ledgerEvents.error}
+        eventsRetrying={ledgerEvents.isFetching}
+        exporting={exportApprovalLedgerMutation.isPending}
+        exportErrorStatus={ledgerExportErrorStatus}
+        onRetryEvents={() => void ledgerEvents.refetch()}
+        onConsume={(approvalId, receipt) =>
+          void consumeSyntheticApprovalReceipt(approvalId, receipt)
+        }
+        onExport={(receipts) => void exportApprovalLedger(receipts)}
+      />
+    )}
     </section>
 
     <section

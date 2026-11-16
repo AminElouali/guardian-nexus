@@ -5,6 +5,15 @@ import { WorkspaceQueryError } from "@/components/WorkspaceQueryError";
 
 type ApprovalDecision = "approve" | "deny";
 
+export function isFixtureOnlySyntheticRefundApproval(
+  approval: AiAssessmentApproval,
+): boolean {
+  return approval.syntheticActionRef === "guardian.synthetic.support.refund.v1" &&
+    approval.modelInference === false &&
+    approval.executionMode === "deterministic_fixture" &&
+    approval.toolCallOrigin === "controlled_fixture_not_llm";
+}
+
 type GuardianApprovalInboxProps = {
   approvals: AiAssessmentApproval[];
   canDecide: boolean;

@@ -25,6 +25,8 @@ import {
   ListWorkspaceAiAssessmentLabJobsResponse,
   ListWorkspaceAiAssessmentApprovalsParams,
   ListWorkspaceAiAssessmentApprovalsResponse,
+  ListWorkspaceApprovalLedgerEventsParams,
+  ListWorkspaceApprovalLedgerEventsResponse,
   ConsumeWorkspaceAiAssessmentApprovalReceiptBody,
   ConsumeWorkspaceAiAssessmentApprovalReceiptParams,
   ConsumeWorkspaceAiAssessmentApprovalReceiptResponse,
@@ -2510,6 +2512,63 @@ routes.post(
       RetryWorkspaceAiAssessmentLabJobResponse.parse(
         formatJob(access.value.job),
       ),
+    );
+  },
+);
+
+routes.get(
+  "/workspaces/:workspaceId/ai-security-assessments/approval-ledger/events",
+  async (req, res): Promise<void> => {
+    const params = ListWorkspaceApprovalLedgerEventsParams.safeParse(
+      req.params,
+    );
+    if (!params.success || !UUID_PATTERN.test(params.data.workspaceId)) {
+      res.status(400).json({ error: "Invalid approval ledger workspace" });
+      return;
+    }
+    const workspaceId = params.data.workspaceId;
+    const transactionResult = await withWorkspaceUserTransaction(
+      req.authUserId!,
+      workspaceId,
+      async (tx, membership) => {
+        if (membership.role !== "owner" && membership.role !== "admin") {
+          return { kind: "forbidden" as const };
+        }
+        const events = await readWorkspaceApprovalLedgerEvents(tx, workspaceId);
+        return { kind: "events" as const, events };
+      },
+    ).then(
+      (value) => ({ ok: true as const, value }),
+      (error: unknown) => ({ ok: false as const, error }),
+    );
+    if (!transactionResult.ok) {
+      if (
+        transactionResult.error instanceof ApprovalLedgerError &&
+        transactionResult.error.code === "ledger_export_too_large"
+      ) {
+        res.status(413).json({ error: "Approval ledger history is too large" });
+        return;
+      }
+      req.log?.error?.(
+        { errorCode: "approval_ledger_read_failed" },
+        "Approval ledger events could not be read",
+      );
+      res.status(503).json({ error: "Approval ledger unavailable" });
+      return;
+    }
+    const access = transactionResult.value;
+    if (!access.authorized) {
+      res.status(403).json({ error: "Workspace membership required" });
+      return;
+    }
+    if (access.value.kind === "forbidden") {
+      res.status(403).json({ error: "Workspace owner or admin role required" });
+      return;
+    }
+    res.json(
+      ListWorkspaceApprovalLedgerEventsResponse.parse({
+        events: access.value.events,
+      }),
     );
   },
 );

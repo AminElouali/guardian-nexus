@@ -11,11 +11,15 @@ import type {
   AiAssessmentApproval,
   AiAssessmentLabJob,
   GuardianPolicyLabPreviewResponse,
+  SignedApprovalLedgerEventV1,
+  SignedApprovalReceiptV1,
 } from "@workspace/api-client-react";
+import { ApprovalLedgerDemo } from "./ApprovalLedgerDemo";
 import { AiEvaluationSectionNav, ExecutiveLabJobCard, LabJobCard } from "./AiEvaluationPage";
 import {
   buildSyntheticApprovalConfirmationMessage,
   GuardianApprovalInbox,
+  isFixtureOnlySyntheticRefundApproval,
 } from "./GuardianApprovalInbox";
 import { WorkspaceQueryError } from "./WorkspaceQueryError";
 import {
@@ -221,6 +225,53 @@ test("approval inbox offers only the fixed synthetic refund proposal to workspac
   assert.doesNotMatch(markup, /Qwen real|reembolso real|proveedor de pagos/i);
 });
 
+test("only controlled synthetic refund fixture approvals surface a receipt", () => {
+  const base: AiAssessmentApproval = {
+    id: "11111111-1111-4111-8111-111111111111",
+    jobId: "22222222-2222-4222-8222-222222222222",
+    caseId: "synthetic_refund",
+    proposalSha256: "a".repeat(64),
+    actionSha256: "b".repeat(64),
+    proposalBindingSha256: "c".repeat(64),
+    requestedByUserId: "synthetic-requester",
+    requestedByRole: "member",
+    bindingVersion: 3,
+    syntheticActionRef: "guardian.synthetic.support.refund.v1",
+    modelInference: false,
+    executionMode: "deterministic_fixture",
+    toolCallOrigin: "controlled_fixture_not_llm",
+    status: "pending",
+    canCurrentUserDecide: true,
+    expiresAt: "2026-11-16T13:00:00.000Z",
+    decidedByUserId: null,
+    decidedByRole: null,
+    decidedAt: null,
+    execution: "not_performed",
+    simulatedAt: null,
+    simulationResultCode: null,
+    simulationResultSha256: null,
+    replayBindingSha256: null,
+    createdAt: "2026-11-16T12:00:00.000Z",
+  };
+  assert.equal(isFixtureOnlySyntheticRefundApproval(base), true);
+  assert.equal(
+    isFixtureOnlySyntheticRefundApproval({
+      ...base,
+      modelInference: true,
+      executionMode: "real_local_qwen_inference",
+      toolCallOrigin: "runtime_message_tool_calls",
+    }),
+    false,
+  );
+  assert.equal(
+    isFixtureOnlySyntheticRefundApproval({
+      ...base,
+      toolCallOrigin: "runtime_message_tool_calls",
+    }),
+    false,
+  );
+});
+
 test("approval confirmation states synthetic impact before any decision", () => {
   const message = buildSyntheticApprovalConfirmationMessage({
     id: "11111111-1111-4111-8111-111111111111",
@@ -252,6 +303,168 @@ test("approval confirmation states synthetic impact before any decision", () => 
   assert.match(message, /cambio de cuenta bancaria ficticio/);
   assert.match(message, /no se modifica ninguna cuenta real/);
   assert.match(message, /no ejecuta herramientas ni afecta sistemas externos/);
+});
+
+test("synthetic approval ledger view offers receipt actions and safe history export", () => {
+  const receipt: SignedApprovalReceiptV1 = {
+    payload: {
+      version: 1,
+      keyId: "fixture-key",
+      receiptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      workspaceId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      approvalId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      proposalBindingSha256: "a".repeat(64),
+      actionSha256: "b".repeat(64),
+      requestedBy: "synthetic-requester",
+      approvedBy: "synthetic-reviewer",
+      approvedByRole: "admin",
+      issuedAt: "2026-11-16T12:00:00.000Z",
+      expiresAt: "2026-11-16T12:05:00.000Z",
+      nonce: "synthetic-nonce-value-00000000000000000000000000000000",
+    },
+    payloadSha256: "d".repeat(64),
+    signature: "e".repeat(86),
+  };
+  const event: SignedApprovalLedgerEventV1 = {
+    event: {
+      version: 1,
+      keyId: "fixture-key",
+      workspaceId: receipt.payload.workspaceId,
+      sequence: 1,
+      eventId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      eventType: "approval.approved",
+      approvalId: receipt.payload.approvalId,
+      previousEventSha256: "",
+      occurredAt: "2026-11-16T12:00:00.000Z",
+      payload: {
+        receiptId: receipt.payload.receiptId,
+        receiptSha256: receipt.payloadSha256,
+      },
+    },
+    eventSha256: "f".repeat(64),
+    signature: "g".repeat(86),
+  };
+  const markup = renderToStaticMarkup(
+    createElement(ApprovalLedgerDemo, {
+      receipts: [{ approvalId: receipt.payload.approvalId, receipt }],
+      consumeResults: {},
+      events: [event],
+      eventsLoading: false,
+      eventsError: false,
+      exporting: false,
+      onRetryEvents: () => undefined,
+      onConsume: () => undefined,
+      onExport: () => undefined,
+    }),
+  );
+  assert.match(markup, /Recibo firmado de reembolso sintético/);
+  assert.match(markup, /button-copy-receipt-/);
+  assert.match(markup, /button-download-receipt-/);
+  assert.match(markup, /button-consume-receipt-/);
+  assert.match(markup, /El servidor devuelve este recibo una vez y no lo conserva/);
+  assert.match(markup, /sin pagos ni efectos externos/i);
+  assert.match(markup, /truncación de eventos posteriores/);
+  assert.match(markup, /approval\.approved/);
+  assert.match(markup, /button-export-approval-ledger/);
+  assert.doesNotMatch(markup, /cumplimiento normativo|inmutable|pago real/i);
+});
+
+test("ledger export stays disabled when a server-held receipt is missing", () => {
+  const markup = renderToStaticMarkup(
+    createElement(ApprovalLedgerDemo, {
+      receipts: [],
+      consumeResults: {},
+      events: [{
+        event: {
+          version: 1,
+          keyId: "fixture-key",
+          workspaceId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          sequence: 1,
+          eventId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          eventType: "approval.approved",
+          approvalId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+          previousEventSha256: "",
+          occurredAt: "2026-11-16T12:00:00.000Z",
+          payload: {
+            receiptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            receiptSha256: "d".repeat(64),
+          },
+        },
+        eventSha256: "f".repeat(64),
+        signature: "g".repeat(86),
+      }],
+      eventsLoading: false,
+      eventsError: false,
+      exporting: false,
+      onRetryEvents: () => undefined,
+      onConsume: () => undefined,
+      onExport: () => undefined,
+    }),
+  );
+  assert.match(markup, /faltan 1 recibos/);
+  assert.match(markup, /el servidor no conserva/);
+  assert.match(markup, /button-export-approval-ledger[^>]*disabled/);
+});
+
+test("receipt consumption displays the HTTP result and synthetic hashes", () => {
+  const receiptId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const approvalId = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+  const receipt: SignedApprovalReceiptV1 = {
+    payload: {
+      version: 1,
+      keyId: "fixture-key",
+      receiptId,
+      workspaceId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      approvalId,
+      proposalBindingSha256: "a".repeat(64),
+      actionSha256: "b".repeat(64),
+      requestedBy: "synthetic-requester",
+      approvedBy: "synthetic-reviewer",
+      approvedByRole: "admin",
+      issuedAt: "2026-11-16T12:00:00.000Z",
+      expiresAt: "2026-11-16T12:05:00.000Z",
+      nonce: "synthetic-nonce-value-00000000000000000000000000000000",
+    },
+    payloadSha256: "e".repeat(64),
+    signature: "f".repeat(86),
+  };
+  const markup = renderToStaticMarkup(
+    createElement(ApprovalLedgerDemo, {
+      receipts: [{ approvalId, receipt }],
+      consumeResults: {
+        [approvalId]: {
+          httpStatus: 200,
+          response: {
+            consumed: true,
+            receiptId,
+            consumedEventSha256: "a".repeat(64),
+            syntheticRefundOperation: {
+              executed: true,
+              reasonCode: "valid_receipt_consumed",
+              resultCode: "synthetic_refund_approved_in_clone",
+              resultSha256: "b".repeat(64),
+              beforeStateSha256: "c".repeat(64),
+              afterStateSha256: "d".repeat(64),
+            },
+          },
+        },
+      },
+      events: [],
+      eventsLoading: false,
+      eventsError: false,
+      exporting: false,
+      onRetryEvents: () => undefined,
+      onConsume: () => undefined,
+      onExport: () => undefined,
+    }),
+  );
+  assert.match(markup, /Resultado HTTP: 200/);
+  assert.match(markup, /synthetic_refund_approved_in_clone/);
+  assert.match(markup, new RegExp("a".repeat(64)));
+  assert.match(markup, new RegExp("b".repeat(64)));
+  assert.match(markup, new RegExp("c".repeat(64)));
+  assert.match(markup, new RegExp("d".repeat(64)));
+  assert.match(markup, /simulación sintética/);
 });
 
 test("AI security navigation separates the laboratory, approvals and audit with accessible tabs", () => {

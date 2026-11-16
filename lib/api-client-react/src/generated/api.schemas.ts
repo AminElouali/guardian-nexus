@@ -4490,6 +4490,11 @@ export interface ApprovalLedgerBundleV1 {
   receipts: SignedApprovalReceiptV1[];
 }
 
+export interface WorkspaceApprovalLedgerEventsResponse {
+  /** @maxItems 10000 */
+  events: SignedApprovalLedgerEventV1[];
+}
+
 export interface AiAssessmentApprovalLedgerExportRequest {
   /** @maxItems 5000 */
   receipts: SignedApprovalReceiptV1[];

@@ -62,6 +62,7 @@ type Stage =
   | "runtime_role_verification"
   | "runtime_login_connection"
   | "final_audit"
+  | "development_read_only_catalog_audit"
   | "approval_ledger_rls_probes"
   | "approval_e2e";
 
@@ -82,6 +83,7 @@ type SafeReport = {
   violationCodes?: string[];
   identityVerified?: boolean;
   runtimeLoginAuthenticated?: boolean;
+  developmentReadOnlyCatalogAuditPassed?: boolean;
   approvalLedgerRlsProbesPassed?: boolean;
   approvalLedgerRlsProbeCount?: number;
   approvalLedgerRlsProbeFailureCode?: string;
@@ -559,6 +561,7 @@ async function main(): Promise<void> {
   let identityVerified = false;
   let postSchemaPassed = false;
   let runtimeLoginAuthenticated = false;
+  let developmentReadOnlyCatalogAuditPassed = false;
   let approvalLedgerRlsProbesPassed = false;
   let approvalLedgerRlsProbeCount = 0;
   let approvalLedgerRlsProbeFailureCode: string | undefined;
@@ -927,6 +930,81 @@ async function main(): Promise<void> {
       await finalPool.end();
     }
 
+    currentStage = "development_read_only_catalog_audit";
+    const developmentAuditOutput = await runAndCapture(
+      pnpm,
+      [
+        "--filter",
+        "@workspace/api-server",
+        "run",
+        "audit:development-rls-catalog",
+        "--",
+        "--confirm-read-only",
+        `--expected-database=${databaseName}`,
+      ],
+      repoRoot,
+      {
+        ...safeChildEnvironment(labRoot),
+        NODE_ENV: "development",
+        APP_RUNTIME_DATABASE_URL: runtimeUrl(
+          databaseName,
+          runtimePassword,
+          socketDirectory,
+        ),
+      },
+      currentStage,
+    );
+    const auditReportLine = developmentAuditOutput.stdout
+      .split(/\r?\n/)
+      .find((line) => line.trim().startsWith("{"));
+    if (!auditReportLine) {
+      throw new Error("development_read_only_catalog_report_missing");
+    }
+    const developmentAuditReport = JSON.parse(auditReportLine) as {
+      status?: string;
+      databaseNameMatched?: boolean;
+      transactionReadOnly?: boolean;
+      runtimeLoginAuthenticated?: boolean;
+      expected?: { tables?: number; policies?: number; roles?: number };
+      actual?: { tables?: number; policies?: number; roles?: number };
+      violationCodes?: unknown;
+    };
+    const safeDevelopmentAuditCodes = Array.isArray(
+      developmentAuditReport.violationCodes,
+    )
+      ? developmentAuditReport.violationCodes
+        .filter((code): code is string =>
+          typeof code === "string" &&
+          /^[a-z][a-z0-9_]{1,63}$/.test(code)
+        )
+        .slice(0, 64)
+      : [];
+    if (
+      developmentAuditOutput.exitCode !== 0 ||
+      developmentAuditOutput.signal !== null ||
+      developmentAuditReport.status !== "passed" ||
+      developmentAuditReport.databaseNameMatched !== true ||
+      developmentAuditReport.transactionReadOnly !== true ||
+      developmentAuditReport.runtimeLoginAuthenticated !== true ||
+      developmentAuditReport.expected?.tables !== 13 ||
+      developmentAuditReport.expected?.policies !== 36 ||
+      developmentAuditReport.expected?.roles !== 3 ||
+      developmentAuditReport.actual?.tables !== 13 ||
+      developmentAuditReport.actual?.policies !== 36 ||
+      developmentAuditReport.actual?.roles !== 3 ||
+      !Array.isArray(developmentAuditReport.violationCodes) ||
+      developmentAuditReport.violationCodes.length !== 0
+    ) {
+      console.error(
+        `Development read-only catalog audit failed safely: status=${developmentAuditReport.status ?? "invalid"} tables=${developmentAuditReport.actual?.tables ?? "unknown"} policies=${developmentAuditReport.actual?.policies ?? "unknown"} roles=${developmentAuditReport.actual?.roles ?? "unknown"} violationCodes=${safeDevelopmentAuditCodes.join(",") || "none"}.`,
+      );
+      throw new Error("development_read_only_catalog_audit_failed");
+    }
+    developmentReadOnlyCatalogAuditPassed = true;
+    console.log(
+      "Development read-only catalog audit passed on the disposable runtime connection: tables=13 policies=36.",
+    );
+
     currentStage = "approval_ledger_rls_probes";
     const ledgerProbePool = new Pool({
       host: socketDirectory,
@@ -1040,6 +1118,7 @@ async function main(): Promise<void> {
       violationCodes: [],
       identityVerified,
       runtimeLoginAuthenticated,
+      developmentReadOnlyCatalogAuditPassed,
       approvalLedgerRlsProbesPassed,
       approvalLedgerRlsProbeCount,
       approvalE2eSummary,
@@ -1066,6 +1145,7 @@ async function main(): Promise<void> {
         violationCodes: violations,
         identityVerified,
         runtimeLoginAuthenticated,
+        developmentReadOnlyCatalogAuditPassed,
         approvalLedgerRlsProbesPassed,
         approvalLedgerRlsProbeCount,
         approvalLedgerRlsProbeFailureCode,

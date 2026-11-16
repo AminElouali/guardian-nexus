@@ -381,6 +381,7 @@ export * from './syntheticRefundProposalResponseExecution';
 export * from './syntheticRefundProposalResponseReasonCode';
 export * from './syntheticRefundProposalResponseSimulationResultCode';
 export * from './workspace';
+export * from './workspaceApprovalLedgerEventsResponse';
 export * from './workspaceInput';
 export * from './workspaceInputPlanId';
 export * from './workspaceIntegration';

@@ -921,6 +921,34 @@ paths:
           description: Approval not found in this workspace
         "409":
           description: Receipt invalid, expired, already consumed, or not bound to this approval
+  /workspaces/{workspaceId}/ai-security-assessments/approval-ledger/events:
+    get:
+      operationId: listWorkspaceApprovalLedgerEvents
+      tags: [ai-evaluations]
+      summary: Read the signed approval ledger events
+      description: Returns bounded signed event metadata for a workspace. Access is limited to workspace owners and admins; receipt payloads and connection details are not returned separately.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Signed approval ledger events in sequence order
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkspaceApprovalLedgerEventsResponse" }
+        "401":
+          description: Authentication required
+        "400":
+          description: Invalid workspace identifier
+        "403":
+          description: Workspace owner or admin role required
+        "413":
+          description: Workspace ledger exceeds the bounded response size
+        "503":
+          description: Approval ledger unavailable
   /workspaces/{workspaceId}/ai-security-assessments/approval-ledger/export:
     post:
       operationId: exportWorkspaceApprovalLedgerBundle
@@ -1587,6 +1615,15 @@ components:
           maxItems: 5000
           items: { $ref: "#/components/schemas/SignedApprovalReceiptV1" }
       required: [version, events, receipts]
+    WorkspaceApprovalLedgerEventsResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        events:
+          type: array
+          maxItems: 10000
+          items: { $ref: "#/components/schemas/SignedApprovalLedgerEventV1" }
+      required: [events]
     SignedApprovalLedgerEventV1:
       type: object
       additionalProperties: false

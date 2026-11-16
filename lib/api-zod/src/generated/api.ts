@@ -12839,6 +12839,55 @@ export const ConsumeWorkspaceAiAssessmentApprovalReceiptResponse = zod.object({
 
 
 /**
+ * Returns bounded signed event metadata for a workspace. Access is limited to workspace owners and admins; receipt payloads and connection details are not returned separately.
+ * @summary Read the signed approval ledger events
+ */
+export const ListWorkspaceApprovalLedgerEventsParams = zod.object({
+  "workspaceId": zod.uuid()
+})
+
+
+export const listWorkspaceApprovalLedgerEventsResponseEventsItemEventPreviousEventSha256RegExp = new RegExp('^([a-f0-9]{64})?$');
+export const listWorkspaceApprovalLedgerEventsResponseEventsItemEventOccurredAtRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{3}Z$');
+export const listWorkspaceApprovalLedgerEventsResponseEventsItemEventPayloadReceiptSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const listWorkspaceApprovalLedgerEventsResponseEventsItemEventPayloadNonceMin = 32;
+export const listWorkspaceApprovalLedgerEventsResponseEventsItemEventPayloadNonceMax = 128;
+
+
+export const listWorkspaceApprovalLedgerEventsResponseEventsItemEventPayloadNonceRegExp = new RegExp('^[A-Za-z0-9_-]+$');
+export const listWorkspaceApprovalLedgerEventsResponseEventsItemEventPayloadConsumedAtRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{3}Z$');
+export const listWorkspaceApprovalLedgerEventsResponseEventsItemEventSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const listWorkspaceApprovalLedgerEventsResponseEventsItemSignatureRegExp = new RegExp('^[A-Za-z0-9_-]{86}$');
+export const listWorkspaceApprovalLedgerEventsResponseEventsMax = 10000;
+
+
+
+export const ListWorkspaceApprovalLedgerEventsResponse = zod.object({
+  "events": zod.array(zod.object({
+  "event": zod.object({
+  "version": zod.literal(1),
+  "keyId": zod.string(),
+  "workspaceId": zod.uuid(),
+  "sequence": zod.int().min(1),
+  "eventId": zod.uuid(),
+  "eventType": zod.enum(['approval.approved', 'approval.receipt_consumed']),
+  "approvalId": zod.uuid(),
+  "previousEventSha256": zod.string().regex(listWorkspaceApprovalLedgerEventsResponseEventsItemEventPreviousEventSha256RegExp),
+  "occurredAt": zod.string().regex(listWorkspaceApprovalLedgerEventsResponseEventsItemEventOccurredAtRegExp).describe('Canonical UTC ISO timestamp.'),
+  "payload": zod.object({
+  "receiptId": zod.uuid(),
+  "receiptSha256": zod.string().regex(listWorkspaceApprovalLedgerEventsResponseEventsItemEventPayloadReceiptSha256RegExp),
+  "nonce": zod.string().min(listWorkspaceApprovalLedgerEventsResponseEventsItemEventPayloadNonceMin).max(listWorkspaceApprovalLedgerEventsResponseEventsItemEventPayloadNonceMax).regex(listWorkspaceApprovalLedgerEventsResponseEventsItemEventPayloadNonceRegExp).optional(),
+  "consumedAt": zod.string().regex(listWorkspaceApprovalLedgerEventsResponseEventsItemEventPayloadConsumedAtRegExp).optional().describe('Canonical UTC ISO timestamp.')
+})
+}),
+  "eventSha256": zod.string().regex(listWorkspaceApprovalLedgerEventsResponseEventsItemEventSha256RegExp),
+  "signature": zod.string().regex(listWorkspaceApprovalLedgerEventsResponseEventsItemSignatureRegExp)
+})).max(listWorkspaceApprovalLedgerEventsResponseEventsMax)
+})
+
+
+/**
  * Returns the complete workspace event chain and attaches the caller-held signed receipts. The server does not persist receipt payloads; an incomplete receipt archive is rejected rather than exporting partial history. Verify the result offline with a separately trusted public-key registry.
  * @summary Export a portable signed approval ledger bundle
  */

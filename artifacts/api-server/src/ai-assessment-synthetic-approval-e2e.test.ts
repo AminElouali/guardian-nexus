@@ -25,6 +25,7 @@ import {
   ConsumeWorkspaceAiAssessmentApprovalReceiptResponse,
   DecideWorkspaceAiAssessmentApprovalResponse,
   ExportWorkspaceApprovalLedgerBundleResponse,
+  ListWorkspaceApprovalLedgerEventsResponse,
   ListWorkspaceAiAssessmentApprovalsResponse,
   PreviewWorkspaceAiAssessmentPolicyLabResponse,
   CreateWorkspaceSyntheticRefundProposalResponse,
@@ -1859,8 +1860,34 @@ test(
     const publicKeyPem = createPublicKey(
       createPrivateKey(process.env.APPROVAL_LEDGER_ED25519_PRIVATE_KEY!),
     ).export({ format: "pem", type: "spki" }).toString();
+    const eventsPath =
+      `/api/workspaces/${workspaceA}/ai-security-assessments/approval-ledger/events`;
     const exportPath =
       `/api/workspaces/${workspaceA}/ai-security-assessments/approval-ledger/export`;
+    assert.equal(
+      (await request(workspaceAViewer, eventsPath)).status,
+      403,
+      "ledger event listing is limited to workspace owners and admins",
+    );
+    const eventsResponse = await request(workspaceAAdmin, eventsPath);
+    assert.equal(eventsResponse.status, 200);
+    const eventHistory = ListWorkspaceApprovalLedgerEventsResponse.parse(
+      await eventsResponse.json(),
+    );
+    assert.ok(
+      eventHistory.events.some((event) =>
+        event.event.eventType === "approval.approved" &&
+        event.event.approvalId === supportReceipt.payload.approvalId
+      ),
+      "the read-only ledger view includes the signed approval event",
+    );
+    assert.deepEqual(
+      eventHistory.events.map((event) => event.event.sequence),
+      [...eventHistory.events]
+        .map((event) => event.event.sequence)
+        .sort((left, right) => left - right),
+      "the read-only ledger view preserves chain sequence order",
+    );
     assert.equal(
       (
         await request(workspaceAViewer, exportPath, "POST", {

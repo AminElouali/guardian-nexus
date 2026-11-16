@@ -62,6 +62,7 @@ import type {
   SyntheticRefundProposalRequest,
   SyntheticRefundProposalResponse,
   Workspace,
+  WorkspaceApprovalLedgerEventsResponse,
   WorkspaceInput,
   WorkspaceIntegration,
   WorkspaceIntegrationsResponse
@@ -3399,6 +3400,108 @@ export const useConsumeWorkspaceAiAssessmentApprovalReceipt = <TError = ErrorTyp
       > => {
       return useMutation(getConsumeWorkspaceAiAssessmentApprovalReceiptMutationOptions(options), queryClient);
     }
+
+export const getListWorkspaceApprovalLedgerEventsUrl = (workspaceId: string,) => {
+
+
+
+
+  return `/api/workspaces/${workspaceId}/ai-security-assessments/approval-ledger/events`
+}
+
+/**
+ * Returns bounded signed event metadata for a workspace. Access is limited to workspace owners and admins; receipt payloads and connection details are not returned separately.
+ * @summary Read the signed approval ledger events
+ */
+export const listWorkspaceApprovalLedgerEvents = async (workspaceId: string, options?: Parameters<typeof customFetch>[1]): Promise<WorkspaceApprovalLedgerEventsResponse> => {
+
+  return customFetch<WorkspaceApprovalLedgerEventsResponse>(getListWorkspaceApprovalLedgerEventsUrl(workspaceId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListWorkspaceApprovalLedgerEventsQueryKey = (workspaceId: string,) => {
+    return [
+    `/api/workspaces/${workspaceId}/ai-security-assessments/approval-ledger/events`
+    ] as const;
+    }
+
+
+export const getListWorkspaceApprovalLedgerEventsQueryOptions = <TData = Awaited<ReturnType<typeof listWorkspaceApprovalLedgerEvents>>, TError = ErrorType<void>>(workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listWorkspaceApprovalLedgerEvents>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListWorkspaceApprovalLedgerEventsQueryKey(workspaceId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listWorkspaceApprovalLedgerEvents>>> = ({ signal }) => listWorkspaceApprovalLedgerEvents(workspaceId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: workspaceId !== null && workspaceId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listWorkspaceApprovalLedgerEvents>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListWorkspaceApprovalLedgerEventsQueryResult = NonNullable<Awaited<ReturnType<typeof listWorkspaceApprovalLedgerEvents>>>
+export type ListWorkspaceApprovalLedgerEventsQueryError = ErrorType<void>
+
+
+export function useListWorkspaceApprovalLedgerEvents<TData = Awaited<ReturnType<typeof listWorkspaceApprovalLedgerEvents>>, TError = ErrorType<void>>(
+ workspaceId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listWorkspaceApprovalLedgerEvents>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listWorkspaceApprovalLedgerEvents>>,
+          TError,
+          Awaited<ReturnType<typeof listWorkspaceApprovalLedgerEvents>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListWorkspaceApprovalLedgerEvents<TData = Awaited<ReturnType<typeof listWorkspaceApprovalLedgerEvents>>, TError = ErrorType<void>>(
+ workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listWorkspaceApprovalLedgerEvents>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listWorkspaceApprovalLedgerEvents>>,
+          TError,
+          Awaited<ReturnType<typeof listWorkspaceApprovalLedgerEvents>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListWorkspaceApprovalLedgerEvents<TData = Awaited<ReturnType<typeof listWorkspaceApprovalLedgerEvents>>, TError = ErrorType<void>>(
+ workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listWorkspaceApprovalLedgerEvents>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Read the signed approval ledger events
+ */
+
+export function useListWorkspaceApprovalLedgerEvents<TData = Awaited<ReturnType<typeof listWorkspaceApprovalLedgerEvents>>, TError = ErrorType<void>>(
+ workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listWorkspaceApprovalLedgerEvents>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListWorkspaceApprovalLedgerEventsQueryOptions(workspaceId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getExportWorkspaceApprovalLedgerBundleUrl = (workspaceId: string,) => {
 
