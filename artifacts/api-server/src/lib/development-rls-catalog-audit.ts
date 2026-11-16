@@ -8,10 +8,6 @@ import {
   type RlsCatalogPhaseSnapshot,
 } from "@workspace/db/rls-catalog-phase-audit";
 import { appendOnlyRuntimeGrantsAllowed } from "@workspace/db/rls-runtime-readiness";
-import {
-  expectedRlsPolicyCount,
-  expectedRlsTableNames,
-} from "@workspace/db/rls-catalog-contract";
 
 const safeViolationCodes = new Set([
   "append_only_runtime_privilege_mismatch",
@@ -80,14 +76,239 @@ const safeViolationCodes = new Set([
 export type DevelopmentRlsCatalogAudit = {
   passed: boolean;
   expectedTableCount: number;
+  expectedColumnCount: number;
+  expectedIndexCount: number;
+  expectedConstraintCount: number;
   expectedPolicyCount: number;
   expectedRoleCount: number;
   actualTableCount: number;
+  actualColumnCount: number;
+  actualIndexCount: number;
   actualPolicyCount: number;
   actualRoleCount: number;
   actualConstraintCount: number;
   violationCodes: string[];
 };
+
+export type DevelopmentRlsCatalogCounts = {
+  tables: number;
+  columns: number;
+  indexes: number;
+  constraints: number;
+  policies: number;
+  roles: number;
+};
+
+export type DevelopmentRlsCatalogPartialCounts = {
+  [K in keyof DevelopmentRlsCatalogCounts]: number | null;
+};
+
+export type DevelopmentCatalogQueryStep =
+  | "connection"
+  | "transaction"
+  | "identity"
+  | "rls_flags"
+  | "tables"
+  | "columns"
+  | "column_inventory"
+  | "indexes"
+  | "constraints"
+  | "policies"
+  | "roles"
+  | "memberships"
+  | "role_membership"
+  | "privileges"
+  | "column_privileges"
+  | "append_only_privileges"
+  | "settings"
+  | "catalog";
+
+export type SafeCatalogQueryFailure = {
+  step: DevelopmentCatalogQueryStep;
+  sqlState: string | null;
+  errorClass: string;
+};
+
+export type DevelopmentCatalogReadProgress = {
+  completedSteps: DevelopmentCatalogQueryStep[];
+  actual: DevelopmentRlsCatalogPartialCounts;
+};
+
+export function createDevelopmentCatalogReadProgress(): DevelopmentCatalogReadProgress {
+  return {
+    completedSteps: [],
+    actual: {
+      tables: null,
+      columns: null,
+      indexes: null,
+      constraints: null,
+      policies: null,
+      roles: null,
+    },
+  };
+}
+
+function queryStepForSql(sql: string): DevelopmentCatalogQueryStep {
+  const normalized = sql.toLowerCase();
+  if (
+    normalized.includes("workspace_approval_ledger") &&
+    normalized.includes("has_table_privilege")
+  ) return "append_only_privileges";
+  if (normalized.includes("begin transaction read only")) return "transaction";
+  if (normalized.includes("current_database()")) return "identity";
+  if (normalized.includes("pg_auth_members")) return "memberships";
+  if (normalized.includes("pg_has_role")) return "role_membership";
+  if (normalized.includes("has_column_privilege")) return "column_privileges";
+  if (normalized.includes("has_table_privilege")) return "privileges";
+  if (normalized.includes("pg_policies")) return "policies";
+  if (normalized.includes("pg_constraint")) return "constraints";
+  if (normalized.includes("pg_index")) return "indexes";
+  if (normalized.includes("format_type(")) return "columns";
+  if (
+    normalized.includes("array_agg(attribute.attname") &&
+    normalized.includes("pg_attribute")
+  ) return "column_inventory";
+  if (normalized.includes("relrowsecurity")) return "rls_flags";
+  if (normalized.includes("pg_roles")) return "roles";
+  if (
+    normalized.includes("max_identifier_length") ||
+    normalized.includes("server_version_num")
+  ) return "settings";
+  return "catalog";
+}
+
+function resultRowCount(result: unknown): number {
+  if (typeof result !== "object" || result === null) return 0;
+  const candidate = result as { rowCount?: unknown; rows?: unknown };
+  if (typeof candidate.rowCount === "number") return candidate.rowCount;
+  return Array.isArray(candidate.rows) ? candidate.rows.length : 0;
+}
+
+function recordCatalogReadProgress(
+  progress: DevelopmentCatalogReadProgress,
+  step: DevelopmentCatalogQueryStep,
+  result: unknown,
+): void {
+  if (!progress.completedSteps.includes(step)) {
+    progress.completedSteps.push(step);
+  }
+  const count = resultRowCount(result);
+  switch (step) {
+    case "rls_flags":
+    case "tables":
+      progress.actual.tables = count;
+      break;
+    case "columns":
+      progress.actual.columns = count;
+      break;
+    case "indexes":
+      progress.actual.indexes = count;
+      break;
+    case "constraints":
+      progress.actual.constraints = count;
+      break;
+    case "policies":
+      progress.actual.policies = count;
+      break;
+    case "roles":
+      progress.actual.roles = count;
+      break;
+  }
+}
+
+const errorClassForSqlState = (sqlState: string | null): string => {
+  if (sqlState === null) return "non_postgresql_error";
+  switch (sqlState) {
+    case "42501":
+      return "insufficient_privilege";
+    case "42703":
+      return "undefined_column";
+    case "42704":
+      return "undefined_object";
+    case "42P01":
+      return "undefined_table";
+    case "42883":
+      return "undefined_function";
+    case "0A000":
+      return "feature_not_supported";
+    case "25006":
+      return "read_only_violation";
+    default:
+      if (sqlState.startsWith("08")) return "connection_exception";
+      if (sqlState.startsWith("28")) return "authentication_exception";
+      if (sqlState.startsWith("42")) return "syntax_or_access_rule_error";
+      if (sqlState.startsWith("53")) return "resource_exhaustion";
+      return "other_postgresql_error";
+  }
+};
+
+export function sanitizeCatalogQueryFailure(
+  step: DevelopmentCatalogQueryStep,
+  error: unknown,
+): SafeCatalogQueryFailure {
+  const candidate = typeof error === "object" && error !== null &&
+      "code" in error
+    ? (error as { code?: unknown }).code
+    : undefined;
+  const sqlState = typeof candidate === "string" &&
+      /^[0-9A-Z]{5}$/.test(candidate)
+    ? candidate
+    : null;
+  return { step, sqlState, errorClass: errorClassForSqlState(sqlState) };
+}
+
+export class SafeCatalogQueryError extends Error {
+  constructor(readonly failure: SafeCatalogQueryFailure) {
+    super("catalog_query_failed");
+    this.name = "SafeCatalogQueryError";
+  }
+}
+
+/**
+ * Serializes catalog reads so a PostgreSQL transaction stops at its first
+ * failed query. Only fixed steps, counts, SQLSTATE, and mapped classes remain.
+ */
+export function monitorDevelopmentCatalogReads<T extends object>(
+  client: T,
+  progress: DevelopmentCatalogReadProgress,
+): T {
+  let queue: Promise<void> = Promise.resolve();
+  let firstFailure: SafeCatalogQueryFailure | null = null;
+  return new Proxy(client, {
+    get(target, property, receiver) {
+      if (property !== "query") return Reflect.get(target, property, receiver);
+      return (queryInput: unknown, values?: unknown[]) => {
+        const sql = typeof queryInput === "string"
+          ? queryInput
+          : typeof queryInput === "object" && queryInput !== null &&
+              "text" in queryInput &&
+              typeof (queryInput as { text?: unknown }).text === "string"
+            ? (queryInput as { text: string }).text
+            : "";
+        const step = queryStepForSql(sql);
+        const operation = queue.then(async () => {
+          if (firstFailure) throw new SafeCatalogQueryError(firstFailure);
+          try {
+            const query = (target as unknown as {
+              query: (
+                query: unknown,
+                parameters?: unknown[],
+              ) => Promise<unknown>;
+            }).query;
+            const result = await query.call(target, queryInput, values);
+            recordCatalogReadProgress(progress, step, result);
+            return result;
+          } catch (error) {
+            firstFailure ??= sanitizeCatalogQueryFailure(step, error);
+            throw new SafeCatalogQueryError(firstFailure);
+          }
+        });
+        queue = operation.then(() => undefined, () => undefined);
+        return operation;
+      };
+    },
+  });
+}
 
 function safeCode(value: string): string {
   const prefix = value.split(":", 1)[0]!;
@@ -124,10 +345,15 @@ export function auditDevelopmentRlsCatalog(input: {
   return {
     passed: structuralAudit.passed && grantAudit.passed &&
       appendOnlyPrivilegesPassed,
-    expectedTableCount: expectedRlsTableNames.length,
-    expectedPolicyCount: expectedRlsPolicyCount,
+    expectedTableCount: structuralAudit.expectedTableCount,
+    expectedColumnCount: structuralAudit.expectedColumnCount,
+    expectedIndexCount: structuralAudit.expectedIndexCount,
+    expectedConstraintCount: structuralAudit.expectedConstraintCount,
+    expectedPolicyCount: structuralAudit.expectedPolicyCount,
     expectedRoleCount: Object.keys(input.contract.roles).length,
     actualTableCount: input.phaseSnapshot.tables.length,
+    actualColumnCount: input.phaseSnapshot.columns.length,
+    actualIndexCount: input.phaseSnapshot.indexes.length,
     actualPolicyCount: input.phaseSnapshot.policies.length,
     actualRoleCount: input.phaseSnapshot.roles.length,
     actualConstraintCount: input.phaseSnapshot.constraints.length,
@@ -147,18 +373,18 @@ export type DevelopmentRlsCatalogReport = {
   credentialsIncluded: false;
   connectionCoordinatesIncluded: false;
   postgresMajor: number | null;
-  expected: { tables: number; policies: number; roles: number };
-  actual: {
-    tables: number;
-    policies: number;
-    roles: number;
-    constraints: number;
-  };
+  expected: DevelopmentRlsCatalogCounts;
+  actual: DevelopmentRlsCatalogPartialCounts;
+  completedSteps: DevelopmentCatalogQueryStep[];
+  failedQuery: SafeCatalogQueryFailure | null;
   violationCodes: string[];
 };
 
 export function createDevelopmentRlsCatalogReport(input: {
   audit?: DevelopmentRlsCatalogAudit;
+  expectedCounts: DevelopmentRlsCatalogCounts;
+  progress?: DevelopmentCatalogReadProgress;
+  failedQuery?: SafeCatalogQueryFailure | null;
   generatedAt: string;
   databaseNameMatched: boolean;
   transactionReadOnly: boolean;
@@ -190,16 +416,28 @@ export function createDevelopmentRlsCatalogReport(input: {
     connectionCoordinatesIncluded: false,
     postgresMajor: input.postgresMajor,
     expected: {
-      tables: audit?.expectedTableCount ?? expectedRlsTableNames.length,
-      policies: audit?.expectedPolicyCount ?? expectedRlsPolicyCount,
-      roles: audit?.expectedRoleCount ?? 0,
+      tables: audit?.expectedTableCount ?? input.expectedCounts.tables,
+      columns: audit?.expectedColumnCount ?? input.expectedCounts.columns,
+      indexes: audit?.expectedIndexCount ?? input.expectedCounts.indexes,
+      constraints: audit?.expectedConstraintCount ??
+        input.expectedCounts.constraints,
+      policies: audit?.expectedPolicyCount ?? input.expectedCounts.policies,
+      roles: audit?.expectedRoleCount ?? input.expectedCounts.roles,
     },
     actual: {
-      tables: audit?.actualTableCount ?? 0,
-      policies: audit?.actualPolicyCount ?? 0,
-      roles: audit?.actualRoleCount ?? 0,
-      constraints: audit?.actualConstraintCount ?? 0,
+      tables: audit?.actualTableCount ?? input.progress?.actual.tables ?? null,
+      columns: audit?.actualColumnCount ??
+        input.progress?.actual.columns ?? null,
+      indexes: audit?.actualIndexCount ?? input.progress?.actual.indexes ??
+        null,
+      constraints: audit?.actualConstraintCount ??
+        input.progress?.actual.constraints ?? null,
+      policies: audit?.actualPolicyCount ??
+        input.progress?.actual.policies ?? null,
+      roles: audit?.actualRoleCount ?? input.progress?.actual.roles ?? null,
     },
+    completedSteps: input.progress?.completedSteps ?? [],
+    failedQuery: input.failedQuery ?? null,
     violationCodes: refusalCode
       ? [refusalCode]
       : audit?.violationCodes ?? [],

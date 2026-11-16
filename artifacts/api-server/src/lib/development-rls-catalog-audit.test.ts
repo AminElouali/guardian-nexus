@@ -16,9 +16,12 @@ import {
   type RlsCatalogPhaseSnapshot,
 } from "@workspace/db/rls-catalog-phase-audit";
 import {
+  createDevelopmentCatalogReadProgress,
   auditDevelopmentRlsCatalog,
   createDevelopmentRlsCatalogReport,
+  monitorDevelopmentCatalogReads,
   parseDevelopmentRlsAuditArguments,
+  SafeCatalogQueryError,
 } from "./development-rls-catalog-audit";
 
 const repositoryRoot = path.resolve(
@@ -163,7 +166,11 @@ test("development RLS audit accepts the complete canonical catalog snapshot", ()
   const audit = auditDevelopmentRlsCatalog({ contract, ...snapshots });
   assert.equal(audit.passed, true, audit.violationCodes.join(","));
   assert.equal(audit.expectedTableCount, 13);
+  assert.equal(audit.expectedColumnCount, 149);
+  assert.equal(audit.expectedIndexCount, 37);
+  assert.equal(audit.expectedConstraintCount, 54);
   assert.equal(audit.expectedPolicyCount, 36);
+  assert.equal(audit.expectedRoleCount, 3);
 });
 
 test("development RLS audit fails when the approval ledger is missing", () => {
@@ -252,6 +259,14 @@ test("read-only audit report exposes only safe status, counts, and fixed codes",
   const audit = auditDevelopmentRlsCatalog({ contract, ...snapshots });
   const report = createDevelopmentRlsCatalogReport({
     audit,
+    expectedCounts: {
+      tables: audit.expectedTableCount,
+      columns: audit.expectedColumnCount,
+      indexes: audit.expectedIndexCount,
+      constraints: audit.expectedConstraintCount,
+      policies: audit.expectedPolicyCount,
+      roles: audit.expectedRoleCount,
+    },
     generatedAt: "2026-11-16T00:00:00.000Z",
     databaseNameMatched: true,
     transactionReadOnly: true,
@@ -262,6 +277,110 @@ test("read-only audit report exposes only safe status, counts, and fixed codes",
   assert.equal(report.applicationRowsRead, false);
   assert.equal(report.credentialsIncluded, false);
   assert.equal(report.connectionCoordinatesIncluded, false);
+  assert.deepEqual(report.expected, {
+    tables: 13,
+    columns: 149,
+    indexes: 37,
+    constraints: 54,
+    policies: 36,
+    roles: 3,
+  });
+  assert.deepEqual(report.actual, {
+    tables: 13,
+    columns: 149,
+    indexes: 37,
+    constraints: 54,
+    policies: 36,
+    roles: 3,
+  });
   assert.deepEqual(report.violationCodes, []);
   assert.doesNotMatch(JSON.stringify(report), /postgresql:|password|secret|localhost/i);
+});
+
+test("catalog failure reports its fixed step and sanitized SQLSTATE with prior counts", async () => {
+  const progress = createDevelopmentCatalogReadProgress();
+  const issuedQueries: string[] = [];
+  const privateObjectName = "private_catalog_object_sentinel";
+  const client = {
+    async query(sql: string) {
+      issuedQueries.push(sql);
+      if (sql.includes("pg_auth_members")) {
+        throw Object.assign(
+          new Error(`permission denied for ${privateObjectName}`),
+          { code: "42501" },
+        );
+      }
+      if (sql.includes("relrowsecurity")) {
+        return { rows: [], rowCount: 13 };
+      }
+      if (sql.includes("format_type(")) {
+        return { rows: [], rowCount: 149 };
+      }
+      return { rows: [], rowCount: 0 };
+    },
+  };
+  const monitored = monitorDevelopmentCatalogReads(client, progress);
+  await monitored.query(
+    "SELECT relrowsecurity FROM pg_class",
+  );
+  await monitored.query(
+    "SELECT format_type(atttypid, atttypmod) FROM pg_attribute",
+  );
+  let failure: SafeCatalogQueryError | undefined;
+  await assert.rejects(
+    monitored.query("SELECT * FROM pg_auth_members"),
+    (error) => {
+      assert.ok(error instanceof SafeCatalogQueryError);
+      failure = error;
+      assert.deepEqual(error.failure, {
+        step: "memberships",
+        sqlState: "42501",
+        errorClass: "insufficient_privilege",
+      });
+      return true;
+    },
+  );
+  await assert.rejects(
+    monitored.query("SELECT * FROM pg_roles"),
+    (error) => error instanceof SafeCatalogQueryError &&
+      error.failure.step === "memberships",
+  );
+  assert.equal(issuedQueries.length, 3);
+  assert.deepEqual(progress.completedSteps, ["rls_flags", "columns"]);
+  assert.deepEqual(progress.actual, {
+    tables: 13,
+    columns: 149,
+    indexes: null,
+    constraints: null,
+    policies: null,
+    roles: null,
+  });
+  assert.ok(failure);
+  const report = createDevelopmentRlsCatalogReport({
+    expectedCounts: {
+      tables: 13,
+      columns: 149,
+      indexes: 37,
+      constraints: 54,
+      policies: 36,
+      roles: 3,
+    },
+    progress,
+    failedQuery: failure.failure,
+    generatedAt: "2026-11-16T00:00:00.000Z",
+    databaseNameMatched: true,
+    transactionReadOnly: true,
+    runtimeLoginAuthenticated: true,
+    postgresMajor: 16,
+    refusalCode: "catalog_query_failed",
+  });
+  const serialized = JSON.stringify(report);
+  assert.equal(report.expected.roles, 3);
+  assert.deepEqual(report.failedQuery, {
+    step: "memberships",
+    sqlState: "42501",
+    errorClass: "insufficient_privilege",
+  });
+  assert.match(serialized, /"completedSteps":\["rls_flags","columns"\]/);
+  assert.doesNotMatch(serialized, /permission denied|private_catalog_object_sentinel/);
 });

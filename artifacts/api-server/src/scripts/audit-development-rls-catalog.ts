@@ -8,6 +8,7 @@ import {
 } from "@workspace/db/rls-catalog-audit";
 import {
   deriveDrizzleRlsTableNames,
+  deriveRlsCatalogPhaseSnapshot,
   readRlsCatalogPhaseSnapshot,
 } from "@workspace/db/rls-catalog-phase-audit";
 import {
@@ -15,9 +16,17 @@ import {
 } from "@workspace/db/rls-runtime-readiness";
 import { readCatalogSnapshot } from "./verify-rls-catalog";
 import {
+  createDevelopmentCatalogReadProgress,
+  monitorDevelopmentCatalogReads,
+  SafeCatalogQueryError,
+  sanitizeCatalogQueryFailure,
   auditDevelopmentRlsCatalog,
   createDevelopmentRlsCatalogReport,
   parseDevelopmentRlsAuditArguments,
+} from "../lib/development-rls-catalog-audit";
+import type {
+  DevelopmentRlsCatalogCounts,
+  SafeCatalogQueryFailure,
 } from "../lib/development-rls-catalog-audit";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -164,8 +173,28 @@ async function readAppendOnlyRuntimePrivileges(
   return rows;
 }
 
-function emitRefusal(code: string): void {
+function expectedCatalogCounts(
+  contract: RlsCatalogContract,
+): DevelopmentRlsCatalogCounts {
+  const expected = deriveRlsCatalogPhaseSnapshot(contract, "final");
+  return {
+    tables: expected.tables.length,
+    columns: expected.columns.length,
+    indexes: expected.indexes.length,
+    constraints: expected.constraints.length,
+    policies: expected.policies.length,
+    roles: expected.roles.length,
+  };
+}
+
+function emitRefusal(
+  code: string,
+  expectedCounts: DevelopmentRlsCatalogCounts,
+  progress: ReturnType<typeof createDevelopmentCatalogReadProgress>,
+): void {
   const report = createDevelopmentRlsCatalogReport({
+    expectedCounts,
+    progress,
     generatedAt: new Date().toISOString(),
     databaseNameMatched: false,
     transactionReadOnly: false,
@@ -177,28 +206,37 @@ function emitRefusal(code: string): void {
 }
 
 async function main(): Promise<void> {
+  const contract = await loadContract();
+  const expectedCounts = expectedCatalogCounts(contract);
+  const progress = createDevelopmentCatalogReadProgress();
   const parsedArguments = parseDevelopmentRlsAuditArguments(
     process.argv.slice(2),
   );
   if (!parsedArguments.ok) {
-    emitRefusal(parsedArguments.code);
+    emitRefusal(parsedArguments.code, expectedCounts, progress);
     return;
   }
 
   let pool: Pool | undefined;
   let client: PoolClient | undefined;
+  let observedClient: PoolClient | undefined;
   let transactionStarted = false;
   let databaseNameMatched = false;
   let transactionReadOnly = false;
   let runtimeLoginAuthenticated = false;
   let postgresMajor: number | null = null;
+  let currentStep: SafeCatalogQueryFailure["step"] = "connection";
+  let refusalCode: string | undefined;
   try {
     const db = await import("@workspace/db");
     pool = db.pool;
     client = await pool.connect();
-    await client.query("BEGIN TRANSACTION READ ONLY");
+    observedClient = monitorDevelopmentCatalogReads(client, progress);
+    currentStep = "transaction";
+    await observedClient.query("BEGIN TRANSACTION READ ONLY");
     transactionStarted = true;
-    const identity = await client.query(
+    currentStep = "identity";
+    const identity = await observedClient.query(
       `SELECT current_database() AS database_name,
               session_user::text AS session_role,
               current_user::text AS current_role,
@@ -220,6 +258,8 @@ async function main(): Promise<void> {
       await client.query("ROLLBACK");
       transactionStarted = false;
       const report = createDevelopmentRlsCatalogReport({
+        expectedCounts,
+        progress,
         generatedAt: new Date().toISOString(),
         databaseNameMatched: false,
         transactionReadOnly,
@@ -234,6 +274,8 @@ async function main(): Promise<void> {
       await client.query("ROLLBACK");
       transactionStarted = false;
       const report = createDevelopmentRlsCatalogReport({
+        expectedCounts,
+        progress,
         generatedAt: new Date().toISOString(),
         databaseNameMatched,
         transactionReadOnly,
@@ -249,6 +291,8 @@ async function main(): Promise<void> {
       await client.query("ROLLBACK");
       transactionStarted = false;
       const report = createDevelopmentRlsCatalogReport({
+        expectedCounts,
+        progress,
         generatedAt: new Date().toISOString(),
         databaseNameMatched,
         transactionReadOnly,
@@ -261,17 +305,18 @@ async function main(): Promise<void> {
       return;
     }
     if (!transactionReadOnly || postgresMajor === null) {
+      refusalCode = "read_only_transaction_failed";
       throw new Error("read_only_transaction_failed");
     }
 
-    const contract = await loadContract();
     const tableNames = deriveDrizzleRlsTableNames();
     const roleNames = Object.keys(contract.roles).sort();
+    currentStep = "catalog";
     const [phaseSnapshot, { snapshot }, appendOnlyGrantRows] =
       await Promise.all([
-        readRlsCatalogPhaseSnapshot(client, tableNames, roleNames),
-        readCatalogSnapshot(client, tableNames, roleNames),
-        readAppendOnlyRuntimePrivileges(client, postgresMajor),
+        readRlsCatalogPhaseSnapshot(observedClient, tableNames, roleNames),
+        readCatalogSnapshot(observedClient, tableNames, roleNames),
+        readAppendOnlyRuntimePrivileges(observedClient, postgresMajor),
       ]);
     const audit = auditDevelopmentRlsCatalog({
       contract,
@@ -281,28 +326,38 @@ async function main(): Promise<void> {
     });
     const report = createDevelopmentRlsCatalogReport({
       audit,
+      expectedCounts,
+      progress,
       generatedAt: new Date().toISOString(),
       databaseNameMatched,
       transactionReadOnly,
       runtimeLoginAuthenticated,
       postgresMajor,
     });
-    await client.query("COMMIT");
+    currentStep = "transaction";
+    await observedClient.query("COMMIT");
     transactionStarted = false;
     process.stdout.write(`${JSON.stringify(report)}\n`);
     if (report.status !== "passed") process.exitCode = 1;
-  } catch {
+  } catch (error) {
     if (transactionStarted && client) {
       await client.query("ROLLBACK").catch(() => undefined);
       transactionStarted = false;
     }
+    const failedQuery = error instanceof SafeCatalogQueryError
+      ? error.failure
+      : sanitizeCatalogQueryFailure(currentStep, error);
     const report = createDevelopmentRlsCatalogReport({
+      expectedCounts,
+      progress,
+      failedQuery,
       generatedAt: new Date().toISOString(),
       databaseNameMatched,
       transactionReadOnly,
       runtimeLoginAuthenticated,
       postgresMajor,
-      refusalCode: client ? "catalog_query_failed" : "runtime_connection_unavailable",
+      refusalCode: refusalCode ??
+        (client ? "catalog_query_failed" : "runtime_connection_unavailable"),
     });
     process.stdout.write(`${JSON.stringify(report)}\n`);
     process.exitCode = 1;
