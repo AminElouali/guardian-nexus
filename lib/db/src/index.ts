@@ -3,7 +3,10 @@ import { sql } from "drizzle-orm";
 import pg from "pg";
 import * as schema from "./schema";
 import { appRuntimeLoginRoleName } from "./schema/roles";
-import { expectedRlsPolicyCounts } from "./rls-catalog-contract";
+import {
+  assertRlsRuntimeCatalogReady,
+  rlsRuntimeTableNamesSql,
+} from "./rls-runtime-readiness";
 import {
   RlsRuntimeReadinessError,
   type RlsReadinessViolationCode,
@@ -113,55 +116,12 @@ export async function assertRlsRuntimeReady(): Promise<void> {
       ON p.schemaname = n.nspname
       AND p.tablename = c.relname
     WHERE n.nspname = 'public'
-      AND c.relname IN (
-        'workspaces',
-        'workspace_memberships',
-        'assets',
-        'workspace_monthly_usage',
-        'workspace_audit_events',
-        'workspace_integrations',
-        'provider_connections',
-        'connector_oauth_states',
-        'connector_jobs',
-        'ai_assessment_jobs',
-        'host_boundary_attestation_challenges',
-        'ai_assessment_approval_requests'
-      )
+      AND c.relname IN (${rlsRuntimeTableNamesSql})
     GROUP BY c.relname, c.relrowsecurity, c.relforcerowsecurity
   `),
     "table_catalog_query_failed",
   );
-  const catalogViolations: RlsReadinessViolationCode[] = [];
-  if (rows.length !== Object.keys(expectedRlsPolicyCounts).length) {
-    catalogViolations.push("table_inventory_mismatch");
-  }
-  for (const row of rows) {
-      const expectedCount =
-        expectedRlsPolicyCounts[
-          String(row.relname) as keyof typeof expectedRlsPolicyCounts
-        ];
-      if (expectedCount === undefined) {
-        catalogViolations.push("table_inventory_mismatch");
-      }
-      if (row.relrowsecurity !== true) {
-        catalogViolations.push("rls_disabled");
-      }
-      if (row.relforcerowsecurity !== true) {
-        catalogViolations.push("rls_not_forced");
-      }
-      if (
-        expectedCount === undefined ||
-        Number(row.policy_count) !== expectedCount
-      ) {
-        catalogViolations.push("policy_count_mismatch");
-      }
-      if (Number(row.invalid_policies) !== 0) {
-        catalogViolations.push("policy_contract_mismatch");
-      }
-  }
-  if (catalogViolations.length > 0) {
-    throw new RlsRuntimeReadinessError(catalogViolations);
-  }
+  assertRlsRuntimeCatalogReady(rows);
 
   const loginResult = await runRlsReadinessStep(
     () => db.execute(sql`
@@ -213,38 +173,12 @@ export async function assertRlsRuntimeReady(): Promise<void> {
         JOIN pg_namespace AS protected_schema
           ON protected_schema.oid = protected.relnamespace
         WHERE protected_schema.nspname = 'public'
-          AND protected.relname = ANY(ARRAY[
-            'workspaces',
-            'workspace_memberships',
-            'assets',
-            'workspace_monthly_usage',
-            'workspace_audit_events',
-            'workspace_integrations',
-            'provider_connections',
-            'connector_oauth_states',
-            'connector_jobs',
-            'ai_assessment_jobs',
-            'host_boundary_attestation_challenges',
-            'ai_assessment_approval_requests'
-          ])
+          AND protected.relname = ANY(ARRAY[${rlsRuntimeTableNamesSql}])
           AND protected.relowner = runtime.oid
       ) AS runtime_owns_protected_table,
       NOT EXISTS (
         SELECT 1
-        FROM unnest(ARRAY[
-          'workspaces',
-          'workspace_memberships',
-          'assets',
-          'workspace_monthly_usage',
-          'workspace_audit_events',
-          'workspace_integrations',
-          'provider_connections',
-          'connector_oauth_states',
-          'connector_jobs',
-          'ai_assessment_jobs',
-          'host_boundary_attestation_challenges',
-          'ai_assessment_approval_requests'
-        ]) AS protected(table_name)
+        FROM unnest(ARRAY[${rlsRuntimeTableNamesSql}]) AS protected(table_name)
         WHERE NOT CASE
           WHEN protected.table_name = 'host_boundary_attestation_challenges'
           THEN has_table_privilege(
@@ -409,20 +343,7 @@ export async function assertRlsRuntimeReady(): Promise<void> {
       ) AS runtime_has_required_table_grants,
       EXISTS (
         SELECT 1
-        FROM unnest(ARRAY[
-          'workspaces',
-          'workspace_memberships',
-          'assets',
-          'workspace_monthly_usage',
-          'workspace_audit_events',
-          'workspace_integrations',
-          'provider_connections',
-          'connector_oauth_states',
-          'connector_jobs',
-          'ai_assessment_jobs',
-          'host_boundary_attestation_challenges',
-          'ai_assessment_approval_requests'
-        ]) AS protected(table_name)
+        FROM unnest(ARRAY[${rlsRuntimeTableNamesSql}]) AS protected(table_name)
         WHERE
           has_table_privilege(role.oid, format('public.%I', protected.table_name), 'SELECT')
           OR has_table_privilege(role.oid, format('public.%I', protected.table_name), 'INSERT')
