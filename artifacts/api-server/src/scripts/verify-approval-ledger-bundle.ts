@@ -16,6 +16,119 @@ const CANONICAL_TIMESTAMP =
 
 type CliResult = { valid: boolean; code: string };
 
+function assertStrictJson(text: string): void {
+  let index = 0;
+
+  const skipWhitespace = (): void => {
+    while (index < text.length && /[\u0009\u000a\u000d\u0020]/.test(text[index]!)) {
+      index += 1;
+    }
+  };
+
+  const parseString = (): string => {
+    const start = index;
+    if (text[index] !== "\"") throw new TypeError("invalid_json");
+    index += 1;
+    while (index < text.length) {
+      const char = text[index++]!;
+      if (char === "\"") {
+        return JSON.parse(text.slice(start, index)) as string;
+      }
+      if (char === "\\") {
+        if (index >= text.length) throw new TypeError("invalid_json");
+        const escape = text[index++]!;
+        if (escape === "u") {
+          const hex = text.slice(index, index + 4);
+          if (!/^[0-9A-Fa-f]{4}$/.test(hex)) {
+            throw new TypeError("invalid_json");
+          }
+          index += 4;
+        } else if (!"\"\\/bfnrt".includes(escape)) {
+          throw new TypeError("invalid_json");
+        }
+      } else if (char.charCodeAt(0) < 0x20) {
+        throw new TypeError("invalid_json");
+      }
+    }
+    throw new TypeError("invalid_json");
+  };
+
+  const parseValue = (): void => {
+    skipWhitespace();
+    const char = text[index];
+    if (char === "{") {
+      index += 1;
+      skipWhitespace();
+      const names = new Set<string>();
+      if (text[index] === "}") {
+        index += 1;
+        return;
+      }
+      while (true) {
+        skipWhitespace();
+        const name = parseString();
+        if (names.has(name)) throw new TypeError("duplicate_json_key");
+        names.add(name);
+        skipWhitespace();
+        if (text[index++] !== ":") throw new TypeError("invalid_json");
+        parseValue();
+        skipWhitespace();
+        const delimiter = text[index++];
+        if (delimiter === "}") return;
+        if (delimiter !== ",") throw new TypeError("invalid_json");
+      }
+    }
+    if (char === "[") {
+      index += 1;
+      skipWhitespace();
+      if (text[index] === "]") {
+        index += 1;
+        return;
+      }
+      while (true) {
+        parseValue();
+        skipWhitespace();
+        const delimiter = text[index++];
+        if (delimiter === "]") return;
+        if (delimiter !== ",") throw new TypeError("invalid_json");
+      }
+    }
+    if (char === "\"") {
+      parseString();
+      return;
+    }
+    if (char === "t" && text.slice(index, index + 4) === "true") {
+      index += 4;
+      return;
+    }
+    if (char === "f" && text.slice(index, index + 5) === "false") {
+      index += 5;
+      return;
+    }
+    if (char === "n" && text.slice(index, index + 4) === "null") {
+      index += 4;
+      return;
+    }
+    const number = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/.exec(
+      text.slice(index),
+    )?.[0];
+    if (!number) throw new TypeError("invalid_json");
+    if (
+      /[.eE]/.test(number) ||
+      number === "-0" ||
+      !Number.isSafeInteger(Number(number))
+    ) {
+      throw new TypeError("canonical_integer_invalid");
+    }
+    index += number.length;
+  };
+
+  parseValue();
+  skipWhitespace();
+  if (index !== text.length) throw new TypeError("invalid_json");
+  JSON.parse(text);
+}
+
 function parseArguments(args: readonly string[]): {
   bundlePath: string;
   trustedKeysPath: string;
@@ -210,13 +323,21 @@ export function verifyApprovalLedgerBundleFiles(
     ) {
       return { valid: false, code: "invalid_bundle" };
     }
-    const bundle = JSON.parse(bundleBytes.toString("utf8")) as ApprovalLedgerBundleV1;
+    const bundleText = bundleBytes.toString("utf8");
+    assertStrictJson(bundleText);
+    const bundle = JSON.parse(bundleText) as ApprovalLedgerBundleV1;
+    const trustedKeysText = trustBytes.toString("utf8");
+    assertStrictJson(trustedKeysText);
     const trustedKeys = parseTrustedKeys(
-      JSON.parse(trustBytes.toString("utf8")) as unknown,
+      JSON.parse(trustedKeysText) as unknown,
     );
-    const checkpoint = JSON.parse(checkpointBytes.toString("utf8")) as unknown;
+    const checkpointText = checkpointBytes.toString("utf8");
+    assertStrictJson(checkpointText);
+    const checkpoint = JSON.parse(checkpointText) as unknown;
+    const checkpointTrustText = checkpointTrustBytes.toString("utf8");
+    assertStrictJson(checkpointTrustText);
     const checkpointTrustedKeys = parseTrustedKeys(
-      JSON.parse(checkpointTrustBytes.toString("utf8")) as unknown,
+      JSON.parse(checkpointTrustText) as unknown,
     );
     if (!trustedKeys || !checkpointTrustedKeys) {
       return { valid: false, code: "trusted_key_invalid" };
