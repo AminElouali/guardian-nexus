@@ -36,6 +36,10 @@ import {
   downloadQwenExecutiveReport,
 } from './qwenExecutiveReport';
 import {
+  requestAndDownloadApprovalLedgerBundle,
+  type ApprovalLedgerExportFailure,
+} from './approvalLedgerExport';
+import {
   GuardianApprovalInbox,
   isFixtureOnlySyntheticRefundApproval,
 } from './GuardianApprovalInbox';
@@ -988,9 +992,8 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
     receipts: Record<string, SignedApprovalReceiptV1>;
     consumeResults: Record<string, ReceiptConsumeDisplay>;
   } | null>(null);
-  const [ledgerExportErrorStatus, setLedgerExportErrorStatus] = useState<
-    number | null | undefined
-  >();
+  const [ledgerExportFailure, setLedgerExportFailure] =
+    useState<ApprovalLedgerExportFailure>();
   const [qwenProposal, setQwenProposal] = useState<SyntheticRefundProposalResponse | null>(null);
   const [qwenProposalError, setQwenProposalError] = useState('');
   const [qwenProposalMessage, setQwenProposalMessage] = useState('');
@@ -1178,33 +1181,29 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
   }
 
   async function exportApprovalLedger(receipts: SignedApprovalReceiptV1[]) {
-    setLedgerExportErrorStatus(undefined);
-    try {
-      const bundle: ApprovalLedgerBundleV1 =
-        await exportApprovalLedgerMutation.mutateAsync({
+    setLedgerExportFailure(undefined);
+    const result = await requestAndDownloadApprovalLedgerBundle(
+      () =>
+        exportApprovalLedgerMutation.mutateAsync({
           workspaceId: workspace.id,
           data: { receipts },
+        }),
+      (bundle: ApprovalLedgerBundleV1) => {
+        const blob = new Blob([`${JSON.stringify(bundle, null, 2)}\n`], {
+          type: 'application/json',
         });
-      const blob = new Blob([`${JSON.stringify(bundle, null, 2)}\n`], {
-        type: 'application/json',
-      });
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = `guardian-approval-ledger-${workspace.id}.json`;
-      document.body.append(anchor);
-      anchor.click();
-      anchor.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 0);
-    } catch (caught) {
-      const status = caught &&
-          typeof caught === 'object' &&
-          'status' in caught &&
-          typeof caught.status === 'number' &&
-          Number.isInteger(caught.status)
-        ? caught.status
-        : null;
-      setLedgerExportErrorStatus(status);
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = `guardian-approval-ledger-${workspace.id}.json`;
+        document.body.append(anchor);
+        anchor.click();
+        anchor.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 0);
+      },
+    );
+    if (!result.ok) {
+      setLedgerExportFailure(result.failure);
     }
   }
 
@@ -1568,7 +1567,7 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
         eventsErrorDetail={ledgerEvents.error}
         eventsRetrying={ledgerEvents.isFetching}
         exporting={exportApprovalLedgerMutation.isPending}
-        exportErrorStatus={ledgerExportErrorStatus}
+        exportFailure={ledgerExportFailure}
         onRetryEvents={() => void ledgerEvents.refetch()}
         onConsume={(approvalId, receipt) =>
           void consumeSyntheticApprovalReceipt(approvalId, receipt)

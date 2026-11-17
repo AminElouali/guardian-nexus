@@ -6,6 +6,10 @@ import type {
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { WorkspaceQueryError } from "@/components/WorkspaceQueryError";
+import {
+  approvalLedgerExportFailureMessage,
+  type ApprovalLedgerExportFailure,
+} from "./approvalLedgerExport";
 
 export type ReceiptConsumeDisplay = {
   httpStatus: number | null;
@@ -21,7 +25,7 @@ type ApprovalLedgerDemoProps = {
   eventsErrorDetail?: unknown;
   eventsRetrying?: boolean;
   exporting: boolean;
-  exportErrorStatus?: number | null;
+  exportFailure?: ApprovalLedgerExportFailure;
   onRetryEvents: () => void;
   onConsume: (approvalId: string, receipt: SignedApprovalReceiptV1) => void;
   onExport: (receipts: SignedApprovalReceiptV1[]) => void;
@@ -52,7 +56,7 @@ export function ApprovalLedgerDemo({
   eventsErrorDetail,
   eventsRetrying = false,
   exporting,
-  exportErrorStatus,
+  exportFailure,
   onRetryEvents,
   onConsume,
   onExport,
@@ -266,13 +270,13 @@ export function ApprovalLedgerDemo({
             Guarde los recibos al aprobar para poder incluirlos.
           </p>
         )}
-        {exportErrorStatus !== undefined && (
-          <p className="notice notice-error" role="alert">
-            No se pudo exportar el registro
-            {exportErrorStatus === null
-              ? " (sin respuesta HTTP)"
-              : ` (HTTP ${exportErrorStatus})`}.
-            No se descargó un archivo parcial.
+        {exportFailure && (
+          <p
+            className="notice notice-error"
+            role="alert"
+            data-testid="approval-ledger-export-error"
+          >
+            {approvalLedgerExportFailureMessage(exportFailure)}
           </p>
         )}
         <div className="ai-evaluation-actions">

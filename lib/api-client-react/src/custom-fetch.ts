@@ -322,6 +322,19 @@ async function parseSuccessBody(
   }
 }
 
+/**
+ * The browser's fetch rejected before an HTTP response was available.
+ * Deliberately omits the original error, URL, and request details.
+ */
+export class FetchTransportError extends TypeError {
+  readonly name = "TypeError";
+
+  constructor() {
+    super("api_transport_failed");
+    Object.setPrototypeOf(this, new.target.prototype);
+  }
+}
+
 export async function customFetch<T = unknown>(
   input: RequestInfo | URL,
   options: CustomFetchOptions = {},
@@ -360,7 +373,12 @@ export async function customFetch<T = unknown>(
 
   const requestInfo = { method, url: resolveUrl(input) };
 
-  const response = await fetch(input, { ...init, method, headers });
+  let response: Response;
+  try {
+    response = await fetch(input, { ...init, method, headers });
+  } catch {
+    throw new FetchTransportError();
+  }
 
   if (!response.ok) {
     const errorData = await parseErrorBody(response, method);

@@ -41,6 +41,19 @@ non-Ed25519 material fails closed. The disposable approval E2E creates an
 ephemeral test-only Ed25519 key after its database guard passes. Receipts
 expire five minutes after issuance.
 
+To derive only the public key from the configured application signing key, run
+this command in the Replit Shell where the Secret is configured:
+
+```sh
+pnpm --filter @workspace/api-server run print:ledger-public-key
+```
+
+It performs no network or database access. Its JSON output contains the stable
+`keyId`, the Ed25519 public key in SPKI PEM, the SHA-256 of the SPKI DER bytes,
+and a `trustedKeys` object ready to save as the CLI's `--trusted-keys` JSON
+file. The command never prints private-key material; a missing or invalid key
+produces only `status: "no ok"` and a fixed error code.
+
 The receipt commits to `proposalBindingSha256` and `actionSha256`. Under the
 current binding contract, the synthetic amount is covered indirectly by
 `actionSha256`; the idempotency key is linked only indirectly through the bound

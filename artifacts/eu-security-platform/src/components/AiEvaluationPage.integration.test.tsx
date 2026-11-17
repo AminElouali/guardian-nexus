@@ -1416,3 +1416,44 @@ test("report v3 export allow-lists fields and drops unexpected tenant or raw-con
   assert.equal(report.reportVersion, 3);
   assert.equal(report.brand, "Guardian Nexus");
 });
+
+test("ledger export UI distinguishes network, client, download, and HTTP failures without details", () => {
+  const failures = [
+    {
+      failure: { kind: "network" as const },
+      message: "No se pudo conectar con el servidor",
+    },
+    {
+      failure: { kind: "client" as const },
+      message: "El navegador no pudo preparar la solicitud",
+    },
+    {
+      failure: { kind: "download" as const },
+      message: "el navegador no pudo iniciar la descarga",
+    },
+    {
+      failure: { kind: "http" as const, status: 409 },
+      message: "HTTP 409",
+    },
+  ];
+
+  for (const { failure, message } of failures) {
+    const markup = renderToStaticMarkup(
+      createElement(ApprovalLedgerDemo, {
+        receipts: [],
+        consumeResults: {},
+        events: [],
+        eventsLoading: false,
+        eventsError: false,
+        exporting: false,
+        exportFailure: failure,
+        onRetryEvents: () => undefined,
+        onConsume: () => undefined,
+        onExport: () => undefined,
+      }),
+    );
+    assert.match(markup, /data-testid="approval-ledger-export-error"/);
+    assert.match(markup, new RegExp(message, "i"));
+    assert.doesNotMatch(markup, /private|token|credential|database url/i);
+  }
+});
