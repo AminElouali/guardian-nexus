@@ -10,6 +10,10 @@ import {
   type RlsCatalogQueryStep,
   type RlsCatalogPhaseSnapshot,
 } from "@workspace/db/rls-catalog-phase-audit";
+import {
+  appendOnlyRlsTableNames,
+  expectedRlsTableNames,
+} from "@workspace/db/rls-catalog-contract";
 import { appendOnlyRuntimeGrantsAllowed } from "@workspace/db/rls-runtime-readiness";
 import type { PoolClient } from "pg";
 
@@ -100,8 +104,18 @@ export type DevelopmentRlsCatalogAudit = {
   actualRoleCount: number;
   actualConstraintCount: number;
   objectDiffs: DevelopmentCatalogObjectDiff;
+  privilegeDifferences: DevelopmentPrivilegeDifference[];
   provenanceConstraintOutdated: boolean;
   violationCodes: string[];
+};
+
+export type DevelopmentPrivilegeDifference = {
+  role: string;
+  table: string;
+  privilege: string;
+  expectedGranted: boolean;
+  actualGranted: boolean | null;
+  scope: "table" | "column";
 };
 
 export type DevelopmentRlsCatalogCounts = {
@@ -146,6 +160,124 @@ export type DevelopmentCatalogObjectDiff = {
   missing: DevelopmentCatalogObjectInventory;
   unexpected: DevelopmentCatalogObjectInventory;
 };
+
+const catalogTablePrivileges = [
+  "SELECT",
+  "INSERT",
+  "UPDATE",
+  "DELETE",
+] as const;
+
+function developmentPrivilegeDifferences(
+  contract: RlsCatalogContract,
+  snapshot: RlsCatalogSnapshot,
+  appendOnlyGrantRows: readonly Record<string, unknown>[],
+): DevelopmentPrivilegeDifference[] {
+  const differences = new Map<string, DevelopmentPrivilegeDifference>();
+  const addDifference = (
+    difference: DevelopmentPrivilegeDifference,
+  ): void => {
+    if (difference.expectedGranted === difference.actualGranted) return;
+    const key = [
+      difference.scope,
+      difference.role,
+      difference.table,
+      difference.privilege,
+    ].join(":");
+    differences.set(key, difference);
+  };
+  const roles = Object.keys(contract.roles);
+  const tables = new Set<string>(expectedRlsTableNames);
+  for (const role of roles) {
+    for (const table of expectedRlsTableNames) {
+      for (const privilege of catalogTablePrivileges) {
+        const expectedGranted = contract.grants.some((grant) =>
+          grant.roleName === role &&
+          grant.tableName === table &&
+          grant.privilege === privilege &&
+          grant.columns === undefined
+        );
+        const actual = snapshot.tablePrivileges.find((grant) =>
+          grant.roleName === role &&
+          grant.tableName === table &&
+          grant.privilege === privilege
+        );
+        addDifference({
+          role,
+          table,
+          privilege,
+          expectedGranted,
+          actualGranted: actual?.granted ?? null,
+          scope: "table",
+        });
+      }
+    }
+  }
+
+  for (const actual of snapshot.updateColumns) {
+    if (
+      !roles.includes(actual.roleName) ||
+      !tables.has(actual.tableName)
+    ) continue;
+    const grant = contract.grants.find((candidate) =>
+      candidate.roleName === actual.roleName &&
+      candidate.tableName === actual.tableName &&
+      candidate.privilege === "UPDATE"
+    );
+    const expectedGranted = grant !== undefined &&
+      (grant.columns === undefined ||
+        grant.columns.includes(actual.columnName));
+    addDifference({
+      role: actual.roleName,
+      table: actual.tableName,
+      privilege: "UPDATE",
+      expectedGranted,
+      actualGranted: actual.granted,
+      scope: "column",
+    });
+  }
+
+  const appendOnlyPrivilegeFields = [
+    ["SELECT", "can_select", true, "table"],
+    ["INSERT", "can_insert", true, "table"],
+    ["UPDATE", "can_update", false, "table"],
+    ["DELETE", "can_delete", false, "table"],
+    ["TRUNCATE", "can_truncate", false, "table"],
+    ["REFERENCES", "can_references", false, "table"],
+    ["TRIGGER", "can_trigger", false, "table"],
+    ["MAINTAIN", "can_maintain", false, "table"],
+    ["UPDATE", "column_update", false, "column"],
+    ["REFERENCES", "column_references", false, "column"],
+  ] as const;
+  for (const table of appendOnlyRlsTableNames) {
+    const row = appendOnlyGrantRows.find(
+      (candidate) => candidate.table_name === table,
+    );
+    for (
+      const [privilege, field, expectedGranted, scope] of
+        appendOnlyPrivilegeFields
+    ) {
+      if (
+        privilege === "MAINTAIN" &&
+        row?.maintain_supported !== true
+      ) continue;
+      const value = row?.[field];
+      addDifference({
+        role: "app_runtime",
+        table,
+        privilege,
+        expectedGranted,
+        actualGranted: typeof value === "boolean" ? value : null,
+        scope,
+      });
+    }
+  }
+  return [...differences.values()].sort((left, right) =>
+    `${left.role}:${left.table}:${left.privilege}:${left.scope}`.localeCompare(
+      `${right.role}:${right.table}:${right.privilege}:${right.scope}`,
+    )
+  );
+}
 
 const objectKinds: DevelopmentCatalogObjectKind[] = [
   "tables",
@@ -381,6 +513,11 @@ export function auditDevelopmentRlsCatalog(input: {
     "final",
   );
   const grantAudit = auditRlsCatalog(input.contract, input.catalogSnapshot);
+  const privilegeDifferences = developmentPrivilegeDifferences(
+    input.contract,
+    input.catalogSnapshot,
+    input.appendOnlyGrantRows,
+  );
   const appendOnlyPrivilegesPassed = appendOnlyRuntimeGrantsAllowed(
     input.appendOnlyGrantRows,
   );
@@ -458,6 +595,7 @@ export function auditDevelopmentRlsCatalog(input: {
     actualRoleCount: input.phaseSnapshot.roles.length,
     actualConstraintCount: input.phaseSnapshot.constraints.length,
     objectDiffs,
+    privilegeDifferences,
     provenanceConstraintOutdated,
     violationCodes: [...violations].sort(),
   };
@@ -480,6 +618,7 @@ export type DevelopmentRlsCatalogReport = {
   completedSteps: DevelopmentCatalogQueryStep[];
   failedQuery: SafeCatalogQueryFailure | null;
   objectDiffs: DevelopmentCatalogObjectDiff | null;
+  privilegeDifferences: DevelopmentPrivilegeDifference[];
   violationCodes: string[];
 };
 
@@ -543,6 +682,7 @@ export function createDevelopmentRlsCatalogReport(input: {
     completedSteps: input.progress?.completedSteps ?? [],
     failedQuery: input.failedQuery ?? null,
     objectDiffs: input.audit?.objectDiffs ?? input.objectDiffs ?? null,
+    privilegeDifferences: input.audit?.privilegeDifferences ?? [],
     violationCodes: refusalCode
       ? [refusalCode]
       : audit?.violationCodes ?? [],

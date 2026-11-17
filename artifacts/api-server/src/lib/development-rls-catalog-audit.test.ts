@@ -404,6 +404,13 @@ test("missing ledger is listed while catalog and privilege reads complete", asyn
   assert.deepEqual(audit.objectDiffs.missing.tables, [
     "public.workspace_approval_ledger",
   ]);
+  assert.ok(audit.privilegeDifferences.length > 0);
+  assert.equal(
+    audit.privilegeDifferences.every(
+      (difference) => difference.table === "workspace_approval_ledger",
+    ),
+    true,
+  );
   assert.ok(progress.completedSteps.includes("columns"));
   assert.ok(progress.completedSteps.includes("privileges"));
   assert.ok(progress.completedSteps.includes("append_only_privileges"));
@@ -427,6 +434,75 @@ test("development RLS audit fails if runtime receives table-level UPDATE", () =>
   );
   assert.ok(
     audit.violationCodes.includes("table_privilege_mismatch"),
+  );
+});
+
+test("safe report identifies privilege differences only with contract names", () => {
+  const snapshots = makeSnapshots();
+  const update = snapshots.catalogSnapshot.tablePrivileges.find((item) =>
+    item.roleName === "app_runtime" &&
+    item.tableName === "workspace_memberships" &&
+    item.privilege === "UPDATE"
+  );
+  assert.ok(update);
+  const expectedGranted = contract.grants.some((grant) =>
+    grant.roleName === "app_runtime" &&
+    grant.tableName === "workspace_memberships" &&
+    grant.privilege === "UPDATE" &&
+    grant.columns === undefined
+  );
+  update.granted = !expectedGranted;
+  snapshots.catalogSnapshot.tablePrivileges.push({
+    roleName: "private_role_sentinel",
+    tableName: "private_table_sentinel",
+    privilege: "SELECT",
+    granted: true,
+  });
+
+  const audit = auditDevelopmentRlsCatalog({
+    contract,
+    ...snapshots,
+  });
+  assert.ok(
+    audit.privilegeDifferences.some((difference) =>
+      difference.role === "app_runtime" &&
+      difference.table === "workspace_memberships" &&
+      difference.privilege === "UPDATE" &&
+      difference.scope === "table" &&
+      difference.expectedGranted === expectedGranted &&
+      difference.actualGranted === !expectedGranted
+    ),
+  );
+  assert.equal(
+    audit.privilegeDifferences.some((difference) =>
+      difference.role === "private_role_sentinel" ||
+      difference.table === "private_table_sentinel"
+    ),
+    false,
+  );
+  const report = createDevelopmentRlsCatalogReport({
+    audit,
+    expectedCounts: {
+      tables: audit.expectedTableCount,
+      columns: audit.expectedColumnCount,
+      indexes: audit.expectedIndexCount,
+      constraints: audit.expectedConstraintCount,
+      policies: audit.expectedPolicyCount,
+      roles: audit.expectedRoleCount,
+    },
+    generatedAt: "2026-11-17T00:00:00.000Z",
+    databaseNameMatched: true,
+    transactionReadOnly: true,
+    runtimeLoginAuthenticated: true,
+    postgresMajor: 16,
+  });
+  const serialized = JSON.stringify(report);
+  assert.match(serialized, /"role":"app_runtime"/);
+  assert.match(serialized, /"table":"workspace_memberships"/);
+  assert.match(serialized, /"privilege":"UPDATE"/);
+  assert.doesNotMatch(
+    serialized,
+    /private_role_sentinel|private_table_sentinel/,
   );
 });
 
@@ -564,6 +640,7 @@ test("read-only audit report exposes only safe status, counts, and fixed codes",
     roles: 3,
   });
   assert.deepEqual(report.violationCodes, []);
+  assert.deepEqual(report.privilegeDifferences, []);
   assert.doesNotMatch(JSON.stringify(report), /postgresql:|password|secret|localhost/i);
 });
 
