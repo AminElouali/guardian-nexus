@@ -31,12 +31,27 @@ export type ApprovalLedgerSigningKeys = {
   publicKey: KeyObject;
 };
 
+function normalizePrivateKeyPem(value: string): string {
+  const trimmed = value.trim();
+  const hasOuterQuotes =
+    trimmed.length >= 2 &&
+    ((trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+      (trimmed.startsWith("'") && trimmed.endsWith("'")));
+  const unquoted = (hasOuterQuotes ? trimmed.slice(1, -1) : trimmed).trim();
+  const pem = unquoted.replace(/\\n/g, "\n");
+
+  if (/^[A-Za-z0-9+/]{64}$/.test(pem)) {
+    return `-----BEGIN PRIVATE KEY-----\n${pem}\n-----END PRIVATE KEY-----`;
+  }
+  return pem;
+}
+
 export function loadApprovalLedgerSigningKeys(
   pem = process.env.APPROVAL_LEDGER_ED25519_PRIVATE_KEY,
 ): ApprovalLedgerSigningKeys {
   if (!pem) throw new ApprovalLedgerError("key_unavailable");
   try {
-    const privateKey = createPrivateKey(pem);
+    const privateKey = createPrivateKey(normalizePrivateKeyPem(pem));
     if (privateKey.asymmetricKeyType !== "ed25519") {
       throw new ApprovalLedgerError("key_invalid");
     }

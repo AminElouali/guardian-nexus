@@ -12,6 +12,34 @@ test("approval ledger signing accepts only Ed25519 private keys", () => {
   assert.equal(keys.publicKey.asymmetricKeyType, "ed25519");
 });
 
+test("approval ledger signing accepts quoted PEM with literal newline escapes", () => {
+  const pair = generateKeyPairSync("ed25519");
+  const pem = pair.privateKey
+    .export({ format: "pem", type: "pkcs8" })
+    .toString()
+    .replace(/\n/g, "\\n");
+  const keys = loadApprovalLedgerSigningKeys(`  "${pem}"  `);
+
+  assert.equal(keys.privateKey.asymmetricKeyType, "ed25519");
+  assert.equal(keys.publicKey.asymmetricKeyType, "ed25519");
+});
+
+test("approval ledger signing accepts a bare 64-character PKCS8 base64 body", () => {
+  const pair = generateKeyPairSync("ed25519");
+  const pem = pair.privateKey
+    .export({ format: "pem", type: "pkcs8" })
+    .toString();
+  const body = pem
+    .split(/\r?\n/)
+    .filter((line) => !line.startsWith("-----"))
+    .join("");
+  assert.match(body, /^[A-Za-z0-9+/]{64}$/);
+
+  const keys = loadApprovalLedgerSigningKeys(`  '${body}'  `);
+  assert.equal(keys.privateKey.asymmetricKeyType, "ed25519");
+  assert.equal(keys.publicKey.asymmetricKeyType, "ed25519");
+});
+
 test("missing and malformed approval ledger keys fail closed without echoing input", () => {
   const malformed = "TEST_ONLY_PRIVATE_KEY_SENTINEL";
   assert.throws(
