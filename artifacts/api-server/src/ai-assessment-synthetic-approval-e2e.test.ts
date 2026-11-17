@@ -1673,7 +1673,10 @@ test(
       "expired signed receipts are rejected before any ledger append",
     );
     const alteredReceipt = structuredClone(financeReceipt);
-    alteredReceipt.signature = `${alteredReceipt.signature.slice(0, -1)}A`;
+    alteredReceipt.signature = `${
+      alteredReceipt.signature[0] === "A" ? "B" : "A"
+    }${alteredReceipt.signature.slice(1)}`;
+    assert.notEqual(alteredReceipt.signature, financeReceipt.signature);
     assert.equal(
       (
         await request(workspaceAAdmin, consumePath, "POST", {

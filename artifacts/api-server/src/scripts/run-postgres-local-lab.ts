@@ -105,9 +105,9 @@ type NodeTestSummary = {
   skipped: number;
 };
 
-type SafeNodeTestPrimitive = string | number | boolean | null;
+export type SafeNodeTestPrimitive = string | number | boolean | null;
 
-type SafeNodeTestFailure = {
+export type SafeNodeTestFailure = {
   subtest: string;
   errorCode?: string;
   errorName?: string;
@@ -272,74 +272,223 @@ function parseNodeTestSummary(output: string): NodeTestSummary {
   return summary as NodeTestSummary;
 }
 
-function parseSafeFailedTestLabels(output: string): string[] {
-  return [...output.matchAll(/^not ok \d+ - (.{1,160})$/gm)]
-    .map((match) => match[1] ?? "")
-    .filter((label) => /^[A-Za-z0-9][A-Za-z0-9 .:_/-]{0,159}$/.test(label))
-    .slice(0, 20);
+const safeNodeTestErrorCodes = new Set([
+  "ERR_ASSERTION",
+  "ERR_TEST_FAILURE",
+  "ERR_MODULE_NOT_FOUND",
+  "ERR_PACKAGE_PATH_NOT_EXPORTED",
+  "ERR_INVALID_ARG_TYPE",
+  "ERR_STREAM_PREMATURE_CLOSE",
+  "23503",
+  "23505",
+  "42501",
+  "42703",
+  "42P01",
+  "28P01",
+]);
+const safeNodeTestErrorNames = new Set([
+  "AssertionError",
+  "Error",
+  "TypeError",
+  "RangeError",
+  "ReferenceError",
+  "SyntaxError",
+  "TimeoutError",
+]);
+const safeNodeTestFailureTypes = new Set([
+  "testCodeFailure",
+  "testTimeoutFailure",
+  "hookFailed",
+  "subtestsFailed",
+]);
+const sensitiveDiagnosticPattern =
+  /(?:postgres(?:ql)?:\/\/|https?:\/\/|\b(?:bearer|token|secret|password|credential|authorization)\b|-----BEGIN [^-]*PRIVATE KEY-----|\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b|\b(?:localhost|127(?:\.\d{1,3}){3}|::1)(?::\d{1,5})?\b|\b[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+(?::\d{1,5})?\b|\b[A-Za-z0-9_+/=-]{32,}\b|\b[0-9a-f]{8}-[0-9a-f-]{27,}\b)/i;
+
+function tapField(block: string, key: string): string | undefined {
+  const lines = block.split(/\r?\n/);
+  const index = lines.findIndex((line) =>
+    new RegExp(`^ {2}${key}:`).test(line)
+  );
+  if (index < 0) return undefined;
+  const match = lines[index]?.match(/^ {2}[A-Za-z][A-Za-z0-9_-]*:\s*(.*)$/);
+  if (!match) return undefined;
+  const scalar = match[1] ?? "";
+  if (/^[|>][+-]?$/.test(scalar.trim())) {
+    const content: string[] = [];
+    for (let cursor = index + 1; cursor < lines.length; cursor += 1) {
+      const line = lines[cursor] ?? "";
+      if (/^ {2}[A-Za-z][A-Za-z0-9_-]*:/.test(line) || /^ {2}\.\.\.$/.test(line)) {
+        break;
+      }
+      if (line.trim()) content.push(line.replace(/^ {4}/, ""));
+    }
+    return content.join("\n");
+  }
+  const value = scalar.trim();
+  if (value.startsWith("'") && value.endsWith("'")) {
+    return value.slice(1, -1).replaceAll("''", "'");
+  }
+  if (value.startsWith('"') && value.endsWith('"')) {
+    try {
+      const decoded: unknown = JSON.parse(value);
+      return typeof decoded === "string" ? decoded : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+  return value || undefined;
 }
 
-function parseSafeFailureLocations(output: string): string[] {
-  const stackLocations = [
-    ...output.matchAll(/^\s+at .*?\/([A-Za-z0-9._-]+\.ts):(\d+):\d+/gm),
-  ].map((match) => `${match[1]}:${match[2]}`);
-  const tapLocations = [
-    ...output.matchAll(
-      /^\s*location:\s*['"]?(?:file:\/\/)?[^'"\n]*\/([A-Za-z0-9._-]+\.ts):(\d+):\d+['"]?\s*$/gm,
-    ),
-  ].map((match) => `${match[1]}:${match[2]}`);
-  return [
-    ...new Set(
-      [...stackLocations, ...tapLocations].filter((location) =>
-        /^[A-Za-z0-9._-]+\.ts:\d+$/.test(location),
-      ),
-    ),
-  ].slice(0, 8);
+function safeFailureMessage(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const firstLine = value
+    .replace(/\u001b\[[0-9;]*m/g, "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find(Boolean);
+  if (!firstLine) return undefined;
+  const message = firstLine
+    .replace(/^AssertionError(?:\s+\[[A-Z0-9_]+\])?:\s*/i, "")
+    .replace(
+      /(?:postgres(?:ql)?:\/\/|https?:\/\/)\S+|\bBearer\s+\S+|-----BEGIN [^-]*PRIVATE KEY-----.*?-----END [^-]*PRIVATE KEY-----/gi,
+      "[redacted]",
+    )
+    .replace(
+      /\b(?:token|secret|password|credential|authorization|database_url)\s*[:=]\s*[^\s,;]+/gi,
+      "[redacted]",
+    )
+    .replace(
+      /\b(?:localhost|127(?:\.\d{1,3}){3}|::1)(?::\d{1,5})?\b|\b[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+(?::\d{1,5})?\b/gi,
+      "[redacted]",
+    )
+    .replace(
+      /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b|\b[A-Za-z0-9_+/=-]{32,}\b|\b[0-9a-f]{8}-[0-9a-f-]{27,}\b/gi,
+      "[redacted]",
+    )
+    .replace(/[\u0000-\u001f\u007f]/g, " ")
+    .trim();
+  if (!message || /[{}]/.test(message)) return undefined;
+  return message.slice(0, 300);
 }
 
-function parseSafeFailureError(output: string): {
-  name?: string;
-  code?: string;
-  type?: string;
-} {
-  const name = output.match(
-    /^\s*error:\s*['"]?(AssertionError|Error|TypeError|RangeError|ReferenceError|SyntaxError|TimeoutError)\b/m,
-  )?.[1];
-  const candidateCode = output.match(
-    /^\s*code:\s*['"]([A-Z0-9_]{1,64})['"]\s*$/m,
-  )?.[1];
-  const candidateType = output.match(
-    /^\s*failureType:\s*['"]([A-Za-z]+)['"]\s*$/m,
-  )?.[1];
-  const safeCodes = new Set([
-    "ERR_ASSERTION",
-    "ERR_TEST_FAILURE",
-    "ERR_MODULE_NOT_FOUND",
-    "ERR_PACKAGE_PATH_NOT_EXPORTED",
-    "ERR_INVALID_ARG_TYPE",
-    "ERR_STREAM_PREMATURE_CLOSE",
-    "23503",
-    "23505",
-    "42501",
-    "42703",
-    "42P01",
-    "28P01",
-  ]);
-  const safeTypes = new Set([
-    "testCodeFailure",
-    "testTimeoutFailure",
-    "hookFailed",
-    "subtestsFailed",
-  ]);
-  return {
-    ...(name ? { name } : {}),
-    ...(candidateCode && safeCodes.has(candidateCode)
-      ? { code: candidateCode }
-      : {}),
-    ...(candidateType && safeTypes.has(candidateType)
-      ? { type: candidateType }
-      : {}),
-  };
+function safeTapPrimitive(value: string | undefined): SafeNodeTestPrimitive | undefined {
+  if (value === undefined) return undefined;
+  if (value === "null" || value === "~") return null;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  if (/^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(value)) {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : undefined;
+  }
+  let stringValue = value;
+  if (value.startsWith("'") && value.endsWith("'")) {
+    stringValue = value.slice(1, -1).replaceAll("''", "'");
+  } else if (value.startsWith('"') && value.endsWith('"')) {
+    try {
+      const decoded: unknown = JSON.parse(value);
+      if (typeof decoded !== "string") return undefined;
+      stringValue = decoded;
+    } catch {
+      return undefined;
+    }
+  }
+  if (
+    stringValue.length === 0 ||
+    stringValue.length > 120 ||
+    /[\u0000-\u001f\u007f]/.test(stringValue) ||
+    sensitiveDiagnosticPattern.test(stringValue) ||
+    /[{}\[\]]/.test(stringValue)
+  ) {
+    return undefined;
+  }
+  return stringValue;
+}
+
+function importSourceLines(source: string): Set<number> {
+  const result = new Set<number>();
+  let inImport = false;
+  for (const [index, line] of source.split(/\r?\n/).entries()) {
+    if (!inImport && /^\s*import\b/.test(line)) inImport = true;
+    if (!inImport) continue;
+    result.add(index + 1);
+    if (
+      /\bfrom\s+["'][^"']+["']\s*;?\s*$/.test(line) ||
+      /^\s*import\s*["'][^"']+["']\s*;?\s*$/.test(line) ||
+      /;\s*$/.test(line)
+    ) {
+      inImport = false;
+    }
+  }
+  return result;
+}
+
+function testSourceLocation(
+  block: string,
+  testFileName: string,
+  source: string,
+): string | undefined {
+  const importLines = importSourceLines(source);
+  for (const line of block.split(/\r?\n/)) {
+    if (!/^\s+at\s/.test(line) || line.includes("/node_modules/")) continue;
+    const frame = line.match(
+      /(?:\(|\s)(?:file:\/\/)?([^()\s]+\.ts):(\d+):\d+\)?\s*$/,
+    );
+    if (!frame) continue;
+    const fileName = path.basename(
+      (frame[1] ?? "").replace(/^file:\/\/+/, ""),
+    );
+    const sourceLine = Number(frame[2]);
+    if (
+      fileName !== testFileName ||
+      !Number.isSafeInteger(sourceLine) ||
+      sourceLine < 1 ||
+      importLines.has(sourceLine)
+    ) {
+      continue;
+    }
+    return `${testFileName}:${sourceLine}`;
+  }
+  return undefined;
+}
+
+export function parseSafeNodeTestFailures(
+  output: string,
+  testFileName: string,
+  testSource: string,
+): SafeNodeTestFailure[] {
+  const failures = [...output.matchAll(/^not ok \d+ - (.{1,240})$/gm)]
+    .slice(0, 8);
+  return failures.map((match, index) => {
+    const start = match.index ?? 0;
+    const nextFailure = failures[index + 1]?.index;
+    const summaryOffset = output.slice(start).search(/^# tests \d+$/m);
+    const end = nextFailure ??
+      (summaryOffset >= 0 ? start + summaryOffset : output.length);
+    const block = output.slice(start, end);
+    const label = (match[1] ?? "").trim();
+    const subtest = /^[A-Za-z0-9][A-Za-z0-9 .:_/-]{0,159}$/.test(label)
+      ? label
+      : "non_allowlisted_subtest";
+    const code = tapField(block, "code");
+    const name = tapField(block, "name");
+    const failureType = tapField(block, "failureType");
+    const message = safeFailureMessage(tapField(block, "error"));
+    const expected = safeTapPrimitive(tapField(block, "expected"));
+    const received = safeTapPrimitive(tapField(block, "actual"));
+    const location = testSourceLocation(block, testFileName, testSource);
+    return {
+      subtest,
+      ...(code && safeNodeTestErrorCodes.has(code) ? { errorCode: code } : {}),
+      ...(name && safeNodeTestErrorNames.has(name) ? { errorName: name } : {}),
+      ...(failureType && safeNodeTestFailureTypes.has(failureType)
+        ? { failureType }
+        : {}),
+      ...(message ? { message } : {}),
+      ...(expected !== undefined ? { expected } : {}),
+      ...(received !== undefined ? { received } : {}),
+      ...(location ? { location } : {}),
+    };
+  });
 }
 
 function binaryPath(name: string): string {
@@ -580,6 +729,7 @@ async function main(): Promise<void> {
   let approvalLedgerRlsProbeCount = 0;
   let approvalLedgerRlsProbeFailureCode: string | undefined;
   let approvalE2eSummary: NodeTestSummary | undefined;
+  let approvalE2eFailures: SafeNodeTestFailure[] = [];
   let approvalE2eFailureLocations: string[] = [];
   let approvalE2eFailureErrorName: string | undefined;
   let approvalE2eFailureErrorCode: string | undefined;
@@ -1079,18 +1229,26 @@ async function main(): Promise<void> {
     console.log(
       `node:test approval E2E: tests=${nodeTestSummary.tests} pass=${nodeTestSummary.pass} fail=${nodeTestSummary.fail} skipped=${nodeTestSummary.skipped}`,
     );
-    const failedTestLabels = parseSafeFailedTestLabels(
-      `${e2eOutput.stdout}\n${e2eOutput.stderr}`,
-    );
-    approvalE2eFailureLocations = parseSafeFailureLocations(
-      `${e2eOutput.stdout}\n${e2eOutput.stderr}`,
-    );
-    const failureError = parseSafeFailureError(
-      `${e2eOutput.stdout}\n${e2eOutput.stderr}`,
-    );
-    approvalE2eFailureErrorName = failureError.name;
-    approvalE2eFailureErrorCode = failureError.code;
-    approvalE2eFailureType = failureError.type;
+    const combinedE2eOutput = `${e2eOutput.stdout}\n${e2eOutput.stderr}`;
+    if (nodeTestSummary.fail > 0 || e2eOutput.exitCode !== 0) {
+      const e2eTestPath = path.join(
+        repoRoot,
+        "artifacts/api-server/src/ai-assessment-synthetic-approval-e2e.test.ts",
+      );
+      const e2eTestSource = await readFile(e2eTestPath, "utf8");
+      approvalE2eFailures = parseSafeNodeTestFailures(
+        combinedE2eOutput,
+        path.basename(e2eTestPath),
+        e2eTestSource,
+      );
+      const firstFailure = approvalE2eFailures[0];
+      approvalE2eFailureLocations = firstFailure?.location
+        ? [firstFailure.location]
+        : [];
+      approvalE2eFailureErrorName = firstFailure?.errorName;
+      approvalE2eFailureErrorCode = firstFailure?.errorCode;
+      approvalE2eFailureType = firstFailure?.failureType;
+    }
     if (
       e2eOutput.exitCode !== 0 ||
       e2eOutput.signal !== null ||
@@ -1099,14 +1257,9 @@ async function main(): Promise<void> {
       nodeTestSummary.fail !== 0 ||
       nodeTestSummary.cancelled !== 0
     ) {
-      if (failedTestLabels.length > 0) {
+      if (approvalE2eFailures.length > 0) {
         console.error(
-          `node:test failed cases: ${failedTestLabels.join(" | ")}`,
-        );
-      }
-      if (approvalE2eFailureLocations.length > 0) {
-        console.error(
-          `node:test failure locations: ${approvalE2eFailureLocations.join(" | ")}`,
+          `node:test failure diagnostics: ${JSON.stringify(approvalE2eFailures)}`,
         );
       }
       if (
@@ -1164,6 +1317,7 @@ async function main(): Promise<void> {
         approvalLedgerRlsProbeCount,
         approvalLedgerRlsProbeFailureCode,
         approvalE2eSummary,
+        approvalE2eFailures,
         approvalE2eFailureLocations,
         approvalE2eFailureErrorName,
         approvalE2eFailureErrorCode,
@@ -1269,4 +1423,10 @@ async function main(): Promise<void> {
   }
 }
 
-void main();
+if (
+  process.argv[1] &&
+  path.resolve(process.argv[1]) ===
+    path.resolve(fileURLToPath(import.meta.url))
+) {
+  void main();
+}
