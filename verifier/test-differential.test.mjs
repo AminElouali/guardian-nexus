@@ -43,7 +43,10 @@ function publicPem(pair) {
   return pair.publicKey.export({ format: "pem", type: "spki" }).toString();
 }
 
-function makeFixture() {
+function makeFixture({
+  requestedBy = "requester-ephemeral",
+  approvedBy = "approver-ephemeral",
+} = {}) {
   const ledgerPair = ephemeralPair();
   const checkpointPair = ephemeralPair();
   const otherPair = ephemeralPair();
@@ -56,8 +59,8 @@ function makeFixture() {
       approvalId: "approval-ephemeral",
       proposalBindingSha256: "a".repeat(64),
       actionSha256: "b".repeat(64),
-      requestedBy: "requester-ephemeral",
-      approvedBy: "approver-ephemeral",
+      requestedBy,
+      approvedBy,
       approvedByRole: "admin",
       issuedAt: ISSUED_AT,
       expiresAt: EXPIRES_AT,
@@ -202,7 +205,15 @@ function withTempDir(callback) {
   }
 }
 
-function saveInputs(dir, name, bundleText, ledgerTrust, checkpoint, checkpointTrust) {
+function saveInputs(
+  dir,
+  name,
+  bundleText,
+  ledgerTrust,
+  checkpoint,
+  checkpointTrust,
+  at = VERIFY_AT,
+) {
   const root = resolve(dir, name);
   mkdirSync(root, { mode: 0o700 });
   const bundlePath = resolve(root, "bundle.json");
@@ -226,7 +237,7 @@ function saveInputs(dir, name, bundleText, ledgerTrust, checkpoint, checkpointTr
       checkpointTrustPath,
     );
   }
-  args.push("--at", VERIFY_AT);
+  args.push("--at", at);
   return args;
 }
 
@@ -251,6 +262,7 @@ test("standalone Python verifier matches the TypeScript verifier on ephemeral v1
         ledgerTrust = fixture.ledgerTrust,
         checkpointTrust = fixture.checkpointTrust,
         compareCli = true,
+        at = VERIFY_AT,
       } = {},
     ) => {
       const pyArgs = saveInputs(
@@ -260,6 +272,7 @@ test("standalone Python verifier matches the TypeScript verifier on ephemeral v1
         ledgerTrust,
         checkpoint,
         checkpointTrust,
+        at,
       );
       const py = invokeVerifier("python3", [PY_CLI, ...pyArgs], `${name}: Python`);
       const expected = { valid: expectedCode === "ok", code: expectedCode };
@@ -273,6 +286,7 @@ test("standalone Python verifier matches the TypeScript verifier on ephemeral v1
           ledgerTrust,
           checkpoint,
           checkpointTrust,
+          at,
         );
         const ts = invokeVerifier(
           process.execPath,
@@ -282,7 +296,7 @@ test("standalone Python verifier matches the TypeScript verifier on ephemeral v1
         assert.deepEqual(ts, expected, `${name}: TypeScript result`);
         assert.deepEqual(py, ts, `${name}: differential result`);
       } else {
-        const direct = directTypeScriptResult(JSON.parse(bundleText), fixture);
+        const direct = directTypeScriptResult(JSON.parse(bundleText), fixture, at);
         assert.deepEqual(
           direct,
           expected,
@@ -300,6 +314,27 @@ test("standalone Python verifier matches the TypeScript verifier on ephemeral v1
       assert.notEqual(JSON.stringify(before), JSON.stringify(after), `${label} mutation`);
 
     runPair("complete bundle with sequence-2 checkpoint", original, "ok");
+
+    const alteredCheckpointHead = clone(fixture.checkpoint2);
+    alteredCheckpointHead.checkpoint.headEventSha256 = changedHex(
+      alteredCheckpointHead.checkpoint.headEventSha256,
+    );
+    assertChanged(alteredCheckpointHead, fixture.checkpoint2, "checkpoint head hash");
+    runPair(
+      "changed checkpoint head digest",
+      original,
+      "checkpoint_hash_mismatch",
+      { checkpoint: alteredCheckpointHead },
+    );
+
+    const invalidCheckpointSignature = clone(fixture.checkpoint2);
+    invalidCheckpointSignature.signature = changedCharacter(
+      invalidCheckpointSignature.signature,
+    );
+    assertChanged(invalidCheckpointSignature, fixture.checkpoint2, "checkpoint signature");
+    runPair("altered checkpoint signature", original, "checkpoint_signature_invalid", {
+      checkpoint: invalidCheckpointSignature,
+    });
 
     runPair(
       "sequence-1 checkpoint against full bundle",
@@ -388,6 +423,32 @@ test("standalone Python verifier matches the TypeScript verifier on ephemeral v1
       { ledgerTrust: { "other-ephemeral": publicPem(fixture.otherPair) } },
     );
 
+    const unknownCheckpointKeyTrust = {
+      "different-checkpoint-id": publicPem(fixture.otherPair),
+    };
+    runPair(
+      "unknown checkpoint key id",
+      original,
+      "unknown_key",
+      { checkpointTrust: unknownCheckpointKeyTrust },
+    );
+
+    const checkpointSignedByLedgerKey = signApprovalLedgerCheckpointV1(
+      fixture.checkpoint2.checkpoint,
+      fixture.ledgerPair.privateKey,
+    );
+    runPair(
+      "checkpoint key reused from ledger trust",
+      original,
+      "checkpoint_key_not_independent",
+      {
+        checkpoint: checkpointSignedByLedgerKey,
+        checkpointTrust: {
+          [CHECKPOINT_KEY_ID]: fixture.ledgerTrust[LEDGER_KEY_ID],
+        },
+      },
+    );
+
     const noncanonicalSignature = clone(fixture.bundle);
     const signature = noncanonicalSignature.receipts[0].signature;
     const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
@@ -406,6 +467,21 @@ test("standalone Python verifier matches the TypeScript verifier on ephemeral v1
     extraReceiptField.receipts[0].payload.unexpected = "extra";
     assertChanged(extraReceiptField, fixture.bundle, "extra receipt field");
     runPair("receipt with extra field", JSON.stringify(extraReceiptField), "receipt_invalid");
+
+    const duplicateReceipt = clone(fixture.bundle);
+    duplicateReceipt.receipts.push(clone(duplicateReceipt.receipts[0]));
+    assertChanged(duplicateReceipt, fixture.bundle, "duplicate receipt");
+    runPair("duplicate receipt and nonce", JSON.stringify(duplicateReceipt), "receipt_nonce_reused");
+
+    const expiredUnconsumed = clone(fixture.bundle);
+    expiredUnconsumed.events = expiredUnconsumed.events.slice(0, 1);
+    assertChanged(expiredUnconsumed, fixture.bundle, "unconsumed history");
+    runPair(
+      "unconsumed receipt after expiry",
+      JSON.stringify(expiredUnconsumed),
+      "receipt_expired",
+      { checkpoint: null, compareCli: false, at: "2026-11-17T10:06:00.000Z" },
+    );
 
     const duplicateJson = original.replace(
       '"version":1',
@@ -438,6 +514,38 @@ test("standalone Python verifier matches the TypeScript verifier on ephemeral v1
       ledgerTrust: versionedLedgerTrust,
       checkpointTrust: versionedCheckpointTrust,
     });
+
+    const notYetValidLedgerTrust = {
+      version: 1,
+      keys: {
+        [LEDGER_KEY_ID]: {
+          publicKeyPem: fixture.ledgerTrust[LEDGER_KEY_ID],
+          validFrom: "2026-11-17T10:00:00.001Z",
+          status: "active",
+        },
+      },
+    };
+    runPair(
+      "dated key outside validity at signing time",
+      original,
+      "key_not_valid_at_signing_time",
+      { ledgerTrust: notYetValidLedgerTrust },
+    );
+
+    const unicodeFixture = makeFixture({
+      requestedBy: "requester-🛡",
+      approvedBy: "approver-\u2028-例",
+    });
+    runPair(
+      "canonical Unicode values",
+      JSON.stringify(unicodeFixture.bundle),
+      "ok",
+      {
+        ledgerTrust: unicodeFixture.ledgerTrust,
+        checkpoint: unicodeFixture.checkpoint2,
+        checkpointTrust: unicodeFixture.checkpointTrust,
+      },
+    );
 
     const cliWithoutCheckpoint = saveInputs(
       dir,
