@@ -992,6 +992,8 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
     receipts: Record<string, SignedApprovalReceiptV1>;
     consumeResults: Record<string, ReceiptConsumeDisplay>;
   } | null>(null);
+  const [recentlyApprovedReceiptId, setRecentlyApprovedReceiptId] =
+    useState<string | null>(null);
   const [ledgerExportFailure, setLedgerExportFailure] =
     useState<ApprovalLedgerExportFailure>();
   const [qwenProposal, setQwenProposal] = useState<SyntheticRefundProposalResponse | null>(null);
@@ -1111,8 +1113,9 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
             consumeResults: sameWorkspace ? current.consumeResults : {},
           };
         });
+        setRecentlyApprovedReceiptId(approvalId);
         setApprovalMessage(
-          'Aprobación sintética registrada y recibo firmado recibido. El servidor no conserva el recibo.',
+          'Aprobación sintética registrada. Guarde el recibo ahora: el servidor no lo conserva y al recargar se pierde.',
         );
       } else {
         setApprovalMessage(
@@ -1562,6 +1565,7 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
         )}
         consumeResults={currentLedgerState.consumeResults}
         events={ledgerEvents.data?.events ?? []}
+        recentlyApprovedReceiptId={recentlyApprovedReceiptId}
         eventsLoading={ledgerEvents.isLoading}
         eventsError={ledgerEvents.isError}
         eventsErrorDetail={ledgerEvents.error}
@@ -1572,6 +1576,19 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
         onConsume={(approvalId, receipt) =>
           void consumeSyntheticApprovalReceipt(approvalId, receipt)
         }
+        onAddReceipt={(approvalId, receipt) => {
+          setApprovalLedgerClientState((current) => {
+            const sameWorkspace = current?.workspaceId === workspace.id;
+            return {
+              workspaceId: workspace.id,
+              receipts: {
+                ...(sameWorkspace ? current.receipts : {}),
+                [approvalId]: receipt,
+              },
+              consumeResults: sameWorkspace ? current.consumeResults : {},
+            };
+          });
+        }}
         onExport={(receipts) => void exportApprovalLedger(receipts)}
       />
     )}

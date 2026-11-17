@@ -41,6 +41,53 @@ import {
   getPublicDecisionLabel,
   getPublicReasonLabel,
 } from "./security-ui-copy";
+import { importSavedApprovalReceipt } from "./approvalReceiptImport";
+
+function createSavedReceiptFixture(): SignedApprovalReceiptV1 {
+  return {
+    payload: {
+      version: 1,
+      keyId: "fixture-key",
+      receiptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      workspaceId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      approvalId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      proposalBindingSha256: "a".repeat(64),
+      actionSha256: "b".repeat(64),
+      requestedBy: "synthetic-requester",
+      approvedBy: "synthetic-reviewer",
+      approvedByRole: "admin",
+      issuedAt: "2026-11-16T12:00:00.000Z",
+      expiresAt: "2026-11-16T12:05:00.000Z",
+      nonce: "n".repeat(32),
+    },
+    payloadSha256: "d".repeat(64),
+    signature: "e".repeat(86),
+  };
+}
+
+function createApprovedEventFixture(
+  receipt: SignedApprovalReceiptV1,
+): SignedApprovalLedgerEventV1 {
+  return {
+    event: {
+      version: 1,
+      keyId: "fixture-key",
+      workspaceId: receipt.payload.workspaceId,
+      sequence: 1,
+      eventId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      eventType: "approval.approved",
+      approvalId: receipt.payload.approvalId,
+      previousEventSha256: "",
+      occurredAt: "2026-11-16T12:00:00.000Z",
+      payload: {
+        receiptId: receipt.payload.receiptId,
+        receiptSha256: receipt.payloadSha256,
+      },
+    },
+    eventSha256: "f".repeat(64),
+    signature: "g".repeat(86),
+  };
+}
 
 test("workspace fallback labels API unavailability and keeps a retry action", () => {
   let retryCount = 0;
@@ -349,11 +396,13 @@ test("synthetic approval ledger view offers receipt actions and safe history exp
       receipts: [{ approvalId: receipt.payload.approvalId, receipt }],
       consumeResults: {},
       events: [event],
+      recentlyApprovedReceiptId: receipt.payload.approvalId,
       eventsLoading: false,
       eventsError: false,
       exporting: false,
       onRetryEvents: () => undefined,
       onConsume: () => undefined,
+      onAddReceipt: () => undefined,
       onExport: () => undefined,
     }),
   );
@@ -366,6 +415,12 @@ test("synthetic approval ledger view offers receipt actions and safe history exp
   assert.match(markup, /truncación de eventos posteriores/);
   assert.match(markup, /approval\.approved/);
   assert.match(markup, /button-export-approval-ledger/);
+  assert.match(markup, /Guarde el recibo ahora: el servidor no lo conserva y al recargar se pierde/);
+  assert.match(
+    markup,
+    /<button class="[^"]*bg-primary[^"]*" data-testid="button-download-receipt-/,
+  );
+  assert.match(markup, /Cargar recibo guardado/);
   assert.doesNotMatch(markup, /cumplimiento normativo|inmutable|pago real/i);
 });
 
@@ -398,12 +453,109 @@ test("ledger export stays disabled when a server-held receipt is missing", () =>
       exporting: false,
       onRetryEvents: () => undefined,
       onConsume: () => undefined,
+      onAddReceipt: () => undefined,
       onExport: () => undefined,
     }),
   );
   assert.match(markup, /faltan 1 recibos/);
   assert.match(markup, /el servidor no conserva/);
+  assert.match(markup, /Falta el recibo para approvalId/);
+  assert.match(markup, /cccccccc-cccc-4ccc-8ccc-cccccccccccc/);
   assert.match(markup, /button-export-approval-ledger[^>]*disabled/);
+});
+
+test("saved receipt import accepts a strict v1 receipt linked to a workspace approval event", () => {
+  const receipt = createSavedReceiptFixture();
+  const event = createApprovedEventFixture(receipt);
+  const result = importSavedApprovalReceipt(
+    JSON.stringify(receipt),
+    [event],
+    [],
+  );
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.approvalId, receipt.payload.approvalId);
+  assert.deepEqual(result.receipt, receipt);
+
+  const markup = renderToStaticMarkup(
+    createElement(ApprovalLedgerDemo, {
+      receipts: [],
+      consumeResults: {},
+      events: [event],
+      eventsLoading: false,
+      eventsError: false,
+      exporting: false,
+      onRetryEvents: () => undefined,
+      onConsume: () => undefined,
+      onAddReceipt: () => undefined,
+      onExport: () => undefined,
+    }),
+  );
+  assert.match(markup, /input-approval-receipt-file/);
+  assert.match(markup, /input-approval-receipt-json/);
+  assert.match(markup, /button-load-approval-receipt/);
+});
+
+test("saved receipt import rejects invalid JSON and fields outside the v1 envelope", () => {
+  const receipt = createSavedReceiptFixture();
+  const event = createApprovedEventFixture(receipt);
+  assert.deepEqual(
+    importSavedApprovalReceipt("{", [event], []),
+    { ok: false, failure: "invalid_json" },
+  );
+  assert.deepEqual(
+    importSavedApprovalReceipt(
+      JSON.stringify({ ...receipt, untrustedExtra: true }),
+      [event],
+      [],
+    ),
+    { ok: false, failure: "extra_fields" },
+  );
+});
+
+test("saved receipt import rejects duplicates and receipts without an approval event", () => {
+  const receipt = createSavedReceiptFixture();
+  const event = createApprovedEventFixture(receipt);
+  assert.deepEqual(
+    importSavedApprovalReceipt(
+      JSON.stringify(receipt),
+      [event],
+      [{ approvalId: receipt.payload.approvalId, receipt }],
+    ),
+    { ok: false, failure: "duplicate" },
+  );
+  assert.deepEqual(
+    importSavedApprovalReceipt(JSON.stringify(receipt), [], []),
+    { ok: false, failure: "no_matching_event" },
+  );
+});
+
+test("export becomes enabled after a matching saved receipt is loaded into session state", () => {
+  const receipt = createSavedReceiptFixture();
+  const event = createApprovedEventFixture(receipt);
+  const loaded = importSavedApprovalReceipt(JSON.stringify(receipt), [event], []);
+  assert.equal(loaded.ok, true);
+  if (!loaded.ok) return;
+
+  const markup = renderToStaticMarkup(
+    createElement(ApprovalLedgerDemo, {
+      receipts: [{ approvalId: loaded.approvalId, receipt: loaded.receipt }],
+      consumeResults: {},
+      events: [event],
+      eventsLoading: false,
+      eventsError: false,
+      exporting: false,
+      onRetryEvents: () => undefined,
+      onConsume: () => undefined,
+      onAddReceipt: () => undefined,
+      onExport: () => undefined,
+    }),
+  );
+  const exportButton = markup.match(
+    /<button[^>]*data-testid="button-export-approval-ledger"[^>]*>/,
+  )?.[0];
+  assert.ok(exportButton);
+  assert.doesNotMatch(exportButton, /\sdisabled(?:=|>)/);
 });
 
 test("receipt consumption displays the HTTP result and synthetic hashes", () => {
@@ -455,6 +607,7 @@ test("receipt consumption displays the HTTP result and synthetic hashes", () => 
       exporting: false,
       onRetryEvents: () => undefined,
       onConsume: () => undefined,
+      onAddReceipt: () => undefined,
       onExport: () => undefined,
     }),
   );
@@ -1449,6 +1602,7 @@ test("ledger export UI distinguishes network, client, download, and HTTP failure
         exportFailure: failure,
         onRetryEvents: () => undefined,
         onConsume: () => undefined,
+        onAddReceipt: () => undefined,
         onExport: () => undefined,
       }),
     );

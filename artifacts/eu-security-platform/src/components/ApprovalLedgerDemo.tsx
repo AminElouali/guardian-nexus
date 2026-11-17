@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState, type ChangeEvent } from "react";
 import type {
   AiAssessmentApprovalReceiptConsumeResponse,
   SignedApprovalLedgerEventV1,
@@ -10,6 +10,11 @@ import {
   approvalLedgerExportFailureMessage,
   type ApprovalLedgerExportFailure,
 } from "./approvalLedgerExport";
+import {
+  importSavedApprovalReceipt,
+  MAX_APPROVAL_RECEIPT_JSON_BYTES,
+  savedReceiptImportFailureMessage,
+} from "./approvalReceiptImport";
 
 export type ReceiptConsumeDisplay = {
   httpStatus: number | null;
@@ -20,6 +25,7 @@ type ApprovalLedgerDemoProps = {
   receipts: Array<{ approvalId: string; receipt: SignedApprovalReceiptV1 }>;
   consumeResults: Record<string, ReceiptConsumeDisplay>;
   events: SignedApprovalLedgerEventV1[];
+  recentlyApprovedReceiptId?: string | null;
   eventsLoading: boolean;
   eventsError: boolean;
   eventsErrorDetail?: unknown;
@@ -28,6 +34,7 @@ type ApprovalLedgerDemoProps = {
   exportFailure?: ApprovalLedgerExportFailure;
   onRetryEvents: () => void;
   onConsume: (approvalId: string, receipt: SignedApprovalReceiptV1) => void;
+  onAddReceipt: (approvalId: string, receipt: SignedApprovalReceiptV1) => void;
   onExport: (receipts: SignedApprovalReceiptV1[]) => void;
 };
 
@@ -51,6 +58,7 @@ export function ApprovalLedgerDemo({
   receipts,
   consumeResults,
   events,
+  recentlyApprovedReceiptId,
   eventsLoading,
   eventsError,
   eventsErrorDetail,
@@ -59,9 +67,15 @@ export function ApprovalLedgerDemo({
   exportFailure,
   onRetryEvents,
   onConsume,
+  onAddReceipt,
   onExport,
 }: ApprovalLedgerDemoProps) {
   const [copyMessage, setCopyMessage] = useState("");
+  const [receiptJson, setReceiptJson] = useState("");
+  const [receiptImportMessage, setReceiptImportMessage] = useState("");
+  const [receiptImportError, setReceiptImportError] = useState("");
+  const [readingReceiptFile, setReadingReceiptFile] = useState(false);
+  const receiptFileInput = useRef<HTMLInputElement>(null);
   const receiptIndex = useMemo(
     () => new Map(receipts.map(({ receipt }) => [
       receipt.payload.receiptId,
@@ -69,7 +83,7 @@ export function ApprovalLedgerDemo({
     ])),
     [receipts],
   );
-  const missingReceiptCount = useMemo(
+  const missingApprovalIds = useMemo(
     () =>
       events.filter((signedEvent) => {
         if (signedEvent.event.eventType !== "approval.approved") return false;
@@ -78,10 +92,63 @@ export function ApprovalLedgerDemo({
         );
         return !receipt ||
           receipt.payloadSha256 !== signedEvent.event.payload.receiptSha256;
-      }).length,
+      }).map((signedEvent) => signedEvent.event.approvalId),
     [events, receiptIndex],
   );
+  const missingReceiptCount = missingApprovalIds.length;
   const receiptValues = receipts.map(({ receipt }) => receipt);
+
+  function acceptSavedReceipt(json: string) {
+    setReceiptImportMessage("");
+    setReceiptImportError("");
+    if (eventsLoading || eventsError) {
+      setReceiptImportError(
+        "Carga los eventos del registro antes de añadir un recibo.",
+      );
+      return;
+    }
+    const result = importSavedApprovalReceipt(json, events, receipts);
+    if (!result.ok) {
+      setReceiptImportError(savedReceiptImportFailureMessage(result.failure));
+      return;
+    }
+    onAddReceipt(result.approvalId, result.receipt);
+    setReceiptJson("");
+    setReceiptImportMessage(
+      "Recibo añadido solo a esta sesión. El servidor comprobará su firma y vínculo al exportar.",
+    );
+  }
+
+  async function handleReceiptFileChange(
+    event: ChangeEvent<HTMLInputElement>,
+  ) {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    setReceiptImportMessage("");
+    setReceiptImportError("");
+    if (!file.name.toLowerCase().endsWith(".json")) {
+      setReceiptImportError("Selecciona un archivo .json.");
+      input.value = "";
+      return;
+    }
+    if (file.size > MAX_APPROVAL_RECEIPT_JSON_BYTES) {
+      setReceiptImportError(savedReceiptImportFailureMessage("too_large"));
+      input.value = "";
+      return;
+    }
+
+    setReadingReceiptFile(true);
+    try {
+      acceptSavedReceipt(await file.text());
+    } catch {
+      setReceiptImportError("No se pudo leer el archivo JSON.");
+    } finally {
+      setReadingReceiptFile(false);
+      input.value = "";
+    }
+  }
 
   return (
     <section
@@ -128,6 +195,16 @@ export function ApprovalLedgerDemo({
                 El servidor devuelve este recibo una vez y no lo conserva. Si
                 se pierde, hay que volver a proponer y aprobar la acción.
               </p>
+              {recentlyApprovedReceiptId === approvalId && (
+                <p
+                  className="notice notice-warning"
+                  role="alert"
+                  data-testid={`status-save-receipt-${approvalId}`}
+                >
+                  Guarde el recibo ahora: el servidor no lo conserva y al
+                  recargar se pierde.
+                </p>
+              )}
               <div className="ai-evaluation-actions">
                 <Button
                   variant="outline"
@@ -146,7 +223,7 @@ export function ApprovalLedgerDemo({
                   Copiar recibo JSON
                 </Button>
                 <Button
-                  variant="outline"
+                  variant={recentlyApprovedReceiptId === approvalId ? "default" : "outline"}
                   data-testid={`button-download-receipt-${approvalId}`}
                   onClick={() =>
                     downloadJson(
@@ -264,12 +341,78 @@ export function ApprovalLedgerDemo({
           </ol>
         )}
         {missingReceiptCount > 0 && (
-          <p className="notice notice-error" data-testid="approval-ledger-missing-receipts">
-            No se puede exportar un bundle completo desde esta sesión: faltan
-            {` ${missingReceiptCount} `}recibos que el servidor no conserva.
-            Guarde los recibos al aprobar para poder incluirlos.
-          </p>
+          <div className="notice notice-error" data-testid="approval-ledger-missing-receipts">
+            <p>
+              No se puede exportar un bundle completo desde esta sesión: faltan
+              {` ${missingReceiptCount} `}recibos que el servidor no conserva.
+              Cargue los recibos guardados para continuar.
+            </p>
+            <ul data-testid="approval-ledger-missing-approval-ids">
+              {missingApprovalIds.map((approvalId) => (
+                <li key={approvalId}>
+                  Falta el recibo para approvalId <code>{approvalId}</code>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
+        <section
+          className="panel ai-evaluation-card"
+          aria-labelledby="approval-receipt-import-title"
+          data-testid="approval-receipt-import"
+        >
+          <h3 id="approval-receipt-import-title">Cargar recibo guardado</h3>
+          <p>
+            Seleccione un archivo .json o pegue el JSON del recibo firmado v1.
+            Se conserva solo en memoria durante esta sesión (máximo 16 KiB).
+            El servidor verificará firma y correspondencia al exportar.
+          </p>
+          <label htmlFor="approval-receipt-file">Archivo JSON del recibo</label>
+          <input
+            ref={receiptFileInput}
+            id="approval-receipt-file"
+            type="file"
+            accept=".json,application/json"
+            data-testid="input-approval-receipt-file"
+            disabled={readingReceiptFile || eventsLoading || eventsError}
+            onChange={(event) => void handleReceiptFileChange(event)}
+          />
+          <label htmlFor="approval-receipt-json">O pegue el JSON</label>
+          <textarea
+            id="approval-receipt-json"
+            className="text-input"
+            rows={6}
+            maxLength={MAX_APPROVAL_RECEIPT_JSON_BYTES + 1}
+            value={receiptJson}
+            onChange={(event) => setReceiptJson(event.target.value)}
+            data-testid="input-approval-receipt-json"
+            disabled={readingReceiptFile || eventsLoading || eventsError}
+          />
+          <Button
+            variant="outline"
+            type="button"
+            data-testid="button-load-approval-receipt"
+            disabled={
+              readingReceiptFile ||
+              eventsLoading ||
+              eventsError ||
+              receiptJson.trim().length === 0
+            }
+            onClick={() => acceptSavedReceipt(receiptJson)}
+          >
+            {readingReceiptFile ? "Leyendo recibo…" : "Cargar recibo guardado"}
+          </Button>
+          {receiptImportError && (
+            <p role="alert" data-testid="status-approval-receipt-import-error">
+              {receiptImportError}
+            </p>
+          )}
+          {receiptImportMessage && (
+            <p role="status" data-testid="status-approval-receipt-import">
+              {receiptImportMessage}
+            </p>
+          )}
+        </section>
         {exportFailure && (
           <p
             className="notice notice-error"
