@@ -179,7 +179,7 @@ function createDemoCheckpoint(
     return isRecord(generated) &&
         generated.created === true &&
         generated.code === "ok"
-      ? { checkpointPath, checkpointTrustedKeysPath }
+      ? { checkpointPath, checkpointTrustedKeysPath, verificationTime: issuedAt }
       : null;
   } catch {
     return null;
