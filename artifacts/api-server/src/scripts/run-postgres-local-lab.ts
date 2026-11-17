@@ -88,6 +88,7 @@ type SafeReport = {
   approvalLedgerRlsProbeCount?: number;
   approvalLedgerRlsProbeFailureCode?: string;
   approvalE2eSummary?: NodeTestSummary;
+  approvalE2eFailures?: SafeNodeTestFailure[];
   approvalE2eFailureLocations?: string[];
   approvalE2eFailureErrorName?: string;
   approvalE2eFailureErrorCode?: string;
@@ -102,6 +103,19 @@ type NodeTestSummary = {
   fail: number;
   cancelled: number;
   skipped: number;
+};
+
+type SafeNodeTestPrimitive = string | number | boolean | null;
+
+type SafeNodeTestFailure = {
+  subtest: string;
+  errorCode?: string;
+  errorName?: string;
+  failureType?: string;
+  message?: string;
+  expected?: SafeNodeTestPrimitive;
+  received?: SafeNodeTestPrimitive;
+  location?: string;
 };
 
 const allowedChildEnvironmentKeys = ["PATH", "HOME", "LANG", "LC_ALL"] as const;
