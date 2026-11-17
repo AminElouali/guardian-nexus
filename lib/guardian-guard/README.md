@@ -5,10 +5,12 @@
 **IMPLEMENTADO:** `index.mjs` verifica recibos individuales v1 sin llamar al
 servidor para la firma, compara workspace/aprobación/acción/argumentos, exige
 clave pública confiable y vigencia, y reclama el recibo al endpoint de consumo
-antes de entregar el mensaje al capturador SMTP local. El destino está limitado
-a loopback y el buzón a dominios de prueba (`example.test` o
-`guardian.invalid`). Las pruebas usan claves efímeras, HTTP simulado y un
-servidor SMTP TCP local.
+antes de entregar el mensaje al capturador SMTP local. El capturador requiere
+`AUTH PLAIN` con una credencial aleatoria que solo reciben el guard y el
+capturador de la prueba; un cliente directo sin esa credencial recibe `530`.
+El destino está limitado a loopback y el buzón a dominios de prueba
+(`example.test` o `guardian.invalid`). Las pruebas usan claves y credenciales
+efímeras, HTTP simulado y un servidor SMTP TCP local.
 
 **PROYECTADO:** despliegue como guard obligatorio delante de una herramienta
 empresarial, identidad de workload del agente, aislamiento de red/credenciales,
@@ -47,10 +49,21 @@ El índice único parcial del ledger es la autoridad final contra replay.
 Verificar una firma offline no impide por sí solo el replay. El guard no acepta
 un comando arbitrario ni devuelve credenciales.
 
+## Credencial del capturador local
+
+`sandboxSmtp.credential` es un valor aleatorio del guard, de al menos 32 bytes
+en base64url. El capturador compara la autenticación y no revela el valor. No
+uses una credencial de prueba en otro entorno ni la entregues al agente. Esta
+demostración corre dentro de un entorno de prueba común: no evita que un
+proceso comprometido o con acceso al valor se haga pasar por el guard.
+
 ## Límites
 
 El consumo y el envío SMTP no comparten una transacción. Si Guardian confirma
 el consumo y el capturador no está disponible, el recibo queda consumido y el
 mensaje no se entrega; no hay reintento automático. Este flujo prueba
-**captura local**, no envío de correo a una persona. Un proceso comprometido
-con acceso alternativo a una herramienta puede saltarse el módulo.
+**captura local**, no envío de correo a una persona. La autenticación del
+capturador prueba el rechazo de una conexión directa sin credencial, pero no
+constituye aislamiento de red/proceso ni enforcement de producción. Véase
+`docs/guard-enforcement-threat-model.md` y
+`docs/guard-production-isolation-plan.md`.

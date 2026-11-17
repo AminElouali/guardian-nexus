@@ -39,9 +39,11 @@ del proveedor saltándose el gateway.
   `lib/db/sql/rls-policies.sql`. La base de desarrollo no se ha migrado.
 - **IMPLEMENTADO como prueba aislada:** `lib/guardian-guard` verifica un recibo
   v1 offline, reclama su consumo a Guardian y solo después entrega un correo
-  sintético a un servidor SMTP local de captura. Las pruebas cubren el
-  destinatario de sandbox, argumentos alterados, caducidad, clave no confiable,
-  replay e indisponibilidad del ledger.
+  sintético a un servidor SMTP local de captura. Ese capturador exige una
+  credencial efímera del guard y rechaza el envío directo sin ella. Las pruebas
+  cubren acceso directo, destinatario de sandbox, argumentos alterados,
+  caducidad, clave no confiable, replay secuencial/concurrente e
+  indisponibilidad del ledger. No prueba aislamiento entre procesos.
 - **IMPLEMENTADO en la interfaz:** la sección “Pasarela de acciones” permite
   previsualizar y proponer las dos acciones nuevas, muestra aprobaciones y
   actividad disponible, conserva recibos aprobados en memoria y ofrece una
@@ -380,8 +382,9 @@ constraint está probado únicamente en PostgreSQL desechable.
 **Proyectado:** aplicar esa constraint a la base de desarrollo o producción;
 guard obligatorio con identidad y red aisladas; conectores reales; envío a
 destinatarios externos; reglas editables persistentes; MCP/framework adapters,
-modo sombra operativo e identidad criptográfica de agentes. El SMTP local de
-prueba no demuestra envío real ni aislamiento del agente en producción.
+modo sombra operativo e identidad criptográfica de agentes. La credencial SMTP
+local solo rechaza conexiones que no la poseen; no demuestra que un agente no
+pueda obtenerla ni alcanzar otra ruta en producción.
 
 ## H. Preguntas abiertas para decisión
 

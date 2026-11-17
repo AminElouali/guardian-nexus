@@ -29,7 +29,7 @@ export function executeGuardedSandboxAction(input: {
     actionType: string;
     args: Record<string, string | number | boolean>;
   };
-  sandboxSmtp: { port: number };
+  sandboxSmtp: { port: number; credential: string };
   fetchImpl?: typeof fetch;
   verificationTime?: Date;
 }): Promise<{

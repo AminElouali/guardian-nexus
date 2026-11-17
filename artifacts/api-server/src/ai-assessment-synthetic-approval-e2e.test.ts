@@ -3,7 +3,9 @@ import {
   createHash,
   createPublicKey,
   generateKeyPairSync,
+  randomBytes,
   randomUUID,
+  timingSafeEqual,
 } from "node:crypto";
 import { createPrivateKey } from "node:crypto";
 import {
@@ -15,7 +17,11 @@ import {
 import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
 import { createServer, type Server } from "node:http";
-import { createServer as createTcpServer, type Server as TcpServer } from "node:net";
+import {
+  connect as connectTcp,
+  createServer as createTcpServer,
+  type Server as TcpServer,
+} from "node:net";
 import { dirname, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -85,15 +91,21 @@ const authForTest: RequestHandler = (req, res, next) => {
   next();
 };
 
-async function startSyntheticSmtpCapture(): Promise<{
+async function startSyntheticSmtpCapture(guardCredential: string): Promise<{
   server: TcpServer;
   port: number;
   messages: string[];
 }> {
   const messages: string[] = [];
+  const expectedAuth = Buffer.from(
+    `\0guardian-guard\0${guardCredential}`,
+    "utf8",
+  );
   const server = createTcpServer((socket) => {
     let buffer = "";
     let dataMode = false;
+    let awaitingAuth = false;
+    let authenticated = false;
     let message: string[] = [];
     socket.write("220 synthetic local capture ready\r\n");
     socket.on("data", (chunk) => {
@@ -114,8 +126,28 @@ async function startSyntheticSmtpCapture(): Promise<{
           }
           continue;
         }
+        if (awaitingAuth) {
+          awaitingAuth = false;
+          const decoded = Buffer.from(line, "base64");
+          const valid =
+            decoded.toString("base64") === line &&
+            decoded.length === expectedAuth.length &&
+            timingSafeEqual(decoded, expectedAuth);
+          if (!valid) {
+            socket.write("535 invalid guard credential\r\n");
+            continue;
+          }
+          authenticated = true;
+          socket.write("235 guard authenticated\r\n");
+          continue;
+        }
         if (line.startsWith("EHLO ")) socket.write("250 local capture\r\n");
-        else if (line.startsWith("MAIL FROM:")) socket.write("250 sender accepted\r\n");
+        else if (line === "AUTH PLAIN") {
+          awaitingAuth = true;
+          socket.write("334 provide guard credential\r\n");
+        } else if (!authenticated) {
+          socket.write("530 guard authentication required\r\n");
+        } else if (line.startsWith("MAIL FROM:")) socket.write("250 sender accepted\r\n");
         else if (line.startsWith("RCPT TO:")) socket.write("250 recipient accepted\r\n");
         else if (line === "DATA") {
           dataMode = true;
@@ -130,6 +162,39 @@ async function startSyntheticSmtpCapture(): Promise<{
   const address = server.address();
   assert.ok(address && typeof address !== "string");
   return { server, port: address.port, messages };
+}
+
+async function attemptDirectSmtpWithoutGuardCredential(port: number): Promise<string> {
+  const socket = connectTcp({ host: "127.0.0.1", port });
+  let buffer = "";
+  const nextLine = async (): Promise<string> => new Promise((resolveLine, reject) => {
+    const onData = (chunk: Buffer) => {
+      buffer += chunk.toString("utf8");
+      const newline = buffer.indexOf("\n");
+      if (newline < 0) return;
+      const line = buffer.slice(0, newline).replace(/\r$/, "");
+      buffer = buffer.slice(newline + 1);
+      socket.off("data", onData);
+      socket.off("error", onError);
+      resolveLine(line);
+    };
+    const onError = (error: Error) => {
+      socket.off("data", onData);
+      reject(error);
+    };
+    socket.on("data", onData);
+    socket.once("error", onError);
+  });
+  await once(socket, "connect");
+  try {
+    assert.match(await nextLine(), /^220\b/);
+    socket.write("EHLO direct-agent.local\r\n");
+    assert.match(await nextLine(), /^250\b/);
+    socket.write("MAIL FROM:<agent@localhost.invalid>\r\n");
+    return await nextLine();
+  } finally {
+    socket.end();
+  }
 }
 
 function sha256(value: unknown): string {
@@ -2601,7 +2666,8 @@ test(
     assert.ok(genericDecision.receipt);
     assert.equal(genericDecision.execution, "decision_only");
 
-    const smtpCapture = await startSyntheticSmtpCapture();
+    const guardCredential = randomBytes(32).toString("base64url");
+    const smtpCapture = await startSyntheticSmtpCapture(guardCredential);
     t.after(async () => {
       if (smtpCapture.server.listening) {
         await new Promise<void>((resolveClose, reject) => {
@@ -2637,8 +2703,20 @@ test(
         actionType: sandboxAction.actionType,
         args: sandboxAction.arguments,
       },
-      sandboxSmtp: { port: smtpCapture.port },
+      sandboxSmtp: {
+        port: smtpCapture.port,
+        credential: guardCredential,
+      },
     };
+    const directToolReply = await attemptDirectSmtpWithoutGuardCredential(
+      smtpCapture.port,
+    );
+    assert.match(directToolReply, /^530\b/);
+    assert.equal(
+      smtpCapture.messages.length,
+      0,
+      "direct agent access is rejected before any message is captured",
+    );
     await assert.rejects(
       executeGuardedSandboxAction({
         ...guardInput,
@@ -2673,6 +2751,67 @@ test(
       "one-use ledger consumption permits exactly one local SMTP capture",
     );
 
+    const concurrentAction = {
+      actionType: "guardian.support.reply.send.v1",
+      arguments: {
+        ticket_id: "TICKET-SYNTH-987",
+        recipient_email: "demo@guardian.invalid",
+        recipient_type: "external",
+        compensation_cents: 5000,
+        template_id: "synthetic-support-reply-v1",
+      },
+      idempotencyKey: randomUUID(),
+    };
+    const concurrentProposalResponse = await request(
+      workspaceBOwner,
+      genericProposalPath,
+      "POST",
+      concurrentAction,
+    );
+    assert.equal(concurrentProposalResponse.status, 201);
+    const concurrentProposal =
+      CreateWorkspaceGenericActionProposalResponse.parse(
+        await concurrentProposalResponse.json(),
+      );
+    assert.ok(concurrentProposal.approval);
+    const concurrentApproval = concurrentProposal.approval;
+    const concurrentDecisionResponse = await request(
+      workspaceBAdmin,
+      `/api/workspaces/${workspaceB}/ai-security-assessments/approvals/${concurrentApproval.id}/decision`,
+      "POST",
+      {
+        decision: "approve",
+        proposalBindingSha256: concurrentApproval.proposalBindingSha256,
+      },
+    );
+    assert.equal(concurrentDecisionResponse.status, 200);
+    const concurrentDecision =
+      DecideWorkspaceAiAssessmentApprovalResponse.parse(
+        await concurrentDecisionResponse.json(),
+      );
+    assert.ok(concurrentDecision.receipt);
+    const concurrentConsumeUrl =
+      `/api/workspaces/${workspaceB}/ai-security-assessments/approvals/${concurrentApproval.id}/receipt/consume`;
+    const concurrentConsumeResponses = await Promise.all([
+      request(
+        workspaceBAdmin,
+        concurrentConsumeUrl,
+        "POST",
+        { receipt: concurrentDecision.receipt },
+      ),
+      request(
+        workspaceBAdmin,
+        concurrentConsumeUrl,
+        "POST",
+        { receipt: concurrentDecision.receipt },
+      ),
+    ]);
+    assert.deepEqual(
+      concurrentConsumeResponses.map((response) => response.status).sort(),
+      [200, 409],
+      "concurrent replay against disposable PostgreSQL has exactly one winner",
+    );
+
     const summary = {
       source: "deterministic_fixture_worker_harness",
       evidenceVersion: 1,
@@ -2702,9 +2841,9 @@ test(
           authorizationChecks: queueAuthorizationChecks,
         },
       },
-      approvalRequests: approvals.length + 4,
+      approvalRequests: approvals.length + 5,
       approvalDecisions: {
-        approvedOnce: 2,
+        approvedOnce: 3,
         tamperedChainRejected: 1,
         deniedWithoutSimulation: 1,
         expiredWithoutSimulation: 1,
@@ -2732,9 +2871,11 @@ test(
         deniedUnknownActionAndArguments: true,
         approvedByDifferentAdmin: true,
         receiptVerifiedOffline: true,
+        directToolCallRejected: true,
         consumedOnceBeforeToolExecution: true,
         localSmtpCaptureCount: smtpCapture.messages.length,
         replayRejected: true,
+        concurrentConsumeOneWinner: true,
         externalDelivery: false,
       },
       membershipRoleProbes: {
