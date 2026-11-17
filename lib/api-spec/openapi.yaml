@@ -891,6 +891,35 @@ paths:
               schema: { $ref: "#/components/schemas/GenericActionCatalogResponse" }
         "403":
           description: Workspace membership required
+  /workspaces/{workspaceId}/ai-security-assessments/action-preview:
+    post:
+      operationId: previewWorkspaceGenericAction
+      tags: [ai-evaluations]
+      summary: Evaluate a versioned action example without persisting it
+      description: >-
+        Applies the same catalog validation and policy rules in memory. It does
+        not create a job or approval and never dispatches a tool.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GenericActionPreviewRequest" }
+      responses:
+        "200":
+          description: In-memory decision for the supplied catalog action
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GenericActionPreviewResponse" }
+        "400":
+          description: Unknown action or invalid arguments
+        "403":
+          description: Workspace membership required
   /workspaces/{workspaceId}/ai-security-assessments/qwen-provider/status:
     get:
       operationId: getWorkspaceQwenProviderStatus
@@ -1602,6 +1631,30 @@ components:
               - { type: boolean }
         idempotencyKey: { type: string, minLength: 16, maxLength: 128 }
       required: [actionType, arguments, idempotencyKey]
+    GenericActionPreviewRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        actionType: { type: string, maxLength: 120 }
+        arguments:
+          type: object
+          additionalProperties:
+            oneOf:
+              - { type: string, maxLength: 5000 }
+              - { type: integer, minimum: 0, maximum: 1000000 }
+              - { type: boolean }
+      required: [actionType, arguments]
+    GenericActionPreviewResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        decision: { type: string, enum: [allow, deny, require_approval] }
+        reasonCode: { type: string }
+        ruleId: { type: ["string", "null"] }
+        actionSha256: { type: ["string", "null"], pattern: "^[a-f0-9]{64}$" }
+        persisted: { type: boolean, const: false }
+        dispatched: { type: boolean, const: false }
+      required: [decision, reasonCode, ruleId, actionSha256, persisted, dispatched]
     GenericActionCatalogResponse:
       type: object
       additionalProperties: false

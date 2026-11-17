@@ -15,6 +15,7 @@ import {
 import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
 import { createServer, type Server } from "node:http";
+import { createServer as createTcpServer, type Server as TcpServer } from "node:net";
 import { dirname, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -29,6 +30,9 @@ import {
   ListWorkspaceAiAssessmentApprovalsResponse,
   PreviewWorkspaceAiAssessmentPolicyLabResponse,
   CreateWorkspaceSyntheticRefundProposalResponse,
+  CreateWorkspaceGenericActionProposalResponse,
+  GetWorkspaceGenericActionCatalogResponse,
+  PreviewWorkspaceGenericActionResponse,
 } from "@workspace/api-zod";
 import {
   canonicalApprovalJson,
@@ -80,6 +84,53 @@ const authForTest: RequestHandler = (req, res, next) => {
   req.authUserId = userId;
   next();
 };
+
+async function startSyntheticSmtpCapture(): Promise<{
+  server: TcpServer;
+  port: number;
+  messages: string[];
+}> {
+  const messages: string[] = [];
+  const server = createTcpServer((socket) => {
+    let buffer = "";
+    let dataMode = false;
+    let message: string[] = [];
+    socket.write("220 synthetic local capture ready\r\n");
+    socket.on("data", (chunk) => {
+      buffer += chunk.toString("utf8");
+      for (;;) {
+        const newline = buffer.indexOf("\n");
+        if (newline < 0) break;
+        const line = buffer.slice(0, newline).replace(/\r$/, "");
+        buffer = buffer.slice(newline + 1);
+        if (dataMode) {
+          if (line === ".") {
+            dataMode = false;
+            messages.push(message.join("\r\n"));
+            message = [];
+            socket.write("250 captured in test process\r\n");
+          } else {
+            message.push(line.startsWith("..") ? line.slice(1) : line);
+          }
+          continue;
+        }
+        if (line.startsWith("EHLO ")) socket.write("250 local capture\r\n");
+        else if (line.startsWith("MAIL FROM:")) socket.write("250 sender accepted\r\n");
+        else if (line.startsWith("RCPT TO:")) socket.write("250 recipient accepted\r\n");
+        else if (line === "DATA") {
+          dataMode = true;
+          socket.write("354 end with dot\r\n");
+        } else if (line === "QUIT") socket.write("221 bye\r\n");
+        else socket.write("500 unsupported\r\n");
+      }
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  return { server, port: address.port, messages };
+}
 
 function sha256(value: unknown): string {
   return createHash("sha256")
@@ -2391,6 +2442,237 @@ test(
       "a revoked approver cannot create an approval audit/simulation event",
     );
 
+    const actionCatalogPath =
+      `/api/workspaces/${workspaceA}/ai-security-assessments/action-catalog`;
+    const actionCatalogResponse = await request(workspaceAOwner, actionCatalogPath);
+    assert.equal(actionCatalogResponse.status, 200);
+    const actionCatalog = GetWorkspaceGenericActionCatalogResponse.parse(
+      await actionCatalogResponse.json(),
+    );
+    assert.equal(actionCatalog.catalogVersion, "guardian-action-catalog-v1");
+    assert.ok(actionCatalog.actions.some(
+      (item) => item.actionType === "guardian.support.reply.send.v1",
+    ));
+    assert.ok(actionCatalog.actions.some(
+      (item) => item.actionType === "guardian.email.send.external.v1",
+    ));
+    assert.equal(
+      (await request(
+        workspaceAViewer,
+        actionCatalogPath,
+      )).status,
+      200,
+      "workspace members may read the versioned catalog",
+    );
+
+    const sandboxAction = {
+      actionType: "guardian.email.send.external.v1",
+      arguments: {
+        to: "qa@example.test",
+        template_id: "guardian-demo-email-v1",
+      },
+    };
+    const actionPreviewPath =
+      `/api/workspaces/${workspaceB}/ai-security-assessments/action-preview`;
+    const previewResponse = await request(
+      workspaceBAdmin,
+      actionPreviewPath,
+      "POST",
+      sandboxAction,
+    );
+    assert.equal(previewResponse.status, 200);
+    const previewDecision = PreviewWorkspaceGenericActionResponse.parse(
+      await previewResponse.json(),
+    );
+    assert.equal(previewDecision.decision, "require_approval");
+    assert.equal(previewDecision.persisted, false);
+    assert.equal(previewDecision.dispatched, false);
+    const unknownPreview = await request(
+      workspaceBAdmin,
+      actionPreviewPath,
+      "POST",
+      { actionType: "guardian.unknown.v1", arguments: {} },
+    );
+    assert.equal(unknownPreview.status, 200);
+    assert.equal(
+      PreviewWorkspaceGenericActionResponse.parse(
+        await unknownPreview.json(),
+      ).reasonCode,
+      "unknown_action",
+    );
+
+    const genericProposalPath =
+      `/api/workspaces/${workspaceB}/ai-security-assessments/action-proposals`;
+    const unknownProposal = await request(
+      workspaceBOwner,
+      genericProposalPath,
+      "POST",
+      {
+        ...sandboxAction,
+        actionType: "guardian.unlisted.action.v1",
+        idempotencyKey: randomUUID(),
+      },
+    );
+    assert.equal(unknownProposal.status, 400);
+    assert.equal(
+      (await unknownProposal.json() as { code?: unknown }).code,
+      "unknown_action",
+    );
+    const malformedProposal = await request(
+      workspaceBOwner,
+      genericProposalPath,
+      "POST",
+      {
+        ...sandboxAction,
+        arguments: { ...sandboxAction.arguments, extra: "not allowed" },
+        idempotencyKey: randomUUID(),
+      },
+    );
+    assert.equal(malformedProposal.status, 400);
+    assert.equal(
+      (await malformedProposal.json() as { code?: unknown }).code,
+      "arguments_invalid",
+    );
+    const externalRecipientProposal = await request(
+      workspaceBOwner,
+      genericProposalPath,
+      "POST",
+      {
+        ...sandboxAction,
+        arguments: { ...sandboxAction.arguments, to: "real@example.com" },
+        idempotencyKey: randomUUID(),
+      },
+    );
+    assert.equal(externalRecipientProposal.status, 400);
+    assert.equal(
+      (await externalRecipientProposal.json() as { code?: unknown }).code,
+      "arguments_invalid",
+    );
+
+    const genericProposalResponse = await request(
+      workspaceBOwner,
+      genericProposalPath,
+      "POST",
+      {
+        ...sandboxAction,
+        idempotencyKey: randomUUID(),
+      },
+    );
+    assert.equal(genericProposalResponse.status, 201);
+    const genericProposal = CreateWorkspaceGenericActionProposalResponse.parse(
+      await genericProposalResponse.json(),
+    );
+    assert.equal(genericProposal.decision, "require_approval");
+    assert.equal(genericProposal.externalSideEffect, false);
+    assert.equal(genericProposal.execution, "not_performed");
+    assert.ok(genericProposal.approval);
+    assert.equal(
+      genericProposal.approval.proposalDetails?.agentId,
+      "agent-fixture-email-demo-v1",
+    );
+    assert.equal(genericProposal.approval.proposalDetails?.synthetic, true);
+    const genericApproval = genericProposal.approval;
+    assert.equal(
+      (await request(
+        workspaceBOwner,
+        `/api/workspaces/${workspaceB}/ai-security-assessments/approvals/${genericApproval.id}/decision`,
+        "POST",
+        {
+          decision: "approve",
+          proposalBindingSha256: genericApproval.proposalBindingSha256,
+        },
+      )).status,
+      403,
+      "the requester cannot approve the action they proposed",
+    );
+    const genericDecisionResponse = await request(
+      workspaceBAdmin,
+      `/api/workspaces/${workspaceB}/ai-security-assessments/approvals/${genericApproval.id}/decision`,
+      "POST",
+      {
+        decision: "approve",
+        proposalBindingSha256: genericApproval.proposalBindingSha256,
+      },
+    );
+    assert.equal(genericDecisionResponse.status, 200);
+    const genericDecision = DecideWorkspaceAiAssessmentApprovalResponse.parse(
+      await genericDecisionResponse.json(),
+    );
+    assert.ok(genericDecision.receipt);
+    assert.equal(genericDecision.execution, "decision_only");
+
+    const smtpCapture = await startSyntheticSmtpCapture();
+    t.after(async () => {
+      if (smtpCapture.server.listening) {
+        await new Promise<void>((resolveClose, reject) => {
+          smtpCapture.server.close((error) =>
+            error ? reject(error) : resolveClose(),
+          );
+        });
+      }
+    });
+    const { executeGuardedSandboxAction } = await import(
+      "../../../lib/guardian-guard/index.mjs"
+    );
+    const trustedLedgerPublicKey = createPublicKey(
+      createPrivateKey(ephemeralLedgerKey),
+    );
+    const guardInput = {
+      apiBaseUrl: apiBase,
+      requestHeaders: { "x-guardian-test-user": workspaceBAdmin },
+      receipt: genericDecision.receipt,
+      trustedKeys: {
+        "guardian-nexus-approval-ledger-v1": trustedLedgerPublicKey,
+      },
+      expected: {
+        workspaceId: workspaceB,
+        approvalId: genericApproval.id,
+        proposalBindingSha256: genericApproval.proposalBindingSha256,
+        actionSha256: genericApproval.actionSha256!,
+        requestedBy: workspaceBOwner,
+        approvedBy: workspaceBAdmin,
+        approvedByRole: "admin",
+      },
+      action: {
+        actionType: sandboxAction.actionType,
+        args: sandboxAction.arguments,
+      },
+      sandboxSmtp: { port: smtpCapture.port },
+    };
+    await assert.rejects(
+      executeGuardedSandboxAction({
+        ...guardInput,
+        action: {
+          actionType: sandboxAction.actionType,
+          args: { ...sandboxAction.arguments, to: "other@example.test" },
+        },
+      }),
+      (error: unknown) =>
+        !!error &&
+        typeof error === "object" &&
+        "code" in error &&
+        error.code === "receipt_reference_mismatch",
+    );
+    const guardedSend = await executeGuardedSandboxAction(guardInput);
+    assert.equal(guardedSend.executed, true);
+    assert.equal(guardedSend.mode, "local_smtp_capture_only");
+    assert.equal(guardedSend.externalEffect, false);
+    assert.match(smtpCapture.messages[0] ?? "", /To: qa@example\.test/);
+    assert.match(smtpCapture.messages[0] ?? "", /\[SYNTHETIC\]/);
+    await assert.rejects(
+      executeGuardedSandboxAction(guardInput),
+      (error: unknown) =>
+        !!error &&
+        typeof error === "object" &&
+        "code" in error &&
+        error.code === "receipt_rejected",
+    );
+    assert.equal(
+      smtpCapture.messages.length,
+      1,
+      "one-use ledger consumption permits exactly one local SMTP capture",
+    );
+
     const summary = {
       source: "deterministic_fixture_worker_harness",
       evidenceVersion: 1,
@@ -2420,7 +2702,7 @@ test(
           authorizationChecks: queueAuthorizationChecks,
         },
       },
-      approvalRequests: approvals.length + 3,
+      approvalRequests: approvals.length + 4,
       approvalDecisions: {
         approvedOnce: 2,
         tamperedChainRejected: 1,
@@ -2443,6 +2725,17 @@ test(
         replayRejected: true,
         corruptedEventChainRejected: true,
         externalEffects: false,
+      },
+      genericActionGuard: {
+        actionType: sandboxAction.actionType,
+        catalogValidated: true,
+        deniedUnknownActionAndArguments: true,
+        approvedByDifferentAdmin: true,
+        receiptVerifiedOffline: true,
+        consumedOnceBeforeToolExecution: true,
+        localSmtpCaptureCount: smtpCapture.messages.length,
+        replayRejected: true,
+        externalDelivery: false,
       },
       membershipRoleProbes: {
         ...membershipProbeResults,

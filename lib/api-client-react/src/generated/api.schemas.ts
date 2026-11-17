@@ -4379,6 +4379,37 @@ export interface GenericActionProposalRequest {
   idempotencyKey: string;
 }
 
+export type GenericActionPreviewRequestArguments = {[key: string]: string | number | boolean};
+
+export interface GenericActionPreviewRequest {
+  /** @maxLength 120 */
+  actionType: string;
+  arguments: GenericActionPreviewRequestArguments;
+}
+
+export type GenericActionPreviewResponseDecision = typeof GenericActionPreviewResponseDecision[keyof typeof GenericActionPreviewResponseDecision];
+
+
+export const GenericActionPreviewResponseDecision = {
+  allow: 'allow',
+  deny: 'deny',
+  require_approval: 'require_approval',
+} as const;
+
+export interface GenericActionPreviewResponse {
+  decision: GenericActionPreviewResponseDecision;
+  reasonCode: string;
+  /** @nullable */
+  ruleId: string | null;
+  /**
+     * @nullable
+     * @pattern ^[a-f0-9]{64}$
+     */
+  actionSha256: string | null;
+  persisted: false;
+  dispatched: false;
+}
+
 export type GenericActionTemplateRiskClass = typeof GenericActionTemplateRiskClass[keyof typeof GenericActionTemplateRiskClass];
 
 

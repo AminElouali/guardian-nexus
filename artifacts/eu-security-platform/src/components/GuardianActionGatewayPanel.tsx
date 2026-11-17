@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from "react";
+import React, { useMemo, useState, type FormEvent } from "react";
 import { Activity, ArrowDownToLine, Check, ChevronRight, CircleAlert, Code2, GitBranch, LockKeyhole, Network, Shield, SlidersHorizontal } from "lucide-react";
 
 export type GatewayArgumentField = {
@@ -19,6 +19,7 @@ export type GatewayRuleRow = {
 export type GatewayActionTemplate = {
   actionType: string;
   version: string;
+  businessArea?: string;
   label: string;
   description: string;
   riskLabel: string;
@@ -26,6 +27,7 @@ export type GatewayActionTemplate = {
   approverLabel: string;
   expiryMinutes: number;
   requiresIndependentApprover: boolean;
+  proposalEnabled: boolean;
   argumentFields: GatewayArgumentField[];
   rules: GatewayRuleRow[];
 };
@@ -49,7 +51,22 @@ export type GatewayLedgerEvent = {
   approvalId: string;
   timestamp: string;
   hash: string | null;
+  receiptId?: string | null;
+  receiptSha256?: string | null;
   receiptState?: string | null;
+};
+
+export type GatewayReceiptReference = {
+  receiptId: string;
+  payloadSha256: string;
+};
+
+export type GatewayPreviewResult = {
+  decision: "allow" | "deny" | "require_approval";
+  reasonCode: string;
+  ruleId: string | null;
+  persisted: false;
+  dispatched: false;
 };
 
 export type GatewayAccessState = "available" | "restricted" | "unavailable";
@@ -60,17 +77,23 @@ export type GuardianActionGatewayPanelProps = {
   approvals: GatewayApprovalRecord[];
   ledgerEvents: GatewayLedgerEvent[];
   accessState: GatewayAccessState;
+  canPropose: boolean;
   loading?: boolean;
   error?: string | null;
   approvalCount?: number | null;
   ledgerEventCount?: number | null;
   verifiedReceiptCount?: number | null;
-  receipts?: unknown[];
+  receipts?: GatewayReceiptReference[];
   exporting?: boolean;
   initialSection?: "rules" | "approvals" | "activity" | "connect";
-  onPropose: (actionType: string, args: Record<string, string | number | boolean>) => void;
-  onDecision: (approvalId: string, decision: "approve" | "reject", proposalBinding: string | null) => void;
-  onExport: (receipts: unknown[]) => void;
+  onPropose: (actionType: string, args: Record<string, string | number | boolean>) => Promise<{
+    decision: "allow" | "deny" | "require_approval";
+    reasonCode: string;
+    approvalId: string | null;
+  }>;
+  onSimulate: (actionType: string, args: Record<string, string | number | boolean>) => Promise<GatewayPreviewResult>;
+  onDecision: (approvalId: string, decision: "approve" | "reject", proposalBinding: string | null) => Promise<boolean>;
+  onExport: () => void;
 };
 
 type Section = "rules" | "approvals" | "activity" | "connect";
@@ -80,8 +103,17 @@ const sections: { id: Section; label: string; icon: typeof Shield }[] = [
   { id: "activity", label: "Actividad", icon: Activity },
   { id: "connect", label: "Conectar agente", icon: Network },
 ];
+const unconfiguredAreaTemplates = [
+  { id: "guardian-template-customer-data-v1", label: "Datos de clientes" },
+  { id: "guardian-template-infrastructure-v1", label: "Infraestructura" },
+];
 const unavailable = "No disponible";
 const displayFact = (value: string | null | undefined) => value?.trim() || unavailable;
+const textOrNumberInputValue = (
+  value: string | number | boolean | undefined,
+): string | number => typeof value === "string" || typeof value === "number"
+  ? value
+  : "";
 const statusLabel = (status: string) => {
   const label = ({
     pending: "Pendiente",
@@ -99,6 +131,7 @@ export function GuardianActionGatewayPanel({
   approvals,
   ledgerEvents,
   accessState,
+  canPropose,
   loading = false,
   error = null,
   approvalCount,
@@ -108,6 +141,7 @@ export function GuardianActionGatewayPanel({
   exporting = false,
   initialSection = "rules",
   onPropose,
+  onSimulate,
   onDecision,
   onExport,
 }: GuardianActionGatewayPanelProps) {
@@ -115,21 +149,113 @@ export function GuardianActionGatewayPanel({
   const [selectedAction, setSelectedAction] = useState(actionTemplates[0]?.actionType ?? "");
   const [args, setArgs] = useState<Record<string, string | number | boolean>>({});
   const [simulationResult, setSimulationResult] = useState("");
+  const [proposalResult, setProposalResult] = useState("");
+  const [actionPending, setActionPending] = useState(false);
+  const [decisionPendingId, setDecisionPendingId] = useState<string | null>(null);
+  const [decisionResult, setDecisionResult] = useState("");
   const [framework, setFramework] = useState("gateway");
   const selectedTemplate = useMemo(
-    () => actionTemplates.find((template) => template.actionType === selectedAction),
+    () => actionTemplates.find((template) => template.actionType === selectedAction) ?? actionTemplates[0],
     [actionTemplates, selectedAction],
   );
-  const submitProposal = (event: FormEvent<HTMLFormElement>) => {
+  const receiptIndex = useMemo(
+    () => new Map(receipts.map((receipt) => [
+      receipt.receiptId,
+      receipt.payloadSha256,
+    ])),
+    [receipts],
+  );
+  const missingApprovalIds = useMemo(
+    () => [...new Set(ledgerEvents.filter((event) =>
+      event.eventType === "approval.approved" &&
+      (!event.receiptId ||
+        receiptIndex.get(event.receiptId) !== event.receiptSha256),
+    ).map((event) => event.approvalId))],
+    [ledgerEvents, receiptIndex],
+  );
+  const approvalStatusCounts = useMemo(() => {
+    if (typeof approvalCount !== "number") return null;
+    return {
+      approved: approvals.filter((item) => item.status === "approved").length,
+      pending: approvals.filter((item) => item.status === "pending").length,
+      rejected: approvals.filter((item) =>
+        item.status === "rejected" || item.status === "denied" || item.status === "expired"
+      ).length,
+    };
+  }, [approvalCount, approvals]);
+  const submitProposal = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!selectedTemplate) return;
+    if (!selectedTemplate || !selectedTemplate.proposalEnabled || !canPropose || actionPending) return;
     const valid = selectedTemplate.argumentFields.every((field) => !field.required || String(args[field.name] ?? "").trim().length > 0);
     if (!valid) {
       setSimulationResult("Completa los argumentos obligatorios para continuar.");
       return;
     }
-    onPropose(selectedTemplate.actionType, args);
-    setSimulationResult("Propuesta entregada al callback. Este panel no confirma evaluación ni ejecución.");
+    setActionPending(true);
+    setProposalResult("");
+    setSimulationResult("");
+    try {
+      const result = await onPropose(selectedTemplate.actionType, args);
+      const resultLabel = result.decision === "require_approval"
+        ? "requiere aprobación independiente"
+        : result.decision === "allow" ? "permitida por la plantilla" : "bloqueada";
+      setProposalResult(
+        `Resultado: ${resultLabel} (${result.reasonCode}). ` +
+          (result.approvalId
+            ? `Se registró la aprobación ${result.approvalId}; no se despachó ninguna herramienta.`
+            : "No se despachó ninguna herramienta."),
+      );
+    } catch {
+      setProposalResult("No se pudo registrar la propuesta. No se ejecutó ninguna acción.");
+    } finally {
+      setActionPending(false);
+    }
+  };
+  const simulateAction = async () => {
+    if (!selectedTemplate) return;
+    const valid = selectedTemplate.argumentFields.every((field) => !field.required || String(args[field.name] ?? "").trim().length > 0);
+    if (!valid) {
+      setSimulationResult("Completa los argumentos obligatorios para simular.");
+      return;
+    }
+    setActionPending(true);
+    setSimulationResult("");
+    try {
+      const result = await onSimulate(selectedTemplate.actionType, args);
+      const label = result.decision === "require_approval"
+        ? "Pedir aprobación"
+        : result.decision === "allow" ? "Permitir" : "Bloquear";
+      setSimulationResult(
+        `${label} · ${result.reasonCode} · regla ${result.ruleId ?? "predeterminada"}. ` +
+          "Simulación en memoria; no se guardó ni ejecutó nada.",
+      );
+    } catch {
+      setSimulationResult("No se pudo simular la decisión; no se guardó ni ejecutó nada.");
+    } finally {
+      setActionPending(false);
+    }
+  };
+  const submitDecision = async (
+    approvalId: string,
+    decision: "approve" | "reject",
+    proposalBinding: string | null,
+  ) => {
+    if (!proposalBinding) {
+      setDecisionResult("No se pudo validar el vínculo de la propuesta.");
+      return;
+    }
+    setDecisionPendingId(approvalId);
+    setDecisionResult("");
+    try {
+      const recorded = await onDecision(approvalId, decision, proposalBinding);
+      setDecisionResult(recorded
+        ? "Decisión registrada; no se despachó ninguna herramienta."
+        : "No se pudo confirmar la decisión. No se despachó ninguna herramienta.");
+    } catch {
+      setDecisionResult("No se pudo registrar la decisión. No se despachó ninguna herramienta.");
+    } finally {
+      setDecisionPendingId(null);
+    }
   };
 
   return <section className="guardian-gateway" data-testid="guardian-action-gateway" aria-label="Guardian Nexus · control de propuestas">
@@ -191,10 +317,10 @@ export function GuardianActionGatewayPanel({
         <h1>Pasarela de acciones</h1>
         <p>Revisión de propuestas en el ámbito del espacio <code data-testid="gateway-workspace-id">{workspaceId || unavailable}</code>.</p>
       </div>
-      <div className="gateway-mode" data-testid="gateway-shadow-mode"><span /> Modo sombra · solo observación</div>
+      <div className="gateway-mode" data-testid="gateway-shadow-mode"><span /> Modo sombra · no intercepta herramientas</div>
     </header>
     <div className="gateway-disclosure" role="note" data-testid="gateway-fictitious-notice">
-      <CircleAlert size={17} /><p><b>Alcance honesto.</b> Todos los ejemplos y herramientas de este panel son ficticios salvo los registros recibidos como props. El modo sombra no bloquea la ejecución. Esta interfaz no aplica enforcement ni realiza acciones externas.</p>
+      <CircleAlert size={17} /><p><b>Alcance honesto.</b> Los ejemplos y buzones son sintéticos. Las plantillas no se editan ni guardan; las propuestas de prueba sí se registran para aprobación, pero no se despachan aquí. No hay pagos ni efectos externos.</p>
     </div>
 
     <nav className="gateway-nav" role="tablist" aria-label="Secciones de la pasarela">
@@ -212,26 +338,36 @@ export function GuardianActionGatewayPanel({
         <div className="gateway-default-block" data-testid="gateway-default-block"><LockKeyhole size={17} /><div><b>Acciones no listadas: bloqueadas por defecto</b><span>Es una regla de diseño para el futuro gateway; esta demostración no intercepta llamadas.</span></div><code>DEFAULT · DENY</code></div>
         {actionTemplates.length === 0 ? <div className="gateway-empty" data-testid="gateway-empty-templates">No hay plantillas suministradas. No se crean reglas de ejemplo.</div> : <div className="gateway-template-list">
           {actionTemplates.map((template) => <article className="gateway-template" key={`${template.actionType}-${template.version}`} data-testid={`gateway-template-${template.actionType}`}>
-            <div className="gateway-template-head"><div><span className="gateway-version">{template.version}</span><h3>{template.label}</h3><p>{template.description || unavailable}</p></div><span className="gateway-risk">{template.riskLabel || unavailable}</span></div>
+            <div className="gateway-template-head"><div><span className="gateway-version">{template.version}</span><h3>{template.label}</h3><p>{template.description || unavailable}</p>{template.businessArea && <small data-testid={`gateway-area-${template.actionType}`}>{template.businessArea}</small>}</div><span className="gateway-risk">{template.riskLabel || unavailable}</span></div>
             <div className="gateway-rule-head"><span>Condición</span><span>Decisión</span><span>Aprobador</span></div>
             {template.rules.length ? template.rules.map((rule, index) => <div className="gateway-rule-row" key={`${template.actionType}-rule-${index}`} data-testid={`gateway-rule-${template.actionType}-${index}`}><span>{rule.condition || unavailable}</span><b>{rule.decision || unavailable}</b><span>{rule.approver || unavailable}</span></div>) : <div className="gateway-rule-row" data-testid={`gateway-rule-default-${template.actionType}`}><span>Sin regla específica</span><b>{template.defaultDecision || unavailable}</b><span>{template.approverLabel || unavailable}</span></div>}
             <div className="gateway-template-meta"><span>Caducidad: {Number.isFinite(template.expiryMinutes) ? `${template.expiryMinutes} min` : unavailable}</span><span>Segundo aprobador independiente: {template.requiresIndependentApprover ? "Sí" : "No"}</span></div>
+          </article>)}
+          {unconfiguredAreaTemplates.map((area) => <article className="gateway-template" key={area.id} data-testid={area.id}>
+            <div className="gateway-template-head"><div><span className="gateway-version">{area.id}</span><h3>{area.label}</h3><p>No hay una acción habilitada para esta categoría en el catálogo; no se evalúan ni registran propuestas.</p></div><span className="gateway-risk">No configurada</span></div>
+            <div className="gateway-rule-row"><span>Acción no configurada</span><b>DENY · por defecto</b><span>No aplica</span></div>
           </article>)}
         </div>}
         <section className="gateway-simulator" aria-labelledby="gateway-simulator-title" data-testid="gateway-simulator">
           <div className="gateway-simulator-title"><div><span className="gateway-kicker">SIMULADOR EN MEMORIA</span><h3 id="gateway-simulator-title">Probar una propuesta</h3></div><span className="gateway-sim-badge">No persistente</span></div>
           <form onSubmit={submitProposal} data-testid="gateway-proposal-form">
             <label htmlFor="gateway-action-select">Acción permitida por plantilla</label>
-            <select id="gateway-action-select" value={selectedAction} onChange={(event) => { setSelectedAction(event.target.value); setArgs({}); setSimulationResult(""); }} disabled={!actionTemplates.length} data-testid="gateway-action-select">
+            <select id="gateway-action-select" value={selectedTemplate?.actionType ?? ""} onChange={(event) => { setSelectedAction(event.target.value); setArgs({}); setSimulationResult(""); setProposalResult(""); }} disabled={!actionTemplates.length} data-testid="gateway-action-select">
               {actionTemplates.length ? actionTemplates.map((template) => <option key={template.actionType} value={template.actionType}>{template.label} · {template.version}</option>) : <option value="">Sin acciones disponibles</option>}
             </select>
             {selectedTemplate?.argumentFields.map((field) => <label className="gateway-field" key={field.name} htmlFor={`gateway-arg-${field.name}`}>{field.label}{field.required && <span aria-hidden="true"> · obligatorio</span>}{field.description && <small>{field.description}</small>}
-              {field.type === "boolean" ? <input id={`gateway-arg-${field.name}`} type="checkbox" checked={Boolean(args[field.name])} onChange={(event) => setArgs((previous) => ({ ...previous, [field.name]: event.target.checked }))} data-testid={`gateway-argument-${field.name}`} /> : <input id={`gateway-arg-${field.name}`} type={field.type === "number" ? "number" : "text"} required={field.required} placeholder={field.placeholder ?? undefined} value={args[field.name] ?? ""} onChange={(event) => setArgs((previous) => ({ ...previous, [field.name]: field.type === "number" && event.target.value ? Number(event.target.value) : event.target.value }))} data-testid={`gateway-argument-${field.name}`} />}
+              {field.type === "boolean" ? <input id={`gateway-arg-${field.name}`} type="checkbox" checked={Boolean(args[field.name])} onChange={(event) => setArgs((previous) => ({ ...previous, [field.name]: event.target.checked }))} data-testid={`gateway-argument-${field.name}`} /> : <input id={`gateway-arg-${field.name}`} type={field.type === "number" ? "number" : "text"} required={field.required} placeholder={field.placeholder ?? undefined} value={textOrNumberInputValue(args[field.name])} onChange={(event) => setArgs((previous) => ({ ...previous, [field.name]: field.type === "number" && event.target.value ? Number(event.target.value) : event.target.value }))} data-testid={`gateway-argument-${field.name}`} />}
             </label>)}
-            <p className="gateway-simulator-note">La simulación solo valida campos y llama al callback. No aplica la regla, no llama herramientas y no bloquea ejecución.</p>
-            <button type="submit" disabled={!selectedTemplate} data-testid="gateway-button-propose">Enviar propuesta al integrador</button>
+            <p className="gateway-simulator-note">La previsualización evalúa la misma plantilla sin guardar. Enviar propuesta sí registra la solicitud y, si procede, crea una aprobación; ninguna opción ejecuta una herramienta.</p>
+            <div className="gateway-actions">
+              <button type="button" disabled={!selectedTemplate || actionPending} onClick={() => void simulateAction()} data-testid="gateway-button-simulate">Simular decisión</button>
+              <button type="submit" disabled={!selectedTemplate || !selectedTemplate.proposalEnabled || actionPending || !canPropose} data-testid="gateway-button-propose">{actionPending ? "Procesando…" : "Enviar propuesta"}</button>
+            </div>
+            {!canPropose && <small>Solo owner/admin puede registrar propuestas o decidir aprobaciones.</small>}
+            {selectedTemplate && !selectedTemplate.proposalEnabled && <small>Esta acción mantiene su flujo sintético existente; el formulario genérico solo registra las acciones compatibles del catálogo.</small>}
           </form>
           {simulationResult && <p className="gateway-result" role="status" data-testid="gateway-proposal-result">{simulationResult}</p>}
+          {proposalResult && <p className="gateway-result" role="status" data-testid="gateway-proposal-submit-result">{proposalResult}</p>}
         </section>
       </div>}
 
@@ -248,23 +384,33 @@ export function GuardianActionGatewayPanel({
             <div><dt>Vínculo de propuesta</dt><dd><code>{displayFact(record.proposalBinding)}</code></dd></div>
             <div><dt>Verificación del recibo</dt><dd>{displayFact(record.receiptVerification)}</dd></div>
           </dl>
-          {record.status === "pending" && record.canDecide && <div className="gateway-actions"><button type="button" onClick={() => onDecision(record.id, "approve", record.proposalBinding)} data-testid={`gateway-approve-${record.id}`}>Aprobar · solo registrar decisión</button><button className="gateway-reject" type="button" onClick={() => onDecision(record.id, "reject", record.proposalBinding)} data-testid={`gateway-reject-${record.id}`}>Rechazar</button></div>}
+          {record.status === "pending" && record.canDecide && <div className="gateway-actions"><button type="button" disabled={decisionPendingId !== null} onClick={() => void submitDecision(record.id, "approve", record.proposalBinding)} data-testid={`gateway-approve-${record.id}`}>Aprobar · solo registrar decisión</button><button className="gateway-reject" type="button" disabled={decisionPendingId !== null} onClick={() => void submitDecision(record.id, "reject", record.proposalBinding)} data-testid={`gateway-reject-${record.id}`}>Rechazar</button></div>}
           {record.status === "pending" && !record.canDecide && <p className="gateway-muted" data-testid={`gateway-cannot-decide-${record.id}`}>La capacidad para decidir no está disponible para esta sesión.</p>}
         </article>)}</div>}
+        {decisionResult && <p role="status" className="gateway-result" data-testid="gateway-decision-result">{decisionResult}</p>}
       </div>}
 
       {section === "activity" && <div className="gateway-section">
         <div className="gateway-section-title"><div><span className="gateway-kicker">03 / TRAZABILIDAD</span><h2>Actividad</h2><p>Resumen basado únicamente en valores suministrados.</p></div><span className="gateway-count"><Activity size={14} /> Registro</span></div>
         <div className="gateway-metrics">
-          <div><span>Aprobaciones</span><b data-testid="gateway-count-approvals">{approvalCount ?? unavailable}</b></div>
-          <div><span>Eventos de ledger</span><b data-testid="gateway-count-events">{ledgerEventCount ?? unavailable}</b></div>
+          <div><span>Aprobaciones cargadas</span><b data-testid="gateway-count-approvals">{approvalCount ?? unavailable}</b></div>
+          <div><span>Eventos cargados</span><b data-testid="gateway-count-events">{ledgerEventCount ?? unavailable}</b></div>
           <div><span>Recibos verificados</span><b data-testid="gateway-count-receipts">{verifiedReceiptCount ?? unavailable}</b></div>
+          <div><span>Aprobadas en la lista</span><b data-testid="gateway-count-approved">{approvalStatusCounts?.approved ?? unavailable}</b></div>
+          <div><span>Pendientes en la lista</span><b data-testid="gateway-count-pending">{approvalStatusCounts?.pending ?? unavailable}</b></div>
+          <div><span>Rechazadas o caducadas en la lista</span><b data-testid="gateway-count-rejected">{approvalStatusCounts?.rejected ?? unavailable}</b></div>
+          <div><span>Evaluaciones ALLOW/DENY persistidas</span><b data-testid="gateway-count-policy-decisions">{unavailable}</b></div>
         </div>
         <div className="gateway-ledger-head"><h3>Eventos recientes suministrados</h3><span>{accessState === "available" ? "Acceso disponible" : accessState === "restricted" ? "Acceso restringido" : "Acceso no disponible"}</span></div>
         {!loading && ledgerEvents.length === 0 ? <div className="gateway-empty" data-testid="gateway-empty-events">No hay eventos suministrados.</div> : <ol className="gateway-event-list">{ledgerEvents.map((event) => <li key={`${event.sequence}-${event.approvalId}`} data-testid={`gateway-event-${event.sequence}`}>
           <span className="gateway-event-sequence">#{event.sequence}</span><div><b>{event.eventType || unavailable}</b><span>Aprobación {event.approvalId || unavailable} · {event.timestamp ? new Date(event.timestamp).toLocaleString("es-ES") : unavailable}</span><code>{displayFact(event.hash)}</code></div><span className="gateway-receipt-state">Recibo: {displayFact(event.receiptState)}</span>
         </li>)}</ol>}
-        <div className="gateway-export"><div><b>Exportar recibos proporcionados</b><p>El integrador entrega el conjunto al callback. No se sintetizan ni se recuperan recibos en este panel.</p></div><button type="button" disabled={exporting || accessState !== "available"} onClick={() => onExport(receipts)} data-testid="gateway-button-export"><ArrowDownToLine size={15} />{exporting ? "Preparando…" : "Solicitar exportación"}</button></div>
+        {missingApprovalIds.length > 0 && <div className="gateway-alert" data-testid="gateway-missing-receipts">
+          <p>Faltan {missingApprovalIds.length} recibos que el servidor no conserva:</p>
+          <ul>{missingApprovalIds.map((approvalId) => <li key={approvalId}>approvalId <code>{approvalId}</code></li>)}</ul>
+          <p>Cárguelos en Aprobaciones durante esta sesión para habilitar la exportación.</p>
+        </div>}
+        <div className="gateway-export"><div><b>Exportar historial verificable</b><p>La exportación solo se habilita si se dispone de los recibos requeridos por los eventos; el servidor vuelve a validar su correspondencia.</p></div><button type="button" disabled={exporting || accessState !== "available" || missingApprovalIds.length > 0} onClick={onExport} data-testid="gateway-button-export"><ArrowDownToLine size={15} />{exporting ? "Preparando…" : "Descargar bundle JSON"}</button></div>
       </div>}
 
       {section === "connect" && <div className="gateway-section">
@@ -278,7 +424,7 @@ export function GuardianActionGatewayPanel({
           {framework === "framework" && <><h3>Adaptar el ciclo de herramientas del framework</h3><ol><li>Localiza el punto de despacho de acciones, no el texto conversacional.</li><li>Construye una propuesta con tipo versionado y argumentos validados.</li><li>No consideres una decisión de este panel como autorización ejecutable.</li></ol></>}
           {framework === "library" && <><h3>Encapsular el cliente de herramientas</h3><ol><li>Define un adaptador local que describa argumentos y contexto.</li><li>Mantén el identificador del espacio explícito y validado.</li><li>Las respuestas de este panel no son una biblioteca ni un contrato de API.</li></ol></>}
           {framework === "api" && <><h3>Preparar una futura integración API</h3><ol><li>Espera el contrato publicado por el equipo integrador.</li><li>Valida versión, ámbito y vínculo de propuesta en el lado servidor.</li><li>No envíes secretos ni asumas que esta vista protege operaciones.</li></ol></>}
-          <div className="gateway-command"><span>Comando de prueba seguro · local · no ejecuta acciones</span><code>printf '%s\\n' '{"actionType":"example.v1","args":{}}'</code><button type="button" onClick={() => setSimulationResult("Comando local de ejemplo seleccionado; no se ha ejecutado.")} data-testid="gateway-button-safe-command">Ver confirmación del comando</button></div>
+          <div className="gateway-command"><span>Comando de prueba seguro · local · no ejecuta acciones</span><code>{"printf '%s\\n' '{\"actionType\":\"example.v1\",\"args\":{}}'"}</code><button type="button" onClick={() => setSimulationResult("Comando local de ejemplo seleccionado; no se ha ejecutado.")} data-testid="gateway-button-safe-command">Ver confirmación del comando</button></div>
         </div>
         <p className="gateway-connect-caveat"><GitBranch size={15} /> Guía ilustrativa ficticia. El contrato, autenticación, validación de servidor y enforcement están fuera de este componente.</p>
       </div>}

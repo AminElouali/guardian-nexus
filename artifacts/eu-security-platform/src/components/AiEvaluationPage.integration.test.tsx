@@ -149,6 +149,7 @@ test("approval inbox shows tenant-safe decisions without claiming tool execution
     simulationResultCode: null,
     simulationResultSha256: null,
     replayBindingSha256: null,
+    proposalDetails: null,
     createdAt: "2026-11-03T12:00:00.000Z",
   };
   const approved: AiAssessmentApproval = {
@@ -298,6 +299,7 @@ test("only controlled synthetic refund fixture approvals surface a receipt", () 
     simulationResultCode: null,
     simulationResultSha256: null,
     replayBindingSha256: null,
+    proposalDetails: null,
     createdAt: "2026-11-16T12:00:00.000Z",
   };
   assert.equal(isFixtureOnlySyntheticRefundApproval(base), true);
@@ -345,6 +347,7 @@ test("approval confirmation states synthetic impact before any decision", () => 
     simulationResultCode: null,
     simulationResultSha256: null,
     replayBindingSha256: null,
+    proposalDetails: null,
     createdAt: "2026-11-03T12:00:00.000Z",
   });
   assert.match(message, /cambio de cuenta bancaria ficticio/);
@@ -422,6 +425,33 @@ test("synthetic approval ledger view offers receipt actions and safe history exp
   );
   assert.match(markup, /Cargar recibo guardado/);
   assert.doesNotMatch(markup, /cumplimiento normativo|inmutable|pago real/i);
+});
+
+test("generic action receipts are presented for the local guard without reusing the refund simulator", () => {
+  const receipt = createSavedReceiptFixture();
+  const markup = renderToStaticMarkup(
+    createElement(ApprovalLedgerDemo, {
+      receipts: [{
+        approvalId: receipt.payload.approvalId,
+        receipt,
+        actionLabel: "Recibo firmado · guardian.email.send.external.v1",
+        canConsume: false,
+      }],
+      consumeResults: {},
+      events: [createApprovedEventFixture(receipt)],
+      eventsLoading: false,
+      eventsError: false,
+      exporting: false,
+      onRetryEvents: () => undefined,
+      onConsume: () => undefined,
+      onAddReceipt: () => undefined,
+      onExport: () => undefined,
+    }),
+  );
+  assert.match(markup, /guardian\.email\.send\.external\.v1/);
+  assert.match(markup, /guard local de la herramienta de prueba/);
+  assert.doesNotMatch(markup, /button-consume-receipt-/);
+  assert.match(markup, /button-download-receipt-/);
 });
 
 test("ledger export stays disabled when a server-held receipt is missing", () => {
@@ -620,7 +650,7 @@ test("receipt consumption displays the HTTP result and synthetic hashes", () => 
   assert.match(markup, /simulación sintética/);
 });
 
-test("AI security navigation separates the laboratory, approvals and audit with accessible tabs", () => {
+test("AI security navigation includes laboratory, approvals, action gateway and audit tabs", () => {
   const markup = renderToStaticMarkup(
     createElement(AiEvaluationSectionNav, {
       activeSection: "approvals",
@@ -630,6 +660,8 @@ test("AI security navigation separates the laboratory, approvals and audit with 
   assert.match(markup, /role="tablist"/);
   assert.match(markup, /data-testid="ai-evaluation-tab-lab"/);
   assert.match(markup, /aria-selected="true"[^>]*>Aprobaciones/);
+  assert.match(markup, /data-testid="ai-evaluation-tab-gateway"/);
+  assert.match(markup, /aria-controls="ai-evaluation-panel-gateway"/);
   assert.match(markup, /data-testid="ai-evaluation-tab-audit"/);
   assert.match(markup, /aria-controls="ai-evaluation-panel-audit"/);
 });

@@ -22,7 +22,12 @@ export type ReceiptConsumeDisplay = {
 };
 
 type ApprovalLedgerDemoProps = {
-  receipts: Array<{ approvalId: string; receipt: SignedApprovalReceiptV1 }>;
+  receipts: Array<{
+    approvalId: string;
+    receipt: SignedApprovalReceiptV1;
+    actionLabel?: string;
+    canConsume?: boolean;
+  }>;
   consumeResults: Record<string, ReceiptConsumeDisplay>;
   events: SignedApprovalLedgerEventV1[];
   recentlyApprovedReceiptId?: string | null;
@@ -180,7 +185,7 @@ export function ApprovalLedgerDemo({
             servidor no conserva el recibo; si se pierde, hay que volver a
             proponer y aprobar.
           </div>
-        ) : receipts.map(({ approvalId, receipt }) => {
+        ) : receipts.map(({ approvalId, receipt, actionLabel, canConsume = true }) => {
           const json = stringifyReceipt(receipt);
           const consume = consumeResults[approvalId];
           const operation = consume?.response?.syntheticRefundOperation;
@@ -190,10 +195,11 @@ export function ApprovalLedgerDemo({
               key={approvalId}
               data-testid={`approval-receipt-${approvalId}`}
             >
-              <h3>Recibo firmado de reembolso sintético</h3>
+              <h3>{actionLabel ?? "Recibo firmado de reembolso sintético"}</h3>
               <p>
                 El servidor devuelve este recibo una vez y no lo conserva. Si
                 se pierde, hay que volver a proponer y aprobar la acción.
+                {!canConsume && " Esta autorización se consume desde el guard local de la herramienta de prueba, no desde el simulador de reembolso."}
               </p>
               {recentlyApprovedReceiptId === approvalId && (
                 <p
@@ -234,13 +240,13 @@ export function ApprovalLedgerDemo({
                 >
                   Descargar recibo JSON
                 </Button>
-                <Button
+                {canConsume && <Button
                   data-testid={`button-consume-receipt-${approvalId}`}
                   disabled={Boolean(consume?.response) || consume?.httpStatus === 409}
                   onClick={() => onConsume(approvalId, receipt)}
                 >
                   Consumir recibo sintético
-                </Button>
+                </Button>}
               </div>
               {copyMessage && (
                 <small role="status" data-testid="receipt-copy-status">

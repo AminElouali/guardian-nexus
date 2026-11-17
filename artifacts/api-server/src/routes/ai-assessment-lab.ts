@@ -35,11 +35,14 @@ import {
   ExportWorkspaceApprovalLedgerBundleResponse,
   RetryWorkspaceAiAssessmentLabJobParams,
   RetryWorkspaceAiAssessmentLabJobResponse,
-  GenericActionProposalRequest,
+  CreateWorkspaceGenericActionProposalBody,
   CreateWorkspaceGenericActionProposalParams,
-  GenericActionProposalResponse,
+  CreateWorkspaceGenericActionProposalResponse,
   GetWorkspaceGenericActionCatalogParams,
   GetWorkspaceGenericActionCatalogResponse,
+  PreviewWorkspaceGenericActionBody,
+  PreviewWorkspaceGenericActionParams,
+  PreviewWorkspaceGenericActionResponse,
 } from "@workspace/api-zod";
 import {
   APPROVAL_ACTION_CATALOG,
@@ -1308,6 +1311,49 @@ routes.get(
   },
 );
 
+routes.post(
+  "/workspaces/:workspaceId/ai-security-assessments/action-preview",
+  async (req, res): Promise<void> => {
+    const params = PreviewWorkspaceGenericActionParams.safeParse(req.params);
+    const body = PreviewWorkspaceGenericActionBody.safeParse(req.body);
+    if (
+      !params.success ||
+      !UUID_PATTERN.test(params.data.workspaceId) ||
+      !body.success
+    ) {
+      res.status(400).json({ error: "Invalid action preview request" });
+      return;
+    }
+    const access = await withWorkspaceUserTransaction(
+      req.authUserId!,
+      params.data.workspaceId,
+      async () => true,
+    );
+    if (!access.authorized) {
+      res.status(403).json({ error: "Workspace membership required" });
+      return;
+    }
+    const evaluated = evaluateApprovalAction(
+      body.data.actionType,
+      body.data.arguments,
+    );
+    const actionSha256 = evaluated.ok
+      ? hashGenericActionArguments(evaluated.definition.actionType, evaluated.args)
+          .actionSha256
+      : null;
+    res.json(
+      PreviewWorkspaceGenericActionResponse.parse({
+        decision: evaluated.decision,
+        reasonCode: evaluated.reasonCode,
+        ruleId: evaluated.ok ? evaluated.ruleId : null,
+        actionSha256,
+        persisted: false,
+        dispatched: false,
+      }),
+    );
+  },
+);
+
 routes.get(
   "/workspaces/:workspaceId/ai-security-assessments/approvals",
   async (req, res): Promise<void> => {
@@ -1959,7 +2005,7 @@ routes.post(
   "/workspaces/:workspaceId/ai-security-assessments/action-proposals",
   async (req, res): Promise<void> => {
     const params = CreateWorkspaceGenericActionProposalParams.safeParse(req.params);
-    const body = GenericActionProposalRequest.safeParse(req.body);
+    const body = CreateWorkspaceGenericActionProposalBody.safeParse(req.body);
     if (!params.success || !body.success || !UUID_PATTERN.test(params.data.workspaceId)) {
       res.status(400).json({ error: "Invalid generic action proposal request" });
       return;
@@ -2181,7 +2227,7 @@ routes.post(
     }
     if (access.value.kind === "terminal") {
       res.status(200).json(
-        GenericActionProposalResponse.parse({
+        CreateWorkspaceGenericActionProposalResponse.parse({
           decision: evaluated.decision,
           reasonCode: evaluated.reasonCode,
           actionType,
@@ -2208,7 +2254,7 @@ routes.post(
         }
       : null;
     res.status(isIdempotent ? 200 : 201).json(
-      GenericActionProposalResponse.parse({
+      CreateWorkspaceGenericActionProposalResponse.parse({
         decision: "require_approval",
         reasonCode: "human_approval_required",
         actionType,
@@ -2327,6 +2373,9 @@ routes.post(
             approval.syntheticActionRef ===
             "guardian.synthetic.finance.bank-change.v1"
           ) {
+            if (!("actionRef" in proof)) {
+              return { kind: "evidence_invalid" as const };
+            }
             simulationReceipt = createSyntheticApprovalSimulationReceipt(proof);
             if (!simulationReceipt) return { kind: "evidence_invalid" as const };
             replayBindingSha256 = computeApprovalReplayBinding({
@@ -2595,6 +2644,9 @@ routes.post(
             refundEvidence.proof.actionSha256 !== approval.actionSha256 ||
             expectedProposalSha256 !== approval.proposalSha256
           ) {
+            return { kind: "refund_evidence_invalid" as const };
+          }
+          if (!("actionRef" in persistedProof)) {
             return { kind: "refund_evidence_invalid" as const };
           }
           refundProof = persistedProof;

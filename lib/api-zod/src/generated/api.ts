@@ -12959,6 +12959,41 @@ export const GetWorkspaceGenericActionCatalogResponse = zod.object({
 
 
 /**
+ * Applies the same catalog validation and policy rules in memory. It does not create a job or approval and never dispatches a tool.
+ * @summary Evaluate a versioned action example without persisting it
+ */
+export const PreviewWorkspaceGenericActionParams = zod.object({
+  "workspaceId": zod.uuid()
+})
+
+export const previewWorkspaceGenericActionBodyActionTypeMax = 120;
+
+export const previewWorkspaceGenericActionBodyArgumentsOneMax = 5000;
+
+export const previewWorkspaceGenericActionBodyArgumentsTwoMin = 0;
+export const previewWorkspaceGenericActionBodyArgumentsTwoMax = 1000000;
+
+
+
+export const PreviewWorkspaceGenericActionBody = zod.object({
+  "actionType": zod.string().max(previewWorkspaceGenericActionBodyActionTypeMax),
+  "arguments": zod.record(zod.string(), zod.union([zod.string().max(previewWorkspaceGenericActionBodyArgumentsOneMax),zod.int().min(previewWorkspaceGenericActionBodyArgumentsTwoMin).max(previewWorkspaceGenericActionBodyArgumentsTwoMax),zod.boolean()]))
+})
+
+export const previewWorkspaceGenericActionResponseActionSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+
+
+export const PreviewWorkspaceGenericActionResponse = zod.object({
+  "decision": zod.enum(['allow', 'deny', 'require_approval']),
+  "reasonCode": zod.string(),
+  "ruleId": zod.string().nullable(),
+  "actionSha256": zod.string().regex(previewWorkspaceGenericActionResponseActionSha256RegExp).nullable(),
+  "persisted": zod.literal(false),
+  "dispatched": zod.literal(false)
+})
+
+
+/**
  * Reports only whether server-side provider configuration is present and syntactically valid. It never tests connectivity or returns the endpoint or API key.
  * @summary Read configuration state for the external Qwen proposal demo
  */

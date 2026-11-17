@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash, generateKeyPairSync, sign } from "node:crypto";
+import type { KeyObject } from "node:crypto";
 import { test } from "node:test";
 import {
   signApprovalReceiptV1,
@@ -36,7 +37,7 @@ function fixture() {
 
 function compare(
   receipt: unknown,
-  publicKey: ReturnType<typeof generateKeyPairSync>["publicKey"],
+  publicKey: KeyObject,
   expectedContext = expected,
   at = verificationTime,
 ) {

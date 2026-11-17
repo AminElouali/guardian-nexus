@@ -1,7 +1,8 @@
 # Diseño: catálogo de acciones y gateway de cumplimiento
 
-**Tipo:** propuesta de diseño. Este documento no implementa ni habilita un
-gateway, no cambia el esquema y no autoriza operaciones en herramientas reales.
+**Tipo:** diseño y estado de implementación local. Las etiquetas
+**IMPLEMENTADO** y **PROYECTADO** de cada sección distinguen el código que ya
+existe de las capacidades que todavía no deben usarse en entornos reales.
 
 ## Resumen ejecutivo
 
@@ -24,6 +25,32 @@ del proveedor saltándose el gateway.
 
 ## Estado actual observado en el repositorio
 
+### Avance local de esta fase
+
+- **IMPLEMENTADO en código, solo sintético:** manifiesto versionado en
+  `lib/db/src/approval-action-catalog.ts`; contiene los dos flujos sintéticos
+  existentes y las acciones de respuesta de soporte y correo de prueba. Los
+  argumentos son estrictos, el destino está limitado a dominios `.test` y
+  `.guardian.invalid`, y lo desconocido se deniega por defecto.
+- **IMPLEMENTADO en código:** previsualización en memoria, API de propuestas
+  para las dos acciones genéricas nuevas, aprobaciones persistentes y binding
+  SHA-256 de tipo y argumentos validados. La referencia permitida de acciones
+  se deriva del manifiesto para Drizzle y se refleja en
+  `lib/db/sql/rls-policies.sql`. La base de desarrollo no se ha migrado.
+- **IMPLEMENTADO como prueba aislada:** `lib/guardian-guard` verifica un recibo
+  v1 offline, reclama su consumo a Guardian y solo después entrega un correo
+  sintético a un servidor SMTP local de captura. Las pruebas cubren el
+  destinatario de sandbox, argumentos alterados, caducidad, clave no confiable,
+  replay e indisponibilidad del ledger.
+- **IMPLEMENTADO en la interfaz:** la sección “Pasarela de acciones” permite
+  previsualizar y proponer las dos acciones nuevas, muestra aprobaciones y
+  actividad disponible, conserva recibos aprobados en memoria y ofrece una
+  guía de conexión. No genera credenciales y no conecta proveedores externos.
+- **PROYECTADO:** despliegue del guard como ruta obligatoria, aislamiento de
+  credenciales/red frente al agente, identidad autenticada de workload,
+  persistencia de reglas editables, conectores de producción y operación en
+  modo sombra sobre herramientas reales.
+
 - `workers/guardian-ai-assessment/guardian_ai_assessment/tool_adapter.py`
   contiene una lista fija de herramientas sintéticas y una allow-list de
   operaciones por vertical. `evaluate_synthetic_action_policy` aplica reglas
@@ -35,8 +62,9 @@ del proveedor saltándose el gateway.
   copia en memoria.
 - `lib/db/src/schema/ai-assessment-jobs.ts` y
   `lib/db/sql/rls-policies.sql` tienen una comprobación de referencias de
-  acción que admite esos dos identificadores. La comprobación de procedencia
-  de inferencia es otra constraint, distinta.
+  acción sincronizada con el manifiesto, que admite cuatro identificadores
+  versionados. La comprobación de procedencia de inferencia es otra constraint,
+  distinta, y permanece sin cambios.
 - `artifacts/api-server/src/lib/approval-ledger-crypto.ts` implementa
   recibos, eventos y checkpoints v1. El recibo v1 ya lleva
   `actionSha256` y `proposalBindingSha256`, pero no un identificador explícito
@@ -141,12 +169,13 @@ referencia. La constraint
 (`modelInference`, `executionMode`, `toolCallOrigin`) y **no debe sustituirse
 ni relajarse** para habilitar acciones nuevas.
 
-El cambio mínimo propuesto es sustituir la lista cerrada de dos referencias
-por una validación estructural de identificador versionado, manteniendo la
-regla de que referencia y hash de acción son ambos nulos o ambos presentes, y
-que el hash tenga formato SHA-256 válido. El formato aceptado no constituye
-autorización: el API, el catálogo confiable y el gateway deben rechazar todo
-identificador que no esté registrado y habilitado.
+El cambio mínimo de esta fase sustituye la lista cerrada anterior por la lista
+exacta de identificadores derivados del manifiesto versionado, manteniendo la
+regla de que referencia y hash de acción son ambos nulos o ambos presentes.
+No se usa una expresión genérica para aceptar nombres desconocidos: solo los
+cuatro identificadores enumerados en `APPROVAL_ACTION_CATALOG` son aceptados.
+Esto no constituye autorización: el API y el guard siguen validando que la
+acción esté soportada y sus argumentos cumplan su esquema.
 
 ### Migración controlada
 
@@ -294,6 +323,16 @@ misma interfaz versionada del gateway, no copiar reglas de autorización.
 Frameworks distintos no deben tener rutas alternativas directas al proveedor.
 Las herramientas MCP que no pasen por el guard se consideran no gobernadas.
 
+**PROYECTADO / no probado:** agentgateway podría integrarse como punto de
+entrada si la versión desplegada permite delegar autorización mediante una
+interfaz external-authz y si esa interfaz entrega al autorizador el método,
+destino, identidad autenticada y cuerpo exacto que el guard necesita vincular.
+En ese diseño, un adaptador estrecho traduciría la solicitud a la API del
+guard; agentgateway no debería recibir una regla que permita continuar cuando
+el autorizador no responde. Este repositorio no incluye configuración,
+adaptador ni prueba de compatibilidad con agentgateway, por lo que no se afirma
+que esa integración funcione.
+
 El repositorio contiene herramientas sintéticas y conectores de Microsoft/AWS,
 pero no se ha verificado un servidor MCP ni una integración general con un
 framework de agentes. No deben presentarse como implementados.
@@ -331,13 +370,18 @@ Transición sugerida por acción y tenant:
 | 6. Primer conector real | Un conector de riesgo limitado, con credenciales aisladas y soporte de idempotencia/reconciliación. | Pruebas contractuales del proveedor, guard como único camino, fail-closed, recovery y revisión de seguridad independiente. |
 | 7. Enforcements adicionales | MCP y adaptadores de frameworks que llaman al mismo gateway. | Prueba de que no existe ruta directa desde agente a credenciales/herramienta; catalogación y revocación verificables. |
 
-**Implementado hoy:** contrato criptográfico v1, aprobación/ledger para acciones
-sintéticas enumeradas, verificación offline y checkpoint, controles de base
-append-only, Policy Engine de allow-list y simulación en memoria.
+**Implementado hoy:** contrato criptográfico v1 sin cambios; catálogo versionado
+en código para cuatro acciones sintéticas; previsualización en memoria;
+propuestas/aprobaciones para correo y respuesta de soporte de prueba; binding
+canónico de acción/argumentos; guard aislado probado con SMTP local de captura;
+interfaz para propuestas, aprobaciones, recibos y actividad. El ajuste de
+constraint está probado únicamente en PostgreSQL desechable.
 
-**Proyectado:** catálogo genérico ejecutable, guard universal, identidad
-criptográfica de agentes, MCP/framework adapters, modo sombra y despacho
-controlado de herramientas empresariales reales.
+**Proyectado:** aplicar esa constraint a la base de desarrollo o producción;
+guard obligatorio con identidad y red aisladas; conectores reales; envío a
+destinatarios externos; reglas editables persistentes; MCP/framework adapters,
+modo sombra operativo e identidad criptográfica de agentes. El SMTP local de
+prueba no demuestra envío real ni aislamiento del agente en producción.
 
 ## H. Preguntas abiertas para decisión
 

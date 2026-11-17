@@ -46,6 +46,8 @@ import type {
   AwsIntegrationVerification,
   Dashboard,
   GenericActionCatalogResponse,
+  GenericActionPreviewRequest,
+  GenericActionPreviewResponse,
   GenericActionProposalRequest,
   GenericActionProposalResponse,
   GuardianPolicyLabPreviewRequest,
@@ -3309,6 +3311,96 @@ export function useGetWorkspaceGenericActionCatalog<TData = Awaited<ReturnType<t
 
 
 
+
+export const getPreviewWorkspaceGenericActionUrl = (workspaceId: string,) => {
+
+
+
+
+  return `/api/workspaces/${workspaceId}/ai-security-assessments/action-preview`
+}
+
+/**
+ * Applies the same catalog validation and policy rules in memory. It does not create a job or approval and never dispatches a tool.
+ * @summary Evaluate a versioned action example without persisting it
+ */
+export const previewWorkspaceGenericAction = async (workspaceId: string,
+    genericActionPreviewRequest: GenericActionPreviewRequest, options?: Parameters<typeof customFetch>[1]): Promise<GenericActionPreviewResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<GenericActionPreviewResponse>(getPreviewWorkspaceGenericActionUrl(workspaceId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(genericActionPreviewRequest)
+  }
+);}
+
+
+
+
+
+export const getPreviewWorkspaceGenericActionMutationKey = () => ['previewWorkspaceGenericAction'] as const;
+
+export const getPreviewWorkspaceGenericActionMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewWorkspaceGenericAction>>, TError,PreviewWorkspaceGenericActionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof previewWorkspaceGenericAction>>, TError,PreviewWorkspaceGenericActionMutationVariables, TContext> => {
+
+const mutationKey = getPreviewWorkspaceGenericActionMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof previewWorkspaceGenericAction>>, PreviewWorkspaceGenericActionMutationVariables> = (props) => {
+          const {workspaceId,data} = props ?? {};
+
+          return  previewWorkspaceGenericAction(workspaceId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PreviewWorkspaceGenericActionMutationResult = NonNullable<Awaited<ReturnType<typeof previewWorkspaceGenericAction>>>
+    export type PreviewWorkspaceGenericActionMutationBody = BodyType<GenericActionPreviewRequest>
+    export type PreviewWorkspaceGenericActionMutationError = ErrorType<void>
+    export type PreviewWorkspaceGenericActionMutationVariables = {workspaceId: string;data: BodyType<GenericActionPreviewRequest>}
+
+    /**
+ * @summary Evaluate a versioned action example without persisting it
+ */
+export const usePreviewWorkspaceGenericAction = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewWorkspaceGenericAction>>, TError,PreviewWorkspaceGenericActionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof previewWorkspaceGenericAction>>,
+        TError,
+        PreviewWorkspaceGenericActionMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPreviewWorkspaceGenericActionMutationOptions(options), queryClient);
+    }
 
 export const getGetWorkspaceQwenProviderStatusUrl = (workspaceId: string,) => {
 

@@ -17,6 +17,7 @@ const template: GuardianActionGatewayPanelProps["actionTemplates"][number] = {
   approverLabel: "Responsable de soporte",
   expiryMinutes: 12,
   requiresIndependentApprover: true,
+  proposalEnabled: true,
   argumentFields: [
     { name: "caseId", label: "Identificador de caso", type: "text", required: true },
   ],
@@ -48,8 +49,20 @@ function props(overrides: Partial<GuardianActionGatewayPanelProps> = {}): Guardi
       receiptState: null,
     }],
     accessState: "available",
-    onPropose: () => undefined,
-    onDecision: () => undefined,
+    canPropose: true,
+    onPropose: async () => ({
+      decision: "require_approval",
+      reasonCode: "human_approval_required",
+      approvalId: "approval-test",
+    }),
+    onSimulate: async () => ({
+      decision: "require_approval",
+      reasonCode: "human_approval_required",
+      ruleId: "rule-test",
+      persisted: false,
+      dispatched: false,
+    }),
+    onDecision: async () => true,
     onExport: () => undefined,
     ...overrides,
   };
@@ -79,13 +92,28 @@ test("templates show versioned rule and simulator controls with default-block la
   assert.match(html, /v1\.2/);
   assert.match(html, /Acciones no listadas: bloqueadas por defecto/);
   assert.match(html, /DEFAULT · DENY/);
-  assert.match(html, /No hay regla específica/);
-  assert.match(html, /Modo sombra · solo observación/);
-  assert.match(html, /el modo sombra no bloquea la ejecución/i);
+  assert.match(html, /Sin regla específica/);
+  assert.match(html, /Modo sombra · no intercepta herramientas/);
+  assert.match(html, /Enviar propuesta sí registra la solicitud/i);
   assert.match(html, /data-testid="gateway-simulator"/);
+  assert.match(html, /guardian-template-customer-data-v1/);
+  assert.match(html, /guardian-template-infrastructure-v1/);
   assert.match(html, /data-testid="gateway-action-select"/);
   assert.match(html, /data-testid="gateway-argument-caseId"/);
   assert.match(html, /data-testid="gateway-button-propose"/);
+  assert.match(html, /data-testid="gateway-button-simulate"/);
+});
+
+test("legacy synthetic actions keep their existing flow instead of using the generic proposal endpoint", () => {
+  const html = markup({
+    actionTemplates: [{
+      ...template,
+      actionType: "guardian.synthetic.support.refund.v1",
+      proposalEnabled: false,
+    }],
+  });
+  assert.match(html, /mantiene su flujo sintético existente/);
+  assert.match(html, /disabled=""[^>]*data-testid="gateway-button-propose"/);
 });
 
 test("approval data has explicit unavailable labels and decision controls", () => {
@@ -115,12 +143,40 @@ test("activity never invents counts and exposes supplied ledger and export contr
   assert.doesNotMatch(html, /0 registros|0 eventos|0 recibos/);
 });
 
+test("activity lists missing approval receipts and enables export only when every hash is present", () => {
+  const event = {
+    sequence: 1,
+    eventType: "approval.approved",
+    approvalId: "approval-1",
+    timestamp: "2026-05-04T12:00:00.000Z",
+    hash: "a".repeat(64),
+    receiptId: "receipt-1",
+    receiptSha256: "b".repeat(64),
+  };
+  const missing = markup({
+    initialSection: "activity",
+    ledgerEvents: [event],
+    receipts: [],
+  });
+  assert.match(missing, /Faltan 1 recibos/);
+  assert.match(missing, /approvalId <code>approval-1<\/code>/);
+  assert.match(missing, /disabled=""[^>]*data-testid="gateway-button-export"/);
+
+  const loaded = markup({
+    initialSection: "activity",
+    ledgerEvents: [event],
+    receipts: [{ receiptId: "receipt-1", payloadSha256: "b".repeat(64) }],
+  });
+  assert.doesNotMatch(loaded, /gateway-missing-receipts/);
+  assert.doesNotMatch(loaded, /disabled=""[^>]*data-testid="gateway-button-export"/);
+});
+
 test("agent connection offers safe setup guidance without generating credentials", () => {
   const html = markup({ initialSection: "connect" });
   assert.match(html, /data-testid="gateway-framework-select"/);
   assert.match(html, /data-testid="gateway-connection-guide"/);
   assert.match(html, /data-testid="gateway-button-safe-command"/);
-  assert.match(html, /printf %s/);
-  assert.match(html, /no genera credenciales/i);
+  assert.match(html, /example\.v1/);
+  assert.match(html, /ni genera credenciales/i);
   assert.doesNotMatch(html, /api[_ -]?key|token secreto|generar clave/i);
 });

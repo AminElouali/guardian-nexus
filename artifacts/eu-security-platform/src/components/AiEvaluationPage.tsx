@@ -11,7 +11,10 @@ import {
   useExportWorkspaceApprovalLedgerBundle,
   useCreateWorkspaceAiAssessmentLabJob,
   useCreateWorkspaceSyntheticRefundProposal,
+  useCreateWorkspaceGenericActionProposal,
   useGetWorkspaceAiAssessmentLabAvailability,
+  useGetWorkspaceGenericActionCatalog,
+  usePreviewWorkspaceGenericAction,
   useGetWorkspaceQwenProviderStatus,
   useListWorkspaceAiAssessmentApprovals,
   useListWorkspaceApprovalLedgerEvents,
@@ -41,13 +44,18 @@ import {
 } from './approvalLedgerExport';
 import {
   GuardianApprovalInbox,
-  isFixtureOnlySyntheticRefundApproval,
 } from './GuardianApprovalInbox';
 import {
   ApprovalLedgerDemo,
   type ReceiptConsumeDisplay,
 } from './ApprovalLedgerDemo';
 import { WorkspaceQueryError } from './WorkspaceQueryError';
+import {
+  GuardianActionGatewayPanel,
+  type GatewayActionTemplate,
+  type GatewayApprovalRecord,
+  type GatewayLedgerEvent,
+} from './GuardianActionGatewayPanel';
 import {
   AgentPolicyLabCatalog,
   AgentPolicyLabResult,
@@ -848,7 +856,7 @@ export function ExecutiveLabJobCard({ job }: { job: AiAssessmentLabJob }) {
   </article>;
 }
 
-export type AiEvaluationSection = 'lab' | 'approvals' | 'audit';
+export type AiEvaluationSection = 'lab' | 'approvals' | 'gateway' | 'audit';
 
 const AI_EVALUATION_SECTIONS: Array<{
   id: AiEvaluationSection;
@@ -856,6 +864,7 @@ const AI_EVALUATION_SECTIONS: Array<{
 }> = [
   { id: 'lab', label: 'Laboratorio' },
   { id: 'approvals', label: 'Aprobaciones' },
+  { id: 'gateway', label: 'Pasarela de acciones' },
   { id: 'audit', label: 'Auditoría' },
 ];
 
@@ -958,9 +967,15 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
   const approvalList = useListWorkspaceAiAssessmentApprovals(workspace.id, {
     query: { refetchInterval: 10_000 },
   });
+  const genericActionCatalog = useGetWorkspaceGenericActionCatalog(workspace.id, {
+    query: {
+      enabled: activeSection === 'gateway',
+      refetchOnWindowFocus: false,
+    },
+  });
   const ledgerEvents = useListWorkspaceApprovalLedgerEvents(workspace.id, {
     query: {
-      enabled: canRun && activeSection === 'approvals',
+      enabled: canRun && (activeSection === 'approvals' || activeSection === 'gateway'),
       refetchOnWindowFocus: false,
     },
   });
@@ -972,6 +987,8 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
     useConsumeWorkspaceAiAssessmentApprovalReceipt();
   const exportApprovalLedgerMutation = useExportWorkspaceApprovalLedgerBundle();
   const createSyntheticRefund = useCreateWorkspaceSyntheticRefundProposal();
+  const createGenericActionProposal = useCreateWorkspaceGenericActionProposal();
+  const previewGenericAction = usePreviewWorkspaceGenericAction();
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [labMessage, setLabMessage] = useState('');
@@ -1007,6 +1024,78 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
     approvalLedgerClientState?.workspaceId === workspace.id
       ? approvalLedgerClientState
       : { workspaceId: workspace.id, receipts: {}, consumeResults: {} };
+  const gatewayTemplates: GatewayActionTemplate[] = (
+    genericActionCatalog.data?.actions ?? []
+  ).map((template) => ({
+    actionType: template.actionType,
+    version: template.version,
+    businessArea:
+      template.actionType === 'guardian.email.send.external.v1'
+        ? 'Correo externo'
+        : template.actionType === 'guardian.synthetic.finance.bank-change.v1'
+          ? 'Finanzas'
+          : 'Atención al cliente',
+    label: template.label,
+    description: template.description,
+    riskLabel: `Riesgo ${template.riskClass}`,
+    defaultDecision: template.defaultDecision,
+    approverLabel: template.approverLabel,
+    expiryMinutes: template.expiryMinutes,
+    requiresIndependentApprover: template.requiresIndependentApprover,
+    proposalEnabled:
+      template.actionType === 'guardian.support.reply.send.v1' ||
+      template.actionType === 'guardian.email.send.external.v1',
+    argumentFields: template.argumentFields,
+    rules: template.rules.map((rule) => ({
+      condition: rule.condition,
+      decision: rule.decision,
+      approver: rule.approver,
+    })),
+  }));
+  const gatewayApprovals: GatewayApprovalRecord[] = (
+    approvalList.data?.approvals ?? []
+  ).map((approval) => ({
+    id: approval.id,
+    actionType: approval.syntheticActionRef ?? approval.caseId,
+    agentIdentity: approval.proposalDetails?.agentId ?? null,
+    summary: approval.proposalDetails?.summary ?? null,
+    appliedRule: approval.proposalDetails?.appliedRule ?? null,
+    status: approval.status,
+    expiresAt: approval.expiresAt,
+    canDecide: approval.canCurrentUserDecide,
+    proposalBinding: approval.proposalBindingSha256,
+    receiptVerification: approval.status === 'approved'
+      ? 'No disponible: esta pantalla no verifica firmas localmente'
+      : null,
+  }));
+  const gatewayLedgerEvents: GatewayLedgerEvent[] = (
+    ledgerEvents.data?.events ?? []
+  ).map((signedEvent) => {
+    const payload = signedEvent.event.payload as Record<string, unknown>;
+    const receiptId = typeof payload.receiptId === 'string'
+      ? payload.receiptId
+      : null;
+    const receiptSha256 = typeof payload.receiptSha256 === 'string'
+      ? payload.receiptSha256
+      : null;
+    const localReceipt = currentLedgerState.receipts[signedEvent.event.approvalId];
+    return {
+      sequence: signedEvent.event.sequence,
+      eventType: signedEvent.event.eventType,
+      approvalId: signedEvent.event.approvalId,
+      timestamp: signedEvent.event.occurredAt,
+      hash: signedEvent.eventSha256,
+      receiptId,
+      receiptSha256,
+      receiptState: signedEvent.event.eventType === 'approval.approved'
+        ? localReceipt &&
+            localReceipt.payload.receiptId === receiptId &&
+            localReceipt.payloadSha256 === receiptSha256
+          ? 'Disponible en memoria (sin verificación local)'
+          : 'Falta en esta sesión'
+        : 'No aplica',
+    };
+  });
   const garakAvailable = availability.data?.profiles.some(
     (profile) => profile.profileId === 'guardian-local-agent-v1' && profile.status === 'ready',
   ) ?? false;
@@ -1074,33 +1163,33 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
     approvalId: string,
     proposalBindingSha256: string,
     decision: 'approve' | 'deny',
-  ) {
+  ): Promise<boolean> {
     setApprovalMessage('');
     setApprovalError('');
     try {
       const approval = approvalList.data?.approvals.find(
         (candidate) => candidate.id === approvalId,
       );
-      const eligibleSyntheticRefund = approval
-        ? isFixtureOnlySyntheticRefundApproval(approval)
-        : false;
       const result = await decideApproval.mutateAsync({
         workspaceId: workspace.id,
         approvalId,
         data: { decision, proposalBindingSha256 },
       });
-      if (decision === 'approve' && eligibleSyntheticRefund) {
+      if (decision === 'approve') {
         const receipt = result.receipt;
         if (
           !receipt ||
           receipt.payload.workspaceId !== workspace.id ||
-          receipt.payload.approvalId !== approvalId
+          receipt.payload.approvalId !== approvalId ||
+          receipt.payload.proposalBindingSha256 !== proposalBindingSha256 ||
+          (approval?.actionSha256 &&
+            receipt.payload.actionSha256 !== approval.actionSha256)
         ) {
           setApprovalError(
-            'La aprobación sintética no devolvió el recibo esperado; no se ofrece su consumo desde esta sesión.',
+            'La decisión se registró, pero no llegó un recibo verificable para esta aprobación. No se ofrece consumo ni despacho.',
           );
           await approvalList.refetch();
-          return;
+          return false;
         }
         setApprovalLedgerClientState((current) => {
           const sameWorkspace = current?.workspaceId === workspace.id;
@@ -1115,7 +1204,7 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
         });
         setRecentlyApprovedReceiptId(approvalId);
         setApprovalMessage(
-          'Aprobación sintética registrada. Guarde el recibo ahora: el servidor no lo conserva y al recargar se pierde.',
+          'Aprobación registrada. Guarde el recibo ahora: el servidor no lo conserva y al recargar se pierde.',
         );
       } else {
         setApprovalMessage(
@@ -1128,9 +1217,11 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
       await cache.invalidateQueries({
         queryKey: getListWorkspaceApprovalLedgerEventsQueryKey(workspace.id),
       });
+      return true;
     } catch {
       setApprovalError('No se pudo registrar la decisión. La operación simulada no se ejecutó.');
       await approvalList.refetch();
+      return false;
     }
   }
 
@@ -1208,6 +1299,55 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
     if (!result.ok) {
       setLedgerExportFailure(result.failure);
     }
+  }
+
+  async function previewGatewayAction(
+    actionType: string,
+    args: Record<string, string | number | boolean>,
+  ) {
+    const result = await previewGenericAction.mutateAsync({
+      workspaceId: workspace.id,
+      data: { actionType, arguments: args },
+    });
+    return result;
+  }
+
+  async function proposeGatewayAction(
+    actionType: string,
+    args: Record<string, string | number | boolean>,
+  ) {
+    const result = await createGenericActionProposal.mutateAsync({
+      workspaceId: workspace.id,
+      data: {
+        actionType,
+        arguments: args,
+        idempotencyKey: crypto.randomUUID(),
+      },
+    });
+    await cache.invalidateQueries({
+      queryKey: getListWorkspaceAiAssessmentApprovalsQueryKey(workspace.id),
+    });
+    await cache.invalidateQueries({
+      queryKey: getListWorkspaceAiAssessmentLabJobsQueryKey(workspace.id),
+    });
+    return {
+      decision: result.decision,
+      reasonCode: result.reasonCode,
+      approvalId: result.approval?.id ?? null,
+    };
+  }
+
+  async function decideGatewayApproval(
+    approvalId: string,
+    decision: 'approve' | 'reject',
+    proposalBinding: string | null,
+  ): Promise<boolean> {
+    if (!proposalBinding) return false;
+    return recordApprovalDecision(
+      approvalId,
+      proposalBinding,
+      decision === 'approve' ? 'approve' : 'deny',
+    );
   }
 
   async function requestSyntheticRefund() {
@@ -1561,7 +1701,21 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
     {canRun && (
       <ApprovalLedgerDemo
         receipts={Object.entries(currentLedgerState.receipts).map(
-          ([approvalId, receipt]) => ({ approvalId, receipt }),
+          ([approvalId, receipt]) => {
+            const approval = approvalList.data?.approvals.find(
+              (candidate) => candidate.id === approvalId,
+            );
+            const actionRef = approval?.syntheticActionRef;
+            return {
+              approvalId,
+              receipt,
+              actionLabel: approval?.proposalDetails
+                ? `Recibo firmado · ${approval.proposalDetails.actionType}`
+                : undefined,
+              canConsume: actionRef === 'guardian.synthetic.support.refund.v1' ||
+                actionRef === 'guardian.synthetic.finance.bank-change.v1',
+            };
+          },
         )}
         consumeResults={currentLedgerState.consumeResults}
         events={ledgerEvents.data?.events ?? []}
@@ -1592,6 +1746,45 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
         onExport={(receipts) => void exportApprovalLedger(receipts)}
       />
     )}
+    </section>
+
+    <section
+      id="ai-evaluation-panel-gateway"
+      className="ai-evaluation-section-panel"
+      role="tabpanel"
+      aria-labelledby="ai-evaluation-tab-gateway"
+      tabIndex={0}
+      hidden={activeSection !== 'gateway'}
+      data-testid="ai-evaluation-panel-gateway"
+    >
+      <GuardianActionGatewayPanel
+        workspaceId={workspace.id}
+        actionTemplates={gatewayTemplates}
+        approvals={gatewayApprovals}
+        ledgerEvents={gatewayLedgerEvents}
+        accessState={!canRun ? 'restricted' : ledgerEvents.isError ? 'unavailable' : 'available'}
+        canPropose={canRun}
+        loading={genericActionCatalog.isLoading || approvalList.isLoading || ledgerEvents.isLoading}
+        error={
+          genericActionCatalog.isError || approvalList.isError || ledgerEvents.isError
+            ? 'No se pudieron cargar los datos de la pasarela. No se muestran detalles internos.'
+            : null
+        }
+        approvalCount={approvalList.data?.approvals.length ?? null}
+        ledgerEventCount={ledgerEvents.data?.events.length ?? null}
+        verifiedReceiptCount={null}
+        receipts={Object.values(currentLedgerState.receipts).map((receipt) => ({
+          receiptId: receipt.payload.receiptId,
+          payloadSha256: receipt.payloadSha256,
+        }))}
+        exporting={exportApprovalLedgerMutation.isPending}
+        onPropose={proposeGatewayAction}
+        onSimulate={previewGatewayAction}
+        onDecision={decideGatewayApproval}
+        onExport={() =>
+          void exportApprovalLedger(Object.values(currentLedgerState.receipts))
+        }
+      />
     </section>
 
     <section
