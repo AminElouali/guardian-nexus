@@ -233,6 +233,27 @@ or make network requests, and prints only a fixed verification code and
 validity boolean. The shared TEST ONLY vectors exercise it in a clean child
 process with no database/API environment.
 
+### Local bundle-verification demonstration
+
+Run a disposable demonstration with a saved bundle and ledger trust store:
+
+```sh
+pnpm --filter @workspace/api-server run demo:verify-ledger-bundle \
+  --bundle ./approval-ledger-bundle.json \
+  --trusted-keys ./trusted-ledger-public-keys.json
+```
+
+The script creates a temporary Ed25519 checkpoint key outside the repository,
+runs the existing verifier, and tries removing the last event, altering an
+event, and removing a receipt. Its checkpoint is explicitly **DEMO and
+self-anchored**: it does not prove the bundle is the latest and does not replace
+a checkpoint authenticated and distributed through an external trusted channel.
+**IMPLEMENTADO:** offline signature, chain, receipt, checkpoint, and tamper checks
+for this local demonstration. **PROJECTED:** an externally authenticated latest
+checkpoint and operational isolation of its signer. Without a checkpoint, the
+bundle-only verifier can accept a valid prefix; the checkpoint is what lets the
+verifier detect that tail truncation.
+
 The local end-to-end demonstration uses the repository's disposable,
 process-owned PostgreSQL lab:
 

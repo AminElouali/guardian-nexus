@@ -15,6 +15,7 @@
     "print:ledger-public-key": "tsx src/scripts/print-approval-ledger-public-key.ts",
     "verify:approval-ledger-bundle": "tsx src/scripts/verify-approval-ledger-bundle.ts",
     "create:approval-ledger-checkpoint": "tsx src/scripts/create-approval-ledger-checkpoint.ts",
+    "demo:verify-ledger-bundle": "tsx src/scripts/demo-verify-ledger-bundle.ts",
     "test:assessment-container-integration": "NODE_ENV=development tsx --test src/lib/assessment-container-hardening.integration.test.ts",
     "test:ai-assessment-synthetic-e2e": "NODE_ENV=development tsx --test src/ai-assessment-synthetic-approval-e2e.test.ts",
     "test:ai-assessment-e2e": "node ./scripts/run-ai-assessment-e2e.mjs"
