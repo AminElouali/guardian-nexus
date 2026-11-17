@@ -34,7 +34,7 @@ test("parses a node:test assertion and selects its real source frame", () => {
     "    AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:",
     "        at helper (/tmp/node_modules/helper/index.ts:3:2)",
     `        at importFrame (file:///tmp/project/src/${testFileName}:2:4)`,
-    `        at TestContext.<anonymous> (file:///tmp/project/src/${testFileName}:6:3)`,
+    `        TestContext.<anonymous> (file:///tmp/project/src/${testFileName}:6:3)`,
     "  ...",
     "# tests 1",
     "# pass 0",

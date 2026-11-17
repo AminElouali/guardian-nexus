@@ -428,8 +428,10 @@ function testSourceLocation(
   source: string,
 ): string | undefined {
   const importLines = importSourceLines(source);
-  for (const line of block.split(/\r?\n/)) {
-    if (!/^\s+at\s/.test(line) || line.includes("/node_modules/")) continue;
+  const stack = tapField(block, "stack");
+  if (!stack) return undefined;
+  for (const line of stack.split(/\r?\n/)) {
+    if (line.includes("/node_modules/")) continue;
     const frame = line.match(
       /(?:\(|\s)(?:file:\/\/)?([^()\s]+\.ts):(\d+):\d+\)?\s*$/,
     );
