@@ -9,6 +9,7 @@ import type { AiAssessmentEvidence } from './aiAssessmentEvidence';
 import type { AiAssessmentLabJobProfileId } from './aiAssessmentLabJobProfileId';
 import type { AiAssessmentLabJobStatus } from './aiAssessmentLabJobStatus';
 import type { ExternalQwenProviderApprovalEvidence } from './externalQwenProviderApprovalEvidence';
+import type { GenericActionGatewayEvidence } from './genericActionGatewayEvidence';
 import type { GuardianAgentPolicyLabEvidence } from './guardianAgentPolicyLabEvidence';
 import type { GuardianLocalLlmAutonomousToolSelectionEvidence } from './guardianLocalLlmAutonomousToolSelectionEvidence';
 import type { GuardianLocalLlmEvidence } from './guardianLocalLlmEvidence';
@@ -23,7 +24,7 @@ export interface AiAssessmentLabJob {
   attempts: number;
   /** @nullable */
   engineVersion: string | null;
-  result: AiAssessmentEvidence | GuardianLocalLlmEvidence | GuardianLocalLlmNativeToolSuiteEvidence | GuardianLocalLlmAutonomousToolSelectionEvidence | GuardianAgentPolicyLabEvidence | GuardianQwenPolicyLabEvidence | ExternalQwenProviderApprovalEvidence | null;
+  result: AiAssessmentEvidence | GuardianLocalLlmEvidence | GuardianLocalLlmNativeToolSuiteEvidence | GuardianLocalLlmAutonomousToolSelectionEvidence | GuardianAgentPolicyLabEvidence | GuardianQwenPolicyLabEvidence | ExternalQwenProviderApprovalEvidence | GenericActionGatewayEvidence | null;
   /** @nullable */
   errorCode: string | null;
   createdAt: Date;

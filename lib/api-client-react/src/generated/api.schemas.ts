@@ -3978,6 +3978,57 @@ export interface ExternalQwenProviderApprovalEvidence {
   evidenceSha256: string;
 }
 
+export type GenericActionGatewayEvidenceProfileId = typeof GenericActionGatewayEvidenceProfileId[keyof typeof GenericActionGatewayEvidenceProfileId];
+
+
+export const GenericActionGatewayEvidenceProfileId = {
+  'guardian-agent-lab-email-v1': 'guardian-agent-lab-email-v1',
+  'guardian-agent-lab-customer-service-v1': 'guardian-agent-lab-customer-service-v1',
+} as const;
+
+export type GenericActionGatewayEvidenceAgentId = typeof GenericActionGatewayEvidenceAgentId[keyof typeof GenericActionGatewayEvidenceAgentId];
+
+
+export const GenericActionGatewayEvidenceAgentId = {
+  'agent-fixture-support-demo-v1': 'agent-fixture-support-demo-v1',
+  'agent-fixture-email-demo-v1': 'agent-fixture-email-demo-v1',
+} as const;
+
+export type GenericActionGatewayEvidenceArguments = {[key: string]: string | number | boolean};
+
+export interface GenericActionGatewayEvidence {
+  engine: 'guardian_action_gateway';
+  engineVersion: 'guardian-action-catalog-v1';
+  profileId: GenericActionGatewayEvidenceProfileId;
+  executionMode: 'deterministic_fixture';
+  modelInference: false;
+  toolCallOrigin: 'controlled_fixture_not_llm';
+  evidenceVersion: 1;
+  /** @maxLength 120 */
+  actionType: string;
+  arguments: GenericActionGatewayEvidenceArguments;
+  /** @pattern ^[a-f0-9]{64}$ */
+  actionSha256: string;
+  /** @pattern ^[a-f0-9]{64}$ */
+  argumentsSha256: string;
+  /** @pattern ^[a-f0-9]{64}$ */
+  proposalSha256: string;
+  /** @maxLength 120 */
+  ruleId: string;
+  decision: 'require_approval';
+  agentId: GenericActionGatewayEvidenceAgentId;
+  synthetic: true;
+  /** @maxLength 500 */
+  summary: string;
+  /** @maxLength 500 */
+  messagePreview: string;
+  /** @maxLength 160 */
+  requestedByUserId: string;
+  workspaceId: string;
+  /** @pattern ^[a-f0-9]{64}$ */
+  evidenceSha256: string;
+}
+
 export interface AiAssessmentLabJob {
   id: string;
   status: AiAssessmentLabJobStatus;
@@ -3986,7 +4037,7 @@ export interface AiAssessmentLabJob {
   attempts: number;
   /** @nullable */
   engineVersion: string | null;
-  result: AiAssessmentEvidence | GuardianLocalLlmEvidence | GuardianLocalLlmNativeToolSuiteEvidence | GuardianLocalLlmAutonomousToolSelectionEvidence | GuardianAgentPolicyLabEvidence | GuardianQwenPolicyLabEvidence | ExternalQwenProviderApprovalEvidence | null;
+  result: AiAssessmentEvidence | GuardianLocalLlmEvidence | GuardianLocalLlmNativeToolSuiteEvidence | GuardianLocalLlmAutonomousToolSelectionEvidence | GuardianAgentPolicyLabEvidence | GuardianQwenPolicyLabEvidence | ExternalQwenProviderApprovalEvidence | GenericActionGatewayEvidence | null;
   /** @nullable */
   errorCode: string | null;
   createdAt: string;
@@ -4182,6 +4233,8 @@ export type AiAssessmentApprovalSyntheticActionRef = typeof AiAssessmentApproval
 export const AiAssessmentApprovalSyntheticActionRef = {
   'guardiansyntheticfinancebank-changev1': 'guardian.synthetic.finance.bank-change.v1',
   guardiansyntheticsupportrefundv1: 'guardian.synthetic.support.refund.v1',
+  guardiansupportreplysendv1: 'guardian.support.reply.send.v1',
+  guardianemailsendexternalv1: 'guardian.email.send.external.v1',
 } as const;
 
 /**
@@ -4251,6 +4304,15 @@ export const AiAssessmentApprovalSimulationResultCode = {
   synthetic_refund_approved_in_clone: 'synthetic_refund_approved_in_clone',
 } as const;
 
+export interface GenericActionProposalDetails {
+  agentId: string;
+  actionType: string;
+  summary: string;
+  messagePreview: string;
+  appliedRule: string;
+  synthetic: true;
+}
+
 export interface AiAssessmentApproval {
   id: string;
   jobId: string;
@@ -4300,7 +4362,122 @@ export interface AiAssessmentApproval {
      * @pattern ^[a-f0-9]{64}$
      */
   replayBindingSha256: string | null;
+  proposalDetails: GenericActionProposalDetails | null;
   createdAt: string;
+}
+
+export type GenericActionProposalRequestArguments = {[key: string]: string | number | boolean};
+
+export interface GenericActionProposalRequest {
+  /** @maxLength 120 */
+  actionType: string;
+  arguments: GenericActionProposalRequestArguments;
+  /**
+     * @minLength 16
+     * @maxLength 128
+     */
+  idempotencyKey: string;
+}
+
+export type GenericActionTemplateRiskClass = typeof GenericActionTemplateRiskClass[keyof typeof GenericActionTemplateRiskClass];
+
+
+export const GenericActionTemplateRiskClass = {
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+} as const;
+
+export type GenericActionTemplateAllowedApproverRolesItem = typeof GenericActionTemplateAllowedApproverRolesItem[keyof typeof GenericActionTemplateAllowedApproverRolesItem];
+
+
+export const GenericActionTemplateAllowedApproverRolesItem = {
+  owner: 'owner',
+  admin: 'admin',
+} as const;
+
+export type GenericActionArgumentFieldType = typeof GenericActionArgumentFieldType[keyof typeof GenericActionArgumentFieldType];
+
+
+export const GenericActionArgumentFieldType = {
+  text: 'text',
+  number: 'number',
+  boolean: 'boolean',
+} as const;
+
+export interface GenericActionArgumentField {
+  name: string;
+  label: string;
+  /** @nullable */
+  description: string | null;
+  type: GenericActionArgumentFieldType;
+  required: boolean;
+  /** @nullable */
+  placeholder: string | null;
+}
+
+export type GenericActionRuleRowDecision = typeof GenericActionRuleRowDecision[keyof typeof GenericActionRuleRowDecision];
+
+
+export const GenericActionRuleRowDecision = {
+  allow: 'allow',
+  deny: 'deny',
+  require_approval: 'require_approval',
+} as const;
+
+export interface GenericActionRuleRow {
+  condition: string;
+  decision: GenericActionRuleRowDecision;
+  approver: string;
+}
+
+export interface GenericActionTemplate {
+  actionType: string;
+  version: 'v1';
+  label: string;
+  description: string;
+  riskClass: GenericActionTemplateRiskClass;
+  defaultDecision: 'deny';
+  approverLabel: string;
+  allowedApproverRoles: GenericActionTemplateAllowedApproverRolesItem[];
+  /** @minimum 1 */
+  expiryMinutes: number;
+  requiresIndependentApprover: boolean;
+  /** @nullable */
+  syntheticTemplateText: string | null;
+  argumentFields: GenericActionArgumentField[];
+  rules: GenericActionRuleRow[];
+}
+
+export interface GenericActionCatalogResponse {
+  catalogVersion: 'guardian-action-catalog-v1';
+  actions: GenericActionTemplate[];
+}
+
+export type GenericActionProposalResponseDecision = typeof GenericActionProposalResponseDecision[keyof typeof GenericActionProposalResponseDecision];
+
+
+export const GenericActionProposalResponseDecision = {
+  allow: 'allow',
+  deny: 'deny',
+  require_approval: 'require_approval',
+} as const;
+
+export interface GenericActionProposalResponse {
+  decision: GenericActionProposalResponseDecision;
+  reasonCode: string;
+  actionType: string;
+  /**
+     * @nullable
+     * @pattern ^[a-f0-9]{64}$
+     */
+  actionSha256: string | null;
+  /** @nullable */
+  ruleId: string | null;
+  approval: AiAssessmentApproval | null;
+  execution: 'not_performed';
+  externalSideEffect: false;
+  idempotent: boolean;
 }
 
 export interface AiAssessmentApprovalList {

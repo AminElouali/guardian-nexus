@@ -2,7 +2,9 @@ import { createHash } from "node:crypto";
 
 export type SyntheticApprovalActionRef =
   | "guardian.synthetic.finance.bank-change.v1"
-  | "guardian.synthetic.support.refund.v1";
+  | "guardian.synthetic.support.refund.v1"
+  | "guardian.support.reply.send.v1"
+  | "guardian.email.send.external.v1";
 
 export type ApprovalEvidenceProvenance = {
   modelInference: boolean;

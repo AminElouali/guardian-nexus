@@ -45,6 +45,9 @@ import type {
   AwsIntegrationSetupInput,
   AwsIntegrationVerification,
   Dashboard,
+  GenericActionCatalogResponse,
+  GenericActionProposalRequest,
+  GenericActionProposalResponse,
   GuardianPolicyLabPreviewRequest,
   GuardianPolicyLabPreviewResponse,
   HealthStatus,
@@ -3114,6 +3117,198 @@ export const useCreateWorkspaceSyntheticRefundProposal = <TError = ErrorType<voi
       > => {
       return useMutation(getCreateWorkspaceSyntheticRefundProposalMutationOptions(options), queryClient);
     }
+
+export const getCreateWorkspaceGenericActionProposalUrl = (workspaceId: string,) => {
+
+
+
+
+  return `/api/workspaces/${workspaceId}/ai-security-assessments/action-proposals`
+}
+
+/**
+ * Validates the action and arguments against the versioned catalog, defaults unknown actions to DENY, and records only REQUIRE_APPROVAL proposals. ALLOW and DENY are decision results only; no action is dispatched. All initial tool targets are synthetic/test-only.
+ * @summary Evaluate one versioned synthetic action proposal from the catalog
+ */
+export const createWorkspaceGenericActionProposal = async (workspaceId: string,
+    genericActionProposalRequest: GenericActionProposalRequest, options?: Parameters<typeof customFetch>[1]): Promise<GenericActionProposalResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<GenericActionProposalResponse>(getCreateWorkspaceGenericActionProposalUrl(workspaceId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(genericActionProposalRequest)
+  }
+);}
+
+
+
+
+
+export const getCreateWorkspaceGenericActionProposalMutationKey = () => ['createWorkspaceGenericActionProposal'] as const;
+
+export const getCreateWorkspaceGenericActionProposalMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createWorkspaceGenericActionProposal>>, TError,CreateWorkspaceGenericActionProposalMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createWorkspaceGenericActionProposal>>, TError,CreateWorkspaceGenericActionProposalMutationVariables, TContext> => {
+
+const mutationKey = getCreateWorkspaceGenericActionProposalMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createWorkspaceGenericActionProposal>>, CreateWorkspaceGenericActionProposalMutationVariables> = (props) => {
+          const {workspaceId,data} = props ?? {};
+
+          return  createWorkspaceGenericActionProposal(workspaceId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateWorkspaceGenericActionProposalMutationResult = NonNullable<Awaited<ReturnType<typeof createWorkspaceGenericActionProposal>>>
+    export type CreateWorkspaceGenericActionProposalMutationBody = BodyType<GenericActionProposalRequest>
+    export type CreateWorkspaceGenericActionProposalMutationError = ErrorType<void>
+    export type CreateWorkspaceGenericActionProposalMutationVariables = {workspaceId: string;data: BodyType<GenericActionProposalRequest>}
+
+    /**
+ * @summary Evaluate one versioned synthetic action proposal from the catalog
+ */
+export const useCreateWorkspaceGenericActionProposal = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createWorkspaceGenericActionProposal>>, TError,CreateWorkspaceGenericActionProposalMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createWorkspaceGenericActionProposal>>,
+        TError,
+        CreateWorkspaceGenericActionProposalMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateWorkspaceGenericActionProposalMutationOptions(options), queryClient);
+    }
+
+export const getGetWorkspaceGenericActionCatalogUrl = (workspaceId: string,) => {
+
+
+
+
+  return `/api/workspaces/${workspaceId}/ai-security-assessments/action-catalog`
+}
+
+/**
+ * Returns declarative rules and input descriptors only. It does not persist edits or enforce tool calls.
+ * @summary Read the versioned action templates available to a workspace member
+ */
+export const getWorkspaceGenericActionCatalog = async (workspaceId: string, options?: Parameters<typeof customFetch>[1]): Promise<GenericActionCatalogResponse> => {
+
+  return customFetch<GenericActionCatalogResponse>(getGetWorkspaceGenericActionCatalogUrl(workspaceId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetWorkspaceGenericActionCatalogQueryKey = (workspaceId: string,) => {
+    return [
+    `/api/workspaces/${workspaceId}/ai-security-assessments/action-catalog`
+    ] as const;
+    }
+
+
+export const getGetWorkspaceGenericActionCatalogQueryOptions = <TData = Awaited<ReturnType<typeof getWorkspaceGenericActionCatalog>>, TError = ErrorType<void>>(workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWorkspaceGenericActionCatalog>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetWorkspaceGenericActionCatalogQueryKey(workspaceId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getWorkspaceGenericActionCatalog>>> = ({ signal }) => getWorkspaceGenericActionCatalog(workspaceId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: workspaceId !== null && workspaceId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getWorkspaceGenericActionCatalog>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetWorkspaceGenericActionCatalogQueryResult = NonNullable<Awaited<ReturnType<typeof getWorkspaceGenericActionCatalog>>>
+export type GetWorkspaceGenericActionCatalogQueryError = ErrorType<void>
+
+
+export function useGetWorkspaceGenericActionCatalog<TData = Awaited<ReturnType<typeof getWorkspaceGenericActionCatalog>>, TError = ErrorType<void>>(
+ workspaceId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWorkspaceGenericActionCatalog>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getWorkspaceGenericActionCatalog>>,
+          TError,
+          Awaited<ReturnType<typeof getWorkspaceGenericActionCatalog>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetWorkspaceGenericActionCatalog<TData = Awaited<ReturnType<typeof getWorkspaceGenericActionCatalog>>, TError = ErrorType<void>>(
+ workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWorkspaceGenericActionCatalog>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getWorkspaceGenericActionCatalog>>,
+          TError,
+          Awaited<ReturnType<typeof getWorkspaceGenericActionCatalog>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetWorkspaceGenericActionCatalog<TData = Awaited<ReturnType<typeof getWorkspaceGenericActionCatalog>>, TError = ErrorType<void>>(
+ workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWorkspaceGenericActionCatalog>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Read the versioned action templates available to a workspace member
+ */
+
+export function useGetWorkspaceGenericActionCatalog<TData = Awaited<ReturnType<typeof getWorkspaceGenericActionCatalog>>, TError = ErrorType<void>>(
+ workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWorkspaceGenericActionCatalog>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetWorkspaceGenericActionCatalogQueryOptions(workspaceId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getGetWorkspaceQwenProviderStatusUrl = (workspaceId: string,) => {
 

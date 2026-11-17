@@ -35,8 +35,16 @@ import {
   ExportWorkspaceApprovalLedgerBundleResponse,
   RetryWorkspaceAiAssessmentLabJobParams,
   RetryWorkspaceAiAssessmentLabJobResponse,
+  GenericActionProposalRequest,
+  CreateWorkspaceGenericActionProposalParams,
+  GenericActionProposalResponse,
+  GetWorkspaceGenericActionCatalogParams,
+  GetWorkspaceGenericActionCatalogResponse,
 } from "@workspace/api-zod";
 import {
+  APPROVAL_ACTION_CATALOG,
+  evaluateApprovalAction,
+  getApprovalActionDefinition,
   aiAssessmentApprovalRequestsTable,
   aiAssessmentJobsTable,
   workspaceAuditEventsTable,
@@ -110,6 +118,12 @@ import {
   SYNTHETIC_REFUND_TOOL_NAME,
   validateSyntheticRefundPolicyEvidence,
 } from "../lib/synthetic-refund-gateway";
+import {
+  createGenericActionEvidence,
+  genericActionDisplay,
+  hashGenericActionArguments,
+  verifyGenericActionEvidence,
+} from "../lib/generic-action-evidence";
 import {
   createExternalQwenApprovalEvidence,
   getQwenProviderStatus,
@@ -438,6 +452,14 @@ function formatApproval(
   },
   execution: "not_performed" | "simulated_once" = "not_performed",
   canCurrentUserDecide = false,
+  proposalDetails: {
+    agentId: string;
+    actionType: string;
+    summary: string;
+    messagePreview: string;
+    appliedRule: string;
+    synthetic: true;
+  } | null = null,
 ) {
   const now = new Date();
   return {
@@ -466,6 +488,51 @@ function formatApproval(
         approval.expiresAt,
         now,
       ),
+    proposalDetails,
+  };
+}
+
+function genericProposalDetails(
+  approval: {
+    workspaceId: string;
+    requestedByUserId: string;
+    actionSha256: string | null;
+    proposalSha256: string;
+    syntheticActionRef: string | null;
+    bindingVersion: number;
+    modelInference: boolean | null;
+    executionMode: string | null;
+    toolCallOrigin: string | null;
+  },
+  job: AiAssessmentJob | undefined,
+) {
+  if (
+    !job ||
+    !approval.syntheticActionRef ||
+    !approval.actionSha256 ||
+    approval.bindingVersion !== 3 ||
+    approval.modelInference !== false ||
+    approval.executionMode !== "deterministic_fixture" ||
+    approval.toolCallOrigin !== "controlled_fixture_not_llm"
+  ) {
+    return null;
+  }
+  const evidence = verifyGenericActionEvidence(job.result, {
+    workspaceId: approval.workspaceId,
+    requestedByUserId: approval.requestedByUserId,
+    actionType: approval.syntheticActionRef,
+    actionSha256: approval.actionSha256,
+    proposalSha256: approval.proposalSha256,
+    profileId: job.profileId,
+  });
+  if (!evidence) return null;
+  return {
+    agentId: evidence.agentId,
+    actionType: evidence.actionType,
+    summary: evidence.summary,
+    messagePreview: evidence.messagePreview,
+    appliedRule: evidence.ruleId,
+    synthetic: true as const,
   };
 }
 
@@ -577,6 +644,31 @@ function verifyPersistedApprovalEvidence(
     return null;
   }
   const raw = job.result as unknown as Record<string, unknown>;
+  if (raw.engine === "guardian_action_gateway") {
+    if (
+      approval.bindingVersion !== 3 ||
+      job.engineVersion !== "guardian-action-catalog-v1" ||
+      raw.engineVersion !== job.engineVersion ||
+      approval.modelInference !== false ||
+      approval.executionMode !== "deterministic_fixture" ||
+      approval.toolCallOrigin !== "controlled_fixture_not_llm" ||
+      raw.profileId !== job.profileId ||
+      approval.caseId !== raw.actionType ||
+      raw.actionType !== approval.syntheticActionRef ||
+      raw.actionSha256 !== approval.actionSha256 ||
+      raw.proposalSha256 !== approval.proposalSha256
+    ) {
+      return null;
+    }
+    return verifyGenericActionEvidence(raw, {
+      workspaceId: approval.workspaceId,
+      requestedByUserId: approval.requestedByUserId,
+      actionType: approval.syntheticActionRef,
+      actionSha256: approval.actionSha256 ?? "",
+      proposalSha256: approval.proposalSha256,
+      profileId: job.profileId,
+    });
+  }
   if (raw.engine === QWEN_PROVIDER_ENGINE) {
     if (
       approval.bindingVersion !== 3 ||
@@ -1152,6 +1244,71 @@ routes.get(
 );
 
 routes.get(
+  "/workspaces/:workspaceId/ai-security-assessments/action-catalog",
+  async (req, res): Promise<void> => {
+    const params = GetWorkspaceGenericActionCatalogParams.safeParse(req.params);
+    if (!params.success || !UUID_PATTERN.test(params.data.workspaceId)) {
+      res.status(400).json({ error: "Invalid workspace ID" });
+      return;
+    }
+    const access = await withWorkspaceUserTransaction(
+      req.authUserId!,
+      params.data.workspaceId,
+      async () => true,
+    );
+    if (!access.authorized) {
+      res.status(403).json({ error: "Workspace membership required" });
+      return;
+    }
+    const fieldLabels: Record<string, string> = {
+      ticket_id: "Caso sintético",
+      amount_cents: "Importe en céntimos",
+      account_id: "Cuenta de laboratorio",
+      new_iban: "IBAN de laboratorio",
+      recipient_email: "Correo del buzón de pruebas",
+      recipient_type: "Tipo de destinatario",
+      compensation_cents: "Compensación en céntimos",
+      template_id: "Plantilla fija de demostración",
+      to: "Dirección del buzón sandbox",
+    };
+    const actions = APPROVAL_ACTION_CATALOG.map((definition) => ({
+      actionType: definition.actionType,
+      version: "v1" as const,
+      label: definition.label,
+      description: definition.description,
+      riskClass: definition.riskClass,
+      defaultDecision: "deny" as const,
+      approverLabel: definition.allowedApproverRoles.join(" / "),
+      allowedApproverRoles: [...definition.allowedApproverRoles],
+      expiryMinutes: Math.max(1, Math.ceil(definition.receiptExpirySeconds / 60)),
+      requiresIndependentApprover: definition.requiresIndependentApprover,
+      syntheticTemplateText: definition.syntheticTemplateText ?? null,
+      argumentFields: Object.entries(definition.argumentSchema.properties).map(
+        ([name, rule]) => ({
+          name,
+          label: fieldLabels[name] ?? name,
+          description: null,
+          type: rule.type === "integer" ? "number" as const : rule.type === "boolean" ? "boolean" as const : "text" as const,
+          required: rule.required ?? false,
+          placeholder: null,
+        }),
+      ),
+      rules: definition.rules.map((rule) => ({
+        condition: rule.conditionText,
+        decision: rule.decision,
+        approver: definition.allowedApproverRoles.join(" / "),
+      })),
+    }));
+    res.json(
+      GetWorkspaceGenericActionCatalogResponse.parse({
+        catalogVersion: "guardian-action-catalog-v1",
+        actions,
+      }),
+    );
+  },
+);
+
+routes.get(
   "/workspaces/:workspaceId/ai-security-assessments/approvals",
   async (req, res): Promise<void> => {
     const params = ListWorkspaceAiAssessmentApprovalsParams.safeParse(req.params);
@@ -1166,18 +1323,29 @@ routes.get(
       async (tx, membership) => {
         const now = new Date();
         const canDecide = canRunAiEvaluation(membership.role);
-        const approvals = await tx
-          .select()
+        const rows = await tx
+          .select({
+            approval: aiAssessmentApprovalRequestsTable,
+            job: aiAssessmentJobsTable,
+          })
           .from(aiAssessmentApprovalRequestsTable)
+          .leftJoin(
+            aiAssessmentJobsTable,
+            and(
+              eq(aiAssessmentJobsTable.id, aiAssessmentApprovalRequestsTable.jobId),
+              eq(aiAssessmentJobsTable.workspaceId, workspaceId),
+            ),
+          )
           .where(eq(aiAssessmentApprovalRequestsTable.workspaceId, workspaceId))
           .orderBy(desc(aiAssessmentApprovalRequestsTable.createdAt))
           .limit(MAX_APPROVAL_HISTORY);
         return {
-          approvals: approvals.map((approval) =>
+          approvals: rows.map(({ approval, job }) =>
             formatApproval(
               approval,
               approval.simulatedAt ? "simulated_once" : "not_performed",
               canDecide && approval.requestedByUserId !== req.authUserId,
+              genericProposalDetails(approval, job ?? undefined),
             ),
           ),
           canDecide,
@@ -1788,6 +1956,279 @@ routes.post(
 );
 
 routes.post(
+  "/workspaces/:workspaceId/ai-security-assessments/action-proposals",
+  async (req, res): Promise<void> => {
+    const params = CreateWorkspaceGenericActionProposalParams.safeParse(req.params);
+    const body = GenericActionProposalRequest.safeParse(req.body);
+    if (!params.success || !body.success || !UUID_PATTERN.test(params.data.workspaceId)) {
+      res.status(400).json({ error: "Invalid generic action proposal request" });
+      return;
+    }
+    const { workspaceId } = params.data;
+    const { actionType, arguments: rawArguments, idempotencyKey } = body.data;
+    const evaluated = evaluateApprovalAction(actionType, rawArguments);
+    if (!evaluated.ok) {
+      res.status(400).json({
+        error: "Action proposal rejected by the catalog",
+        code: evaluated.reasonCode,
+        ...(evaluated.issues.length ? { violations: evaluated.issues } : {}),
+      });
+      return;
+    }
+    const actionHash = hashGenericActionArguments(actionType, evaluated.args);
+    const definition = getApprovalActionDefinition(actionType);
+    const display = genericActionDisplay(actionType, evaluated.args);
+    if (!definition || !display) {
+      res.status(400).json({ error: "Action is not available for proposal" });
+      return;
+    }
+    const now = new Date();
+    const evidence = evaluated.decision === "require_approval"
+      ? createGenericActionEvidence({
+          workspaceId,
+          requestedByUserId: req.authUserId!,
+          actionType,
+          args: evaluated.args,
+          ruleId: evaluated.ruleId ?? "",
+          summary: display.summary,
+          messagePreview: display.messagePreview,
+        })
+      : null;
+    if (evaluated.decision === "require_approval" && !evidence) {
+      res.status(400).json({ error: "Catalog evidence could not be created" });
+      return;
+    }
+    const transactionResult = await withWorkspaceUserTransaction(
+      req.authUserId!,
+      workspaceId,
+      async (tx, membership) => {
+        if (
+          !canRunAiEvaluation(membership.role) ||
+          !definition.allowedApproverRoles.includes(
+            membership.role as "owner" | "admin",
+          )
+        ) {
+          return { kind: "forbidden" as const };
+        }
+        if (evaluated.decision !== "require_approval" || !evidence) {
+          return { kind: "terminal" as const };
+        }
+        const profileId = evidence.profileId;
+        const existingJob = await tx
+          .select()
+          .from(aiAssessmentJobsTable)
+          .where(
+            and(
+              eq(aiAssessmentJobsTable.workspaceId, workspaceId),
+              eq(aiAssessmentJobsTable.idempotencyKey, idempotencyKey),
+            ),
+          )
+          .limit(1)
+          .then((rows) => rows[0]);
+        if (existingJob) {
+          if (
+            existingJob.requestedByUserId !== req.authUserId ||
+            existingJob.profileId !== profileId ||
+            existingJob.status !== "succeeded" ||
+            !verifyGenericActionEvidence(existingJob.result, {
+              workspaceId,
+              requestedByUserId: req.authUserId!,
+              actionType,
+              actionSha256: evidence.actionSha256,
+              proposalSha256: evidence.proposalSha256,
+              profileId,
+            })
+          ) {
+            return { kind: "idempotency_conflict" as const };
+          }
+          const existingApproval = await tx
+            .select()
+            .from(aiAssessmentApprovalRequestsTable)
+            .where(
+              and(
+                eq(aiAssessmentApprovalRequestsTable.workspaceId, workspaceId),
+                eq(aiAssessmentApprovalRequestsTable.jobId, existingJob.id),
+                eq(aiAssessmentApprovalRequestsTable.caseId, actionType),
+              ),
+            )
+            .limit(1)
+            .then((rows) => rows[0]);
+          return existingApproval
+            ? { kind: "existing" as const, approval: existingApproval }
+            : { kind: "idempotency_conflict" as const };
+        }
+        const pending = await tx
+          .select({ total: count() })
+          .from(aiAssessmentApprovalRequestsTable)
+          .where(
+            and(
+              eq(aiAssessmentApprovalRequestsTable.workspaceId, workspaceId),
+              eq(aiAssessmentApprovalRequestsTable.status, "pending"),
+              gt(aiAssessmentApprovalRequestsTable.expiresAt, now),
+            ),
+          )
+          .then((rows) => rows[0]?.total ?? 0);
+        if (pending >= MAX_PENDING_PER_WORKSPACE) {
+          return { kind: "pending_limit" as const };
+        }
+        const expiresAt = new Date(
+          now.getTime() + definition.receiptExpirySeconds * 1000,
+        );
+        const [job] = await tx
+          .insert(aiAssessmentJobsTable)
+          .values({
+            workspaceId,
+            requestedByUserId: req.authUserId!,
+            idempotencyKey,
+            profileId,
+            status: "succeeded",
+            workerVersion: "guardian-action-gateway-v1",
+            engineVersion: "guardian-action-catalog-v1",
+            result: evidence as unknown as AiAssessmentJobEvidence,
+            startedAt: now,
+            completedAt: now,
+          })
+          .onConflictDoNothing({
+            target: [
+              aiAssessmentJobsTable.workspaceId,
+              aiAssessmentJobsTable.idempotencyKey,
+            ],
+          })
+          .returning();
+        if (!job) return { kind: "idempotency_conflict" as const };
+        const proposalBindingSha256 = computeApprovalProposalBindingV3({
+          workspaceId,
+          jobId: job.id,
+          caseId: actionType,
+          proposalSha256: evidence.proposalSha256,
+          actionSha256: evidence.actionSha256,
+          syntheticActionRef: actionType as SyntheticApprovalActionRef,
+          requestedByUserId: req.authUserId!,
+          requestedByRole: membership.role,
+          expiresAt,
+          modelInference: false,
+          executionMode: "deterministic_fixture",
+          toolCallOrigin: "controlled_fixture_not_llm",
+        });
+        const [approval] = await tx
+          .insert(aiAssessmentApprovalRequestsTable)
+          .values({
+            workspaceId,
+            jobId: job.id,
+            caseId: actionType,
+            proposalSha256: evidence.proposalSha256,
+            actionSha256: evidence.actionSha256,
+            proposalBindingSha256,
+            requestedByUserId: req.authUserId!,
+            requestedByRole: membership.role,
+            bindingVersion: 3,
+            syntheticActionRef: actionType,
+            modelInference: false,
+            executionMode: "deterministic_fixture",
+            toolCallOrigin: "controlled_fixture_not_llm",
+            status: "pending",
+            expiresAt,
+          })
+          .returning();
+        if (!approval) return { kind: "persistence_failed" as const };
+        await tx.insert(workspaceAuditEventsTable).values({
+          workspaceId,
+          actorUserId: req.authUserId!,
+          action: "ai_assessment.generic_action_proposal_requested",
+          resourceType: "ai_assessment_approval",
+          resourceId: approval.id,
+          metadata: {
+            actionType,
+            actionSha256: evidence.actionSha256,
+            proposalSha256: evidence.proposalSha256,
+            proposalBindingSha256,
+            ruleId: evidence.ruleId,
+            decision: "require_approval",
+            synthetic: true,
+            externalSideEffect: false,
+          },
+        });
+        return { kind: "created" as const, approval };
+      },
+    ).then(
+      (value) => ({ ok: true as const, value }),
+      () => ({ ok: false as const }),
+    );
+    if (!transactionResult.ok) {
+      res.status(503).json({ error: "Approval ledger unavailable" });
+      return;
+    }
+    const access = transactionResult.value;
+    if (!access.authorized) {
+      res.status(403).json({ error: "Workspace membership required" });
+      return;
+    }
+    if (access.value.kind === "forbidden") {
+      res.status(403).json({ error: "Workspace owner or admin role required" });
+      return;
+    }
+    if (access.value.kind === "idempotency_conflict") {
+      res.status(409).json({ error: "Idempotency key is bound to another proposal" });
+      return;
+    }
+    if (access.value.kind === "pending_limit") {
+      res.status(429).json({ error: "Pending approval limit reached" });
+      return;
+    }
+    if (access.value.kind === "persistence_failed") {
+      res.status(503).json({ error: "Approval could not be recorded" });
+      return;
+    }
+    if (access.value.kind === "terminal") {
+      res.status(200).json(
+        GenericActionProposalResponse.parse({
+          decision: evaluated.decision,
+          reasonCode: evaluated.reasonCode,
+          actionType,
+          actionSha256: actionHash.actionSha256,
+          ruleId: evaluated.ruleId,
+          approval: null,
+          execution: "not_performed",
+          externalSideEffect: false,
+          idempotent: false,
+        }),
+      );
+      return;
+    }
+    const approval = access.value.approval;
+    const isIdempotent = access.value.kind === "existing";
+    const details = evidence
+      ? {
+          agentId: evidence.agentId,
+          actionType: evidence.actionType,
+          summary: evidence.summary,
+          messagePreview: evidence.messagePreview,
+          appliedRule: evidence.ruleId,
+          synthetic: true as const,
+        }
+      : null;
+    res.status(isIdempotent ? 200 : 201).json(
+      GenericActionProposalResponse.parse({
+        decision: "require_approval",
+        reasonCode: "human_approval_required",
+        actionType,
+        actionSha256: evidence?.actionSha256 ?? null,
+        ruleId: evidence?.ruleId ?? null,
+        approval: formatApproval(
+          approval,
+          "not_performed",
+          false,
+          details,
+        ),
+        execution: "not_performed",
+        externalSideEffect: false,
+        idempotent: isIdempotent,
+      }),
+    );
+  },
+);
+
+routes.post(
   "/workspaces/:workspaceId/ai-security-assessments/approvals/:approvalId/decision",
   async (req, res): Promise<void> => {
     const params = DecideWorkspaceAiAssessmentApprovalParams.safeParse(req.params);
@@ -1882,7 +2323,10 @@ routes.post(
             .limit(1);
           const proof = verifyPersistedApprovalEvidence(approval, job);
           if (!proof) return { kind: "evidence_invalid" as const };
-          if (approval.syntheticActionRef !== SYNTHETIC_REFUND_SCENARIO_ID) {
+          if (
+            approval.syntheticActionRef ===
+            "guardian.synthetic.finance.bank-change.v1"
+          ) {
             simulationReceipt = createSyntheticApprovalSimulationReceipt(proof);
             if (!simulationReceipt) return { kind: "evidence_invalid" as const };
             replayBindingSha256 = computeApprovalReplayBinding({
@@ -1894,6 +2338,12 @@ routes.post(
               simulationResultCode: simulationReceipt.resultCode,
               simulationResultSha256: simulationReceipt.resultSha256,
             });
+          } else if (
+            approval.syntheticActionRef !== SYNTHETIC_REFUND_SCENARIO_ID &&
+            approval.syntheticActionRef !== "guardian.support.reply.send.v1" &&
+            approval.syntheticActionRef !== "guardian.email.send.external.v1"
+          ) {
+            return { kind: "evidence_invalid" as const };
           }
         } else if (
           status === "approved" &&
@@ -2148,6 +2598,29 @@ routes.post(
             return { kind: "refund_evidence_invalid" as const };
           }
           refundProof = persistedProof;
+        } else if (
+          approval.syntheticActionRef === "guardian.support.reply.send.v1" ||
+          approval.syntheticActionRef === "guardian.email.send.external.v1"
+        ) {
+          if (
+            approval.caseId !== approval.syntheticActionRef ||
+            approval.bindingVersion !== 3
+          ) {
+            return { kind: "generic_action_evidence_invalid" as const };
+          }
+          const [job] = await tx
+            .select()
+            .from(aiAssessmentJobsTable)
+            .where(
+              and(
+                eq(aiAssessmentJobsTable.id, approval.jobId),
+                eq(aiAssessmentJobsTable.workspaceId, workspaceId),
+              ),
+            )
+            .limit(1);
+          if (!verifyPersistedApprovalEvidence(approval, job)) {
+            return { kind: "generic_action_evidence_invalid" as const };
+          }
         }
         const consumed = await consumeApprovalReceipt(tx, {
           workspaceId,

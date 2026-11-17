@@ -831,6 +831,66 @@ paths:
           description: Idempotency key is bound to a different request
         "503":
           description: Fixed policy-lab evidence was unavailable or invalid
+  /workspaces/{workspaceId}/ai-security-assessments/action-proposals:
+    post:
+      operationId: createWorkspaceGenericActionProposal
+      tags: [ai-evaluations]
+      summary: Evaluate one versioned synthetic action proposal from the catalog
+      description: >-
+        Validates the action and arguments against the versioned catalog,
+        defaults unknown actions to DENY, and records only REQUIRE_APPROVAL
+        proposals. ALLOW and DENY are decision results only; no action is
+        dispatched. All initial tool targets are synthetic/test-only.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GenericActionProposalRequest" }
+      responses:
+        "200":
+          description: Idempotent prior proposal or a terminal policy decision
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GenericActionProposalResponse" }
+        "201":
+          description: Independent human approval was requested; no dispatch occurred
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GenericActionProposalResponse" }
+        "400":
+          description: Invalid request, unknown action, or invalid arguments
+        "403":
+          description: Workspace owner or admin role required
+        "409":
+          description: Idempotency key is already bound to another proposal
+        "503":
+          description: Approval ledger signing or persistence is unavailable
+  /workspaces/{workspaceId}/ai-security-assessments/action-catalog:
+    get:
+      operationId: getWorkspaceGenericActionCatalog
+      tags: [ai-evaluations]
+      summary: Read the versioned action templates available to a workspace member
+      description: Returns declarative rules and input descriptors only. It does not persist edits or enforce tool calls.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Current catalog version and synthetic action templates
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GenericActionCatalogResponse" }
+        "403":
+          description: Workspace membership required
   /workspaces/{workspaceId}/ai-security-assessments/qwen-provider/status:
     get:
       operationId: getWorkspaceQwenProviderStatus
@@ -1399,6 +1459,7 @@ components:
             - { $ref: "#/components/schemas/GuardianAgentPolicyLabEvidence" }
             - { $ref: "#/components/schemas/GuardianQwenPolicyLabEvidence" }
             - { $ref: "#/components/schemas/ExternalQwenProviderApprovalEvidence" }
+            - { $ref: "#/components/schemas/GenericActionGatewayEvidence" }
             - { type: "null" }
         errorCode: { type: ["string", "null"] }
         createdAt: { type: string, format: date-time }
@@ -1489,7 +1550,7 @@ components:
         bindingVersion: { type: integer, enum: [1, 2, 3] }
         syntheticActionRef:
           type: ["string", "null"]
-          enum: [guardian.synthetic.finance.bank-change.v1, guardian.synthetic.support.refund.v1, null]
+          enum: [guardian.synthetic.finance.bank-change.v1, guardian.synthetic.support.refund.v1, guardian.support.reply.send.v1, guardian.email.send.external.v1, null]
         modelInference: { type: ["boolean", "null"] }
         executionMode:
           type: ["string", "null"]
@@ -1510,8 +1571,138 @@ components:
           enum: [synthetic_bank_change_approved_in_clone, synthetic_refund_approved_in_clone, null]
         simulationResultSha256: { type: ["string", "null"], pattern: "^[a-f0-9]{64}$" }
         replayBindingSha256: { type: ["string", "null"], pattern: "^[a-f0-9]{64}$" }
+        proposalDetails:
+          oneOf:
+            - { $ref: "#/components/schemas/GenericActionProposalDetails" }
+            - { type: "null" }
         createdAt: { type: string, format: date-time }
-      required: [id, jobId, caseId, proposalSha256, actionSha256, proposalBindingSha256, requestedByUserId, requestedByRole, bindingVersion, syntheticActionRef, modelInference, executionMode, toolCallOrigin, status, canCurrentUserDecide, expiresAt, decidedByUserId, decidedByRole, decidedAt, execution, simulatedAt, simulationResultCode, simulationResultSha256, replayBindingSha256, createdAt]
+      required: [id, jobId, caseId, proposalSha256, actionSha256, proposalBindingSha256, requestedByUserId, requestedByRole, bindingVersion, syntheticActionRef, modelInference, executionMode, toolCallOrigin, status, canCurrentUserDecide, expiresAt, decidedByUserId, decidedByRole, decidedAt, execution, simulatedAt, simulationResultCode, simulationResultSha256, replayBindingSha256, proposalDetails, createdAt]
+    GenericActionProposalDetails:
+      type: object
+      additionalProperties: false
+      properties:
+        agentId: { type: string }
+        actionType: { type: string }
+        summary: { type: string }
+        messagePreview: { type: string }
+        appliedRule: { type: string }
+        synthetic: { type: boolean, const: true }
+      required: [agentId, actionType, summary, messagePreview, appliedRule, synthetic]
+    GenericActionProposalRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        actionType: { type: string, maxLength: 120 }
+        arguments:
+          type: object
+          additionalProperties:
+            oneOf:
+              - { type: string, maxLength: 5000 }
+              - { type: integer, minimum: 0, maximum: 1000000 }
+              - { type: boolean }
+        idempotencyKey: { type: string, minLength: 16, maxLength: 128 }
+      required: [actionType, arguments, idempotencyKey]
+    GenericActionCatalogResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        catalogVersion: { type: string, const: guardian-action-catalog-v1 }
+        actions:
+          type: array
+          items: { $ref: "#/components/schemas/GenericActionTemplate" }
+      required: [catalogVersion, actions]
+    GenericActionTemplate:
+      type: object
+      additionalProperties: false
+      properties:
+        actionType: { type: string }
+        version: { type: string, const: v1 }
+        label: { type: string }
+        description: { type: string }
+        riskClass: { type: string, enum: [low, medium, high] }
+        defaultDecision: { type: string, const: deny }
+        approverLabel: { type: string }
+        allowedApproverRoles:
+          type: array
+          items: { type: string, enum: [owner, admin] }
+        expiryMinutes: { type: integer, minimum: 1 }
+        requiresIndependentApprover: { type: boolean }
+        syntheticTemplateText: { type: ["string", "null"] }
+        argumentFields:
+          type: array
+          items: { $ref: "#/components/schemas/GenericActionArgumentField" }
+        rules:
+          type: array
+          items: { $ref: "#/components/schemas/GenericActionRuleRow" }
+      required: [actionType, version, label, description, riskClass, defaultDecision, approverLabel, allowedApproverRoles, expiryMinutes, requiresIndependentApprover, syntheticTemplateText, argumentFields, rules]
+    GenericActionArgumentField:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string }
+        label: { type: string }
+        description: { type: ["string", "null"] }
+        type: { type: string, enum: [text, number, boolean] }
+        required: { type: boolean }
+        placeholder: { type: ["string", "null"] }
+      required: [name, label, description, type, required, placeholder]
+    GenericActionRuleRow:
+      type: object
+      additionalProperties: false
+      properties:
+        condition: { type: string }
+        decision: { type: string, enum: [allow, deny, require_approval] }
+        approver: { type: string }
+      required: [condition, decision, approver]
+    GenericActionProposalResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        decision: { type: string, enum: [allow, deny, require_approval] }
+        reasonCode: { type: string }
+        actionType: { type: string }
+        actionSha256: { type: ["string", "null"], pattern: "^[a-f0-9]{64}$" }
+        ruleId: { type: ["string", "null"] }
+        approval:
+          oneOf:
+            - { $ref: "#/components/schemas/AiAssessmentApproval" }
+            - { type: "null" }
+        execution: { type: string, const: not_performed }
+        externalSideEffect: { type: boolean, const: false }
+        idempotent: { type: boolean }
+      required: [decision, reasonCode, actionType, actionSha256, ruleId, approval, execution, externalSideEffect, idempotent]
+    GenericActionGatewayEvidence:
+      type: object
+      additionalProperties: false
+      properties:
+        engine: { type: string, const: guardian_action_gateway }
+        engineVersion: { type: string, const: guardian-action-catalog-v1 }
+        profileId: { type: string, enum: [guardian-agent-lab-email-v1, guardian-agent-lab-customer-service-v1] }
+        executionMode: { type: string, const: deterministic_fixture }
+        modelInference: { type: boolean, const: false }
+        toolCallOrigin: { type: string, const: controlled_fixture_not_llm }
+        evidenceVersion: { type: integer, const: 1 }
+        actionType: { type: string, maxLength: 120 }
+        arguments:
+          type: object
+          additionalProperties:
+            oneOf:
+              - { type: string, maxLength: 5000 }
+              - { type: integer, minimum: 0, maximum: 1000000 }
+              - { type: boolean }
+        actionSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        argumentsSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        proposalSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        ruleId: { type: string, maxLength: 120 }
+        decision: { type: string, const: require_approval }
+        agentId: { type: string, enum: [agent-fixture-support-demo-v1, agent-fixture-email-demo-v1] }
+        synthetic: { type: boolean, const: true }
+        summary: { type: string, maxLength: 500 }
+        messagePreview: { type: string, maxLength: 500 }
+        requestedByUserId: { type: string, maxLength: 160 }
+        workspaceId: { type: string, format: uuid }
+        evidenceSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+      required: [engine, engineVersion, profileId, executionMode, modelInference, toolCallOrigin, evidenceVersion, actionType, arguments, actionSha256, argumentsSha256, proposalSha256, ruleId, decision, agentId, synthetic, summary, messagePreview, requestedByUserId, workspaceId, evidenceSha256]
     AiAssessmentApprovalList:
       type: object
       additionalProperties: false

@@ -15,4 +15,6 @@ export type AiAssessmentApprovalSyntheticActionRef = typeof AiAssessmentApproval
 export const AiAssessmentApprovalSyntheticActionRef = {
   'guardiansyntheticfinancebank-changev1': 'guardian.synthetic.finance.bank-change.v1',
   guardiansyntheticsupportrefundv1: 'guardian.synthetic.support.refund.v1',
+  guardiansupportreplysendv1: 'guardian.support.reply.send.v1',
+  guardianemailsendexternalv1: 'guardian.email.send.external.v1',
 } as const;

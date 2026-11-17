@@ -170,7 +170,9 @@ CREATE TABLE IF NOT EXISTS public.ai_assessment_approval_requests (
     (synthetic_action_ref IS NULL AND action_sha256 IS NULL)
     OR (synthetic_action_ref IN (
         'guardian.synthetic.finance.bank-change.v1',
-        'guardian.synthetic.support.refund.v1'
+        'guardian.synthetic.support.refund.v1',
+        'guardian.support.reply.send.v1',
+        'guardian.email.send.external.v1'
       ) AND action_sha256 IS NOT NULL)
   ),
   CONSTRAINT ai_assessment_approval_simulation_receipt_check CHECK (

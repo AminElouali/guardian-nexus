@@ -2255,6 +2255,25 @@ export const listWorkspaceAiAssessmentLabJobsResponseResultSevenGuardianPolicyEv
 
 export const listWorkspaceAiAssessmentLabJobsResponseResultSevenGuardianPolicyEvidenceEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const listWorkspaceAiAssessmentLabJobsResponseResultSevenEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const listWorkspaceAiAssessmentLabJobsResponseResultEightActionTypeMax = 120;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultEightArgumentsOneMax = 5000;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultEightArgumentsTwoMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultEightArgumentsTwoMax = 1000000;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultEightActionSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const listWorkspaceAiAssessmentLabJobsResponseResultEightArgumentsSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const listWorkspaceAiAssessmentLabJobsResponseResultEightProposalSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const listWorkspaceAiAssessmentLabJobsResponseResultEightRuleIdMax = 120;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultEightSummaryMax = 500;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultEightMessagePreviewMax = 500;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultEightRequestedByUserIdMax = 160;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultEightEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 
 
 export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
@@ -3875,6 +3894,28 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "evidenceSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultSevenGuardianPolicyEvidenceEvidenceSha256RegExp)
 }),
   "evidenceSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultSevenEvidenceSha256RegExp)
+}),zod.object({
+  "engine": zod.literal("guardian_action_gateway"),
+  "engineVersion": zod.literal("guardian-action-catalog-v1"),
+  "profileId": zod.enum(['guardian-agent-lab-email-v1', 'guardian-agent-lab-customer-service-v1']),
+  "executionMode": zod.literal("deterministic_fixture"),
+  "modelInference": zod.literal(false),
+  "toolCallOrigin": zod.literal("controlled_fixture_not_llm"),
+  "evidenceVersion": zod.literal(1),
+  "actionType": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultEightActionTypeMax),
+  "arguments": zod.record(zod.string(), zod.union([zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultEightArgumentsOneMax),zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultEightArgumentsTwoMin).max(listWorkspaceAiAssessmentLabJobsResponseResultEightArgumentsTwoMax),zod.boolean()])),
+  "actionSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultEightActionSha256RegExp),
+  "argumentsSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultEightArgumentsSha256RegExp),
+  "proposalSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultEightProposalSha256RegExp),
+  "ruleId": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultEightRuleIdMax),
+  "decision": zod.literal("require_approval"),
+  "agentId": zod.enum(['agent-fixture-support-demo-v1', 'agent-fixture-email-demo-v1']),
+  "synthetic": zod.literal(true),
+  "summary": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultEightSummaryMax),
+  "messagePreview": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultEightMessagePreviewMax),
+  "requestedByUserId": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultEightRequestedByUserIdMax),
+  "workspaceId": zod.uuid(),
+  "evidenceSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultEightEvidenceSha256RegExp)
 }),zod.null()]),
   "errorCode": zod.string().nullable(),
   "createdAt": zod.coerce.date(),
@@ -5122,6 +5163,25 @@ export const createWorkspaceAiAssessmentLabJobResponseResultSevenGuardianPolicyE
 
 export const createWorkspaceAiAssessmentLabJobResponseResultSevenGuardianPolicyEvidenceEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const createWorkspaceAiAssessmentLabJobResponseResultSevenEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceAiAssessmentLabJobResponseResultEightActionTypeMax = 120;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultEightArgumentsOneMax = 5000;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultEightArgumentsTwoMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultEightArgumentsTwoMax = 1000000;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultEightActionSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceAiAssessmentLabJobResponseResultEightArgumentsSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceAiAssessmentLabJobResponseResultEightProposalSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceAiAssessmentLabJobResponseResultEightRuleIdMax = 120;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultEightSummaryMax = 500;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultEightMessagePreviewMax = 500;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultEightRequestedByUserIdMax = 160;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultEightEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 
 
 export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
@@ -6742,6 +6802,28 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "evidenceSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultSevenGuardianPolicyEvidenceEvidenceSha256RegExp)
 }),
   "evidenceSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultSevenEvidenceSha256RegExp)
+}),zod.object({
+  "engine": zod.literal("guardian_action_gateway"),
+  "engineVersion": zod.literal("guardian-action-catalog-v1"),
+  "profileId": zod.enum(['guardian-agent-lab-email-v1', 'guardian-agent-lab-customer-service-v1']),
+  "executionMode": zod.literal("deterministic_fixture"),
+  "modelInference": zod.literal(false),
+  "toolCallOrigin": zod.literal("controlled_fixture_not_llm"),
+  "evidenceVersion": zod.literal(1),
+  "actionType": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultEightActionTypeMax),
+  "arguments": zod.record(zod.string(), zod.union([zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultEightArgumentsOneMax),zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultEightArgumentsTwoMin).max(createWorkspaceAiAssessmentLabJobResponseResultEightArgumentsTwoMax),zod.boolean()])),
+  "actionSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultEightActionSha256RegExp),
+  "argumentsSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultEightArgumentsSha256RegExp),
+  "proposalSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultEightProposalSha256RegExp),
+  "ruleId": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultEightRuleIdMax),
+  "decision": zod.literal("require_approval"),
+  "agentId": zod.enum(['agent-fixture-support-demo-v1', 'agent-fixture-email-demo-v1']),
+  "synthetic": zod.literal(true),
+  "summary": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultEightSummaryMax),
+  "messagePreview": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultEightMessagePreviewMax),
+  "requestedByUserId": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultEightRequestedByUserIdMax),
+  "workspaceId": zod.uuid(),
+  "evidenceSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultEightEvidenceSha256RegExp)
 }),zod.null()]),
   "errorCode": zod.string().nullable(),
   "createdAt": zod.coerce.date(),
@@ -7978,6 +8060,25 @@ export const getWorkspaceAiAssessmentLabJobResponseResultSevenGuardianPolicyEvid
 
 export const getWorkspaceAiAssessmentLabJobResponseResultSevenGuardianPolicyEvidenceEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const getWorkspaceAiAssessmentLabJobResponseResultSevenEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const getWorkspaceAiAssessmentLabJobResponseResultEightActionTypeMax = 120;
+
+export const getWorkspaceAiAssessmentLabJobResponseResultEightArgumentsOneMax = 5000;
+
+export const getWorkspaceAiAssessmentLabJobResponseResultEightArgumentsTwoMin = 0;
+export const getWorkspaceAiAssessmentLabJobResponseResultEightArgumentsTwoMax = 1000000;
+
+export const getWorkspaceAiAssessmentLabJobResponseResultEightActionSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const getWorkspaceAiAssessmentLabJobResponseResultEightArgumentsSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const getWorkspaceAiAssessmentLabJobResponseResultEightProposalSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const getWorkspaceAiAssessmentLabJobResponseResultEightRuleIdMax = 120;
+
+export const getWorkspaceAiAssessmentLabJobResponseResultEightSummaryMax = 500;
+
+export const getWorkspaceAiAssessmentLabJobResponseResultEightMessagePreviewMax = 500;
+
+export const getWorkspaceAiAssessmentLabJobResponseResultEightRequestedByUserIdMax = 160;
+
+export const getWorkspaceAiAssessmentLabJobResponseResultEightEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 
 
 export const GetWorkspaceAiAssessmentLabJobResponse = zod.object({
@@ -9598,6 +9699,28 @@ export const GetWorkspaceAiAssessmentLabJobResponse = zod.object({
   "evidenceSha256": zod.string().regex(getWorkspaceAiAssessmentLabJobResponseResultSevenGuardianPolicyEvidenceEvidenceSha256RegExp)
 }),
   "evidenceSha256": zod.string().regex(getWorkspaceAiAssessmentLabJobResponseResultSevenEvidenceSha256RegExp)
+}),zod.object({
+  "engine": zod.literal("guardian_action_gateway"),
+  "engineVersion": zod.literal("guardian-action-catalog-v1"),
+  "profileId": zod.enum(['guardian-agent-lab-email-v1', 'guardian-agent-lab-customer-service-v1']),
+  "executionMode": zod.literal("deterministic_fixture"),
+  "modelInference": zod.literal(false),
+  "toolCallOrigin": zod.literal("controlled_fixture_not_llm"),
+  "evidenceVersion": zod.literal(1),
+  "actionType": zod.string().max(getWorkspaceAiAssessmentLabJobResponseResultEightActionTypeMax),
+  "arguments": zod.record(zod.string(), zod.union([zod.string().max(getWorkspaceAiAssessmentLabJobResponseResultEightArgumentsOneMax),zod.int().min(getWorkspaceAiAssessmentLabJobResponseResultEightArgumentsTwoMin).max(getWorkspaceAiAssessmentLabJobResponseResultEightArgumentsTwoMax),zod.boolean()])),
+  "actionSha256": zod.string().regex(getWorkspaceAiAssessmentLabJobResponseResultEightActionSha256RegExp),
+  "argumentsSha256": zod.string().regex(getWorkspaceAiAssessmentLabJobResponseResultEightArgumentsSha256RegExp),
+  "proposalSha256": zod.string().regex(getWorkspaceAiAssessmentLabJobResponseResultEightProposalSha256RegExp),
+  "ruleId": zod.string().max(getWorkspaceAiAssessmentLabJobResponseResultEightRuleIdMax),
+  "decision": zod.literal("require_approval"),
+  "agentId": zod.enum(['agent-fixture-support-demo-v1', 'agent-fixture-email-demo-v1']),
+  "synthetic": zod.literal(true),
+  "summary": zod.string().max(getWorkspaceAiAssessmentLabJobResponseResultEightSummaryMax),
+  "messagePreview": zod.string().max(getWorkspaceAiAssessmentLabJobResponseResultEightMessagePreviewMax),
+  "requestedByUserId": zod.string().max(getWorkspaceAiAssessmentLabJobResponseResultEightRequestedByUserIdMax),
+  "workspaceId": zod.uuid(),
+  "evidenceSha256": zod.string().regex(getWorkspaceAiAssessmentLabJobResponseResultEightEvidenceSha256RegExp)
 }),zod.null()]),
   "errorCode": zod.string().nullable(),
   "createdAt": zod.coerce.date(),
@@ -10900,6 +11023,25 @@ export const retryWorkspaceAiAssessmentLabJobResponseResultSevenGuardianPolicyEv
 
 export const retryWorkspaceAiAssessmentLabJobResponseResultSevenGuardianPolicyEvidenceEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const retryWorkspaceAiAssessmentLabJobResponseResultSevenEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const retryWorkspaceAiAssessmentLabJobResponseResultEightActionTypeMax = 120;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultEightArgumentsOneMax = 5000;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultEightArgumentsTwoMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultEightArgumentsTwoMax = 1000000;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultEightActionSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const retryWorkspaceAiAssessmentLabJobResponseResultEightArgumentsSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const retryWorkspaceAiAssessmentLabJobResponseResultEightProposalSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const retryWorkspaceAiAssessmentLabJobResponseResultEightRuleIdMax = 120;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultEightSummaryMax = 500;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultEightMessagePreviewMax = 500;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultEightRequestedByUserIdMax = 160;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultEightEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 
 
 export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
@@ -12520,6 +12662,28 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "evidenceSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultSevenGuardianPolicyEvidenceEvidenceSha256RegExp)
 }),
   "evidenceSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultSevenEvidenceSha256RegExp)
+}),zod.object({
+  "engine": zod.literal("guardian_action_gateway"),
+  "engineVersion": zod.literal("guardian-action-catalog-v1"),
+  "profileId": zod.enum(['guardian-agent-lab-email-v1', 'guardian-agent-lab-customer-service-v1']),
+  "executionMode": zod.literal("deterministic_fixture"),
+  "modelInference": zod.literal(false),
+  "toolCallOrigin": zod.literal("controlled_fixture_not_llm"),
+  "evidenceVersion": zod.literal(1),
+  "actionType": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultEightActionTypeMax),
+  "arguments": zod.record(zod.string(), zod.union([zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultEightArgumentsOneMax),zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultEightArgumentsTwoMin).max(retryWorkspaceAiAssessmentLabJobResponseResultEightArgumentsTwoMax),zod.boolean()])),
+  "actionSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultEightActionSha256RegExp),
+  "argumentsSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultEightArgumentsSha256RegExp),
+  "proposalSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultEightProposalSha256RegExp),
+  "ruleId": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultEightRuleIdMax),
+  "decision": zod.literal("require_approval"),
+  "agentId": zod.enum(['agent-fixture-support-demo-v1', 'agent-fixture-email-demo-v1']),
+  "synthetic": zod.literal(true),
+  "summary": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultEightSummaryMax),
+  "messagePreview": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultEightMessagePreviewMax),
+  "requestedByUserId": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultEightRequestedByUserIdMax),
+  "workspaceId": zod.uuid(),
+  "evidenceSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultEightEvidenceSha256RegExp)
 }),zod.null()]),
   "errorCode": zod.string().nullable(),
   "createdAt": zod.coerce.date(),
@@ -12554,7 +12718,7 @@ export const ListWorkspaceAiAssessmentApprovalsResponse = zod.object({
   "requestedByUserId": zod.string(),
   "requestedByRole": zod.union([zod.literal('owner'),zod.literal('admin'),zod.literal('member'),zod.literal('viewer'),zod.literal(null)]).nullable(),
   "bindingVersion": zod.union([zod.literal(1),zod.literal(2),zod.literal(3)]),
-  "syntheticActionRef": zod.union([zod.literal('guardian.synthetic.finance.bank-change.v1'),zod.literal('guardian.synthetic.support.refund.v1'),zod.literal(null)]).nullable(),
+  "syntheticActionRef": zod.union([zod.literal('guardian.synthetic.finance.bank-change.v1'),zod.literal('guardian.synthetic.support.refund.v1'),zod.literal('guardian.support.reply.send.v1'),zod.literal('guardian.email.send.external.v1'),zod.literal(null)]).nullable(),
   "modelInference": zod.boolean().nullable(),
   "executionMode": zod.union([zod.literal('deterministic_fixture'),zod.literal('real_local_qwen_inference'),zod.literal('real_openai_compatible_qwen_inference'),zod.literal(null)]).nullable(),
   "toolCallOrigin": zod.union([zod.literal('controlled_fixture_not_llm'),zod.literal('guardian_qwen_native_markup_adapter'),zod.literal('runtime_message_tool_calls'),zod.literal('openai_compatible_provider_tool_call'),zod.literal(null)]).nullable(),
@@ -12569,6 +12733,14 @@ export const ListWorkspaceAiAssessmentApprovalsResponse = zod.object({
   "simulationResultCode": zod.union([zod.literal('synthetic_bank_change_approved_in_clone'),zod.literal('synthetic_refund_approved_in_clone'),zod.literal(null)]).nullable(),
   "simulationResultSha256": zod.string().regex(listWorkspaceAiAssessmentApprovalsResponseApprovalsItemSimulationResultSha256RegExp).nullable(),
   "replayBindingSha256": zod.string().regex(listWorkspaceAiAssessmentApprovalsResponseApprovalsItemReplayBindingSha256RegExp).nullable(),
+  "proposalDetails": zod.union([zod.object({
+  "agentId": zod.string(),
+  "actionType": zod.string(),
+  "summary": zod.string(),
+  "messagePreview": zod.string(),
+  "appliedRule": zod.string(),
+  "synthetic": zod.literal(true)
+}),zod.null()]),
   "createdAt": zod.coerce.date()
 })),
   "canDecide": zod.boolean(),
@@ -12622,7 +12794,7 @@ export const CreateWorkspaceSyntheticRefundProposalResponse = zod.object({
   "requestedByUserId": zod.string(),
   "requestedByRole": zod.union([zod.literal('owner'),zod.literal('admin'),zod.literal('member'),zod.literal('viewer'),zod.literal(null)]).nullable(),
   "bindingVersion": zod.union([zod.literal(1),zod.literal(2),zod.literal(3)]),
-  "syntheticActionRef": zod.union([zod.literal('guardian.synthetic.finance.bank-change.v1'),zod.literal('guardian.synthetic.support.refund.v1'),zod.literal(null)]).nullable(),
+  "syntheticActionRef": zod.union([zod.literal('guardian.synthetic.finance.bank-change.v1'),zod.literal('guardian.synthetic.support.refund.v1'),zod.literal('guardian.support.reply.send.v1'),zod.literal('guardian.email.send.external.v1'),zod.literal(null)]).nullable(),
   "modelInference": zod.boolean().nullable(),
   "executionMode": zod.union([zod.literal('deterministic_fixture'),zod.literal('real_local_qwen_inference'),zod.literal('real_openai_compatible_qwen_inference'),zod.literal(null)]).nullable(),
   "toolCallOrigin": zod.union([zod.literal('controlled_fixture_not_llm'),zod.literal('guardian_qwen_native_markup_adapter'),zod.literal('runtime_message_tool_calls'),zod.literal('openai_compatible_provider_tool_call'),zod.literal(null)]).nullable(),
@@ -12637,6 +12809,14 @@ export const CreateWorkspaceSyntheticRefundProposalResponse = zod.object({
   "simulationResultCode": zod.union([zod.literal('synthetic_bank_change_approved_in_clone'),zod.literal('synthetic_refund_approved_in_clone'),zod.literal(null)]).nullable(),
   "simulationResultSha256": zod.string().regex(createWorkspaceSyntheticRefundProposalResponseApprovalOneSimulationResultSha256RegExp).nullable(),
   "replayBindingSha256": zod.string().regex(createWorkspaceSyntheticRefundProposalResponseApprovalOneReplayBindingSha256RegExp).nullable(),
+  "proposalDetails": zod.union([zod.object({
+  "agentId": zod.string(),
+  "actionType": zod.string(),
+  "summary": zod.string(),
+  "messagePreview": zod.string(),
+  "appliedRule": zod.string(),
+  "synthetic": zod.literal(true)
+}),zod.null()]),
   "createdAt": zod.coerce.date()
 }),zod.null()]),
   "execution": zod.enum(['not_performed', 'not_performed_denied', 'synthetic_action_simulated_once']),
@@ -12652,6 +12832,129 @@ export const CreateWorkspaceSyntheticRefundProposalResponse = zod.object({
   "argumentsSha256": zod.string().regex(createWorkspaceSyntheticRefundProposalResponseProviderInferenceArgumentsSha256RegExp),
   "toolName": zod.literal("propose_synthetic_refund")
 }).optional()
+})
+
+
+/**
+ * Validates the action and arguments against the versioned catalog, defaults unknown actions to DENY, and records only REQUIRE_APPROVAL proposals. ALLOW and DENY are decision results only; no action is dispatched. All initial tool targets are synthetic/test-only.
+ * @summary Evaluate one versioned synthetic action proposal from the catalog
+ */
+export const CreateWorkspaceGenericActionProposalParams = zod.object({
+  "workspaceId": zod.uuid()
+})
+
+export const createWorkspaceGenericActionProposalBodyActionTypeMax = 120;
+
+export const createWorkspaceGenericActionProposalBodyArgumentsOneMax = 5000;
+
+export const createWorkspaceGenericActionProposalBodyArgumentsTwoMin = 0;
+export const createWorkspaceGenericActionProposalBodyArgumentsTwoMax = 1000000;
+
+export const createWorkspaceGenericActionProposalBodyIdempotencyKeyMin = 16;
+export const createWorkspaceGenericActionProposalBodyIdempotencyKeyMax = 128;
+
+
+
+export const CreateWorkspaceGenericActionProposalBody = zod.object({
+  "actionType": zod.string().max(createWorkspaceGenericActionProposalBodyActionTypeMax),
+  "arguments": zod.record(zod.string(), zod.union([zod.string().max(createWorkspaceGenericActionProposalBodyArgumentsOneMax),zod.int().min(createWorkspaceGenericActionProposalBodyArgumentsTwoMin).max(createWorkspaceGenericActionProposalBodyArgumentsTwoMax),zod.boolean()])),
+  "idempotencyKey": zod.string().min(createWorkspaceGenericActionProposalBodyIdempotencyKeyMin).max(createWorkspaceGenericActionProposalBodyIdempotencyKeyMax)
+})
+
+export const createWorkspaceGenericActionProposalResponseActionSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceGenericActionProposalResponseApprovalOneProposalSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceGenericActionProposalResponseApprovalOneActionSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceGenericActionProposalResponseApprovalOneProposalBindingSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceGenericActionProposalResponseApprovalOneSimulationResultSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceGenericActionProposalResponseApprovalOneReplayBindingSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+
+
+export const CreateWorkspaceGenericActionProposalResponse = zod.object({
+  "decision": zod.enum(['allow', 'deny', 'require_approval']),
+  "reasonCode": zod.string(),
+  "actionType": zod.string(),
+  "actionSha256": zod.string().regex(createWorkspaceGenericActionProposalResponseActionSha256RegExp).nullable(),
+  "ruleId": zod.string().nullable(),
+  "approval": zod.union([zod.object({
+  "id": zod.uuid(),
+  "jobId": zod.uuid(),
+  "caseId": zod.string(),
+  "proposalSha256": zod.string().regex(createWorkspaceGenericActionProposalResponseApprovalOneProposalSha256RegExp),
+  "actionSha256": zod.string().regex(createWorkspaceGenericActionProposalResponseApprovalOneActionSha256RegExp).nullable(),
+  "proposalBindingSha256": zod.string().regex(createWorkspaceGenericActionProposalResponseApprovalOneProposalBindingSha256RegExp),
+  "requestedByUserId": zod.string(),
+  "requestedByRole": zod.union([zod.literal('owner'),zod.literal('admin'),zod.literal('member'),zod.literal('viewer'),zod.literal(null)]).nullable(),
+  "bindingVersion": zod.union([zod.literal(1),zod.literal(2),zod.literal(3)]),
+  "syntheticActionRef": zod.union([zod.literal('guardian.synthetic.finance.bank-change.v1'),zod.literal('guardian.synthetic.support.refund.v1'),zod.literal('guardian.support.reply.send.v1'),zod.literal('guardian.email.send.external.v1'),zod.literal(null)]).nullable(),
+  "modelInference": zod.boolean().nullable(),
+  "executionMode": zod.union([zod.literal('deterministic_fixture'),zod.literal('real_local_qwen_inference'),zod.literal('real_openai_compatible_qwen_inference'),zod.literal(null)]).nullable(),
+  "toolCallOrigin": zod.union([zod.literal('controlled_fixture_not_llm'),zod.literal('guardian_qwen_native_markup_adapter'),zod.literal('runtime_message_tool_calls'),zod.literal('openai_compatible_provider_tool_call'),zod.literal(null)]).nullable(),
+  "status": zod.enum(['pending', 'approved', 'denied', 'expired']),
+  "canCurrentUserDecide": zod.boolean(),
+  "expiresAt": zod.coerce.date(),
+  "decidedByUserId": zod.string().nullable(),
+  "decidedByRole": zod.union([zod.literal('owner'),zod.literal('admin'),zod.literal('member'),zod.literal('viewer'),zod.literal(null)]).nullable(),
+  "decidedAt": zod.coerce.date().nullable(),
+  "execution": zod.enum(['not_performed', 'synthetic_action_simulated_once']),
+  "simulatedAt": zod.coerce.date().nullable(),
+  "simulationResultCode": zod.union([zod.literal('synthetic_bank_change_approved_in_clone'),zod.literal('synthetic_refund_approved_in_clone'),zod.literal(null)]).nullable(),
+  "simulationResultSha256": zod.string().regex(createWorkspaceGenericActionProposalResponseApprovalOneSimulationResultSha256RegExp).nullable(),
+  "replayBindingSha256": zod.string().regex(createWorkspaceGenericActionProposalResponseApprovalOneReplayBindingSha256RegExp).nullable(),
+  "proposalDetails": zod.union([zod.object({
+  "agentId": zod.string(),
+  "actionType": zod.string(),
+  "summary": zod.string(),
+  "messagePreview": zod.string(),
+  "appliedRule": zod.string(),
+  "synthetic": zod.literal(true)
+}),zod.null()]),
+  "createdAt": zod.coerce.date()
+}),zod.null()]),
+  "execution": zod.literal("not_performed"),
+  "externalSideEffect": zod.literal(false),
+  "idempotent": zod.boolean()
+})
+
+
+/**
+ * Returns declarative rules and input descriptors only. It does not persist edits or enforce tool calls.
+ * @summary Read the versioned action templates available to a workspace member
+ */
+export const GetWorkspaceGenericActionCatalogParams = zod.object({
+  "workspaceId": zod.uuid()
+})
+
+
+
+
+export const GetWorkspaceGenericActionCatalogResponse = zod.object({
+  "catalogVersion": zod.literal("guardian-action-catalog-v1"),
+  "actions": zod.array(zod.object({
+  "actionType": zod.string(),
+  "version": zod.literal("v1"),
+  "label": zod.string(),
+  "description": zod.string(),
+  "riskClass": zod.enum(['low', 'medium', 'high']),
+  "defaultDecision": zod.literal("deny"),
+  "approverLabel": zod.string(),
+  "allowedApproverRoles": zod.array(zod.enum(['owner', 'admin'])),
+  "expiryMinutes": zod.int().min(1),
+  "requiresIndependentApprover": zod.boolean(),
+  "syntheticTemplateText": zod.string().nullable(),
+  "argumentFields": zod.array(zod.object({
+  "name": zod.string(),
+  "label": zod.string(),
+  "description": zod.string().nullable(),
+  "type": zod.enum(['text', 'number', 'boolean']),
+  "required": zod.boolean(),
+  "placeholder": zod.string().nullable()
+})),
+  "rules": zod.array(zod.object({
+  "condition": zod.string(),
+  "decision": zod.enum(['allow', 'deny', 'require_approval']),
+  "approver": zod.string()
+}))
+}))
 })
 
 
@@ -12727,7 +13030,7 @@ export const DecideWorkspaceAiAssessmentApprovalResponse = zod.object({
   "requestedByUserId": zod.string(),
   "requestedByRole": zod.union([zod.literal('owner'),zod.literal('admin'),zod.literal('member'),zod.literal('viewer'),zod.literal(null)]).nullable(),
   "bindingVersion": zod.union([zod.literal(1),zod.literal(2),zod.literal(3)]),
-  "syntheticActionRef": zod.union([zod.literal('guardian.synthetic.finance.bank-change.v1'),zod.literal('guardian.synthetic.support.refund.v1'),zod.literal(null)]).nullable(),
+  "syntheticActionRef": zod.union([zod.literal('guardian.synthetic.finance.bank-change.v1'),zod.literal('guardian.synthetic.support.refund.v1'),zod.literal('guardian.support.reply.send.v1'),zod.literal('guardian.email.send.external.v1'),zod.literal(null)]).nullable(),
   "modelInference": zod.boolean().nullable(),
   "executionMode": zod.union([zod.literal('deterministic_fixture'),zod.literal('real_local_qwen_inference'),zod.literal('real_openai_compatible_qwen_inference'),zod.literal(null)]).nullable(),
   "toolCallOrigin": zod.union([zod.literal('controlled_fixture_not_llm'),zod.literal('guardian_qwen_native_markup_adapter'),zod.literal('runtime_message_tool_calls'),zod.literal('openai_compatible_provider_tool_call'),zod.literal(null)]).nullable(),
@@ -12742,6 +13045,14 @@ export const DecideWorkspaceAiAssessmentApprovalResponse = zod.object({
   "simulationResultCode": zod.union([zod.literal('synthetic_bank_change_approved_in_clone'),zod.literal('synthetic_refund_approved_in_clone'),zod.literal(null)]).nullable(),
   "simulationResultSha256": zod.string().regex(decideWorkspaceAiAssessmentApprovalResponseApprovalSimulationResultSha256RegExp).nullable(),
   "replayBindingSha256": zod.string().regex(decideWorkspaceAiAssessmentApprovalResponseApprovalReplayBindingSha256RegExp).nullable(),
+  "proposalDetails": zod.union([zod.object({
+  "agentId": zod.string(),
+  "actionType": zod.string(),
+  "summary": zod.string(),
+  "messagePreview": zod.string(),
+  "appliedRule": zod.string(),
+  "synthetic": zod.literal(true)
+}),zod.null()]),
   "createdAt": zod.coerce.date()
 }),
   "execution": zod.enum(['decision_only', 'not_performed_denied', 'synthetic_action_simulated_once']),

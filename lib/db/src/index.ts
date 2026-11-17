@@ -20,6 +20,7 @@ export {
   rlsReadinessViolationCodes,
 } from "./rls-readiness-diagnostics";
 export type { RlsReadinessViolationCode } from "./rls-readiness-diagnostics";
+export * from "./approval-action-catalog";
 
 const { Pool } = pg;
 

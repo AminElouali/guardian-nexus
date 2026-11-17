@@ -14,6 +14,7 @@ import type { AiAssessmentApprovalSimulationResultCode } from './aiAssessmentApp
 import type { AiAssessmentApprovalStatus } from './aiAssessmentApprovalStatus';
 import type { AiAssessmentApprovalSyntheticActionRef } from './aiAssessmentApprovalSyntheticActionRef';
 import type { AiAssessmentApprovalToolCallOrigin } from './aiAssessmentApprovalToolCallOrigin';
+import type { GenericActionProposalDetails } from './genericActionProposalDetails';
 
 export interface AiAssessmentApproval {
   id: string;
@@ -64,5 +65,6 @@ export interface AiAssessmentApproval {
      * @pattern ^[a-f0-9]{64}$
      */
   replayBindingSha256: string | null;
+  proposalDetails: GenericActionProposalDetails | null;
   createdAt: Date;
 }

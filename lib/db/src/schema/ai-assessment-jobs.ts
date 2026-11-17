@@ -14,6 +14,12 @@ import {
 } from "drizzle-orm/pg-core";
 import { aiAssessmentWorkerRole, appRuntimeRole } from "./roles";
 import { membershipsTable, workspacesTable } from "./workspaces";
+import { APPROVAL_ACTION_REFS } from "../approval-action-catalog";
+import type { GenericActionGatewayEvidence } from "../approval-action-catalog";
+
+const approvalActionRefListSql = sql.raw(
+  APPROVAL_ACTION_REFS.map((actionRef) => `'${actionRef}'`).join(", "),
+);
 
 export type GuardianVerificationObjective =
   | "untrusted_text_present"
@@ -1171,7 +1177,8 @@ export type AiAssessmentJobEvidence =
   | GuardianLocalLlmAutonomousToolSelectionEvidence
   | GuardianAgentPolicyLabEvidence
   | GuardianQwenPolicyLabEvidence
-  | ExternalQwenProviderApprovalEvidence;
+  | ExternalQwenProviderApprovalEvidence
+  | GenericActionGatewayEvidence;
 
 const memberScope = (workspaceId: SQLWrapper) => sql`
   ${workspaceId}::text = NULLIF(current_setting('app.workspace_id', true), '')
@@ -1377,7 +1384,7 @@ export const aiAssessmentApprovalRequestsTable = pgTable(
     ),
     check(
       "ai_assessment_approval_action_ref_check",
-      sql`(${table.syntheticActionRef} IS NULL AND ${table.actionSha256} IS NULL) OR (${table.syntheticActionRef} IN ('guardian.synthetic.finance.bank-change.v1', 'guardian.synthetic.support.refund.v1') AND ${table.actionSha256} IS NOT NULL)`,
+      sql`(${table.syntheticActionRef} IS NULL AND ${table.actionSha256} IS NULL) OR (${table.syntheticActionRef} IN (${approvalActionRefListSql}) AND ${table.actionSha256} IS NOT NULL)`,
     ),
     check(
       "ai_assessment_approval_simulation_receipt_check",
