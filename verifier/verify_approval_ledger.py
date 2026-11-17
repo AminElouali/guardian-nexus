@@ -3,11 +3,11 @@
 
 from __future__ import annotations
 
-import argparse
 import base64
 import binascii
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -31,6 +31,26 @@ MAX_TRUST_BYTES = 256 * 1024
 MAX_CHECKPOINT_BYTES = 256 * 1024
 MAX_DEPTH = 64
 MAX_NODES = 20_000
+OPENSSL_EXECUTABLE: str | None = None
+UNSUPPORTED_OPENSSL_MESSAGE = (
+    "Unsupported OpenSSL: this verifier requires Ed25519 SPKI export and "
+    "pkeyutl -verify -pubin -rawin support. Install OpenSSL 3.x, then pass "
+    "--openssl /path/to/openssl or set LEDGER_OPENSSL."
+)
+PROBE_PUBLIC_PEM = (
+    "-----BEGIN PUBLIC KEY-----\n"
+    "MCowBQYDK2VwAyEAPUAXw+hDiVqStwqnTRt+vJyYLM8uxJaMwM1V8Sr0Zgw=\n"
+    "-----END PUBLIC KEY-----\n"
+)
+# RFC 8032 Ed25519 test vector; the verifier needs only its public key,
+# one-byte message, and public signature (never a private key).
+PROBE_MESSAGE = bytes.fromhex("72")
+PROBE_SIGNATURE = bytes.fromhex(
+    "92a009a9f0d4cab8720e820b5f642540"
+    "a2b27b5416503f8fb3762223ebdb69da"
+    "085ac1e43e15996e458f3613d0f11d8c"
+    "387b2eaeb4302aeeb00d291612bb0c00"
+)
 
 
 class CanonicalizationError(ValueError):
@@ -169,7 +189,7 @@ def _openssl_public_der(public_pem: str) -> bytes | None:
         or "PRIVATE KEY" in public_pem
     ):
         return None
-    openssl = shutil.which("openssl")
+    openssl = OPENSSL_EXECUTABLE
     if not openssl:
         return None
     try:
@@ -208,7 +228,7 @@ def _openssl_public_der(public_pem: str) -> bytes | None:
 
 
 def _openssl_verify(public_pem: str, message: bytes, signature: bytes) -> bool:
-    openssl = shutil.which("openssl")
+    openssl = OPENSSL_EXECUTABLE
     if not openssl:
         return False
     try:
@@ -673,7 +693,7 @@ def _parse_arguments(argv: list[str]) -> dict[str, str] | None:
     index = 0
     supported = {
         "--bundle", "--trusted-keys", "--checkpoint",
-        "--checkpoint-trusted-keys", "--at",
+        "--checkpoint-trusted-keys", "--at", "--openssl",
     }
     while index < len(argv):
         flag = argv[index]
@@ -698,6 +718,83 @@ def _parse_arguments(argv: list[str]) -> dict[str, str] | None:
     if has_checkpoint != has_checkpoint_keys:
         return None
     return values
+
+
+def _resolve_openssl(args: dict[str, str]) -> str | None:
+    requested = args.get("--openssl") or os.environ.get("LEDGER_OPENSSL") or "openssl"
+    return shutil.which(requested)
+
+
+def _probe_openssl(executable: str) -> bool:
+    """Exercise the exact PEM conversion and raw Ed25519 verify operations."""
+    try:
+        version = subprocess.run(
+            [executable, "version"],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            timeout=5,
+            shell=False,
+        )
+        if version.returncode != 0:
+            return False
+        with tempfile.TemporaryDirectory(prefix="ledger-openssl-probe-") as temp:
+            root = Path(temp)
+            key_path = root / "probe-public.pem"
+            message_path = root / "probe-message.bin"
+            signature_path = root / "probe-signature.bin"
+            key_path.write_text(PROBE_PUBLIC_PEM, encoding="ascii")
+            message_path.write_bytes(PROBE_MESSAGE)
+            signature_path.write_bytes(PROBE_SIGNATURE)
+            export_result = subprocess.run(
+                [
+                    executable,
+                    "pkey",
+                    "-pubin",
+                    "-in",
+                    str(key_path),
+                    "-pubout",
+                    "-outform",
+                    "DER",
+                ],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                check=False,
+                timeout=5,
+                shell=False,
+            )
+            if (
+                export_result.returncode != 0
+                or len(export_result.stdout) != len(ED25519_SPKI_PREFIX) + 32
+                or not export_result.stdout.startswith(ED25519_SPKI_PREFIX)
+            ):
+                return False
+            verify_result = subprocess.run(
+                [
+                    executable,
+                    "pkeyutl",
+                    "-verify",
+                    "-pubin",
+                    "-inkey",
+                    str(key_path),
+                    "-rawin",
+                    "-in",
+                    str(message_path),
+                    "-sigfile",
+                    str(signature_path),
+                ],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+                timeout=5,
+                shell=False,
+            )
+            return verify_result.returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
 
 
 def _read_json_file(path: str, max_bytes: int) -> Any:
@@ -742,14 +839,22 @@ def verify_files(args: dict[str, str]) -> dict[str, Any]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    global OPENSSL_EXECUTABLE
     args = _parse_arguments(sys.argv[1:] if argv is None else argv)
-    result = (
-        verify_files(args)
-        if args is not None
-        else {"valid": False, "code": "invalid_bundle"}
-    )
+    if args is None:
+        result = {"valid": False, "code": "invalid_bundle"}
+        exit_code = 1
+    else:
+        OPENSSL_EXECUTABLE = _resolve_openssl(args)
+        if OPENSSL_EXECUTABLE is None or not _probe_openssl(OPENSSL_EXECUTABLE):
+            print(UNSUPPORTED_OPENSSL_MESSAGE, file=sys.stderr)
+            result = {"valid": False, "code": "unsupported_openssl"}
+            exit_code = 2
+        else:
+            result = verify_files(args)
+            exit_code = 0 if result["valid"] else 1
     print(json.dumps(result, separators=(",", ":")))
-    return 0 if result["valid"] else 1
+    return exit_code
 
 
 if __name__ == "__main__":

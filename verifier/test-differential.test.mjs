@@ -566,3 +566,54 @@ test("standalone Python verifier matches the TypeScript verifier on ephemeral v1
     });
   });
 });
+
+test("unsupported OpenSSL fails clearly through --openssl and LEDGER_OPENSSL", () => {
+  withTempDir((dir) => {
+    const fakeOpenSSL = resolve(dir, "openssl-unsupported");
+    writeFileSync(
+      fakeOpenSSL,
+      "#!/bin/sh\nif [ \"$1\" = version ]; then echo 'LibreSSL test double'; exit 0; fi\nexit 1\n",
+      { mode: 0o700 },
+    );
+    chmodSync(fakeOpenSSL, 0o700);
+
+    const baseArgs = [
+      PY_CLI,
+      "--bundle",
+      resolve(dir, "not-read-bundle.json"),
+      "--trusted-keys",
+      resolve(dir, "not-read-trust.json"),
+      "--at",
+      VERIFY_AT,
+    ];
+    const attempts = [
+      {
+        label: "--openssl argument",
+        args: [...baseArgs, "--openssl", fakeOpenSSL],
+        env: isolatedEnv(),
+      },
+      {
+        label: "LEDGER_OPENSSL environment variable",
+        args: baseArgs,
+        env: { ...isolatedEnv(), LEDGER_OPENSSL: fakeOpenSSL },
+      },
+    ];
+    for (const attempt of attempts) {
+      const result = spawnSync("python3", attempt.args, {
+        cwd: API_DIR,
+        env: attempt.env,
+        encoding: "utf8",
+        timeout: 10_000,
+      });
+      assert.equal(result.error, undefined, `${attempt.label}: launched`);
+      assert.equal(result.status, 2, `${attempt.label}: distinct exit status`);
+      assert.deepEqual(JSON.parse(result.stdout.trim()), {
+        valid: false,
+        code: "unsupported_openssl",
+      });
+      assert.match(result.stderr, /Install OpenSSL 3\.x/);
+      assert.match(result.stderr, /--openssl/);
+      assert.match(result.stderr, /LEDGER_OPENSSL/);
+    }
+  });
+});
