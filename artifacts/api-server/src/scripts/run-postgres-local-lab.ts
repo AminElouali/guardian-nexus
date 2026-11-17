@@ -64,6 +64,7 @@ type Stage =
   | "final_audit"
   | "development_read_only_catalog_audit"
   | "approval_ledger_rls_probes"
+  | "demo_member_seed_tests"
   | "approval_e2e";
 
 type SafeReport = {
@@ -1191,6 +1192,52 @@ async function main(): Promise<void> {
       );
     } finally {
       await ledgerProbePool.end();
+    }
+
+    currentStage = "demo_member_seed_tests";
+    const demoMemberTestEnv = {
+      ...safeChildEnvironment(labRoot),
+      NODE_ENV: "development",
+      GUARDIAN_DEMO_MEMBER_TEST_REQUIRED: "1",
+      GUARDIAN_APPROVAL_E2E_DISPOSABLE: "1",
+      GUARDIAN_APPROVAL_E2E_DATABASE_NAME: databaseName,
+      DATABASE_URL: databaseUrl(databaseName, socketDirectory),
+      APP_RUNTIME_DATABASE_URL: runtimeUrl(
+        databaseName,
+        runtimePassword,
+        socketDirectory,
+      ),
+    };
+    const demoMemberTestOutput = await runAndCapture(
+      pnpm,
+      [
+        "--filter",
+        "@workspace/api-server",
+        "exec",
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "--test-reporter=tap",
+        "src/scripts/seed-demo-member.test.ts",
+      ],
+      repoRoot,
+      demoMemberTestEnv,
+      currentStage,
+    );
+    const demoMemberTestSummary = parseNodeTestSummary(
+      `${demoMemberTestOutput.stdout}\n${demoMemberTestOutput.stderr}`,
+    );
+    console.log(
+      `node:test demo member seed: tests=${demoMemberTestSummary.tests} pass=${demoMemberTestSummary.pass} fail=${demoMemberTestSummary.fail} skipped=${demoMemberTestSummary.skipped}`,
+    );
+    if (
+      demoMemberTestSummary.tests < 1 ||
+      demoMemberTestSummary.fail > 0 ||
+      demoMemberTestSummary.skipped > 0 ||
+      demoMemberTestOutput.exitCode !== 0
+    ) {
+      throw new Error("demo_member_seed_tests_failed");
     }
 
     currentStage = "approval_e2e";

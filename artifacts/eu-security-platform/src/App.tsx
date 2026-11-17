@@ -23,6 +23,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { WorkspaceQueryError } from '@/components/WorkspaceQueryError';
 import { PublicLandingMotion } from '@/components/PublicLandingMotion';
+import { SupportIdentifiers } from '@/components/SupportIdentifiers';
 import NotFound from '@/pages/not-found';
 import { RISK_INTELLIGENCE_CATALOG } from '@/risk-intelligence/catalog.v1';
 import { getDashboardLabStatusPresentation } from '@/lib/dashboard-lab-status';
@@ -289,6 +290,7 @@ function WorkspaceFrame({ page: Page }: { page: (props: { workspace: Workspace }
 }
 
 function WorkspaceSetup({ onCreated }: { onCreated: () => void }) {
+  const { user } = useUser();
   const plans = useListPlans({ query: { queryKey: getListPlansQueryKey() } });
   const createWorkspace = useCreateWorkspace();
   const cache = useQueryClient();
@@ -306,7 +308,7 @@ function WorkspaceSetup({ onCreated }: { onCreated: () => void }) {
   return <div className="setup-wrap reveal">
     <div className="setup-kicker"><Shield size={15} /> TU ESPACIO DE SEGURIDAD</div>
     <h1>Un lugar para<br /><em>empezar.</em></h1>
-    <p className="setup-intro">No encontramos un espacio asociado a esta cuenta. Si esperabas acceder a uno existente, pide a la persona administradora que compruebe la invitación antes de crear otro. Si necesitas un espacio nuevo, puedes configurarlo aquí.</p>
+    <p className="setup-intro">No encontramos un espacio asociado a esta cuenta. Si necesitas acceder al espacio de otra persona, copia tu identificador técnico y compártelo con su propietario; la app todavía no permite invitar miembros ni solicitar acceso. Si necesitas un espacio propio, puedes configurarlo aquí.</p>
     <form className="setup-form" onSubmit={submit}>
       <label className="field-label" htmlFor="workspace-name">Nombre del espacio</label>
       <input id="workspace-name" className="text-input" value={name} onChange={e => setName(e.target.value)} required minLength={2} maxLength={100} placeholder="p. ej., Estudio Norte" data-testid="input-workspace-name" />
@@ -318,6 +320,7 @@ function WorkspaceSetup({ onCreated }: { onCreated: () => void }) {
       <Button type="submit" disabled={!name.trim() || createWorkspace.isPending || plans.isError || plans.isLoading} className="button-full" data-testid="button-create-workspace">{createWorkspace.isPending ? 'Creando tu espacio…' : 'Crear espacio'} <ArrowRight size={16} /></Button>
       <span className="form-footnote"><LockKeyhole size={13} /> Privado para tu organización. Consulta los límites cuando quieras.</span>
     </form>
+    <SupportIdentifiers userId={user?.id} />
     <div className="setup-aside"><span className="aside-index">01</span><div><b>Un punto de partida claro</b><p>En esta fase no hay integraciones ni evaluaciones. Empieza por registrar los activos de tu organización.</p></div></div>
   </div>;
 }
@@ -696,6 +699,7 @@ function supportLabel(support: string) {
 function formatDate(date: string) { const parsed = new Date(date); return Number.isNaN(parsed.getTime()) ? '—' : parsed.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }); }
 
 function TeamPage({ workspace }: { workspace: Workspace }) {
+  const { user } = useUser();
   const membersQuery = useListWorkspaceMembers(workspace.id, { query: { queryKey: getListWorkspaceMembersQueryKey(workspace.id), enabled: !!workspace.id } });
   const updateMember = useUpdateWorkspaceMember();
   const cache = useQueryClient();
@@ -706,6 +710,7 @@ function TeamPage({ workspace }: { workspace: Workspace }) {
   return <div>
     <PageHeading eyebrow="PERSONAS Y ACCESO" title="Equipo" detail="Consulta los miembros y sus roles. Solo los propietarios pueden cambiar los roles." />
     <div className="team-intro"><div className="team-intro-icon"><Users size={18} /></div><p><b>Acceso según el rol</b><span>El propietario tiene el control completo. Los roles de administrador, analista y lector determinan el acceso al espacio.</span></p><span className="team-plan">Plan {planLabel({ id: workspace.planId, name: workspace.planId })}</span></div>
+    <SupportIdentifiers userId={user?.id} workspaceId={workspace.id} />
     {membersQuery.isLoading ? <LoadingState /> : membersQuery.isError ? <WorkspaceQueryError error={membersQuery.error} onRetry={() => void membersQuery.refetch()} isRetrying={membersQuery.isFetching} /> : !membersQuery.data?.length ? <EmptyState icon={Users} title="No hay miembros disponibles" copy="Los miembros del espacio aparecerán aquí cuando el servicio los devuelva." /> : <section className="panel members-panel">
       <div className="members-header"><span>MIEMBRO</span><span>ROL</span><span>SE UNIÓ</span><span /></div>
       {membersQuery.data.map(member => <div className="member-row" key={member.id} data-testid={`row-member-${member.id}`}><div className="member-avatar">{member.userId.slice(0, 1).toUpperCase()}</div><div className="member-details"><b>{member.userId}</b><span>ID de miembro · {member.id.slice(0, 8)}</span></div><div className="member-role">{member.role === 'owner' ? <span className="role-badge role-owner"><ShieldCheck size={13} /> Propietario</span> : isOwner ? <select value={member.role} onChange={e => handleRole(member, e.target.value as 'admin' | 'analyst' | 'viewer')} disabled={updateMember.isPending} className="role-select" aria-label={`Cambiar el rol de ${member.userId}`} data-testid={`select-member-role-${member.id}`}><option value="admin">Administrador</option><option value="analyst">Analista</option><option value="viewer">Lector</option></select> : <span className={`role-badge role-${member.role}`}>{roleLabel(member.role)}</span>}</div><div className="member-date">{formatDate(member.createdAt)}</div></div>)}
