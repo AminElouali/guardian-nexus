@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  createWorkspaceRuleActionEvidence,
   createGenericActionEvidence,
   genericActionDisplay,
   genericActionProposalSha256,
@@ -76,6 +77,69 @@ test("generic evidence rejects changed arguments and mismatched action or worksp
   assert.equal(
     verifyGenericActionEvidence(value, { ...expected, workspaceId: "22222222-2222-4222-8222-222222222222" }),
     null,
+  );
+});
+
+test("generic evidence rejects engine versions crossed in either evidence version direction", () => {
+  const versionOne = evidence();
+  assert.ok(versionOne);
+  const expectedV1 = {
+    workspaceId,
+    requestedByUserId,
+    actionType,
+    actionSha256: versionOne.actionSha256,
+    proposalSha256: versionOne.proposalSha256,
+    profileId: versionOne.profileId,
+  };
+  assert.equal(
+    verifyGenericActionEvidence(
+      {
+        ...versionOne,
+        engineVersion: "guardian-workspace-rules-v2",
+      },
+      expectedV1,
+    ),
+    null,
+    "evidence v1 cannot claim the v2 engine",
+  );
+
+  const ruleDocument = {
+    version: 1 as const,
+    rules: [{
+      id: "require-independent-approval",
+      decision: "require_approval" as const,
+      when: {},
+    }],
+  };
+  const display = genericActionDisplay(actionType, args);
+  assert.ok(display);
+  const versionTwo = createWorkspaceRuleActionEvidence({
+    workspaceId,
+    requestedByUserId,
+    actionType,
+    args,
+    ruleId: "require-independent-approval",
+    ruleVersionId: "11111111-1111-4111-8111-111111111111",
+    ruleDocument,
+    ...display,
+    agentId: "agent-synthetic-evidence-v2",
+  });
+  assert.ok(versionTwo);
+  assert.equal(versionTwo.evidenceVersion, 2);
+  assert.equal(
+    verifyGenericActionEvidence(
+      {
+        ...versionTwo,
+        engineVersion: "guardian-action-catalog-v1",
+      },
+      {
+        ...expectedV1,
+        actionSha256: versionTwo.actionSha256,
+        proposalSha256: versionTwo.proposalSha256,
+      },
+    ),
+    null,
+    "evidence v2 cannot claim the v1 engine",
   );
 });
 

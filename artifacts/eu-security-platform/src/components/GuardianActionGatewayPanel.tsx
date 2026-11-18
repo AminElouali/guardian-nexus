@@ -128,7 +128,7 @@ const sections: { id: Section; label: string; icon: typeof Shield }[] = [
   { id: "rules", label: "Reglas por plantillas", icon: SlidersHorizontal },
   { id: "approvals", label: "Bandeja de aprobaciones", icon: Check },
   { id: "activity", label: "Actividad", icon: Activity },
-  { id: "connect", label: "Conectar agente", icon: Network },
+  { id: "connect", label: "Agentes", icon: Network },
 ];
 const unconfiguredAreaTemplates = [
   { id: "guardian-template-internal-email-v1", label: "Correo interno" },
@@ -592,7 +592,12 @@ export function GuardianActionGatewayPanel({
     }
   };
   const rotateAgent = async (agentId: string) => {
-    if (!canManage || !window.confirm("Rotar la credencial invalidará la credencial anterior. ¿Continuar?")) return;
+    const isRevoked = agents.find((agent) => agent.id === agentId)?.revokedAt;
+    if (!canManage || !window.confirm(
+      isRevoked
+        ? "Crear una credencial nueva reactivará este agente e invalidará la credencial anterior. ¿Continuar?"
+        : "Rotar la credencial invalidará la credencial anterior. ¿Continuar?",
+    )) return;
     setAgentBusyId(agentId);
     setAgentCredential(null);
     setCopiedCredential(false);
@@ -600,7 +605,9 @@ export function GuardianActionGatewayPanel({
     try {
       const result = await onRotateAgent(agentId);
       if (result.shownOnce) setAgentCredential(result);
-      setAgentMessage("Credencial rotada. Guarda la nueva credencial ahora; la anterior deja de ser válida.");
+      setAgentMessage(isRevoked
+        ? "Agente reactivado con una credencial nueva. Guarda ahora el único valor mostrado."
+        : "Credencial rotada. Guarda la nueva credencial ahora; la anterior deja de ser válida.");
     } catch {
       setAgentMessage("No se pudo rotar la credencial.");
     } finally {
@@ -908,7 +915,7 @@ export function GuardianActionGatewayPanel({
       </div>}
 
       {section === "connect" && <div className="gateway-section">
-        <div className="gateway-section-title"><div><span className="gateway-kicker">04 / IDENTIDAD DEL AGENTE</span><h2>Conectar agente</h2><p>Registra principales del workspace y administra sus credenciales. El registro no conecta por sí solo herramientas ni habilita enforcement.</p></div><span className="gateway-count">{agentsLoading || agentsError ? unavailable : agents.length} agentes registrados</span></div>
+         <div className="gateway-section-title"><div><span className="gateway-kicker">04 / IDENTIDAD DEL AGENTE</span><h2>Agentes</h2><p>Registra principales del workspace y administra sus credenciales. El registro no conecta por sí solo herramientas ni habilita enforcement.</p></div><span className="gateway-count">{agentsLoading || agentsError ? unavailable : agents.length} agentes registrados</span></div>
         <section className="gateway-persisted" aria-labelledby="gateway-agent-management-title" data-testid="gateway-agent-management">
           <div className="gateway-persisted-head"><div><span className="gateway-kicker">ADMINISTRACIÓN DEL WORKSPACE</span><h3 id="gateway-agent-management-title">Agentes registrados</h3><p>Las credenciales completas solo se entregan en la respuesta inmediata de creación o rotación.</p></div><span className="gateway-persisted-tag"><KeyRound size={13} /> Acceso administrativo</span></div>
           {!canManage && <p className="gateway-permission-note" data-testid="gateway-agents-readonly">Solo owner/admin puede registrar agentes, rotar credenciales o revocar acceso.</p>}
@@ -916,7 +923,7 @@ export function GuardianActionGatewayPanel({
             <label htmlFor="gateway-agent-name">Nombre visible del agente<input id="gateway-agent-name" value={agentName} maxLength={120} onChange={(event) => setAgentName(event.target.value)} required placeholder="Nombre identificable" data-testid="gateway-agent-name" /></label>
             <button type="submit" disabled={!agentName.trim() || !!agentBusyId} data-testid="gateway-create-agent">{agentBusyId === "create" ? "Registrando…" : "Registrar agente"}</button>
           </form>}
-          <p className="gateway-agent-note">Al crear o rotar, copia la credencial y guárdala en un gestor seguro ahora. No se almacena en el navegador; al cambiar de sección o recargar esta pantalla deja de mostrarse.</p>
+           <p className="gateway-agent-note">Al crear o rotar, copia la credencial y guárdala en un gestor seguro ahora. Solo permanece en memoria de esta pantalla; al cambiar de sección, ocultarla o recargar deja de mostrarse.</p>
           {agentsLoading && <div className="gateway-skeleton" role="status" data-testid="gateway-agents-loading"><span /><span /><span />Cargando agentes registrados…</div>}
           {agentsError && <div className="gateway-rule-error" role="alert" data-testid="gateway-agents-error">{agentsError} <button type="button" className="gateway-quiet-button" onClick={onRetryAgents} data-testid="gateway-retry-agents">Reintentar</button></div>}
           {!agentsLoading && !agentsError && agents.length === 0 && <div className="gateway-empty" data-testid="gateway-empty-agents">No hay agentes registrados en este workspace.</div>}
@@ -930,7 +937,7 @@ export function GuardianActionGatewayPanel({
               {agent.revokedAt && <div><dt>Revocado</dt><dd>{new Date(agent.revokedAt).toLocaleString("es-ES")}</dd></div>}
             </dl>
             {canManage && <div className="gateway-agent-actions">
-              {!agent.revokedAt && <button type="button" className="gateway-quiet-button" disabled={!!agentBusyId} onClick={() => void rotateAgent(agent.id)} data-testid={`gateway-rotate-agent-${agent.id}`}><RotateCw size={14} />Rotar credencial</button>}
+               <button type="button" className="gateway-quiet-button" disabled={!!agentBusyId} onClick={() => void rotateAgent(agent.id)} data-testid={`gateway-rotate-agent-${agent.id}`}><RotateCw size={14} />{agent.revokedAt ? "Crear credencial nueva" : "Rotar credencial"}</button>
               {!agent.revokedAt && <button type="button" className="gateway-reject" disabled={!!agentBusyId} onClick={() => void revokeAgent(agent.id)} data-testid={`gateway-revoke-agent-${agent.id}`}><Trash2 size={14} />Revocar agente</button>}
             </div>}
           </article>)}</div>}

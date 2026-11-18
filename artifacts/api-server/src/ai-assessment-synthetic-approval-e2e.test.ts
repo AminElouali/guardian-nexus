@@ -1131,6 +1131,22 @@ test(
     });
     await t.test("agent credentials are scoped, revocable, renewable and cannot self-approve", async () => {
       const agentsPath = `/api/workspaces/${workspaceA}/agents`;
+      const viewerAgentCreate = await request(
+        workspaceAViewer,
+        agentsPath,
+        "POST",
+        { displayName: "Viewer must not register an agent" },
+      );
+      assert.equal(
+        viewerAgentCreate.status,
+        403,
+        "only a workspace owner or administrator can register an agent",
+      );
+      assert.equal(
+        (await viewerAgentCreate.text()).includes("gnx_agent_v1_"),
+        false,
+        "authorization errors never include a credential",
+      );
       const createdResponse = await request(
         workspaceAAdmin,
         agentsPath,
@@ -1167,6 +1183,96 @@ test(
         !stored.rows.some((row) => row.credential_sha256 === created.credential),
         "the raw credential is not stored",
       );
+      const listedAgentsResponse = await request(workspaceAAdmin, agentsPath);
+      assert.equal(listedAgentsResponse.status, 200);
+      const listedAgentsText = await listedAgentsResponse.text();
+      assert.equal(
+        listedAgentsText.includes(created.credential),
+        false,
+        "the agent list never returns a credential",
+      );
+      assert.equal(
+        listedAgentsText.includes(stored.rows[0]?.credential_sha256 ?? ""),
+        false,
+        "the agent list never returns the stored digest",
+      );
+      assert.equal(
+        (await request(
+          null,
+          agentsPath,
+          "GET",
+          undefined,
+          { authorization: `Bearer ${created.credential}` },
+        )).status,
+        401,
+        "an agent credential cannot use the people-authenticated agent registry",
+      );
+      assert.equal(
+        (await request(
+          null,
+          `${agentsPath}/${created.agent.id}/rotate`,
+          "POST",
+          undefined,
+          { authorization: `Bearer ${created.credential}` },
+        )).status,
+        401,
+        "an agent credential cannot rotate credentials",
+      );
+      assert.equal(
+        (await request(
+          null,
+          agentsPath,
+          "POST",
+          { displayName: "Agent cannot create another agent" },
+          { authorization: `Bearer ${created.credential}` },
+        )).status,
+        401,
+        "an agent credential cannot create or register agents",
+      );
+      assert.equal(
+        (await request(
+          null,
+          `${agentsPath}/${created.agent.id}/revoke`,
+          "POST",
+          undefined,
+          { authorization: `Bearer ${created.credential}` },
+        )).status,
+        401,
+        "an agent credential cannot revoke or manage agents",
+      );
+      assert.equal(
+        (await request(
+          null,
+          `/api/workspaces/${workspaceA}/action-rules/guardian.email.send.external.v1/draft`,
+          "PUT",
+          { rules: [] },
+          { authorization: `Bearer ${created.credential}` },
+        )).status,
+        401,
+        "an agent credential cannot use human rule-management endpoints",
+      );
+      assert.equal(
+        (await request(
+          null,
+          `/api/workspaces/${workspaceA}/action-rules`,
+          "GET",
+          undefined,
+          { authorization: `Bearer ${created.credential}` },
+        )).status,
+        401,
+        "an agent credential cannot read through person-only rule routes",
+      );
+      assert.equal(
+        (await request(
+          null,
+          `/api/workspaces/${workspaceA}/members`,
+          "GET",
+          undefined,
+          { authorization: `Bearer ${created.credential}` },
+        )).status,
+        401,
+        "agent credentials cannot access workspace people endpoints",
+      );
 
       const agentProposalPath = `/api/agent/workspaces/${workspaceA}/action-proposals`;
       const proposalBody = {
@@ -1192,6 +1298,20 @@ test(
         401,
         "an unregistered credential is rejected",
       );
+      const malformedCredentialResponse = await request(
+        null,
+        agentProposalPath,
+        "POST",
+        { ...proposalBody, idempotencyKey: randomUUID() },
+        { authorization: "Bearer malformed" },
+      );
+      assert.equal(malformedCredentialResponse.status, 401);
+      const malformedCredentialText = await malformedCredentialResponse.text();
+      assert.equal(
+        malformedCredentialText,
+        '{"error":"Agent authentication failed"}',
+        "invalid token formats use the same non-enumerating error",
+      );
       assert.equal(
         (await request(
           null,
@@ -1203,6 +1323,34 @@ test(
         401,
         "an agent credential cannot be used in another workspace",
       );
+      for (let attempt = 0; attempt < 7; attempt += 1) {
+        const limitedAttempt = await request(
+          null,
+          `/api/agent/workspaces/${workspaceB}/action-proposals`,
+          "POST",
+          { ...proposalBody, idempotencyKey: randomUUID() },
+          { authorization: "Bearer invalid-agent-token" },
+        );
+        assert.equal(
+          limitedAttempt.status,
+          401,
+          "failed agent authentication attempts remain non-enumerating below the limit",
+        );
+      }
+      const rateLimitedAttempt = await request(
+        null,
+        `/api/agent/workspaces/${workspaceB}/action-proposals`,
+        "POST",
+        { ...proposalBody, idempotencyKey: randomUUID() },
+        { authorization: "Bearer invalid-agent-token" },
+      );
+      assert.equal(rateLimitedAttempt.status, 429);
+      assert.ok(rateLimitedAttempt.headers.get("retry-after"));
+      assert.equal(
+        (await rateLimitedAttempt.text()).includes("invalid-agent-token"),
+        false,
+        "rate limit errors do not echo credentials",
+      );
 
       const proposalResponse = await request(
         null,
@@ -1212,12 +1360,27 @@ test(
         { authorization: `Bearer ${created.credential}` },
       );
       assert.equal(proposalResponse.status, 201);
+      const proposalText = await proposalResponse.text();
+      assert.equal(
+        proposalText.includes(created.credential),
+        false,
+        "proposal responses never echo the bearer credential",
+      );
       const proposal = CreateWorkspaceGenericActionProposalResponse.parse(
-        await proposalResponse.json(),
+        JSON.parse(proposalText),
       );
       assert.equal(proposal.decision, "require_approval");
       assert.equal(proposal.approval?.proposalDetails?.agentId, created.agent.id);
       assert.ok(proposal.approval?.proposalDetails?.ruleVersionId);
+      const afterProposalAgents = await request(workspaceAAdmin, agentsPath);
+      const afterProposalAgentData = await afterProposalAgents.json() as {
+        agents: Array<{ id: string; lastUsedAt: string | null }>;
+      };
+      assert.ok(
+        afterProposalAgentData.agents.find((agent) => agent.id === created.agent.id)
+          ?.lastUsedAt,
+        "a successful proposal updates the agent's last activity",
+      );
       assert.equal(
         (await request(
           workspaceAAdmin,
@@ -1230,6 +1393,67 @@ test(
         )).status,
         403,
         "the agent principal cannot approve its own proposal",
+      );
+      const agentCredentialSelfApproval = await request(
+        null,
+        `/api/workspaces/${workspaceA}/ai-security-assessments/approvals/${proposal.approval!.id}/decision`,
+        "POST",
+        {
+          decision: "approve",
+          proposalBindingSha256: proposal.approval!.proposalBindingSha256,
+        },
+        { authorization: `Bearer ${created.credential}` },
+      );
+      assert.equal(
+        agentCredentialSelfApproval.status,
+        401,
+        "an agent bearer credential cannot use the human approval endpoint",
+      );
+      const secondAgentResponse = await request(
+        workspaceAAdmin,
+        agentsPath,
+        "POST",
+        { displayName: "Second synthetic agent" },
+      );
+      assert.equal(secondAgentResponse.status, 201);
+      const secondAgent = await secondAgentResponse.json() as {
+        agent: { id: string };
+        credential: string;
+      };
+      const otherAgentApprovalAttempt = await request(
+        null,
+        `/api/workspaces/${workspaceA}/ai-security-assessments/approvals/${proposal.approval!.id}/decision`,
+        "POST",
+        {
+          decision: "approve",
+          proposalBindingSha256: proposal.approval!.proposalBindingSha256,
+        },
+        { authorization: `Bearer ${secondAgent.credential}` },
+      );
+      assert.equal(
+        otherAgentApprovalAttempt.status,
+        401,
+        "a different agent cannot approve another agent's proposal",
+      );
+      const agentRejectAttempt = await request(
+        null,
+        `/api/workspaces/${workspaceA}/ai-security-assessments/approvals/${proposal.approval!.id}/decision`,
+        "POST",
+        {
+          decision: "deny",
+          proposalBindingSha256: proposal.approval!.proposalBindingSha256,
+        },
+        { authorization: `Bearer ${created.credential}` },
+      );
+      assert.equal(
+        agentRejectAttempt.status,
+        401,
+        "agent credentials cannot reject proposals either",
+      );
+      assert.equal(
+        (await otherAgentApprovalAttempt.text()).includes(secondAgent.credential),
+        false,
+        "human endpoint errors never echo another agent's credential",
       );
       const agentApprovalResponse = await request(
         workspaceAAdmin2,
@@ -1250,6 +1474,46 @@ test(
       );
       assert.ok(agentDecision.receipt);
       agentApprovalReceipt = agentDecision.receipt;
+      const agentApprovalLedger = await fixturePool.query<{
+        approval_id: string;
+        payload_canonical: string;
+        result: Record<string, unknown>;
+      }>(
+        `SELECT ledger.approval_id, ledger.payload_canonical, job.result
+           FROM public.workspace_approval_ledger AS ledger
+           JOIN public.ai_assessment_approval_requests AS approval
+             ON approval.id::text = ledger.approval_id
+           JOIN public.ai_assessment_jobs AS job
+             ON job.id = approval.job_id
+          WHERE ledger.workspace_id = $1
+            AND ledger.approval_id = $2
+            AND ledger.event_type = 'approval.approved'`,
+        [workspaceA, proposal.approval!.id],
+      );
+      assert.equal(agentApprovalLedger.rowCount, 1);
+      assert.equal(
+        agentApprovalLedger.rows[0]?.approval_id,
+        proposal.approval!.id,
+        "the v1 ledger event points to the approval that carries agent attribution",
+      );
+      assert.equal(
+        (agentApprovalLedger.rows[0]?.result as { agentId?: string } | undefined)
+          ?.agentId,
+        created.agent.id,
+        "the approved job evidence preserves the registered agent identity",
+      );
+      assert.equal(
+        JSON.stringify(agentApprovalLedger.rows).includes(created.credential),
+        false,
+        "ledger history never contains the raw agent credential",
+      );
+      assert.equal(
+        JSON.stringify(agentApprovalLedger.rows).includes(
+          stored.rows[0]?.credential_sha256 ?? "",
+        ),
+        false,
+        "ledger history never contains the credential digest",
+      );
 
       const rotatedResponse = await request(
         workspaceAAdmin,
@@ -1274,6 +1538,18 @@ test(
         )).status,
         401,
         "rotation invalidates the prior credential",
+      );
+      const oldCredentialAfterRotation = await request(
+        null,
+        agentProposalPath,
+        "POST",
+        { ...proposalBody, idempotencyKey: randomUUID() },
+        { authorization: `Bearer ${created.credential}` },
+      );
+      assert.equal(
+        (await oldCredentialAfterRotation.text()).includes(created.credential),
+        false,
+        "authentication errors do not echo a retired credential",
       );
       const rotatedProposalResponse = await request(
         null,
@@ -1340,6 +1616,55 @@ test(
       assert.equal(renewed.agent.credentialVersion, 3);
       assert.equal(renewed.agent.revokedAt, null);
       assert.equal(renewed.shownOnce, true);
+      const finalAgentList = await request(workspaceAAdmin, agentsPath);
+      const finalAgentListText = await finalAgentList.text();
+      assert.equal(finalAgentListText.includes(renewed.credential), false);
+      assert.equal(finalAgentListText.includes(rotated.credential), false);
+      const agentLifecycleAudit = await fixturePool.query<{
+        action: string;
+        metadata: Record<string, unknown>;
+      }>(
+        `SELECT action, metadata
+           FROM public.workspace_audit_events
+          WHERE workspace_id = $1
+            AND resource_type = 'workspace_agent'
+            AND resource_id = $2
+          ORDER BY created_at`,
+        [workspaceA, created.agent.id],
+      );
+      assert.deepEqual(
+        agentLifecycleAudit.rows.map((event) => event.action),
+        [
+          "workspace.agent.created",
+          "workspace.agent.credential_rotated",
+          "workspace.agent.revoked",
+          "workspace.agent.credential_rotated",
+        ],
+        "create, immediate rotation, revocation and reactivation are auditable",
+      );
+      const lifecycleText = JSON.stringify(agentLifecycleAudit.rows);
+      for (const credential of [
+        created.credential,
+        rotated.credential,
+        renewed.credential,
+      ]) {
+        assert.equal(
+          lifecycleText.includes(credential),
+          false,
+          "agent credential values never enter audit metadata",
+        );
+      }
+      for (const credentialHash of [
+        stored.rows[0]!.credential_sha256,
+        createHash("sha256").update(rotated.credential).digest("hex"),
+        createHash("sha256").update(renewed.credential).digest("hex"),
+      ]) {
+        assert.equal(
+          lifecycleText.includes(credentialHash),
+          false,
+          "audit events contain neither raw credentials nor credential digests",
+        );
+      }
     });
     const previewEvidence: Array<{
       profileId: string;
@@ -2242,14 +2567,27 @@ test(
 
     const support = approvals[1]!;
     const supportDecisionPath = `${approvalPath}/${support.approvalId}/decision`;
-    const dashboardDecision = DecideWorkspaceAiAssessmentApprovalResponse.parse(
-      await (
-        await request(workspaceAAdmin, supportDecisionPath, "POST", {
-          decision: "approve",
-          proposalBindingSha256: support.binding,
-        })
-      ).json(),
+    const concurrentRefundApprovals = await Promise.all([
+      request(workspaceAAdmin, supportDecisionPath, "POST", {
+        decision: "approve",
+        proposalBindingSha256: support.binding,
+      }),
+      request(workspaceAAdmin2, supportDecisionPath, "POST", {
+        decision: "approve",
+        proposalBindingSha256: support.binding,
+      }),
+    ]);
+    assert.deepEqual(
+      concurrentRefundApprovals.map((response) => response.status).sort(),
+      [200, 409],
+      "concurrent refund approval requests produce one decision and one rejection",
     );
+    const dashboardDecision =
+      DecideWorkspaceAiAssessmentApprovalResponse.parse(
+        await concurrentRefundApprovals
+          .find((response) => response.status === 200)!
+          .json(),
+      );
     assert.equal(
       dashboardDecision.approval.status,
       "approved",

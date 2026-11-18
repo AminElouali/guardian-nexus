@@ -6,6 +6,7 @@ import {
   type Membership,
   type WorkspaceAgent,
 } from "@workspace/db";
+import { workspaceAgentCredentialHashesMatch } from "./workspace-agent-credentials";
 
 export type TenantTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -106,7 +107,11 @@ export async function withAgentWorkspaceTransaction<T>(
         ),
       )
       .limit(1);
-    if (!agent || agent.revokedAt !== null) {
+    const credentialMatches = workspaceAgentCredentialHashesMatch(
+      agent?.credentialSha256,
+      credentialSha256,
+    );
+    if (!agent || !credentialMatches || agent.revokedAt !== null) {
       return { authorized: false };
     }
 
@@ -127,6 +132,17 @@ export async function withAgentWorkspaceTransaction<T>(
       )
       .limit(1);
     if (!membership) return { authorized: false };
+    await tx
+      .update(workspaceAgentsTable)
+      .set({ lastUsedAt: new Date() })
+      .where(
+        and(
+          eq(workspaceAgentsTable.workspaceId, workspaceId),
+          eq(workspaceAgentsTable.id, agent.id),
+          eq(workspaceAgentsTable.credentialVersion, agent.credentialVersion),
+          eq(workspaceAgentsTable.credentialSha256, credentialSha256),
+        ),
+      );
     return {
       authorized: true,
       agent,

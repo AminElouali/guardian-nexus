@@ -1,6 +1,7 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { Router, type IRouter, type RequestHandler } from "express";
 import {
+  workspaceAuditEventsTable,
   workspaceActionRuleVersionsTable,
   workspaceAgentsTable,
   getStarterWorkspaceRuleTemplates,
@@ -44,6 +45,7 @@ import {
   toWorkspaceActionRuleSimulation,
 } from "../lib/workspace-action-rules";
 import { hashWorkspaceAgentCredential, issueWorkspaceAgentCredential } from "../lib/workspace-agent-credentials";
+import { createWorkspaceAgentAttemptLimiter } from "../lib/workspace-agent-attempt-limiter";
 import {
   createGenericActionProposalInTransaction,
 } from "../lib/generic-action-proposal-service";
@@ -55,6 +57,7 @@ import { formatApproval } from "./ai-assessment-lab";
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const agentAttemptLimiter = createWorkspaceAgentAttemptLimiter();
 
 function publicAgent(agent: typeof workspaceAgentsTable.$inferSelect) {
   return {
@@ -372,7 +375,6 @@ router.post(
       res.status(400).json({ error: "Invalid agent registration request" });
       return;
     }
-    const issued = issueWorkspaceAgentCredential();
     const access = await withWorkspaceUserTransaction(
       req.authUserId!,
       params.data.workspaceId,
@@ -380,6 +382,7 @@ router.post(
         if (!canRunAiEvaluation(membership.role)) {
           return { kind: "forbidden" as const };
         }
+        const issued = issueWorkspaceAgentCredential();
         const [agent] = await tx
           .insert(workspaceAgentsTable)
           .values({
@@ -391,8 +394,21 @@ router.post(
             createdByUserId: req.authUserId!,
           })
           .returning();
+        if (agent) {
+          await tx.insert(workspaceAuditEventsTable).values({
+            workspaceId: params.data.workspaceId,
+            actorUserId: req.authUserId!,
+            action: "workspace.agent.created",
+            resourceType: "workspace_agent",
+            resourceId: agent.id,
+            metadata: {
+              agentId: agent.id,
+              credentialVersion: agent.credentialVersion,
+            },
+          });
+        }
         return agent
-          ? { kind: "created" as const, agent }
+          ? { kind: "created" as const, agent, credential: issued.credential }
           : { kind: "failed" as const };
       },
     );
@@ -411,7 +427,7 @@ router.post(
     res.status(201).json(
       CreateWorkspaceAgentResponse.parse({
         agent: publicAgent(access.value.agent),
-        credential: issued.credential,
+        credential: access.value.credential,
         shownOnce: true,
       }),
     );
@@ -426,7 +442,6 @@ router.post(
       res.status(400).json({ error: "Invalid agent credential rotation request" });
       return;
     }
-    const issued = issueWorkspaceAgentCredential();
     const access = await withWorkspaceUserTransaction(
       req.authUserId!,
       params.data.workspaceId,
@@ -434,6 +449,19 @@ router.post(
         if (!canRunAiEvaluation(membership.role)) {
           return { kind: "forbidden" as const };
         }
+        const [existingAgent] = await tx
+          .select()
+          .from(workspaceAgentsTable)
+          .where(
+            and(
+              eq(workspaceAgentsTable.workspaceId, params.data.workspaceId),
+              eq(workspaceAgentsTable.id, params.data.agentId),
+            ),
+          )
+          .for("update")
+          .limit(1);
+        if (!existingAgent) return { kind: "not_found" as const };
+        const issued = issueWorkspaceAgentCredential();
         const [agent] = await tx
           .update(workspaceAgentsTable)
           .set({
@@ -448,8 +476,22 @@ router.post(
             ),
           )
           .returning();
+        if (agent) {
+          await tx.insert(workspaceAuditEventsTable).values({
+            workspaceId: params.data.workspaceId,
+            actorUserId: req.authUserId!,
+            action: "workspace.agent.credential_rotated",
+            resourceType: "workspace_agent",
+            resourceId: agent.id,
+            metadata: {
+              agentId: agent.id,
+              credentialVersion: agent.credentialVersion,
+              previousCredentialInvalidated: true,
+            },
+          });
+        }
         return agent
-          ? { kind: "rotated" as const, agent }
+          ? { kind: "rotated" as const, agent, credential: issued.credential }
           : { kind: "not_found" as const };
       },
     );
@@ -468,7 +510,7 @@ router.post(
     res.json(
       RotateWorkspaceAgentCredentialResponse.parse({
         agent: publicAgent(access.value.agent),
-        credential: issued.credential,
+        credential: access.value.credential,
         shownOnce: true,
       }),
     );
@@ -501,9 +543,19 @@ router.post(
             ),
           )
           .returning();
-        return agent
-          ? { kind: "revoked" as const, agent }
-          : { kind: "not_found" as const };
+        if (!agent) return { kind: "not_found" as const };
+        await tx.insert(workspaceAuditEventsTable).values({
+          workspaceId: params.data.workspaceId,
+          actorUserId: req.authUserId!,
+          action: "workspace.agent.revoked",
+          resourceType: "workspace_agent",
+          resourceId: agent.id,
+          metadata: {
+            agentId: agent.id,
+            credentialVersion: agent.credentialVersion,
+          },
+        });
+        return { kind: "revoked" as const, agent };
       },
     );
     if (!access.authorized) {
@@ -533,13 +585,23 @@ router.post(
       res.status(400).json({ error: "Invalid agent action proposal request" });
       return;
     }
+    const attempt = agentAttemptLimiter.consume(
+      `${params.data.workspaceId}:${req.ip || "unknown"}`,
+    );
+    if (!attempt.allowed) {
+      res.setHeader("Retry-After", String(attempt.retryAfterSeconds));
+      res.status(429).json({
+        error: "Agent authentication temporarily limited",
+      });
+      return;
+    }
     const authorization = req.get("authorization") ?? "";
     const match = /^Bearer ([^\s]+)$/.exec(authorization);
     const credentialHash = match
       ? hashWorkspaceAgentCredential(match[1])
       : null;
     if (!credentialHash) {
-      res.status(401).json({ error: "Agent authentication required" });
+      res.status(401).json({ error: "Agent authentication failed" });
       return;
     }
     const access = await withAgentWorkspaceTransaction(

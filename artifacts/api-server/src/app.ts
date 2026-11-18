@@ -4,6 +4,7 @@ import { clerkMiddleware } from "@clerk/express";
 import { publishableKeyFromHost } from "@clerk/shared/keys";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { safeHttpRequestLog } from "./lib/safe-http-request-log";
 import {
   AGENT_ACTION_INTENT_ROUTE,
   AI_ASSESSMENT_LAB_JOB_ROUTE,
@@ -25,11 +26,7 @@ app.use(
     logger,
     serializers: {
       req(req) {
-        return {
-          id: req.id,
-          method: req.method,
-          url: req.url?.split("?")[0],
-        };
+        return safeHttpRequestLog(req);
       },
       res(res) {
         return {

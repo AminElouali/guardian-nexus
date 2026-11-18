@@ -82,7 +82,7 @@ test("gateway exposes four accessible navigation sections and their content", ()
     ["rules", "Reglas por plantillas"],
     ["approvals", "Bandeja de aprobaciones"],
     ["activity", "Actividad"],
-    ["connect", "Conectar agente"],
+    ["connect", "Agentes"],
   ] as const) {
     const html = markup({ initialSection: section });
     assert.match(html, new RegExp(`data-testid="gateway-tab-${section}"`));
@@ -319,7 +319,9 @@ test("agent management shows scoped identities and active revocation controls on
   assert.match(administrator, /data-testid="gateway-rotate-agent-agent-1"/);
   assert.match(administrator, /data-testid="gateway-revoke-agent-agent-1"/);
   assert.match(administrator, /data-testid="gateway-agent-status-agent-2">Revocado/);
-  assert.doesNotMatch(administrator, /gateway-rotate-agent-agent-2/);
+  assert.match(administrator, /gateway-rotate-agent-agent-2/);
+  assert.match(administrator, /Último uso/);
+  assert.match(administrator, /solo permanece en memoria de esta pantalla/i);
 
   const member = markup({
     initialSection: "connect",
@@ -329,4 +331,5 @@ test("agent management shows scoped identities and active revocation controls on
   assert.match(member, /Solo owner\/admin puede registrar agentes/);
   assert.doesNotMatch(member, /gateway-create-agent-form/);
   assert.doesNotMatch(member, /gateway-rotate-agent-agent-1/);
+  assert.doesNotMatch(member, /gateway-rotate-agent-agent-2/);
 });
