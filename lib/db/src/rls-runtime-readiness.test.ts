@@ -60,6 +60,7 @@ test("append-only contract contains only runtime inventory tables", () => {
     appendOnlyRlsTableNames.every((name) => expectedRlsTableNames.includes(name)),
   );
   assert.ok(appendOnlyRlsTableNames.includes("workspace_approval_ledger"));
+  assert.ok(appendOnlyRlsTableNames.includes("workspace_action_rule_versions"));
 });
 
 test("append-only privilege query inventory comes from its contract", () => {

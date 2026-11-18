@@ -191,8 +191,8 @@ function makeSnapshot(): RlsCatalogSnapshot {
 }
 
 test("RLS catalog contract is derived from Drizzle, SQL and role bootstrap sources", () => {
-  assert.equal(tableNames.length, 13);
-  assert.equal(contract.policies.length, 36);
+  assert.equal(tableNames.length, 16);
+  assert.equal(contract.policies.length, 45);
   assert.deepEqual(
     contract.policies
       .filter((policy) => policy.tableName === "workspace_approval_ledger")
@@ -364,10 +364,10 @@ test("RLS catalog contract is derived from Drizzle, SQL and role bootstrap sourc
 test("complete synthetic PostgreSQL catalog snapshot satisfies the contract", () => {
   const report = auditRlsCatalog(contract, makeSnapshot());
   assert.equal(report.passed, true, report.violations.join(", "));
-  assert.equal(report.expectedTableCount, 13);
-  assert.equal(report.expectedPolicyCount, 36);
-  assert.equal(report.policies.length, 36);
-  assert.equal(report.tablePrivileges.length, 3 * 13 * 4);
+  assert.equal(report.expectedTableCount, 16);
+  assert.equal(report.expectedPolicyCount, 45);
+  assert.equal(report.policies.length, 45);
+  assert.equal(report.tablePrivileges.length, 3 * 16 * 4);
   assert.equal(report.updateColumns.length, 3 * (6 + 6 + 12));
 });
 
