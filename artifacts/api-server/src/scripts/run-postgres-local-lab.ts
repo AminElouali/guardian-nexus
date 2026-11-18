@@ -125,6 +125,7 @@ type VersionedMigrationAuditReport = {
   migratedCatalog?: CatalogCounts;
   migrationsApplied: string[];
   migration0003Idempotent?: boolean;
+  migration0004Idempotent?: boolean;
   inventoryMatchesDrizzle?: {
     tables: boolean;
     columns: boolean;
@@ -1224,6 +1225,7 @@ async function runVersionedMigrationAudit(input: {
       "0001_workspace_action_rules.sql",
       "0002_workspace_agents.sql",
       "0003_workspace_rule_version_unique_constraint.sql",
+      "0004_align_rule_check_constraint_names.sql",
     ];
     for (const filename of migrationFiles) {
       await applyVersionedMigration(migrationClient, filename);
@@ -1231,6 +1233,10 @@ async function runVersionedMigrationAudit(input: {
       if (filename === "0003_workspace_rule_version_unique_constraint.sql") {
         await applyVersionedMigration(migrationClient, filename);
         report.migration0003Idempotent = true;
+      }
+      if (filename === "0004_align_rule_check_constraint_names.sql") {
+        await applyVersionedMigration(migrationClient, filename);
+        report.migration0004Idempotent = true;
       }
     }
 
@@ -1272,6 +1278,7 @@ async function runVersionedMigrationAudit(input: {
       !grantAudit.passed ||
       !sameValue(report.migratedCatalog, fullCatalogCounts) ||
       !report.migration0003Idempotent ||
+        !report.migration0004Idempotent ||
       auditViolations.length > 0
     ) {
       report.violationCodes.push(...auditViolations);
@@ -1839,7 +1846,7 @@ async function main(): Promise<void> {
     });
     versionedMigrationAudit.status = "passed";
     console.log(
-      `Versioned migration catalog: baseline=${versionedMigrationAudit.baselineActual?.tables}/${versionedMigrationAudit.baselineActual?.columns}/${versionedMigrationAudit.baselineActual?.indexes}/${versionedMigrationAudit.baselineActual?.constraints}/${versionedMigrationAudit.baselineActual?.policies}/${versionedMigrationAudit.baselineActual?.roles} migrated=${versionedMigrationAudit.migratedCatalog?.tables}/${versionedMigrationAudit.migratedCatalog?.columns}/${versionedMigrationAudit.migratedCatalog?.indexes}/${versionedMigrationAudit.migratedCatalog?.constraints}/${versionedMigrationAudit.migratedCatalog?.policies}/${versionedMigrationAudit.migratedCatalog?.roles} migration_0003_idempotent=${versionedMigrationAudit.migration0003Idempotent === true}.`,
+      `Versioned migration catalog: baseline=${versionedMigrationAudit.baselineActual?.tables}/${versionedMigrationAudit.baselineActual?.columns}/${versionedMigrationAudit.baselineActual?.indexes}/${versionedMigrationAudit.baselineActual?.constraints}/${versionedMigrationAudit.baselineActual?.policies}/${versionedMigrationAudit.baselineActual?.roles} migrated=${versionedMigrationAudit.migratedCatalog?.tables}/${versionedMigrationAudit.migratedCatalog?.columns}/${versionedMigrationAudit.migratedCatalog?.indexes}/${versionedMigrationAudit.migratedCatalog?.constraints}/${versionedMigrationAudit.migratedCatalog?.policies}/${versionedMigrationAudit.migratedCatalog?.roles} migration_0003_idempotent=${versionedMigrationAudit.migration0003Idempotent === true} migration_0004_idempotent=${versionedMigrationAudit.migration0004Idempotent === true}.`,
     );
 
     currentStage = "api_unit_tests";
