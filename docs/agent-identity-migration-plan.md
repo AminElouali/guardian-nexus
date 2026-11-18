@@ -6,9 +6,9 @@
 - **IMPLEMENTADO:** autenticación de propuestas de agente con una credencial bearer, validación de workspace, estado de revocación y pertenencia del principal. La evidencia de propuesta registra el UUID del agente y la versión de regla.
 - **IMPLEMENTADO:** rotación (invalida la credencial anterior e incrementa la versión), revocación, bloqueo de credenciales inválidas/revocadas/de otro workspace y prohibición de autoaprobación por el principal humano.
 - **IMPLEMENTADO:** migración SQL versionada `lib/db/migrations/0002_workspace_agents.sql`, validada solo en el PostgreSQL desechable de `lab:local`.
-- **IMPLEMENTADO (repositorio y laboratorio desechable):** `lib/db/migrations/0004_align_rule_check_constraint_names.sql` comprueba y alinea con Drizzle los nombres de dos constraints CHECK y tres claves foráneas heredadas de 0001/0002, sin cambiar filas. La migración y su segunda ejecución pasaron en `lab:local`.
+- **IMPLEMENTADO:** `lib/db/migrations/0004_align_rule_check_constraint_names.sql` comprueba y alinea con Drizzle los nombres de dos constraints CHECK y tres claves foráneas heredadas de 0001/0002, sin cambiar filas. Pasó dos veces en el laboratorio desechable y se aplicó dos veces a Development el 18 de noviembre de 2026; la auditoría posterior confirmó 72/72 nombres de constraints coincidentes y los conteos de filas sin cambios.
 - **IMPLEMENTADO:** tablas de reglas y agentes aplicadas a la base de desarrollo el 18 de noviembre de 2026 y verificadas con 16 tablas, 173 columnas, 44 índices, 72 constraints, 45 policies y 3 roles. Producción no se tocó.
-- **PROYECTADO:** aplicar 0004 a la base de desarrollo; todavía no está aplicada allí. Aplicación equivalente en producción.
+- **PROYECTADO:** aplicación equivalente en producción.
 - **PROYECTADO:** credenciales por acción o scopes configurables por agente, atestación de proceso y aislamiento del agente respecto a su principal humano.
 
 ## Cambios de catálogo
