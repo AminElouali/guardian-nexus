@@ -40,6 +40,14 @@ const allowedKeys = (value: unknown, allowed: readonly string[]): value is Recor
   !Array.isArray(value) &&
   Object.keys(value).every((key) => allowed.includes(key));
 
+function stableWhen(when: WorkspaceActionRule["when"]): string {
+  const normalize = (conditions: WorkspaceRuleCondition[] | undefined) =>
+    [...(conditions ?? [])]
+      .map((condition) => `${condition.field}:${condition.op}:${JSON.stringify(condition.value)}`)
+      .sort();
+  return JSON.stringify({ all: normalize(when.all), any: normalize(when.any) });
+}
+
 function isPrimitive(value: unknown): value is string | number | boolean {
   return (
     typeof value === "string" ||
@@ -86,6 +94,7 @@ export function validateWorkspaceActionRuleDocument(
   if (input.rules.length > 50) return { ok: false, issues: ["too_many_rules"] };
   const issues: string[] = [];
   const rules: WorkspaceActionRule[] = [];
+  const seenIds = new Set<string>();
   input.rules.forEach((candidate, index) => {
     if (!allowedKeys(candidate, ["id", "decision", "when"])) {
       issues.push(`invalid_rule:${index}`);
@@ -94,12 +103,14 @@ export function validateWorkspaceActionRuleDocument(
     if (
       typeof candidate.id !== "string" ||
       !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$/.test(candidate.id) ||
+      seenIds.has(candidate.id) ||
       !["allow", "deny", "require_approval"].includes(String(candidate.decision)) ||
       !allowedKeys(candidate.when, ["all", "any"])
     ) {
       issues.push(`invalid_rule:${index}`);
       return;
     }
+    seenIds.add(candidate.id);
     const when = candidate.when as Record<string, unknown>;
     if (
       (when.all !== undefined &&
@@ -145,13 +156,18 @@ export function getWorkspaceRuleWarnings(
       message: "Esta regla permite la acción sin comprobar ningún campo.",
     });
   }
+  const recipientField = definition.argumentSchema.properties.to
+    ? "to"
+    : definition.argumentSchema.properties.recipient_email
+      ? "recipient_email"
+      : null;
   if (
-    definition.argumentSchema.properties.to &&
+    recipientField &&
     document.rules.some(
       (rule) =>
         rule.decision === "allow" &&
-        !rule.when.all?.some((condition) => condition.field === "to") &&
-        !rule.when.any?.some((condition) => condition.field === "to"),
+        !rule.when.all?.some((condition) => condition.field === recipientField) &&
+        !rule.when.any?.some((condition) => condition.field === recipientField),
     )
   ) {
     warnings.push({
@@ -160,8 +176,8 @@ export function getWorkspaceRuleWarnings(
         .filter(
           (rule) =>
             rule.decision === "allow" &&
-            !rule.when.all?.some((condition) => condition.field === "to") &&
-            !rule.when.any?.some((condition) => condition.field === "to"),
+            !rule.when.all?.some((condition) => condition.field === recipientField) &&
+            !rule.when.any?.some((condition) => condition.field === recipientField),
         )
         .map((rule) => rule.id),
       message: "La regla de correo no limita el destinatario.",
@@ -170,7 +186,7 @@ export function getWorkspaceRuleWarnings(
 
   const byCondition = new Map<string, WorkspaceActionRule[]>();
   for (const rule of document.rules) {
-    const signature = JSON.stringify(rule.when);
+    const signature = stableWhen(rule.when);
     const group = byCondition.get(signature) ?? [];
     group.push(rule);
     byCondition.set(signature, group);

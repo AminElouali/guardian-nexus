@@ -918,6 +918,272 @@ paths:
               schema: { $ref: "#/components/schemas/GenericActionPreviewResponse" }
         "400":
           description: Unknown action or invalid arguments
+  /workspaces/{workspaceId}/action-rules:
+    get:
+      operationId: listWorkspaceActionRules
+      tags: [ai-evaluations]
+      summary: Read saved, versioned action rules for a workspace
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Rule versions, active/draft states, and history
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkspaceActionRulesResponse" }
+        "403":
+          description: Workspace membership required
+  /workspaces/{workspaceId}/action-rules/{actionType}/draft:
+    put:
+      operationId: saveWorkspaceActionRuleDraft
+      tags: [ai-evaluations]
+      summary: Save a new immutable draft rule version
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: actionType
+          required: true
+          schema: { type: string, maxLength: 120 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WorkspaceActionRuleDocumentInput" }
+      responses:
+        "201":
+          description: New draft version recorded in the workspace history
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkspaceActionRuleVersionResponse" }
+        "400":
+          description: Unknown action or invalid rule document
+        "403":
+          description: Workspace owner or administrator required
+  /workspaces/{workspaceId}/action-rules/{actionType}/activate:
+    post:
+      operationId: activateWorkspaceActionRuleDraft
+      tags: [ai-evaluations]
+      summary: Activate the current draft rule version
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: actionType
+          required: true
+          schema: { type: string, maxLength: 120 }
+      responses:
+        "200":
+          description: Activated rule version
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkspaceActionRuleVersionResponse" }
+        "403":
+          description: Workspace owner or administrator required
+        "409":
+          description: No draft version is available
+  /workspaces/{workspaceId}/action-rules/{actionType}/rollback:
+    post:
+      operationId: rollbackWorkspaceActionRule
+      tags: [ai-evaluations]
+      summary: Create and activate a new version copied from history
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: actionType
+          required: true
+          schema: { type: string, maxLength: 120 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WorkspaceActionRuleRollbackInput" }
+      responses:
+        "201":
+          description: New active version copied from the selected historical version
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkspaceActionRuleVersionResponse" }
+        "403":
+          description: Workspace owner or administrator required
+        "404":
+          description: Historical version not found
+  /workspaces/{workspaceId}/action-rules/{actionType}/simulate:
+    post:
+      operationId: simulateWorkspaceActionRule
+      tags: [ai-evaluations]
+      summary: Simulate an example against a saved rule version without persisting it
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: actionType
+          required: true
+          schema: { type: string, maxLength: 120 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WorkspaceActionRuleSimulationInput" }
+      responses:
+        "200":
+          description: In-memory decision with the evaluated version
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkspaceActionRuleSimulationResponse" }
+        "403":
+          description: Workspace membership required
+        "404":
+          description: Rule version not found
+  /workspaces/{workspaceId}/agents:
+    get:
+      operationId: listWorkspaceAgents
+      tags: [ai-evaluations]
+      summary: List agent identities without exposing credentials
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Workspace agent registry
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkspaceAgentsResponse" }
+        "403":
+          description: Workspace owner or administrator required
+    post:
+      operationId: createWorkspaceAgent
+      tags: [ai-evaluations]
+      summary: Register an agent and return its credential once
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WorkspaceAgentInput" }
+      responses:
+        "201":
+          description: Agent created; credential is shown only in this response
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkspaceAgentCredentialResponse" }
+        "403":
+          description: Workspace owner or administrator required
+  /workspaces/{workspaceId}/agents/{agentId}/rotate:
+    post:
+      operationId: rotateWorkspaceAgentCredential
+      tags: [ai-evaluations]
+      summary: Revoke the prior credential and return a replacement once
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: agentId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Replaced credential, returned only in this response
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkspaceAgentCredentialResponse" }
+        "403":
+          description: Workspace owner or administrator required
+        "404":
+          description: Active agent not found
+  /workspaces/{workspaceId}/agents/{agentId}/revoke:
+    post:
+      operationId: revokeWorkspaceAgent
+      tags: [ai-evaluations]
+      summary: Revoke an agent credential
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: agentId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Agent credential revoked
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkspaceAgentResponse" }
+        "403":
+          description: Workspace owner or administrator required
+        "404":
+          description: Active agent not found
+  /agent/workspaces/{workspaceId}/action-proposals:
+    post:
+      operationId: createWorkspaceAgentActionProposal
+      tags: [ai-evaluations]
+      summary: Submit an action proposal using a registered agent credential
+      description: >-
+        The agent credential is checked against a workspace-scoped hash.
+        Proposals are attributed to the registered agent and never execute a
+        tool. Human approval remains separate, and the agent principal cannot
+        approve its own request.
+      security: [{ agentBearerAuth: [] }]
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GenericActionProposalRequest" }
+      responses:
+        "200":
+          description: Recorded terminal policy decision
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GenericActionProposalResponse" }
+        "201":
+          description: Independent human approval requested; no tool execution
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GenericActionProposalResponse" }
+        "400":
+          description: Invalid action proposal
+        "401":
+          description: Invalid, revoked, or cross-workspace agent credential
+        "409":
+          description: Idempotency key conflicts with an earlier request
+        "503":
+          description: Proposal persistence unavailable
         "403":
           description: Workspace membership required
   /workspaces/{workspaceId}/ai-security-assessments/qwen-provider/status:
@@ -1615,8 +1881,9 @@ components:
         summary: { type: string }
         messagePreview: { type: string }
         appliedRule: { type: string }
+        ruleVersionId: { type: ["string", "null"], format: uuid }
         synthetic: { type: boolean, const: true }
-      required: [agentId, actionType, summary, messagePreview, appliedRule, synthetic]
+      required: [agentId, actionType, summary, messagePreview, appliedRule, ruleVersionId, synthetic]
     GenericActionProposalRequest:
       type: object
       additionalProperties: false
@@ -1707,6 +1974,186 @@ components:
         decision: { type: string, enum: [allow, deny, require_approval] }
         approver: { type: string }
       required: [condition, decision, approver]
+    WorkspaceRuleCondition:
+      type: object
+      additionalProperties: false
+      properties:
+        field: { type: string, maxLength: 80 }
+        op: { type: string, enum: [eq, gt, lte] }
+        value:
+          oneOf:
+            - { type: string, maxLength: 254 }
+            - { type: integer, minimum: 0, maximum: 1000000 }
+            - { type: boolean }
+      required: [field, op, value]
+    WorkspaceActionRule:
+      type: object
+      additionalProperties: false
+      properties:
+        id: { type: string, minLength: 1, maxLength: 120 }
+        decision: { type: string, enum: [allow, deny, require_approval] }
+        when:
+          type: object
+          additionalProperties: false
+          properties:
+            all:
+              type: array
+              maxItems: 8
+              items: { $ref: "#/components/schemas/WorkspaceRuleCondition" }
+            any:
+              type: array
+              maxItems: 8
+              items: { $ref: "#/components/schemas/WorkspaceRuleCondition" }
+          minProperties: 0
+      required: [id, decision, when]
+    WorkspaceActionRuleDocumentInput:
+      type: object
+      additionalProperties: false
+      properties:
+        version: { type: integer, const: 1 }
+        rules:
+          type: array
+          maxItems: 50
+          items: { $ref: "#/components/schemas/WorkspaceActionRule" }
+      required: [version, rules]
+    WorkspaceActionRuleVersion:
+      type: object
+      additionalProperties: false
+      properties:
+        id: { type: string, format: uuid }
+        version: { type: integer, minimum: 1 }
+        rules:
+          type: array
+          items: { $ref: "#/components/schemas/WorkspaceActionRule" }
+        createdByUserId: { type: string }
+        createdAt: { type: string, format: date-time }
+        isActive: { type: boolean }
+        isDraft: { type: boolean }
+      required: [id, version, rules, createdByUserId, createdAt, isActive, isDraft]
+    WorkspaceActionRuleState:
+      type: object
+      additionalProperties: false
+      properties:
+        actionType: { type: string }
+        label: { type: string }
+        description: { type: string }
+        riskClass: { type: string, enum: [low, medium, high] }
+        riskCategories:
+          type: array
+          items:
+            type: string
+            enum: [money, internal_email, external_email, customer_data, infrastructure]
+        activeVersionId: { type: ["string", "null"], format: uuid }
+        draftVersionId: { type: ["string", "null"], format: uuid }
+        activeRules:
+          type: array
+          items: { $ref: "#/components/schemas/WorkspaceActionRule" }
+        draftRules:
+          type: array
+          items: { $ref: "#/components/schemas/WorkspaceActionRule" }
+        history:
+          type: array
+          items: { $ref: "#/components/schemas/WorkspaceActionRuleVersion" }
+        warnings:
+          type: array
+          items: { type: string }
+      required: [actionType, label, description, riskClass, riskCategories, activeVersionId, draftVersionId, activeRules, draftRules, history, warnings]
+    WorkspaceActionRulesResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        actions:
+          type: array
+          items: { $ref: "#/components/schemas/WorkspaceActionRuleState" }
+      required: [actions]
+    WorkspaceActionRuleVersionResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        actionType: { type: string }
+        versionId: { type: string, format: uuid }
+        version: { type: integer, minimum: 1 }
+        rules:
+          type: array
+          items: { $ref: "#/components/schemas/WorkspaceActionRule" }
+        createdAt: { type: string, format: date-time }
+        active: { type: boolean }
+      required: [actionType, versionId, version, rules, createdAt, active]
+    WorkspaceActionRuleRollbackInput:
+      type: object
+      additionalProperties: false
+      properties:
+        version: { type: integer, minimum: 1 }
+      required: [version]
+    WorkspaceActionRuleSimulationInput:
+      type: object
+      additionalProperties: false
+      properties:
+        versionId: { type: string, format: uuid }
+        arguments:
+          type: object
+          additionalProperties:
+            oneOf:
+              - { type: string, maxLength: 5000 }
+              - { type: integer, minimum: 0, maximum: 1000000 }
+              - { type: boolean }
+      required: [arguments]
+    WorkspaceActionRuleSimulationResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        actionType: { type: string }
+        decision: { type: string, enum: [allow, deny, require_approval] }
+        reasonCode: { type: string }
+        ruleId: { type: ["string", "null"] }
+        ruleVersionId: { type: ["string", "null"], format: uuid }
+        matched: { type: boolean }
+        issues:
+          type: array
+          items: { type: string }
+        persisted: { type: boolean, const: false }
+        dispatched: { type: boolean, const: false }
+      required: [actionType, decision, reasonCode, ruleId, ruleVersionId, matched, issues, persisted, dispatched]
+    WorkspaceAgentInput:
+      type: object
+      additionalProperties: false
+      properties:
+        displayName: { type: string, minLength: 1, maxLength: 120 }
+      required: [displayName]
+    WorkspaceAgent:
+      type: object
+      additionalProperties: false
+      properties:
+        id: { type: string, format: uuid }
+        displayName: { type: string }
+        principalUserId: { type: string }
+        credentialVersion: { type: integer, minimum: 1 }
+        createdAt: { type: string, format: date-time }
+        revokedAt: { type: ["string", "null"], format: date-time }
+        lastUsedAt: { type: ["string", "null"], format: date-time }
+      required: [id, displayName, principalUserId, credentialVersion, createdAt, revokedAt, lastUsedAt]
+    WorkspaceAgentsResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        agents:
+          type: array
+          items: { $ref: "#/components/schemas/WorkspaceAgent" }
+      required: [agents]
+    WorkspaceAgentCredentialResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        agent: { $ref: "#/components/schemas/WorkspaceAgent" }
+        credential: { type: string, minLength: 40, maxLength: 100 }
+        shownOnce: { type: boolean, const: true }
+      required: [agent, credential, shownOnce]
+    WorkspaceAgentResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        agent: { $ref: "#/components/schemas/WorkspaceAgent" }
+      required: [agent]
     GenericActionProposalResponse:
       type: object
       additionalProperties: false
@@ -1716,6 +2163,7 @@ components:
         actionType: { type: string }
         actionSha256: { type: ["string", "null"], pattern: "^[a-f0-9]{64}$" }
         ruleId: { type: ["string", "null"] }
+        ruleVersionId: { type: ["string", "null"], format: uuid }
         approval:
           oneOf:
             - { $ref: "#/components/schemas/AiAssessmentApproval" }
@@ -1723,18 +2171,18 @@ components:
         execution: { type: string, const: not_performed }
         externalSideEffect: { type: boolean, const: false }
         idempotent: { type: boolean }
-      required: [decision, reasonCode, actionType, actionSha256, ruleId, approval, execution, externalSideEffect, idempotent]
+      required: [decision, reasonCode, actionType, actionSha256, ruleId, ruleVersionId, approval, execution, externalSideEffect, idempotent]
     GenericActionGatewayEvidence:
       type: object
       additionalProperties: false
       properties:
         engine: { type: string, const: guardian_action_gateway }
-        engineVersion: { type: string, const: guardian-action-catalog-v1 }
+        engineVersion: { type: string, maxLength: 80 }
         profileId: { type: string, enum: [guardian-agent-lab-email-v1, guardian-agent-lab-customer-service-v1] }
         executionMode: { type: string, const: deterministic_fixture }
         modelInference: { type: boolean, const: false }
         toolCallOrigin: { type: string, const: controlled_fixture_not_llm }
-        evidenceVersion: { type: integer, const: 1 }
+        evidenceVersion: { type: integer, enum: [1, 2] }
         actionType: { type: string, maxLength: 120 }
         arguments:
           type: object
@@ -1748,7 +2196,13 @@ components:
         proposalSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
         ruleId: { type: string, maxLength: 120 }
         decision: { type: string, const: require_approval }
-        agentId: { type: string, enum: [agent-fixture-support-demo-v1, agent-fixture-email-demo-v1] }
+        agentId: { type: string, minLength: 1, maxLength: 120 }
+        ruleVersionId: { type: ["string", "null"], format: uuid }
+        ruleDocumentSha256: { type: ["string", "null"], pattern: "^[a-f0-9]{64}$" }
+        ruleDocument:
+          oneOf:
+            - { $ref: "#/components/schemas/WorkspaceActionRuleDocumentInput" }
+            - { type: "null" }
         synthetic: { type: boolean, const: true }
         summary: { type: string, maxLength: 500 }
         messagePreview: { type: string, maxLength: 500 }
@@ -3382,6 +3836,9 @@ components:
       required: [engine, version, suiteVersion, agentVersion, policyVersion, oracleVersion, mode, objectiveBitOrder, scenarios, sampleCount, seedCount, splitSampleCounts, metrics, toolCallSummary, anomalyCount, selfChecks, caseEvidence, suiteEvidenceSha256, startedAt, completedAt, durationMs, limits, syntheticOnly, rawPromptsStored, rawResponsesStored, externalCalls, customerDataUsed, interpretation]
   securitySchemes:
     bearerAuth:
+      type: http
+      scheme: bearer
+    agentBearerAuth:
       type: http
       scheme: bearer
 

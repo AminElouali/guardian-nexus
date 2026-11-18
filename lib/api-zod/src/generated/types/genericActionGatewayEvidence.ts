@@ -5,18 +5,20 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { GenericActionGatewayEvidenceAgentId } from './genericActionGatewayEvidenceAgentId';
 import type { GenericActionGatewayEvidenceArguments } from './genericActionGatewayEvidenceArguments';
+import type { GenericActionGatewayEvidenceEvidenceVersion } from './genericActionGatewayEvidenceEvidenceVersion';
 import type { GenericActionGatewayEvidenceProfileId } from './genericActionGatewayEvidenceProfileId';
+import type { WorkspaceActionRuleDocumentInput } from './workspaceActionRuleDocumentInput';
 
 export interface GenericActionGatewayEvidence {
   engine: 'guardian_action_gateway';
-  engineVersion: 'guardian-action-catalog-v1';
+  /** @maxLength 80 */
+  engineVersion: string;
   profileId: GenericActionGatewayEvidenceProfileId;
   executionMode: 'deterministic_fixture';
   modelInference: false;
   toolCallOrigin: 'controlled_fixture_not_llm';
-  evidenceVersion: 1;
+  evidenceVersion: GenericActionGatewayEvidenceEvidenceVersion;
   /** @maxLength 120 */
   actionType: string;
   arguments: GenericActionGatewayEvidenceArguments;
@@ -29,7 +31,19 @@ export interface GenericActionGatewayEvidence {
   /** @maxLength 120 */
   ruleId: string;
   decision: 'require_approval';
-  agentId: GenericActionGatewayEvidenceAgentId;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  agentId: string;
+  /** @nullable */
+  ruleVersionId?: string | null;
+  /**
+     * @nullable
+     * @pattern ^[a-f0-9]{64}$
+     */
+  ruleDocumentSha256?: string | null;
+  ruleDocument?: WorkspaceActionRuleDocumentInput | null;
   synthetic: true;
   /** @maxLength 500 */
   summary: string;

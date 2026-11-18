@@ -2255,6 +2255,8 @@ export const listWorkspaceAiAssessmentLabJobsResponseResultSevenGuardianPolicyEv
 
 export const listWorkspaceAiAssessmentLabJobsResponseResultSevenGuardianPolicyEvidenceEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const listWorkspaceAiAssessmentLabJobsResponseResultSevenEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const listWorkspaceAiAssessmentLabJobsResponseResultEightEngineVersionMax = 80;
+
 export const listWorkspaceAiAssessmentLabJobsResponseResultEightActionTypeMax = 120;
 
 export const listWorkspaceAiAssessmentLabJobsResponseResultEightArgumentsOneMax = 5000;
@@ -2266,6 +2268,31 @@ export const listWorkspaceAiAssessmentLabJobsResponseResultEightActionSha256RegE
 export const listWorkspaceAiAssessmentLabJobsResponseResultEightArgumentsSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const listWorkspaceAiAssessmentLabJobsResponseResultEightProposalSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const listWorkspaceAiAssessmentLabJobsResponseResultEightRuleIdMax = 120;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultEightAgentIdMax = 120;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemIdMax = 120;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAllItemFieldMax = 80;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueOneMax = 254;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueTwoMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueTwoMax = 1000000;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAllMax = 8;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAnyItemFieldMax = 80;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueOneMax = 254;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueTwoMin = 0;
+export const listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueTwoMax = 1000000;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAnyMax = 8;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesMax = 50;
 
 export const listWorkspaceAiAssessmentLabJobsResponseResultEightSummaryMax = 500;
 
@@ -3896,12 +3923,12 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "evidenceSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultSevenEvidenceSha256RegExp)
 }),zod.object({
   "engine": zod.literal("guardian_action_gateway"),
-  "engineVersion": zod.literal("guardian-action-catalog-v1"),
+  "engineVersion": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultEightEngineVersionMax),
   "profileId": zod.enum(['guardian-agent-lab-email-v1', 'guardian-agent-lab-customer-service-v1']),
   "executionMode": zod.literal("deterministic_fixture"),
   "modelInference": zod.literal(false),
   "toolCallOrigin": zod.literal("controlled_fixture_not_llm"),
-  "evidenceVersion": zod.literal(1),
+  "evidenceVersion": zod.union([zod.literal(1),zod.literal(2)]),
   "actionType": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultEightActionTypeMax),
   "arguments": zod.record(zod.string(), zod.union([zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultEightArgumentsOneMax),zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultEightArgumentsTwoMin).max(listWorkspaceAiAssessmentLabJobsResponseResultEightArgumentsTwoMax),zod.boolean()])),
   "actionSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultEightActionSha256RegExp),
@@ -3909,7 +3936,28 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "proposalSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultEightProposalSha256RegExp),
   "ruleId": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultEightRuleIdMax),
   "decision": zod.literal("require_approval"),
-  "agentId": zod.enum(['agent-fixture-support-demo-v1', 'agent-fixture-email-demo-v1']),
+  "agentId": zod.string().min(1).max(listWorkspaceAiAssessmentLabJobsResponseResultEightAgentIdMax),
+  "ruleVersionId": zod.uuid().nullish(),
+  "ruleDocumentSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentSha256RegExp).nullish(),
+  "ruleDocument": zod.union([zod.object({
+  "version": zod.literal(1),
+  "rules": zod.array(zod.object({
+  "id": zod.string().min(1).max(listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemIdMax),
+  "decision": zod.enum(['allow', 'deny', 'require_approval']),
+  "when": zod.object({
+  "all": zod.array(zod.object({
+  "field": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAllItemFieldMax),
+  "op": zod.enum(['eq', 'gt', 'lte']),
+  "value": zod.union([zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueOneMax),zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueTwoMin).max(listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueTwoMax),zod.boolean()])
+})).max(listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAllMax).optional(),
+  "any": zod.array(zod.object({
+  "field": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAnyItemFieldMax),
+  "op": zod.enum(['eq', 'gt', 'lte']),
+  "value": zod.union([zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueOneMax),zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueTwoMin).max(listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueTwoMax),zod.boolean()])
+})).max(listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAnyMax).optional()
+})
+})).max(listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesMax)
+}),zod.null()]).optional(),
   "synthetic": zod.literal(true),
   "summary": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultEightSummaryMax),
   "messagePreview": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultEightMessagePreviewMax),
@@ -5163,6 +5211,8 @@ export const createWorkspaceAiAssessmentLabJobResponseResultSevenGuardianPolicyE
 
 export const createWorkspaceAiAssessmentLabJobResponseResultSevenGuardianPolicyEvidenceEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const createWorkspaceAiAssessmentLabJobResponseResultSevenEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceAiAssessmentLabJobResponseResultEightEngineVersionMax = 80;
+
 export const createWorkspaceAiAssessmentLabJobResponseResultEightActionTypeMax = 120;
 
 export const createWorkspaceAiAssessmentLabJobResponseResultEightArgumentsOneMax = 5000;
@@ -5174,6 +5224,31 @@ export const createWorkspaceAiAssessmentLabJobResponseResultEightActionSha256Reg
 export const createWorkspaceAiAssessmentLabJobResponseResultEightArgumentsSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const createWorkspaceAiAssessmentLabJobResponseResultEightProposalSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const createWorkspaceAiAssessmentLabJobResponseResultEightRuleIdMax = 120;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultEightAgentIdMax = 120;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemIdMax = 120;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemFieldMax = 80;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueOneMax = 254;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueTwoMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueTwoMax = 1000000;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllMax = 8;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemFieldMax = 80;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueOneMax = 254;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueTwoMin = 0;
+export const createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueTwoMax = 1000000;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyMax = 8;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesMax = 50;
 
 export const createWorkspaceAiAssessmentLabJobResponseResultEightSummaryMax = 500;
 
@@ -6804,12 +6879,12 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "evidenceSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultSevenEvidenceSha256RegExp)
 }),zod.object({
   "engine": zod.literal("guardian_action_gateway"),
-  "engineVersion": zod.literal("guardian-action-catalog-v1"),
+  "engineVersion": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultEightEngineVersionMax),
   "profileId": zod.enum(['guardian-agent-lab-email-v1', 'guardian-agent-lab-customer-service-v1']),
   "executionMode": zod.literal("deterministic_fixture"),
   "modelInference": zod.literal(false),
   "toolCallOrigin": zod.literal("controlled_fixture_not_llm"),
-  "evidenceVersion": zod.literal(1),
+  "evidenceVersion": zod.union([zod.literal(1),zod.literal(2)]),
   "actionType": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultEightActionTypeMax),
   "arguments": zod.record(zod.string(), zod.union([zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultEightArgumentsOneMax),zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultEightArgumentsTwoMin).max(createWorkspaceAiAssessmentLabJobResponseResultEightArgumentsTwoMax),zod.boolean()])),
   "actionSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultEightActionSha256RegExp),
@@ -6817,7 +6892,28 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "proposalSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultEightProposalSha256RegExp),
   "ruleId": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultEightRuleIdMax),
   "decision": zod.literal("require_approval"),
-  "agentId": zod.enum(['agent-fixture-support-demo-v1', 'agent-fixture-email-demo-v1']),
+  "agentId": zod.string().min(1).max(createWorkspaceAiAssessmentLabJobResponseResultEightAgentIdMax),
+  "ruleVersionId": zod.uuid().nullish(),
+  "ruleDocumentSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentSha256RegExp).nullish(),
+  "ruleDocument": zod.union([zod.object({
+  "version": zod.literal(1),
+  "rules": zod.array(zod.object({
+  "id": zod.string().min(1).max(createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemIdMax),
+  "decision": zod.enum(['allow', 'deny', 'require_approval']),
+  "when": zod.object({
+  "all": zod.array(zod.object({
+  "field": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemFieldMax),
+  "op": zod.enum(['eq', 'gt', 'lte']),
+  "value": zod.union([zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueOneMax),zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueTwoMin).max(createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueTwoMax),zod.boolean()])
+})).max(createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllMax).optional(),
+  "any": zod.array(zod.object({
+  "field": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemFieldMax),
+  "op": zod.enum(['eq', 'gt', 'lte']),
+  "value": zod.union([zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueOneMax),zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueTwoMin).max(createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueTwoMax),zod.boolean()])
+})).max(createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyMax).optional()
+})
+})).max(createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesMax)
+}),zod.null()]).optional(),
   "synthetic": zod.literal(true),
   "summary": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultEightSummaryMax),
   "messagePreview": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultEightMessagePreviewMax),
@@ -8060,6 +8156,8 @@ export const getWorkspaceAiAssessmentLabJobResponseResultSevenGuardianPolicyEvid
 
 export const getWorkspaceAiAssessmentLabJobResponseResultSevenGuardianPolicyEvidenceEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const getWorkspaceAiAssessmentLabJobResponseResultSevenEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const getWorkspaceAiAssessmentLabJobResponseResultEightEngineVersionMax = 80;
+
 export const getWorkspaceAiAssessmentLabJobResponseResultEightActionTypeMax = 120;
 
 export const getWorkspaceAiAssessmentLabJobResponseResultEightArgumentsOneMax = 5000;
@@ -8071,6 +8169,31 @@ export const getWorkspaceAiAssessmentLabJobResponseResultEightActionSha256RegExp
 export const getWorkspaceAiAssessmentLabJobResponseResultEightArgumentsSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const getWorkspaceAiAssessmentLabJobResponseResultEightProposalSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const getWorkspaceAiAssessmentLabJobResponseResultEightRuleIdMax = 120;
+
+export const getWorkspaceAiAssessmentLabJobResponseResultEightAgentIdMax = 120;
+
+export const getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemIdMax = 120;
+
+export const getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemFieldMax = 80;
+
+export const getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueOneMax = 254;
+
+export const getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueTwoMin = 0;
+export const getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueTwoMax = 1000000;
+
+export const getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllMax = 8;
+
+export const getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemFieldMax = 80;
+
+export const getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueOneMax = 254;
+
+export const getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueTwoMin = 0;
+export const getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueTwoMax = 1000000;
+
+export const getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyMax = 8;
+
+export const getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesMax = 50;
 
 export const getWorkspaceAiAssessmentLabJobResponseResultEightSummaryMax = 500;
 
@@ -9701,12 +9824,12 @@ export const GetWorkspaceAiAssessmentLabJobResponse = zod.object({
   "evidenceSha256": zod.string().regex(getWorkspaceAiAssessmentLabJobResponseResultSevenEvidenceSha256RegExp)
 }),zod.object({
   "engine": zod.literal("guardian_action_gateway"),
-  "engineVersion": zod.literal("guardian-action-catalog-v1"),
+  "engineVersion": zod.string().max(getWorkspaceAiAssessmentLabJobResponseResultEightEngineVersionMax),
   "profileId": zod.enum(['guardian-agent-lab-email-v1', 'guardian-agent-lab-customer-service-v1']),
   "executionMode": zod.literal("deterministic_fixture"),
   "modelInference": zod.literal(false),
   "toolCallOrigin": zod.literal("controlled_fixture_not_llm"),
-  "evidenceVersion": zod.literal(1),
+  "evidenceVersion": zod.union([zod.literal(1),zod.literal(2)]),
   "actionType": zod.string().max(getWorkspaceAiAssessmentLabJobResponseResultEightActionTypeMax),
   "arguments": zod.record(zod.string(), zod.union([zod.string().max(getWorkspaceAiAssessmentLabJobResponseResultEightArgumentsOneMax),zod.int().min(getWorkspaceAiAssessmentLabJobResponseResultEightArgumentsTwoMin).max(getWorkspaceAiAssessmentLabJobResponseResultEightArgumentsTwoMax),zod.boolean()])),
   "actionSha256": zod.string().regex(getWorkspaceAiAssessmentLabJobResponseResultEightActionSha256RegExp),
@@ -9714,7 +9837,28 @@ export const GetWorkspaceAiAssessmentLabJobResponse = zod.object({
   "proposalSha256": zod.string().regex(getWorkspaceAiAssessmentLabJobResponseResultEightProposalSha256RegExp),
   "ruleId": zod.string().max(getWorkspaceAiAssessmentLabJobResponseResultEightRuleIdMax),
   "decision": zod.literal("require_approval"),
-  "agentId": zod.enum(['agent-fixture-support-demo-v1', 'agent-fixture-email-demo-v1']),
+  "agentId": zod.string().min(1).max(getWorkspaceAiAssessmentLabJobResponseResultEightAgentIdMax),
+  "ruleVersionId": zod.uuid().nullish(),
+  "ruleDocumentSha256": zod.string().regex(getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentSha256RegExp).nullish(),
+  "ruleDocument": zod.union([zod.object({
+  "version": zod.literal(1),
+  "rules": zod.array(zod.object({
+  "id": zod.string().min(1).max(getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemIdMax),
+  "decision": zod.enum(['allow', 'deny', 'require_approval']),
+  "when": zod.object({
+  "all": zod.array(zod.object({
+  "field": zod.string().max(getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemFieldMax),
+  "op": zod.enum(['eq', 'gt', 'lte']),
+  "value": zod.union([zod.string().max(getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueOneMax),zod.int().min(getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueTwoMin).max(getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueTwoMax),zod.boolean()])
+})).max(getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllMax).optional(),
+  "any": zod.array(zod.object({
+  "field": zod.string().max(getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemFieldMax),
+  "op": zod.enum(['eq', 'gt', 'lte']),
+  "value": zod.union([zod.string().max(getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueOneMax),zod.int().min(getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueTwoMin).max(getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueTwoMax),zod.boolean()])
+})).max(getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyMax).optional()
+})
+})).max(getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesMax)
+}),zod.null()]).optional(),
   "synthetic": zod.literal(true),
   "summary": zod.string().max(getWorkspaceAiAssessmentLabJobResponseResultEightSummaryMax),
   "messagePreview": zod.string().max(getWorkspaceAiAssessmentLabJobResponseResultEightMessagePreviewMax),
@@ -11023,6 +11167,8 @@ export const retryWorkspaceAiAssessmentLabJobResponseResultSevenGuardianPolicyEv
 
 export const retryWorkspaceAiAssessmentLabJobResponseResultSevenGuardianPolicyEvidenceEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const retryWorkspaceAiAssessmentLabJobResponseResultSevenEvidenceSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const retryWorkspaceAiAssessmentLabJobResponseResultEightEngineVersionMax = 80;
+
 export const retryWorkspaceAiAssessmentLabJobResponseResultEightActionTypeMax = 120;
 
 export const retryWorkspaceAiAssessmentLabJobResponseResultEightArgumentsOneMax = 5000;
@@ -11034,6 +11180,31 @@ export const retryWorkspaceAiAssessmentLabJobResponseResultEightActionSha256RegE
 export const retryWorkspaceAiAssessmentLabJobResponseResultEightArgumentsSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const retryWorkspaceAiAssessmentLabJobResponseResultEightProposalSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const retryWorkspaceAiAssessmentLabJobResponseResultEightRuleIdMax = 120;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultEightAgentIdMax = 120;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemIdMax = 120;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemFieldMax = 80;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueOneMax = 254;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueTwoMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueTwoMax = 1000000;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllMax = 8;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemFieldMax = 80;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueOneMax = 254;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueTwoMin = 0;
+export const retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueTwoMax = 1000000;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyMax = 8;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesMax = 50;
 
 export const retryWorkspaceAiAssessmentLabJobResponseResultEightSummaryMax = 500;
 
@@ -12664,12 +12835,12 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "evidenceSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultSevenEvidenceSha256RegExp)
 }),zod.object({
   "engine": zod.literal("guardian_action_gateway"),
-  "engineVersion": zod.literal("guardian-action-catalog-v1"),
+  "engineVersion": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultEightEngineVersionMax),
   "profileId": zod.enum(['guardian-agent-lab-email-v1', 'guardian-agent-lab-customer-service-v1']),
   "executionMode": zod.literal("deterministic_fixture"),
   "modelInference": zod.literal(false),
   "toolCallOrigin": zod.literal("controlled_fixture_not_llm"),
-  "evidenceVersion": zod.literal(1),
+  "evidenceVersion": zod.union([zod.literal(1),zod.literal(2)]),
   "actionType": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultEightActionTypeMax),
   "arguments": zod.record(zod.string(), zod.union([zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultEightArgumentsOneMax),zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultEightArgumentsTwoMin).max(retryWorkspaceAiAssessmentLabJobResponseResultEightArgumentsTwoMax),zod.boolean()])),
   "actionSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultEightActionSha256RegExp),
@@ -12677,7 +12848,28 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "proposalSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultEightProposalSha256RegExp),
   "ruleId": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultEightRuleIdMax),
   "decision": zod.literal("require_approval"),
-  "agentId": zod.enum(['agent-fixture-support-demo-v1', 'agent-fixture-email-demo-v1']),
+  "agentId": zod.string().min(1).max(retryWorkspaceAiAssessmentLabJobResponseResultEightAgentIdMax),
+  "ruleVersionId": zod.uuid().nullish(),
+  "ruleDocumentSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentSha256RegExp).nullish(),
+  "ruleDocument": zod.union([zod.object({
+  "version": zod.literal(1),
+  "rules": zod.array(zod.object({
+  "id": zod.string().min(1).max(retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemIdMax),
+  "decision": zod.enum(['allow', 'deny', 'require_approval']),
+  "when": zod.object({
+  "all": zod.array(zod.object({
+  "field": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemFieldMax),
+  "op": zod.enum(['eq', 'gt', 'lte']),
+  "value": zod.union([zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueOneMax),zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueTwoMin).max(retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueTwoMax),zod.boolean()])
+})).max(retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllMax).optional(),
+  "any": zod.array(zod.object({
+  "field": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemFieldMax),
+  "op": zod.enum(['eq', 'gt', 'lte']),
+  "value": zod.union([zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueOneMax),zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueTwoMin).max(retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueTwoMax),zod.boolean()])
+})).max(retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyMax).optional()
+})
+})).max(retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesMax)
+}),zod.null()]).optional(),
   "synthetic": zod.literal(true),
   "summary": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultEightSummaryMax),
   "messagePreview": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultEightMessagePreviewMax),
@@ -12739,6 +12931,7 @@ export const ListWorkspaceAiAssessmentApprovalsResponse = zod.object({
   "summary": zod.string(),
   "messagePreview": zod.string(),
   "appliedRule": zod.string(),
+  "ruleVersionId": zod.uuid().nullable(),
   "synthetic": zod.literal(true)
 }),zod.null()]),
   "createdAt": zod.coerce.date()
@@ -12815,6 +13008,7 @@ export const CreateWorkspaceSyntheticRefundProposalResponse = zod.object({
   "summary": zod.string(),
   "messagePreview": zod.string(),
   "appliedRule": zod.string(),
+  "ruleVersionId": zod.uuid().nullable(),
   "synthetic": zod.literal(true)
 }),zod.null()]),
   "createdAt": zod.coerce.date()
@@ -12875,6 +13069,7 @@ export const CreateWorkspaceGenericActionProposalResponse = zod.object({
   "actionType": zod.string(),
   "actionSha256": zod.string().regex(createWorkspaceGenericActionProposalResponseActionSha256RegExp).nullable(),
   "ruleId": zod.string().nullable(),
+  "ruleVersionId": zod.uuid().nullable(),
   "approval": zod.union([zod.object({
   "id": zod.uuid(),
   "jobId": zod.uuid(),
@@ -12906,6 +13101,7 @@ export const CreateWorkspaceGenericActionProposalResponse = zod.object({
   "summary": zod.string(),
   "messagePreview": zod.string(),
   "appliedRule": zod.string(),
+  "ruleVersionId": zod.uuid().nullable(),
   "synthetic": zod.literal(true)
 }),zod.null()]),
   "createdAt": zod.coerce.date()
@@ -12990,6 +13186,609 @@ export const PreviewWorkspaceGenericActionResponse = zod.object({
   "actionSha256": zod.string().regex(previewWorkspaceGenericActionResponseActionSha256RegExp).nullable(),
   "persisted": zod.literal(false),
   "dispatched": zod.literal(false)
+})
+
+
+/**
+ * @summary Read saved, versioned action rules for a workspace
+ */
+export const ListWorkspaceActionRulesParams = zod.object({
+  "workspaceId": zod.uuid()
+})
+
+export const listWorkspaceActionRulesResponseActionsItemActiveRulesItemIdMax = 120;
+
+export const listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAllItemFieldMax = 80;
+
+export const listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAllItemValueOneMax = 254;
+
+export const listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAllItemValueTwoMin = 0;
+export const listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAllItemValueTwoMax = 1000000;
+
+export const listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAllMax = 8;
+
+export const listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAnyItemFieldMax = 80;
+
+export const listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAnyItemValueOneMax = 254;
+
+export const listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAnyItemValueTwoMin = 0;
+export const listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAnyItemValueTwoMax = 1000000;
+
+export const listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAnyMax = 8;
+
+export const listWorkspaceActionRulesResponseActionsItemDraftRulesItemIdMax = 120;
+
+export const listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAllItemFieldMax = 80;
+
+export const listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAllItemValueOneMax = 254;
+
+export const listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAllItemValueTwoMin = 0;
+export const listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAllItemValueTwoMax = 1000000;
+
+export const listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAllMax = 8;
+
+export const listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAnyItemFieldMax = 80;
+
+export const listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAnyItemValueOneMax = 254;
+
+export const listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAnyItemValueTwoMin = 0;
+export const listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAnyItemValueTwoMax = 1000000;
+
+export const listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAnyMax = 8;
+
+
+export const listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemIdMax = 120;
+
+export const listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAllItemFieldMax = 80;
+
+export const listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAllItemValueOneMax = 254;
+
+export const listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAllItemValueTwoMin = 0;
+export const listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAllItemValueTwoMax = 1000000;
+
+export const listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAllMax = 8;
+
+export const listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAnyItemFieldMax = 80;
+
+export const listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAnyItemValueOneMax = 254;
+
+export const listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAnyItemValueTwoMin = 0;
+export const listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAnyItemValueTwoMax = 1000000;
+
+export const listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAnyMax = 8;
+
+
+
+export const ListWorkspaceActionRulesResponse = zod.object({
+  "actions": zod.array(zod.object({
+  "actionType": zod.string(),
+  "label": zod.string(),
+  "description": zod.string(),
+  "riskClass": zod.enum(['low', 'medium', 'high']),
+  "riskCategories": zod.array(zod.enum(['money', 'internal_email', 'external_email', 'customer_data', 'infrastructure'])),
+  "activeVersionId": zod.uuid().nullable(),
+  "draftVersionId": zod.uuid().nullable(),
+  "activeRules": zod.array(zod.object({
+  "id": zod.string().min(1).max(listWorkspaceActionRulesResponseActionsItemActiveRulesItemIdMax),
+  "decision": zod.enum(['allow', 'deny', 'require_approval']),
+  "when": zod.object({
+  "all": zod.array(zod.object({
+  "field": zod.string().max(listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAllItemFieldMax),
+  "op": zod.enum(['eq', 'gt', 'lte']),
+  "value": zod.union([zod.string().max(listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAllItemValueOneMax),zod.int().min(listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAllItemValueTwoMin).max(listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAllItemValueTwoMax),zod.boolean()])
+})).max(listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAllMax).optional(),
+  "any": zod.array(zod.object({
+  "field": zod.string().max(listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAnyItemFieldMax),
+  "op": zod.enum(['eq', 'gt', 'lte']),
+  "value": zod.union([zod.string().max(listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAnyItemValueOneMax),zod.int().min(listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAnyItemValueTwoMin).max(listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAnyItemValueTwoMax),zod.boolean()])
+})).max(listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAnyMax).optional()
+})
+})),
+  "draftRules": zod.array(zod.object({
+  "id": zod.string().min(1).max(listWorkspaceActionRulesResponseActionsItemDraftRulesItemIdMax),
+  "decision": zod.enum(['allow', 'deny', 'require_approval']),
+  "when": zod.object({
+  "all": zod.array(zod.object({
+  "field": zod.string().max(listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAllItemFieldMax),
+  "op": zod.enum(['eq', 'gt', 'lte']),
+  "value": zod.union([zod.string().max(listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAllItemValueOneMax),zod.int().min(listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAllItemValueTwoMin).max(listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAllItemValueTwoMax),zod.boolean()])
+})).max(listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAllMax).optional(),
+  "any": zod.array(zod.object({
+  "field": zod.string().max(listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAnyItemFieldMax),
+  "op": zod.enum(['eq', 'gt', 'lte']),
+  "value": zod.union([zod.string().max(listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAnyItemValueOneMax),zod.int().min(listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAnyItemValueTwoMin).max(listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAnyItemValueTwoMax),zod.boolean()])
+})).max(listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAnyMax).optional()
+})
+})),
+  "history": zod.array(zod.object({
+  "id": zod.uuid(),
+  "version": zod.int().min(1),
+  "rules": zod.array(zod.object({
+  "id": zod.string().min(1).max(listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemIdMax),
+  "decision": zod.enum(['allow', 'deny', 'require_approval']),
+  "when": zod.object({
+  "all": zod.array(zod.object({
+  "field": zod.string().max(listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAllItemFieldMax),
+  "op": zod.enum(['eq', 'gt', 'lte']),
+  "value": zod.union([zod.string().max(listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAllItemValueOneMax),zod.int().min(listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAllItemValueTwoMin).max(listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAllItemValueTwoMax),zod.boolean()])
+})).max(listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAllMax).optional(),
+  "any": zod.array(zod.object({
+  "field": zod.string().max(listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAnyItemFieldMax),
+  "op": zod.enum(['eq', 'gt', 'lte']),
+  "value": zod.union([zod.string().max(listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAnyItemValueOneMax),zod.int().min(listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAnyItemValueTwoMin).max(listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAnyItemValueTwoMax),zod.boolean()])
+})).max(listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAnyMax).optional()
+})
+})),
+  "createdByUserId": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "isActive": zod.boolean(),
+  "isDraft": zod.boolean()
+})),
+  "warnings": zod.array(zod.string())
+}))
+})
+
+
+/**
+ * @summary Save a new immutable draft rule version
+ */
+export const saveWorkspaceActionRuleDraftPathActionTypeMax = 120;
+
+
+
+export const SaveWorkspaceActionRuleDraftParams = zod.object({
+  "workspaceId": zod.uuid(),
+  "actionType": zod.coerce.string().max(saveWorkspaceActionRuleDraftPathActionTypeMax)
+})
+
+export const saveWorkspaceActionRuleDraftBodyRulesItemIdMax = 120;
+
+export const saveWorkspaceActionRuleDraftBodyRulesItemWhenAllItemFieldMax = 80;
+
+export const saveWorkspaceActionRuleDraftBodyRulesItemWhenAllItemValueOneMax = 254;
+
+export const saveWorkspaceActionRuleDraftBodyRulesItemWhenAllItemValueTwoMin = 0;
+export const saveWorkspaceActionRuleDraftBodyRulesItemWhenAllItemValueTwoMax = 1000000;
+
+export const saveWorkspaceActionRuleDraftBodyRulesItemWhenAllMax = 8;
+
+export const saveWorkspaceActionRuleDraftBodyRulesItemWhenAnyItemFieldMax = 80;
+
+export const saveWorkspaceActionRuleDraftBodyRulesItemWhenAnyItemValueOneMax = 254;
+
+export const saveWorkspaceActionRuleDraftBodyRulesItemWhenAnyItemValueTwoMin = 0;
+export const saveWorkspaceActionRuleDraftBodyRulesItemWhenAnyItemValueTwoMax = 1000000;
+
+export const saveWorkspaceActionRuleDraftBodyRulesItemWhenAnyMax = 8;
+
+export const saveWorkspaceActionRuleDraftBodyRulesMax = 50;
+
+
+
+export const SaveWorkspaceActionRuleDraftBody = zod.object({
+  "version": zod.literal(1),
+  "rules": zod.array(zod.object({
+  "id": zod.string().min(1).max(saveWorkspaceActionRuleDraftBodyRulesItemIdMax),
+  "decision": zod.enum(['allow', 'deny', 'require_approval']),
+  "when": zod.object({
+  "all": zod.array(zod.object({
+  "field": zod.string().max(saveWorkspaceActionRuleDraftBodyRulesItemWhenAllItemFieldMax),
+  "op": zod.enum(['eq', 'gt', 'lte']),
+  "value": zod.union([zod.string().max(saveWorkspaceActionRuleDraftBodyRulesItemWhenAllItemValueOneMax),zod.int().min(saveWorkspaceActionRuleDraftBodyRulesItemWhenAllItemValueTwoMin).max(saveWorkspaceActionRuleDraftBodyRulesItemWhenAllItemValueTwoMax),zod.boolean()])
+})).max(saveWorkspaceActionRuleDraftBodyRulesItemWhenAllMax).optional(),
+  "any": zod.array(zod.object({
+  "field": zod.string().max(saveWorkspaceActionRuleDraftBodyRulesItemWhenAnyItemFieldMax),
+  "op": zod.enum(['eq', 'gt', 'lte']),
+  "value": zod.union([zod.string().max(saveWorkspaceActionRuleDraftBodyRulesItemWhenAnyItemValueOneMax),zod.int().min(saveWorkspaceActionRuleDraftBodyRulesItemWhenAnyItemValueTwoMin).max(saveWorkspaceActionRuleDraftBodyRulesItemWhenAnyItemValueTwoMax),zod.boolean()])
+})).max(saveWorkspaceActionRuleDraftBodyRulesItemWhenAnyMax).optional()
+})
+})).max(saveWorkspaceActionRuleDraftBodyRulesMax)
+})
+
+
+export const saveWorkspaceActionRuleDraftResponseRulesItemIdMax = 120;
+
+export const saveWorkspaceActionRuleDraftResponseRulesItemWhenAllItemFieldMax = 80;
+
+export const saveWorkspaceActionRuleDraftResponseRulesItemWhenAllItemValueOneMax = 254;
+
+export const saveWorkspaceActionRuleDraftResponseRulesItemWhenAllItemValueTwoMin = 0;
+export const saveWorkspaceActionRuleDraftResponseRulesItemWhenAllItemValueTwoMax = 1000000;
+
+export const saveWorkspaceActionRuleDraftResponseRulesItemWhenAllMax = 8;
+
+export const saveWorkspaceActionRuleDraftResponseRulesItemWhenAnyItemFieldMax = 80;
+
+export const saveWorkspaceActionRuleDraftResponseRulesItemWhenAnyItemValueOneMax = 254;
+
+export const saveWorkspaceActionRuleDraftResponseRulesItemWhenAnyItemValueTwoMin = 0;
+export const saveWorkspaceActionRuleDraftResponseRulesItemWhenAnyItemValueTwoMax = 1000000;
+
+export const saveWorkspaceActionRuleDraftResponseRulesItemWhenAnyMax = 8;
+
+
+
+export const SaveWorkspaceActionRuleDraftResponse = zod.object({
+  "actionType": zod.string(),
+  "versionId": zod.uuid(),
+  "version": zod.int().min(1),
+  "rules": zod.array(zod.object({
+  "id": zod.string().min(1).max(saveWorkspaceActionRuleDraftResponseRulesItemIdMax),
+  "decision": zod.enum(['allow', 'deny', 'require_approval']),
+  "when": zod.object({
+  "all": zod.array(zod.object({
+  "field": zod.string().max(saveWorkspaceActionRuleDraftResponseRulesItemWhenAllItemFieldMax),
+  "op": zod.enum(['eq', 'gt', 'lte']),
+  "value": zod.union([zod.string().max(saveWorkspaceActionRuleDraftResponseRulesItemWhenAllItemValueOneMax),zod.int().min(saveWorkspaceActionRuleDraftResponseRulesItemWhenAllItemValueTwoMin).max(saveWorkspaceActionRuleDraftResponseRulesItemWhenAllItemValueTwoMax),zod.boolean()])
+})).max(saveWorkspaceActionRuleDraftResponseRulesItemWhenAllMax).optional(),
+  "any": zod.array(zod.object({
+  "field": zod.string().max(saveWorkspaceActionRuleDraftResponseRulesItemWhenAnyItemFieldMax),
+  "op": zod.enum(['eq', 'gt', 'lte']),
+  "value": zod.union([zod.string().max(saveWorkspaceActionRuleDraftResponseRulesItemWhenAnyItemValueOneMax),zod.int().min(saveWorkspaceActionRuleDraftResponseRulesItemWhenAnyItemValueTwoMin).max(saveWorkspaceActionRuleDraftResponseRulesItemWhenAnyItemValueTwoMax),zod.boolean()])
+})).max(saveWorkspaceActionRuleDraftResponseRulesItemWhenAnyMax).optional()
+})
+})),
+  "createdAt": zod.coerce.date(),
+  "active": zod.boolean()
+})
+
+
+/**
+ * @summary Activate the current draft rule version
+ */
+export const activateWorkspaceActionRuleDraftPathActionTypeMax = 120;
+
+
+
+export const ActivateWorkspaceActionRuleDraftParams = zod.object({
+  "workspaceId": zod.uuid(),
+  "actionType": zod.coerce.string().max(activateWorkspaceActionRuleDraftPathActionTypeMax)
+})
+
+
+export const activateWorkspaceActionRuleDraftResponseRulesItemIdMax = 120;
+
+export const activateWorkspaceActionRuleDraftResponseRulesItemWhenAllItemFieldMax = 80;
+
+export const activateWorkspaceActionRuleDraftResponseRulesItemWhenAllItemValueOneMax = 254;
+
+export const activateWorkspaceActionRuleDraftResponseRulesItemWhenAllItemValueTwoMin = 0;
+export const activateWorkspaceActionRuleDraftResponseRulesItemWhenAllItemValueTwoMax = 1000000;
+
+export const activateWorkspaceActionRuleDraftResponseRulesItemWhenAllMax = 8;
+
+export const activateWorkspaceActionRuleDraftResponseRulesItemWhenAnyItemFieldMax = 80;
+
+export const activateWorkspaceActionRuleDraftResponseRulesItemWhenAnyItemValueOneMax = 254;
+
+export const activateWorkspaceActionRuleDraftResponseRulesItemWhenAnyItemValueTwoMin = 0;
+export const activateWorkspaceActionRuleDraftResponseRulesItemWhenAnyItemValueTwoMax = 1000000;
+
+export const activateWorkspaceActionRuleDraftResponseRulesItemWhenAnyMax = 8;
+
+
+
+export const ActivateWorkspaceActionRuleDraftResponse = zod.object({
+  "actionType": zod.string(),
+  "versionId": zod.uuid(),
+  "version": zod.int().min(1),
+  "rules": zod.array(zod.object({
+  "id": zod.string().min(1).max(activateWorkspaceActionRuleDraftResponseRulesItemIdMax),
+  "decision": zod.enum(['allow', 'deny', 'require_approval']),
+  "when": zod.object({
+  "all": zod.array(zod.object({
+  "field": zod.string().max(activateWorkspaceActionRuleDraftResponseRulesItemWhenAllItemFieldMax),
+  "op": zod.enum(['eq', 'gt', 'lte']),
+  "value": zod.union([zod.string().max(activateWorkspaceActionRuleDraftResponseRulesItemWhenAllItemValueOneMax),zod.int().min(activateWorkspaceActionRuleDraftResponseRulesItemWhenAllItemValueTwoMin).max(activateWorkspaceActionRuleDraftResponseRulesItemWhenAllItemValueTwoMax),zod.boolean()])
+})).max(activateWorkspaceActionRuleDraftResponseRulesItemWhenAllMax).optional(),
+  "any": zod.array(zod.object({
+  "field": zod.string().max(activateWorkspaceActionRuleDraftResponseRulesItemWhenAnyItemFieldMax),
+  "op": zod.enum(['eq', 'gt', 'lte']),
+  "value": zod.union([zod.string().max(activateWorkspaceActionRuleDraftResponseRulesItemWhenAnyItemValueOneMax),zod.int().min(activateWorkspaceActionRuleDraftResponseRulesItemWhenAnyItemValueTwoMin).max(activateWorkspaceActionRuleDraftResponseRulesItemWhenAnyItemValueTwoMax),zod.boolean()])
+})).max(activateWorkspaceActionRuleDraftResponseRulesItemWhenAnyMax).optional()
+})
+})),
+  "createdAt": zod.coerce.date(),
+  "active": zod.boolean()
+})
+
+
+/**
+ * @summary Create and activate a new version copied from history
+ */
+export const rollbackWorkspaceActionRulePathActionTypeMax = 120;
+
+
+
+export const RollbackWorkspaceActionRuleParams = zod.object({
+  "workspaceId": zod.uuid(),
+  "actionType": zod.coerce.string().max(rollbackWorkspaceActionRulePathActionTypeMax)
+})
+
+
+
+
+export const RollbackWorkspaceActionRuleBody = zod.object({
+  "version": zod.int().min(1)
+})
+
+
+export const rollbackWorkspaceActionRuleResponseRulesItemIdMax = 120;
+
+export const rollbackWorkspaceActionRuleResponseRulesItemWhenAllItemFieldMax = 80;
+
+export const rollbackWorkspaceActionRuleResponseRulesItemWhenAllItemValueOneMax = 254;
+
+export const rollbackWorkspaceActionRuleResponseRulesItemWhenAllItemValueTwoMin = 0;
+export const rollbackWorkspaceActionRuleResponseRulesItemWhenAllItemValueTwoMax = 1000000;
+
+export const rollbackWorkspaceActionRuleResponseRulesItemWhenAllMax = 8;
+
+export const rollbackWorkspaceActionRuleResponseRulesItemWhenAnyItemFieldMax = 80;
+
+export const rollbackWorkspaceActionRuleResponseRulesItemWhenAnyItemValueOneMax = 254;
+
+export const rollbackWorkspaceActionRuleResponseRulesItemWhenAnyItemValueTwoMin = 0;
+export const rollbackWorkspaceActionRuleResponseRulesItemWhenAnyItemValueTwoMax = 1000000;
+
+export const rollbackWorkspaceActionRuleResponseRulesItemWhenAnyMax = 8;
+
+
+
+export const RollbackWorkspaceActionRuleResponse = zod.object({
+  "actionType": zod.string(),
+  "versionId": zod.uuid(),
+  "version": zod.int().min(1),
+  "rules": zod.array(zod.object({
+  "id": zod.string().min(1).max(rollbackWorkspaceActionRuleResponseRulesItemIdMax),
+  "decision": zod.enum(['allow', 'deny', 'require_approval']),
+  "when": zod.object({
+  "all": zod.array(zod.object({
+  "field": zod.string().max(rollbackWorkspaceActionRuleResponseRulesItemWhenAllItemFieldMax),
+  "op": zod.enum(['eq', 'gt', 'lte']),
+  "value": zod.union([zod.string().max(rollbackWorkspaceActionRuleResponseRulesItemWhenAllItemValueOneMax),zod.int().min(rollbackWorkspaceActionRuleResponseRulesItemWhenAllItemValueTwoMin).max(rollbackWorkspaceActionRuleResponseRulesItemWhenAllItemValueTwoMax),zod.boolean()])
+})).max(rollbackWorkspaceActionRuleResponseRulesItemWhenAllMax).optional(),
+  "any": zod.array(zod.object({
+  "field": zod.string().max(rollbackWorkspaceActionRuleResponseRulesItemWhenAnyItemFieldMax),
+  "op": zod.enum(['eq', 'gt', 'lte']),
+  "value": zod.union([zod.string().max(rollbackWorkspaceActionRuleResponseRulesItemWhenAnyItemValueOneMax),zod.int().min(rollbackWorkspaceActionRuleResponseRulesItemWhenAnyItemValueTwoMin).max(rollbackWorkspaceActionRuleResponseRulesItemWhenAnyItemValueTwoMax),zod.boolean()])
+})).max(rollbackWorkspaceActionRuleResponseRulesItemWhenAnyMax).optional()
+})
+})),
+  "createdAt": zod.coerce.date(),
+  "active": zod.boolean()
+})
+
+
+/**
+ * @summary Simulate an example against a saved rule version without persisting it
+ */
+export const simulateWorkspaceActionRulePathActionTypeMax = 120;
+
+
+
+export const SimulateWorkspaceActionRuleParams = zod.object({
+  "workspaceId": zod.uuid(),
+  "actionType": zod.coerce.string().max(simulateWorkspaceActionRulePathActionTypeMax)
+})
+
+export const simulateWorkspaceActionRuleBodyArgumentsOneMax = 5000;
+
+export const simulateWorkspaceActionRuleBodyArgumentsTwoMin = 0;
+export const simulateWorkspaceActionRuleBodyArgumentsTwoMax = 1000000;
+
+
+
+export const SimulateWorkspaceActionRuleBody = zod.object({
+  "versionId": zod.uuid().optional(),
+  "arguments": zod.record(zod.string(), zod.union([zod.string().max(simulateWorkspaceActionRuleBodyArgumentsOneMax),zod.int().min(simulateWorkspaceActionRuleBodyArgumentsTwoMin).max(simulateWorkspaceActionRuleBodyArgumentsTwoMax),zod.boolean()]))
+})
+
+export const SimulateWorkspaceActionRuleResponse = zod.object({
+  "actionType": zod.string(),
+  "decision": zod.enum(['allow', 'deny', 'require_approval']),
+  "reasonCode": zod.string(),
+  "ruleId": zod.string().nullable(),
+  "ruleVersionId": zod.uuid().nullable(),
+  "matched": zod.boolean(),
+  "issues": zod.array(zod.string()),
+  "persisted": zod.literal(false),
+  "dispatched": zod.literal(false)
+})
+
+
+/**
+ * @summary List agent identities without exposing credentials
+ */
+export const ListWorkspaceAgentsParams = zod.object({
+  "workspaceId": zod.uuid()
+})
+
+
+
+
+export const ListWorkspaceAgentsResponse = zod.object({
+  "agents": zod.array(zod.object({
+  "id": zod.uuid(),
+  "displayName": zod.string(),
+  "principalUserId": zod.string(),
+  "credentialVersion": zod.int().min(1),
+  "createdAt": zod.coerce.date(),
+  "revokedAt": zod.coerce.date().nullable(),
+  "lastUsedAt": zod.coerce.date().nullable()
+}))
+})
+
+
+/**
+ * @summary Register an agent and return its credential once
+ */
+export const CreateWorkspaceAgentParams = zod.object({
+  "workspaceId": zod.uuid()
+})
+
+export const createWorkspaceAgentBodyDisplayNameMax = 120;
+
+
+
+export const CreateWorkspaceAgentBody = zod.object({
+  "displayName": zod.string().min(1).max(createWorkspaceAgentBodyDisplayNameMax)
+})
+
+
+export const createWorkspaceAgentResponseCredentialMin = 40;
+export const createWorkspaceAgentResponseCredentialMax = 100;
+
+
+
+export const CreateWorkspaceAgentResponse = zod.object({
+  "agent": zod.object({
+  "id": zod.uuid(),
+  "displayName": zod.string(),
+  "principalUserId": zod.string(),
+  "credentialVersion": zod.int().min(1),
+  "createdAt": zod.coerce.date(),
+  "revokedAt": zod.coerce.date().nullable(),
+  "lastUsedAt": zod.coerce.date().nullable()
+}),
+  "credential": zod.string().min(createWorkspaceAgentResponseCredentialMin).max(createWorkspaceAgentResponseCredentialMax),
+  "shownOnce": zod.literal(true)
+})
+
+
+/**
+ * @summary Revoke the prior credential and return a replacement once
+ */
+export const RotateWorkspaceAgentCredentialParams = zod.object({
+  "workspaceId": zod.uuid(),
+  "agentId": zod.uuid()
+})
+
+
+export const rotateWorkspaceAgentCredentialResponseCredentialMin = 40;
+export const rotateWorkspaceAgentCredentialResponseCredentialMax = 100;
+
+
+
+export const RotateWorkspaceAgentCredentialResponse = zod.object({
+  "agent": zod.object({
+  "id": zod.uuid(),
+  "displayName": zod.string(),
+  "principalUserId": zod.string(),
+  "credentialVersion": zod.int().min(1),
+  "createdAt": zod.coerce.date(),
+  "revokedAt": zod.coerce.date().nullable(),
+  "lastUsedAt": zod.coerce.date().nullable()
+}),
+  "credential": zod.string().min(rotateWorkspaceAgentCredentialResponseCredentialMin).max(rotateWorkspaceAgentCredentialResponseCredentialMax),
+  "shownOnce": zod.literal(true)
+})
+
+
+/**
+ * @summary Revoke an agent credential
+ */
+export const RevokeWorkspaceAgentParams = zod.object({
+  "workspaceId": zod.uuid(),
+  "agentId": zod.uuid()
+})
+
+
+
+
+export const RevokeWorkspaceAgentResponse = zod.object({
+  "agent": zod.object({
+  "id": zod.uuid(),
+  "displayName": zod.string(),
+  "principalUserId": zod.string(),
+  "credentialVersion": zod.int().min(1),
+  "createdAt": zod.coerce.date(),
+  "revokedAt": zod.coerce.date().nullable(),
+  "lastUsedAt": zod.coerce.date().nullable()
+})
+})
+
+
+/**
+ * The agent credential is checked against a workspace-scoped hash. Proposals are attributed to the registered agent and never execute a tool. Human approval remains separate, and the agent principal cannot approve its own request.
+ * @summary Submit an action proposal using a registered agent credential
+ */
+export const CreateWorkspaceAgentActionProposalParams = zod.object({
+  "workspaceId": zod.uuid()
+})
+
+export const createWorkspaceAgentActionProposalBodyActionTypeMax = 120;
+
+export const createWorkspaceAgentActionProposalBodyArgumentsOneMax = 5000;
+
+export const createWorkspaceAgentActionProposalBodyArgumentsTwoMin = 0;
+export const createWorkspaceAgentActionProposalBodyArgumentsTwoMax = 1000000;
+
+export const createWorkspaceAgentActionProposalBodyIdempotencyKeyMin = 16;
+export const createWorkspaceAgentActionProposalBodyIdempotencyKeyMax = 128;
+
+
+
+export const CreateWorkspaceAgentActionProposalBody = zod.object({
+  "actionType": zod.string().max(createWorkspaceAgentActionProposalBodyActionTypeMax),
+  "arguments": zod.record(zod.string(), zod.union([zod.string().max(createWorkspaceAgentActionProposalBodyArgumentsOneMax),zod.int().min(createWorkspaceAgentActionProposalBodyArgumentsTwoMin).max(createWorkspaceAgentActionProposalBodyArgumentsTwoMax),zod.boolean()])),
+  "idempotencyKey": zod.string().min(createWorkspaceAgentActionProposalBodyIdempotencyKeyMin).max(createWorkspaceAgentActionProposalBodyIdempotencyKeyMax)
+})
+
+export const createWorkspaceAgentActionProposalResponseActionSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceAgentActionProposalResponseApprovalOneProposalSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceAgentActionProposalResponseApprovalOneActionSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceAgentActionProposalResponseApprovalOneProposalBindingSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceAgentActionProposalResponseApprovalOneSimulationResultSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceAgentActionProposalResponseApprovalOneReplayBindingSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+
+
+export const CreateWorkspaceAgentActionProposalResponse = zod.object({
+  "decision": zod.enum(['allow', 'deny', 'require_approval']),
+  "reasonCode": zod.string(),
+  "actionType": zod.string(),
+  "actionSha256": zod.string().regex(createWorkspaceAgentActionProposalResponseActionSha256RegExp).nullable(),
+  "ruleId": zod.string().nullable(),
+  "ruleVersionId": zod.uuid().nullable(),
+  "approval": zod.union([zod.object({
+  "id": zod.uuid(),
+  "jobId": zod.uuid(),
+  "caseId": zod.string(),
+  "proposalSha256": zod.string().regex(createWorkspaceAgentActionProposalResponseApprovalOneProposalSha256RegExp),
+  "actionSha256": zod.string().regex(createWorkspaceAgentActionProposalResponseApprovalOneActionSha256RegExp).nullable(),
+  "proposalBindingSha256": zod.string().regex(createWorkspaceAgentActionProposalResponseApprovalOneProposalBindingSha256RegExp),
+  "requestedByUserId": zod.string(),
+  "requestedByRole": zod.union([zod.literal('owner'),zod.literal('admin'),zod.literal('member'),zod.literal('viewer'),zod.literal(null)]).nullable(),
+  "bindingVersion": zod.union([zod.literal(1),zod.literal(2),zod.literal(3)]),
+  "syntheticActionRef": zod.union([zod.literal('guardian.synthetic.finance.bank-change.v1'),zod.literal('guardian.synthetic.support.refund.v1'),zod.literal('guardian.support.reply.send.v1'),zod.literal('guardian.email.send.external.v1'),zod.literal(null)]).nullable(),
+  "modelInference": zod.boolean().nullable(),
+  "executionMode": zod.union([zod.literal('deterministic_fixture'),zod.literal('real_local_qwen_inference'),zod.literal('real_openai_compatible_qwen_inference'),zod.literal(null)]).nullable(),
+  "toolCallOrigin": zod.union([zod.literal('controlled_fixture_not_llm'),zod.literal('guardian_qwen_native_markup_adapter'),zod.literal('runtime_message_tool_calls'),zod.literal('openai_compatible_provider_tool_call'),zod.literal(null)]).nullable(),
+  "status": zod.enum(['pending', 'approved', 'denied', 'expired']),
+  "canCurrentUserDecide": zod.boolean(),
+  "expiresAt": zod.coerce.date(),
+  "decidedByUserId": zod.string().nullable(),
+  "decidedByRole": zod.union([zod.literal('owner'),zod.literal('admin'),zod.literal('member'),zod.literal('viewer'),zod.literal(null)]).nullable(),
+  "decidedAt": zod.coerce.date().nullable(),
+  "execution": zod.enum(['not_performed', 'synthetic_action_simulated_once']),
+  "simulatedAt": zod.coerce.date().nullable(),
+  "simulationResultCode": zod.union([zod.literal('synthetic_bank_change_approved_in_clone'),zod.literal('synthetic_refund_approved_in_clone'),zod.literal(null)]).nullable(),
+  "simulationResultSha256": zod.string().regex(createWorkspaceAgentActionProposalResponseApprovalOneSimulationResultSha256RegExp).nullable(),
+  "replayBindingSha256": zod.string().regex(createWorkspaceAgentActionProposalResponseApprovalOneReplayBindingSha256RegExp).nullable(),
+  "proposalDetails": zod.union([zod.object({
+  "agentId": zod.string(),
+  "actionType": zod.string(),
+  "summary": zod.string(),
+  "messagePreview": zod.string(),
+  "appliedRule": zod.string(),
+  "ruleVersionId": zod.uuid().nullable(),
+  "synthetic": zod.literal(true)
+}),zod.null()]),
+  "createdAt": zod.coerce.date()
+}),zod.null()]),
+  "execution": zod.literal("not_performed"),
+  "externalSideEffect": zod.literal(false),
+  "idempotent": zod.boolean()
 })
 
 
@@ -13086,6 +13885,7 @@ export const DecideWorkspaceAiAssessmentApprovalResponse = zod.object({
   "summary": zod.string(),
   "messagePreview": zod.string(),
   "appliedRule": zod.string(),
+  "ruleVersionId": zod.uuid().nullable(),
   "synthetic": zod.literal(true)
 }),zod.null()]),
   "createdAt": zod.coerce.date()

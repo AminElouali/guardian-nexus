@@ -3,14 +3,14 @@ export type ApprovalActionValue = string | number | boolean;
 
 export type GenericActionGatewayEvidence = {
   engine: "guardian_action_gateway";
-  engineVersion: "guardian-action-catalog-v1";
+  engineVersion: "guardian-action-catalog-v1" | "guardian-workspace-rules-v2";
   profileId:
     | "guardian-agent-lab-email-v1"
     | "guardian-agent-lab-customer-service-v1";
   executionMode: "deterministic_fixture";
   modelInference: false;
   toolCallOrigin: "controlled_fixture_not_llm";
-  evidenceVersion: 1;
+  evidenceVersion: 1 | 2;
   actionType: string;
   arguments: Record<string, ApprovalActionValue>;
   actionSha256: string;
@@ -18,12 +18,33 @@ export type GenericActionGatewayEvidence = {
   proposalSha256: string;
   ruleId: string;
   decision: "require_approval";
-  agentId: "agent-fixture-support-demo-v1" | "agent-fixture-email-demo-v1";
+  agentId: string;
   synthetic: true;
   summary: string;
   messagePreview: string;
   requestedByUserId: string;
   workspaceId: string;
+  ruleVersionId?: string | null;
+  ruleDocumentSha256?: string | null;
+  ruleDocument?: {
+    version: 1;
+    rules: Array<{
+      id: string;
+      decision: ApprovalActionDecision;
+      when: {
+        all?: Array<{
+          field: string;
+          op: "eq" | "gt" | "lte";
+          value: string | number | boolean;
+        }>;
+        any?: Array<{
+          field: string;
+          op: "eq" | "gt" | "lte";
+          value: string | number | boolean;
+        }>;
+      };
+    }>;
+  } | null;
   evidenceSha256: string;
 };
 

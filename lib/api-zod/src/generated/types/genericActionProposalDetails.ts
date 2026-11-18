@@ -12,5 +12,7 @@ export interface GenericActionProposalDetails {
   summary: string;
   messagePreview: string;
   appliedRule: string;
+  /** @nullable */
+  ruleVersionId: string | null;
   synthetic: true;
 }

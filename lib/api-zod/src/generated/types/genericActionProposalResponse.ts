@@ -19,6 +19,8 @@ export interface GenericActionProposalResponse {
   actionSha256: string | null;
   /** @nullable */
   ruleId: string | null;
+  /** @nullable */
+  ruleVersionId: string | null;
   approval: AiAssessmentApproval | null;
   execution: 'not_performed';
   externalSideEffect: false;

@@ -9,7 +9,7 @@ CREATE TABLE public.workspace_agents (
   display_name text NOT NULL
     CHECK (length(btrim(display_name)) BETWEEN 1 AND 120),
   principal_user_id text NOT NULL,
-  credential_sha256 text NOT NULL UNIQUE
+  credential_sha256 text NOT NULL
     CHECK (credential_sha256 ~ '^[a-f0-9]{64}$'),
   credential_version integer NOT NULL DEFAULT 1
     CHECK (credential_version > 0),
@@ -18,6 +18,8 @@ CREATE TABLE public.workspace_agents (
   revoked_at timestamptz,
   last_used_at timestamptz
 );
+CREATE UNIQUE INDEX workspace_agents_credential_sha256_uidx
+  ON public.workspace_agents (credential_sha256);
 CREATE INDEX workspace_agents_workspace_created_idx
   ON public.workspace_agents (workspace_id, created_at);
 

@@ -47,7 +47,6 @@ import {
 import {
   APPROVAL_ACTION_CATALOG,
   evaluateApprovalAction,
-  getApprovalActionDefinition,
   aiAssessmentApprovalRequestsTable,
   aiAssessmentJobsTable,
   workspaceAuditEventsTable,
@@ -122,11 +121,10 @@ import {
   validateSyntheticRefundPolicyEvidence,
 } from "../lib/synthetic-refund-gateway";
 import {
-  createGenericActionEvidence,
-  genericActionDisplay,
   hashGenericActionArguments,
   verifyGenericActionEvidence,
 } from "../lib/generic-action-evidence";
+import { createGenericActionProposalInTransaction } from "../lib/generic-action-proposal-service";
 import {
   createExternalQwenApprovalEvidence,
   getQwenProviderStatus,
@@ -427,7 +425,7 @@ function formatJob(job: AiAssessmentJob) {
   });
 }
 
-function formatApproval(
+export function formatApproval(
   approval: {
   id: string;
   jobId: string;
@@ -461,6 +459,7 @@ function formatApproval(
     summary: string;
     messagePreview: string;
     appliedRule: string;
+    ruleVersionId: string | null;
     synthetic: true;
   } | null = null,
 ) {
@@ -535,6 +534,7 @@ function genericProposalDetails(
     summary: evidence.summary,
     messagePreview: evidence.messagePreview,
     appliedRule: evidence.ruleId,
+    ruleVersionId: evidence.ruleVersionId ?? null,
     synthetic: true as const,
   };
 }
@@ -2010,6 +2010,117 @@ routes.post(
       res.status(400).json({ error: "Invalid generic action proposal request" });
       return;
     }
+    const savedRuleResult = await withWorkspaceUserTransaction(
+      req.authUserId!,
+      params.data.workspaceId,
+      async (tx, membership) =>
+        createGenericActionProposalInTransaction(tx, {
+          workspaceId: params.data.workspaceId,
+          actorUserId: req.authUserId!,
+          actorRole: membership.role,
+          agentId:
+            body.data.actionType === "guardian.support.reply.send.v1"
+              ? "agent-fixture-support-demo-v1"
+              : body.data.actionType === "guardian.synthetic.support.refund.v1"
+                ? "agent-fixture-refund-demo-v1"
+                : body.data.actionType === "guardian.synthetic.finance.bank-change.v1"
+                  ? "agent-fixture-bank-change-demo-v1"
+                  : "agent-fixture-email-demo-v1",
+          actionType: body.data.actionType,
+          arguments: body.data.arguments,
+          idempotencyKey: body.data.idempotencyKey,
+        }),
+    ).then(
+      (value) => ({ ok: true as const, value }),
+      () => ({ ok: false as const }),
+    );
+    if (!savedRuleResult.ok) {
+      res.status(503).json({ error: "Rule-based proposal persistence is unavailable" });
+      return;
+    }
+    const savedRuleAccess = savedRuleResult.value;
+    if (!savedRuleAccess.authorized) {
+      res.status(403).json({ error: "Workspace membership required" });
+      return;
+    }
+    const savedOutcome = savedRuleAccess.value;
+    if (savedOutcome.kind === "invalid_action") {
+      res.status(400).json({
+        error: "Action proposal rejected by the catalog",
+        code: savedOutcome.code,
+        ...(savedOutcome.issues.length
+          ? { violations: savedOutcome.issues }
+          : {}),
+      });
+      return;
+    }
+    if (savedOutcome.kind === "forbidden") {
+      res.status(403).json({ error: "Workspace owner or admin role required" });
+      return;
+    }
+    if (savedOutcome.kind === "idempotency_conflict") {
+      res.status(409).json({ error: "Idempotency key is bound to another proposal" });
+      return;
+    }
+    if (savedOutcome.kind === "pending_limit") {
+      res.status(429).json({ error: "Pending approval limit reached" });
+      return;
+    }
+    if (savedOutcome.kind === "persistence_failed") {
+      res.status(503).json({ error: "Approval could not be recorded" });
+      return;
+    }
+    if (savedOutcome.kind === "terminal") {
+      res.status(200).json(
+        CreateWorkspaceGenericActionProposalResponse.parse({
+          decision: savedOutcome.decision,
+          reasonCode: savedOutcome.reasonCode,
+          actionType: savedOutcome.actionType,
+          actionSha256: savedOutcome.actionSha256,
+          ruleId: savedOutcome.ruleId,
+          ruleVersionId: savedOutcome.ruleVersionId,
+          approval: null,
+          execution: "not_performed",
+          externalSideEffect: false,
+          idempotent: false,
+        }),
+      );
+      return;
+    }
+    const savedDetails = {
+      agentId: savedOutcome.evidence.agentId,
+      actionType: savedOutcome.evidence.actionType,
+      summary: savedOutcome.evidence.summary,
+      messagePreview: savedOutcome.evidence.messagePreview,
+      appliedRule: savedOutcome.evidence.ruleId,
+      ruleVersionId: savedOutcome.evidence.ruleVersionId ?? null,
+      synthetic: true as const,
+    };
+    res
+      .status(savedOutcome.kind === "created" ? 201 : 200)
+      .json(
+        CreateWorkspaceGenericActionProposalResponse.parse({
+          decision: "require_approval",
+          reasonCode: "human_approval_required",
+          actionType: savedOutcome.evidence.actionType,
+          actionSha256: savedOutcome.evidence.actionSha256,
+          ruleId: savedOutcome.evidence.ruleId,
+          ruleVersionId: savedOutcome.evidence.ruleVersionId ?? null,
+          approval: formatApproval(
+            savedOutcome.approval,
+            "not_performed",
+            false,
+            savedDetails,
+          ),
+          execution: "not_performed",
+          externalSideEffect: false,
+          idempotent: savedOutcome.kind === "existing",
+        }),
+      );
+    return;
+
+    // Kept unreachable only as historical reference for the prior stateless
+    // catalog flow; all requests return above and use the persisted rule engine.
     const { workspaceId } = params.data;
     const { actionType, arguments: rawArguments, idempotencyKey } = body.data;
     const evaluated = evaluateApprovalAction(actionType, rawArguments);

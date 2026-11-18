@@ -1,5 +1,11 @@
 import { and, eq, sql } from "drizzle-orm";
-import { db, membershipsTable, type Membership } from "@workspace/db";
+import {
+  db,
+  membershipsTable,
+  workspaceAgentsTable,
+  type Membership,
+  type WorkspaceAgent,
+} from "@workspace/db";
 
 export type TenantTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -61,6 +67,69 @@ export async function withWorkspaceUserTransaction<T>(
       authorized: true,
       membership,
       value: await operation(tx, membership),
+    };
+  });
+}
+
+/**
+ * Authenticate a workspace-scoped agent using only its SHA-256 bearer-token
+ * digest. The raw credential must never enter this helper, SQL parameters,
+ * logs, or an error message.
+ */
+export async function withAgentWorkspaceTransaction<T>(
+  workspaceId: string,
+  credentialSha256: string,
+  operation: (
+    tx: TenantTransaction,
+    agent: WorkspaceAgent,
+    membership: Membership,
+  ) => Promise<T>,
+): Promise<
+  | { authorized: false }
+  | { authorized: true; agent: WorkspaceAgent; membership: Membership; value: T }
+> {
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`SET LOCAL ROLE app_runtime`);
+    await setWorkspaceContext(tx, workspaceId);
+    await tx.execute(
+      sql`SELECT set_config('app.agent_credential_sha256', ${credentialSha256}, true)`,
+    );
+    const [agent] = await tx
+      .select()
+      .from(workspaceAgentsTable)
+      .where(
+        and(
+          eq(workspaceAgentsTable.workspaceId, workspaceId),
+          eq(workspaceAgentsTable.credentialSha256, credentialSha256),
+        ),
+      )
+      .limit(1);
+    if (!agent || agent.revokedAt !== null) {
+      return { authorized: false };
+    }
+
+    await tx.execute(
+      sql`SELECT set_config('app.user_id', ${agent.principalUserId}, true)`,
+    );
+    await tx.execute(
+      sql`SELECT set_config('app.agent_id', ${agent.id}, true)`,
+    );
+    const [membership] = await tx
+      .select()
+      .from(membershipsTable)
+      .where(
+        and(
+          eq(membershipsTable.workspaceId, workspaceId),
+          eq(membershipsTable.userId, agent.principalUserId),
+        ),
+      )
+      .limit(1);
+    if (!membership) return { authorized: false };
+    return {
+      authorized: true,
+      agent,
+      membership,
+      value: await operation(tx, agent, membership),
     };
   });
 }

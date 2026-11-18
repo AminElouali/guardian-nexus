@@ -67,6 +67,16 @@ import type {
   SyntheticRefundProposalRequest,
   SyntheticRefundProposalResponse,
   Workspace,
+  WorkspaceActionRuleDocumentInput,
+  WorkspaceActionRuleRollbackInput,
+  WorkspaceActionRuleSimulationInput,
+  WorkspaceActionRuleSimulationResponse,
+  WorkspaceActionRuleVersionResponse,
+  WorkspaceActionRulesResponse,
+  WorkspaceAgentCredentialResponse,
+  WorkspaceAgentInput,
+  WorkspaceAgentResponse,
+  WorkspaceAgentsResponse,
   WorkspaceApprovalLedgerEventsResponse,
   WorkspaceInput,
   WorkspaceIntegration,
@@ -3400,6 +3410,888 @@ export const usePreviewWorkspaceGenericAction = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getPreviewWorkspaceGenericActionMutationOptions(options), queryClient);
+    }
+
+export const getListWorkspaceActionRulesUrl = (workspaceId: string,) => {
+
+
+
+
+  return `/api/workspaces/${workspaceId}/action-rules`
+}
+
+/**
+ * @summary Read saved, versioned action rules for a workspace
+ */
+export const listWorkspaceActionRules = async (workspaceId: string, options?: Parameters<typeof customFetch>[1]): Promise<WorkspaceActionRulesResponse> => {
+
+  return customFetch<WorkspaceActionRulesResponse>(getListWorkspaceActionRulesUrl(workspaceId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListWorkspaceActionRulesQueryKey = (workspaceId: string,) => {
+    return [
+    `/api/workspaces/${workspaceId}/action-rules`
+    ] as const;
+    }
+
+
+export const getListWorkspaceActionRulesQueryOptions = <TData = Awaited<ReturnType<typeof listWorkspaceActionRules>>, TError = ErrorType<void>>(workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listWorkspaceActionRules>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListWorkspaceActionRulesQueryKey(workspaceId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listWorkspaceActionRules>>> = ({ signal }) => listWorkspaceActionRules(workspaceId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: workspaceId !== null && workspaceId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listWorkspaceActionRules>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListWorkspaceActionRulesQueryResult = NonNullable<Awaited<ReturnType<typeof listWorkspaceActionRules>>>
+export type ListWorkspaceActionRulesQueryError = ErrorType<void>
+
+
+export function useListWorkspaceActionRules<TData = Awaited<ReturnType<typeof listWorkspaceActionRules>>, TError = ErrorType<void>>(
+ workspaceId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listWorkspaceActionRules>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listWorkspaceActionRules>>,
+          TError,
+          Awaited<ReturnType<typeof listWorkspaceActionRules>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListWorkspaceActionRules<TData = Awaited<ReturnType<typeof listWorkspaceActionRules>>, TError = ErrorType<void>>(
+ workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listWorkspaceActionRules>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listWorkspaceActionRules>>,
+          TError,
+          Awaited<ReturnType<typeof listWorkspaceActionRules>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListWorkspaceActionRules<TData = Awaited<ReturnType<typeof listWorkspaceActionRules>>, TError = ErrorType<void>>(
+ workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listWorkspaceActionRules>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Read saved, versioned action rules for a workspace
+ */
+
+export function useListWorkspaceActionRules<TData = Awaited<ReturnType<typeof listWorkspaceActionRules>>, TError = ErrorType<void>>(
+ workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listWorkspaceActionRules>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListWorkspaceActionRulesQueryOptions(workspaceId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSaveWorkspaceActionRuleDraftUrl = (workspaceId: string,
+    actionType: string,) => {
+
+
+
+
+  return `/api/workspaces/${workspaceId}/action-rules/${actionType}/draft`
+}
+
+/**
+ * @summary Save a new immutable draft rule version
+ */
+export const saveWorkspaceActionRuleDraft = async (workspaceId: string,
+    actionType: string,
+    workspaceActionRuleDocumentInput: WorkspaceActionRuleDocumentInput, options?: Parameters<typeof customFetch>[1]): Promise<WorkspaceActionRuleVersionResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<WorkspaceActionRuleVersionResponse>(getSaveWorkspaceActionRuleDraftUrl(workspaceId,actionType),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(workspaceActionRuleDocumentInput)
+  }
+);}
+
+
+
+
+
+export const getSaveWorkspaceActionRuleDraftMutationKey = () => ['saveWorkspaceActionRuleDraft'] as const;
+
+export const getSaveWorkspaceActionRuleDraftMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveWorkspaceActionRuleDraft>>, TError,SaveWorkspaceActionRuleDraftMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof saveWorkspaceActionRuleDraft>>, TError,SaveWorkspaceActionRuleDraftMutationVariables, TContext> => {
+
+const mutationKey = getSaveWorkspaceActionRuleDraftMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof saveWorkspaceActionRuleDraft>>, SaveWorkspaceActionRuleDraftMutationVariables> = (props) => {
+          const {workspaceId,actionType,data} = props ?? {};
+
+          return  saveWorkspaceActionRuleDraft(workspaceId,actionType,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SaveWorkspaceActionRuleDraftMutationResult = NonNullable<Awaited<ReturnType<typeof saveWorkspaceActionRuleDraft>>>
+    export type SaveWorkspaceActionRuleDraftMutationBody = BodyType<WorkspaceActionRuleDocumentInput>
+    export type SaveWorkspaceActionRuleDraftMutationError = ErrorType<void>
+    export type SaveWorkspaceActionRuleDraftMutationVariables = {workspaceId: string;actionType: string;data: BodyType<WorkspaceActionRuleDocumentInput>}
+
+    /**
+ * @summary Save a new immutable draft rule version
+ */
+export const useSaveWorkspaceActionRuleDraft = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveWorkspaceActionRuleDraft>>, TError,SaveWorkspaceActionRuleDraftMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof saveWorkspaceActionRuleDraft>>,
+        TError,
+        SaveWorkspaceActionRuleDraftMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSaveWorkspaceActionRuleDraftMutationOptions(options), queryClient);
+    }
+
+export const getActivateWorkspaceActionRuleDraftUrl = (workspaceId: string,
+    actionType: string,) => {
+
+
+
+
+  return `/api/workspaces/${workspaceId}/action-rules/${actionType}/activate`
+}
+
+/**
+ * @summary Activate the current draft rule version
+ */
+export const activateWorkspaceActionRuleDraft = async (workspaceId: string,
+    actionType: string, options?: Parameters<typeof customFetch>[1]): Promise<WorkspaceActionRuleVersionResponse> => {
+
+  return customFetch<WorkspaceActionRuleVersionResponse>(getActivateWorkspaceActionRuleDraftUrl(workspaceId,actionType),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getActivateWorkspaceActionRuleDraftMutationKey = () => ['activateWorkspaceActionRuleDraft'] as const;
+
+export const getActivateWorkspaceActionRuleDraftMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof activateWorkspaceActionRuleDraft>>, TError,ActivateWorkspaceActionRuleDraftMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof activateWorkspaceActionRuleDraft>>, TError,ActivateWorkspaceActionRuleDraftMutationVariables, TContext> => {
+
+const mutationKey = getActivateWorkspaceActionRuleDraftMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof activateWorkspaceActionRuleDraft>>, ActivateWorkspaceActionRuleDraftMutationVariables> = (props) => {
+          const {workspaceId,actionType} = props ?? {};
+
+          return  activateWorkspaceActionRuleDraft(workspaceId,actionType,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ActivateWorkspaceActionRuleDraftMutationResult = NonNullable<Awaited<ReturnType<typeof activateWorkspaceActionRuleDraft>>>
+
+    export type ActivateWorkspaceActionRuleDraftMutationError = ErrorType<void>
+    export type ActivateWorkspaceActionRuleDraftMutationVariables = {workspaceId: string;actionType: string}
+
+    /**
+ * @summary Activate the current draft rule version
+ */
+export const useActivateWorkspaceActionRuleDraft = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof activateWorkspaceActionRuleDraft>>, TError,ActivateWorkspaceActionRuleDraftMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof activateWorkspaceActionRuleDraft>>,
+        TError,
+        ActivateWorkspaceActionRuleDraftMutationVariables,
+        TContext
+      > => {
+      return useMutation(getActivateWorkspaceActionRuleDraftMutationOptions(options), queryClient);
+    }
+
+export const getRollbackWorkspaceActionRuleUrl = (workspaceId: string,
+    actionType: string,) => {
+
+
+
+
+  return `/api/workspaces/${workspaceId}/action-rules/${actionType}/rollback`
+}
+
+/**
+ * @summary Create and activate a new version copied from history
+ */
+export const rollbackWorkspaceActionRule = async (workspaceId: string,
+    actionType: string,
+    workspaceActionRuleRollbackInput: WorkspaceActionRuleRollbackInput, options?: Parameters<typeof customFetch>[1]): Promise<WorkspaceActionRuleVersionResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<WorkspaceActionRuleVersionResponse>(getRollbackWorkspaceActionRuleUrl(workspaceId,actionType),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(workspaceActionRuleRollbackInput)
+  }
+);}
+
+
+
+
+
+export const getRollbackWorkspaceActionRuleMutationKey = () => ['rollbackWorkspaceActionRule'] as const;
+
+export const getRollbackWorkspaceActionRuleMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rollbackWorkspaceActionRule>>, TError,RollbackWorkspaceActionRuleMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof rollbackWorkspaceActionRule>>, TError,RollbackWorkspaceActionRuleMutationVariables, TContext> => {
+
+const mutationKey = getRollbackWorkspaceActionRuleMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof rollbackWorkspaceActionRule>>, RollbackWorkspaceActionRuleMutationVariables> = (props) => {
+          const {workspaceId,actionType,data} = props ?? {};
+
+          return  rollbackWorkspaceActionRule(workspaceId,actionType,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RollbackWorkspaceActionRuleMutationResult = NonNullable<Awaited<ReturnType<typeof rollbackWorkspaceActionRule>>>
+    export type RollbackWorkspaceActionRuleMutationBody = BodyType<WorkspaceActionRuleRollbackInput>
+    export type RollbackWorkspaceActionRuleMutationError = ErrorType<void>
+    export type RollbackWorkspaceActionRuleMutationVariables = {workspaceId: string;actionType: string;data: BodyType<WorkspaceActionRuleRollbackInput>}
+
+    /**
+ * @summary Create and activate a new version copied from history
+ */
+export const useRollbackWorkspaceActionRule = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rollbackWorkspaceActionRule>>, TError,RollbackWorkspaceActionRuleMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof rollbackWorkspaceActionRule>>,
+        TError,
+        RollbackWorkspaceActionRuleMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRollbackWorkspaceActionRuleMutationOptions(options), queryClient);
+    }
+
+export const getSimulateWorkspaceActionRuleUrl = (workspaceId: string,
+    actionType: string,) => {
+
+
+
+
+  return `/api/workspaces/${workspaceId}/action-rules/${actionType}/simulate`
+}
+
+/**
+ * @summary Simulate an example against a saved rule version without persisting it
+ */
+export const simulateWorkspaceActionRule = async (workspaceId: string,
+    actionType: string,
+    workspaceActionRuleSimulationInput: WorkspaceActionRuleSimulationInput, options?: Parameters<typeof customFetch>[1]): Promise<WorkspaceActionRuleSimulationResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<WorkspaceActionRuleSimulationResponse>(getSimulateWorkspaceActionRuleUrl(workspaceId,actionType),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(workspaceActionRuleSimulationInput)
+  }
+);}
+
+
+
+
+
+export const getSimulateWorkspaceActionRuleMutationKey = () => ['simulateWorkspaceActionRule'] as const;
+
+export const getSimulateWorkspaceActionRuleMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof simulateWorkspaceActionRule>>, TError,SimulateWorkspaceActionRuleMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof simulateWorkspaceActionRule>>, TError,SimulateWorkspaceActionRuleMutationVariables, TContext> => {
+
+const mutationKey = getSimulateWorkspaceActionRuleMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof simulateWorkspaceActionRule>>, SimulateWorkspaceActionRuleMutationVariables> = (props) => {
+          const {workspaceId,actionType,data} = props ?? {};
+
+          return  simulateWorkspaceActionRule(workspaceId,actionType,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SimulateWorkspaceActionRuleMutationResult = NonNullable<Awaited<ReturnType<typeof simulateWorkspaceActionRule>>>
+    export type SimulateWorkspaceActionRuleMutationBody = BodyType<WorkspaceActionRuleSimulationInput>
+    export type SimulateWorkspaceActionRuleMutationError = ErrorType<void>
+    export type SimulateWorkspaceActionRuleMutationVariables = {workspaceId: string;actionType: string;data: BodyType<WorkspaceActionRuleSimulationInput>}
+
+    /**
+ * @summary Simulate an example against a saved rule version without persisting it
+ */
+export const useSimulateWorkspaceActionRule = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof simulateWorkspaceActionRule>>, TError,SimulateWorkspaceActionRuleMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof simulateWorkspaceActionRule>>,
+        TError,
+        SimulateWorkspaceActionRuleMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSimulateWorkspaceActionRuleMutationOptions(options), queryClient);
+    }
+
+export const getListWorkspaceAgentsUrl = (workspaceId: string,) => {
+
+
+
+
+  return `/api/workspaces/${workspaceId}/agents`
+}
+
+/**
+ * @summary List agent identities without exposing credentials
+ */
+export const listWorkspaceAgents = async (workspaceId: string, options?: Parameters<typeof customFetch>[1]): Promise<WorkspaceAgentsResponse> => {
+
+  return customFetch<WorkspaceAgentsResponse>(getListWorkspaceAgentsUrl(workspaceId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListWorkspaceAgentsQueryKey = (workspaceId: string,) => {
+    return [
+    `/api/workspaces/${workspaceId}/agents`
+    ] as const;
+    }
+
+
+export const getListWorkspaceAgentsQueryOptions = <TData = Awaited<ReturnType<typeof listWorkspaceAgents>>, TError = ErrorType<void>>(workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listWorkspaceAgents>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListWorkspaceAgentsQueryKey(workspaceId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listWorkspaceAgents>>> = ({ signal }) => listWorkspaceAgents(workspaceId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: workspaceId !== null && workspaceId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listWorkspaceAgents>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListWorkspaceAgentsQueryResult = NonNullable<Awaited<ReturnType<typeof listWorkspaceAgents>>>
+export type ListWorkspaceAgentsQueryError = ErrorType<void>
+
+
+export function useListWorkspaceAgents<TData = Awaited<ReturnType<typeof listWorkspaceAgents>>, TError = ErrorType<void>>(
+ workspaceId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listWorkspaceAgents>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listWorkspaceAgents>>,
+          TError,
+          Awaited<ReturnType<typeof listWorkspaceAgents>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListWorkspaceAgents<TData = Awaited<ReturnType<typeof listWorkspaceAgents>>, TError = ErrorType<void>>(
+ workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listWorkspaceAgents>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listWorkspaceAgents>>,
+          TError,
+          Awaited<ReturnType<typeof listWorkspaceAgents>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListWorkspaceAgents<TData = Awaited<ReturnType<typeof listWorkspaceAgents>>, TError = ErrorType<void>>(
+ workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listWorkspaceAgents>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List agent identities without exposing credentials
+ */
+
+export function useListWorkspaceAgents<TData = Awaited<ReturnType<typeof listWorkspaceAgents>>, TError = ErrorType<void>>(
+ workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listWorkspaceAgents>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListWorkspaceAgentsQueryOptions(workspaceId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateWorkspaceAgentUrl = (workspaceId: string,) => {
+
+
+
+
+  return `/api/workspaces/${workspaceId}/agents`
+}
+
+/**
+ * @summary Register an agent and return its credential once
+ */
+export const createWorkspaceAgent = async (workspaceId: string,
+    workspaceAgentInput: WorkspaceAgentInput, options?: Parameters<typeof customFetch>[1]): Promise<WorkspaceAgentCredentialResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<WorkspaceAgentCredentialResponse>(getCreateWorkspaceAgentUrl(workspaceId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(workspaceAgentInput)
+  }
+);}
+
+
+
+
+
+export const getCreateWorkspaceAgentMutationKey = () => ['createWorkspaceAgent'] as const;
+
+export const getCreateWorkspaceAgentMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createWorkspaceAgent>>, TError,CreateWorkspaceAgentMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createWorkspaceAgent>>, TError,CreateWorkspaceAgentMutationVariables, TContext> => {
+
+const mutationKey = getCreateWorkspaceAgentMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createWorkspaceAgent>>, CreateWorkspaceAgentMutationVariables> = (props) => {
+          const {workspaceId,data} = props ?? {};
+
+          return  createWorkspaceAgent(workspaceId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateWorkspaceAgentMutationResult = NonNullable<Awaited<ReturnType<typeof createWorkspaceAgent>>>
+    export type CreateWorkspaceAgentMutationBody = BodyType<WorkspaceAgentInput>
+    export type CreateWorkspaceAgentMutationError = ErrorType<void>
+    export type CreateWorkspaceAgentMutationVariables = {workspaceId: string;data: BodyType<WorkspaceAgentInput>}
+
+    /**
+ * @summary Register an agent and return its credential once
+ */
+export const useCreateWorkspaceAgent = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createWorkspaceAgent>>, TError,CreateWorkspaceAgentMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createWorkspaceAgent>>,
+        TError,
+        CreateWorkspaceAgentMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateWorkspaceAgentMutationOptions(options), queryClient);
+    }
+
+export const getRotateWorkspaceAgentCredentialUrl = (workspaceId: string,
+    agentId: string,) => {
+
+
+
+
+  return `/api/workspaces/${workspaceId}/agents/${agentId}/rotate`
+}
+
+/**
+ * @summary Revoke the prior credential and return a replacement once
+ */
+export const rotateWorkspaceAgentCredential = async (workspaceId: string,
+    agentId: string, options?: Parameters<typeof customFetch>[1]): Promise<WorkspaceAgentCredentialResponse> => {
+
+  return customFetch<WorkspaceAgentCredentialResponse>(getRotateWorkspaceAgentCredentialUrl(workspaceId,agentId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRotateWorkspaceAgentCredentialMutationKey = () => ['rotateWorkspaceAgentCredential'] as const;
+
+export const getRotateWorkspaceAgentCredentialMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rotateWorkspaceAgentCredential>>, TError,RotateWorkspaceAgentCredentialMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof rotateWorkspaceAgentCredential>>, TError,RotateWorkspaceAgentCredentialMutationVariables, TContext> => {
+
+const mutationKey = getRotateWorkspaceAgentCredentialMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof rotateWorkspaceAgentCredential>>, RotateWorkspaceAgentCredentialMutationVariables> = (props) => {
+          const {workspaceId,agentId} = props ?? {};
+
+          return  rotateWorkspaceAgentCredential(workspaceId,agentId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RotateWorkspaceAgentCredentialMutationResult = NonNullable<Awaited<ReturnType<typeof rotateWorkspaceAgentCredential>>>
+
+    export type RotateWorkspaceAgentCredentialMutationError = ErrorType<void>
+    export type RotateWorkspaceAgentCredentialMutationVariables = {workspaceId: string;agentId: string}
+
+    /**
+ * @summary Revoke the prior credential and return a replacement once
+ */
+export const useRotateWorkspaceAgentCredential = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rotateWorkspaceAgentCredential>>, TError,RotateWorkspaceAgentCredentialMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof rotateWorkspaceAgentCredential>>,
+        TError,
+        RotateWorkspaceAgentCredentialMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRotateWorkspaceAgentCredentialMutationOptions(options), queryClient);
+    }
+
+export const getRevokeWorkspaceAgentUrl = (workspaceId: string,
+    agentId: string,) => {
+
+
+
+
+  return `/api/workspaces/${workspaceId}/agents/${agentId}/revoke`
+}
+
+/**
+ * @summary Revoke an agent credential
+ */
+export const revokeWorkspaceAgent = async (workspaceId: string,
+    agentId: string, options?: Parameters<typeof customFetch>[1]): Promise<WorkspaceAgentResponse> => {
+
+  return customFetch<WorkspaceAgentResponse>(getRevokeWorkspaceAgentUrl(workspaceId,agentId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRevokeWorkspaceAgentMutationKey = () => ['revokeWorkspaceAgent'] as const;
+
+export const getRevokeWorkspaceAgentMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeWorkspaceAgent>>, TError,RevokeWorkspaceAgentMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof revokeWorkspaceAgent>>, TError,RevokeWorkspaceAgentMutationVariables, TContext> => {
+
+const mutationKey = getRevokeWorkspaceAgentMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof revokeWorkspaceAgent>>, RevokeWorkspaceAgentMutationVariables> = (props) => {
+          const {workspaceId,agentId} = props ?? {};
+
+          return  revokeWorkspaceAgent(workspaceId,agentId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RevokeWorkspaceAgentMutationResult = NonNullable<Awaited<ReturnType<typeof revokeWorkspaceAgent>>>
+
+    export type RevokeWorkspaceAgentMutationError = ErrorType<void>
+    export type RevokeWorkspaceAgentMutationVariables = {workspaceId: string;agentId: string}
+
+    /**
+ * @summary Revoke an agent credential
+ */
+export const useRevokeWorkspaceAgent = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeWorkspaceAgent>>, TError,RevokeWorkspaceAgentMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof revokeWorkspaceAgent>>,
+        TError,
+        RevokeWorkspaceAgentMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRevokeWorkspaceAgentMutationOptions(options), queryClient);
+    }
+
+export const getCreateWorkspaceAgentActionProposalUrl = (workspaceId: string,) => {
+
+
+
+
+  return `/api/agent/workspaces/${workspaceId}/action-proposals`
+}
+
+/**
+ * The agent credential is checked against a workspace-scoped hash. Proposals are attributed to the registered agent and never execute a tool. Human approval remains separate, and the agent principal cannot approve its own request.
+ * @summary Submit an action proposal using a registered agent credential
+ */
+export const createWorkspaceAgentActionProposal = async (workspaceId: string,
+    genericActionProposalRequest: GenericActionProposalRequest, options?: Parameters<typeof customFetch>[1]): Promise<GenericActionProposalResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<GenericActionProposalResponse>(getCreateWorkspaceAgentActionProposalUrl(workspaceId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(genericActionProposalRequest)
+  }
+);}
+
+
+
+
+
+export const getCreateWorkspaceAgentActionProposalMutationKey = () => ['createWorkspaceAgentActionProposal'] as const;
+
+export const getCreateWorkspaceAgentActionProposalMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createWorkspaceAgentActionProposal>>, TError,CreateWorkspaceAgentActionProposalMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createWorkspaceAgentActionProposal>>, TError,CreateWorkspaceAgentActionProposalMutationVariables, TContext> => {
+
+const mutationKey = getCreateWorkspaceAgentActionProposalMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createWorkspaceAgentActionProposal>>, CreateWorkspaceAgentActionProposalMutationVariables> = (props) => {
+          const {workspaceId,data} = props ?? {};
+
+          return  createWorkspaceAgentActionProposal(workspaceId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateWorkspaceAgentActionProposalMutationResult = NonNullable<Awaited<ReturnType<typeof createWorkspaceAgentActionProposal>>>
+    export type CreateWorkspaceAgentActionProposalMutationBody = BodyType<GenericActionProposalRequest>
+    export type CreateWorkspaceAgentActionProposalMutationError = ErrorType<void>
+    export type CreateWorkspaceAgentActionProposalMutationVariables = {workspaceId: string;data: BodyType<GenericActionProposalRequest>}
+
+    /**
+ * @summary Submit an action proposal using a registered agent credential
+ */
+export const useCreateWorkspaceAgentActionProposal = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createWorkspaceAgentActionProposal>>, TError,CreateWorkspaceAgentActionProposalMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createWorkspaceAgentActionProposal>>,
+        TError,
+        CreateWorkspaceAgentActionProposalMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateWorkspaceAgentActionProposalMutationOptions(options), queryClient);
     }
 
 export const getGetWorkspaceQwenProviderStatusUrl = (workspaceId: string,) => {

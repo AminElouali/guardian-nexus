@@ -3986,24 +3986,73 @@ export const GenericActionGatewayEvidenceProfileId = {
   'guardian-agent-lab-customer-service-v1': 'guardian-agent-lab-customer-service-v1',
 } as const;
 
-export type GenericActionGatewayEvidenceAgentId = typeof GenericActionGatewayEvidenceAgentId[keyof typeof GenericActionGatewayEvidenceAgentId];
+export type GenericActionGatewayEvidenceEvidenceVersion = typeof GenericActionGatewayEvidenceEvidenceVersion[keyof typeof GenericActionGatewayEvidenceEvidenceVersion];
 
 
-export const GenericActionGatewayEvidenceAgentId = {
-  'agent-fixture-support-demo-v1': 'agent-fixture-support-demo-v1',
-  'agent-fixture-email-demo-v1': 'agent-fixture-email-demo-v1',
+export const GenericActionGatewayEvidenceEvidenceVersion = {
+  NUMBER_1: 1,
+  NUMBER_2: 2,
 } as const;
+
+export type WorkspaceActionRuleDecision = typeof WorkspaceActionRuleDecision[keyof typeof WorkspaceActionRuleDecision];
+
+
+export const WorkspaceActionRuleDecision = {
+  allow: 'allow',
+  deny: 'deny',
+  require_approval: 'require_approval',
+} as const;
+
+export type WorkspaceRuleConditionOp = typeof WorkspaceRuleConditionOp[keyof typeof WorkspaceRuleConditionOp];
+
+
+export const WorkspaceRuleConditionOp = {
+  eq: 'eq',
+  gt: 'gt',
+  lte: 'lte',
+} as const;
+
+export interface WorkspaceRuleCondition {
+  /** @maxLength 80 */
+  field: string;
+  op: WorkspaceRuleConditionOp;
+  value: string | number | boolean;
+}
+
+export type WorkspaceActionRuleWhen = {
+  /** @maxItems 8 */
+  all?: WorkspaceRuleCondition[];
+  /** @maxItems 8 */
+  any?: WorkspaceRuleCondition[];
+};
+
+export interface WorkspaceActionRule {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  id: string;
+  decision: WorkspaceActionRuleDecision;
+  when: WorkspaceActionRuleWhen;
+}
+
+export interface WorkspaceActionRuleDocumentInput {
+  version: 1;
+  /** @maxItems 50 */
+  rules: WorkspaceActionRule[];
+}
 
 export type GenericActionGatewayEvidenceArguments = {[key: string]: string | number | boolean};
 
 export interface GenericActionGatewayEvidence {
   engine: 'guardian_action_gateway';
-  engineVersion: 'guardian-action-catalog-v1';
+  /** @maxLength 80 */
+  engineVersion: string;
   profileId: GenericActionGatewayEvidenceProfileId;
   executionMode: 'deterministic_fixture';
   modelInference: false;
   toolCallOrigin: 'controlled_fixture_not_llm';
-  evidenceVersion: 1;
+  evidenceVersion: GenericActionGatewayEvidenceEvidenceVersion;
   /** @maxLength 120 */
   actionType: string;
   arguments: GenericActionGatewayEvidenceArguments;
@@ -4016,7 +4065,19 @@ export interface GenericActionGatewayEvidence {
   /** @maxLength 120 */
   ruleId: string;
   decision: 'require_approval';
-  agentId: GenericActionGatewayEvidenceAgentId;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  agentId: string;
+  /** @nullable */
+  ruleVersionId?: string | null;
+  /**
+     * @nullable
+     * @pattern ^[a-f0-9]{64}$
+     */
+  ruleDocumentSha256?: string | null;
+  ruleDocument?: WorkspaceActionRuleDocumentInput | null;
   synthetic: true;
   /** @maxLength 500 */
   summary: string;
@@ -4310,6 +4371,8 @@ export interface GenericActionProposalDetails {
   summary: string;
   messagePreview: string;
   appliedRule: string;
+  /** @nullable */
+  ruleVersionId: string | null;
   synthetic: true;
 }
 
@@ -4485,6 +4548,141 @@ export interface GenericActionCatalogResponse {
   actions: GenericActionTemplate[];
 }
 
+export interface WorkspaceActionRuleVersion {
+  id: string;
+  /** @minimum 1 */
+  version: number;
+  rules: WorkspaceActionRule[];
+  createdByUserId: string;
+  createdAt: string;
+  isActive: boolean;
+  isDraft: boolean;
+}
+
+export type WorkspaceActionRuleStateRiskClass = typeof WorkspaceActionRuleStateRiskClass[keyof typeof WorkspaceActionRuleStateRiskClass];
+
+
+export const WorkspaceActionRuleStateRiskClass = {
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+} as const;
+
+export type WorkspaceActionRuleStateRiskCategoriesItem = typeof WorkspaceActionRuleStateRiskCategoriesItem[keyof typeof WorkspaceActionRuleStateRiskCategoriesItem];
+
+
+export const WorkspaceActionRuleStateRiskCategoriesItem = {
+  money: 'money',
+  internal_email: 'internal_email',
+  external_email: 'external_email',
+  customer_data: 'customer_data',
+  infrastructure: 'infrastructure',
+} as const;
+
+export interface WorkspaceActionRuleState {
+  actionType: string;
+  label: string;
+  description: string;
+  riskClass: WorkspaceActionRuleStateRiskClass;
+  riskCategories: WorkspaceActionRuleStateRiskCategoriesItem[];
+  /** @nullable */
+  activeVersionId: string | null;
+  /** @nullable */
+  draftVersionId: string | null;
+  activeRules: WorkspaceActionRule[];
+  draftRules: WorkspaceActionRule[];
+  history: WorkspaceActionRuleVersion[];
+  warnings: string[];
+}
+
+export interface WorkspaceActionRulesResponse {
+  actions: WorkspaceActionRuleState[];
+}
+
+export interface WorkspaceActionRuleVersionResponse {
+  actionType: string;
+  versionId: string;
+  /** @minimum 1 */
+  version: number;
+  rules: WorkspaceActionRule[];
+  createdAt: string;
+  active: boolean;
+}
+
+export interface WorkspaceActionRuleRollbackInput {
+  /** @minimum 1 */
+  version: number;
+}
+
+export type WorkspaceActionRuleSimulationInputArguments = {[key: string]: string | number | boolean};
+
+export interface WorkspaceActionRuleSimulationInput {
+  versionId?: string;
+  arguments: WorkspaceActionRuleSimulationInputArguments;
+}
+
+export type WorkspaceActionRuleSimulationResponseDecision = typeof WorkspaceActionRuleSimulationResponseDecision[keyof typeof WorkspaceActionRuleSimulationResponseDecision];
+
+
+export const WorkspaceActionRuleSimulationResponseDecision = {
+  allow: 'allow',
+  deny: 'deny',
+  require_approval: 'require_approval',
+} as const;
+
+export interface WorkspaceActionRuleSimulationResponse {
+  actionType: string;
+  decision: WorkspaceActionRuleSimulationResponseDecision;
+  reasonCode: string;
+  /** @nullable */
+  ruleId: string | null;
+  /** @nullable */
+  ruleVersionId: string | null;
+  matched: boolean;
+  issues: string[];
+  persisted: false;
+  dispatched: false;
+}
+
+export interface WorkspaceAgentInput {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  displayName: string;
+}
+
+export interface WorkspaceAgent {
+  id: string;
+  displayName: string;
+  principalUserId: string;
+  /** @minimum 1 */
+  credentialVersion: number;
+  createdAt: string;
+  /** @nullable */
+  revokedAt: string | null;
+  /** @nullable */
+  lastUsedAt: string | null;
+}
+
+export interface WorkspaceAgentsResponse {
+  agents: WorkspaceAgent[];
+}
+
+export interface WorkspaceAgentCredentialResponse {
+  agent: WorkspaceAgent;
+  /**
+     * @minLength 40
+     * @maxLength 100
+     */
+  credential: string;
+  shownOnce: true;
+}
+
+export interface WorkspaceAgentResponse {
+  agent: WorkspaceAgent;
+}
+
 export type GenericActionProposalResponseDecision = typeof GenericActionProposalResponseDecision[keyof typeof GenericActionProposalResponseDecision];
 
 
@@ -4505,6 +4703,8 @@ export interface GenericActionProposalResponse {
   actionSha256: string | null;
   /** @nullable */
   ruleId: string | null;
+  /** @nullable */
+  ruleVersionId: string | null;
   approval: AiAssessmentApproval | null;
   execution: 'not_performed';
   externalSideEffect: false;

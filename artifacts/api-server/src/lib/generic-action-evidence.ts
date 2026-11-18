@@ -4,6 +4,10 @@ import {
   getApprovalActionDefinition,
   type GenericActionGatewayEvidence,
 } from "@workspace/db/approval-action-catalog";
+import {
+  evaluateWorkspaceActionRule,
+  type WorkspaceActionRuleDocument,
+} from "@workspace/db";
 import { canonicalApprovalJson } from "./ai-assessment-approval-actions";
 
 type GenericActionInput = {
@@ -39,6 +43,7 @@ export function genericActionProposalSha256(input: {
   actionType: string;
   actionSha256: string;
   ruleId: string;
+  ruleVersionId?: string;
 }): string {
   return sha256(input);
 }
@@ -103,6 +108,77 @@ export function createGenericActionEvidence(
   return { ...unsigned, evidenceSha256: sha256(unsigned) };
 }
 
+export function createWorkspaceRuleActionEvidence(input: {
+  workspaceId: string;
+  requestedByUserId: string;
+  actionType: string;
+  args: Record<string, string | number | boolean>;
+  ruleId: string;
+  ruleVersionId: string;
+  ruleDocument: WorkspaceActionRuleDocument;
+  summary: string;
+  messagePreview: string;
+  agentId: string;
+}): GenericActionGatewayEvidence | null {
+  const action = evaluateApprovalAction(input.actionType, input.args);
+  if (!action.ok) return null;
+  const decision = evaluateWorkspaceActionRule({
+    actionType: input.actionType,
+    arguments: action.args,
+    document: input.ruleDocument,
+    ruleVersionId: input.ruleVersionId,
+  });
+  if (
+    decision.decision !== "require_approval" ||
+    !decision.ruleId ||
+    decision.ruleId !== input.ruleId
+  ) {
+    return null;
+  }
+  const { argumentsSha256, actionSha256 } = hashGenericActionArguments(
+    input.actionType,
+    action.args,
+  );
+  const proposalSha256 = genericActionProposalSha256({
+    workspaceId: input.workspaceId,
+    requestedByUserId: input.requestedByUserId,
+    actionType: input.actionType,
+    actionSha256,
+    ruleId: input.ruleId,
+    ruleVersionId: input.ruleVersionId,
+  });
+  const ruleDocumentSha256 = sha256(input.ruleDocument);
+  const unsigned: Omit<GenericActionGatewayEvidence, "evidenceSha256"> = {
+    engine: "guardian_action_gateway",
+    engineVersion: "guardian-workspace-rules-v2",
+    profileId:
+      input.actionType === "guardian.support.reply.send.v1"
+        ? "guardian-agent-lab-customer-service-v1"
+        : "guardian-agent-lab-email-v1",
+    executionMode: "deterministic_fixture",
+    modelInference: false,
+    toolCallOrigin: "controlled_fixture_not_llm",
+    evidenceVersion: 2,
+    actionType: input.actionType,
+    arguments: action.args,
+    actionSha256,
+    argumentsSha256,
+    proposalSha256,
+    ruleId: input.ruleId,
+    decision: "require_approval",
+    agentId: input.agentId,
+    synthetic: true,
+    summary: input.summary.slice(0, 500),
+    messagePreview: input.messagePreview.slice(0, 500),
+    requestedByUserId: input.requestedByUserId,
+    workspaceId: input.workspaceId,
+    ruleVersionId: input.ruleVersionId,
+    ruleDocumentSha256,
+    ruleDocument: input.ruleDocument,
+  };
+  return { ...unsigned, evidenceSha256: sha256(unsigned) };
+}
+
 export function genericActionDisplay(
   actionType: string,
   args: Record<string, string | number | boolean>,
@@ -122,6 +198,20 @@ export function genericActionDisplay(
       summary: `Respuesta sintética para ${String(args.ticket_id)} a ${String(args.recipient_email)}; compensación ${euros} EUR.`,
       messagePreview: definition.syntheticTemplateText,
       agentId: "agent-fixture-support-demo-v1",
+    };
+  }
+  if (actionType === "guardian.synthetic.support.refund.v1") {
+    return {
+      summary: `Reembolso sintético de ${(Number(args.amount_cents) / 100).toFixed(2)} EUR para ${String(args.ticket_id)}.`,
+      messagePreview: definition.syntheticTemplateText,
+      agentId: "agent-fixture-refund-demo-v1",
+    };
+  }
+  if (actionType === "guardian.synthetic.finance.bank-change.v1") {
+    return {
+      summary: `Cambio bancario sintético para ${String(args.account_id)}.`,
+      messagePreview: definition.syntheticTemplateText,
+      agentId: "agent-fixture-bank-change-demo-v1",
     };
   }
   return null;
@@ -146,7 +236,7 @@ export function verifyGenericActionEvidence(
     return null;
   }
   const evidence = value as Partial<GenericActionGatewayEvidence>;
-  const expectedKeys = [
+  const v1Keys = [
     "engine",
     "engineVersion",
     "profileId",
@@ -169,6 +259,13 @@ export function verifyGenericActionEvidence(
     "workspaceId",
     "evidenceSha256",
   ];
+  const evidenceVersion =
+    typeof (value as { evidenceVersion?: unknown }).evidenceVersion === "number"
+      ? (value as { evidenceVersion: number }).evidenceVersion
+      : 0;
+  const expectedKeys = evidenceVersion === 2
+    ? [...v1Keys, "ruleVersionId", "ruleDocumentSha256", "ruleDocument"]
+    : v1Keys;
   if (
     Reflect.ownKeys(value).length !== expectedKeys.length ||
     expectedKeys.some((key) => !Object.hasOwn(value, key)) ||
@@ -181,15 +278,19 @@ export function verifyGenericActionEvidence(
   const { evidenceSha256, ...unsigned } = evidence;
   if (
     evidence.engine !== "guardian_action_gateway" ||
-    evidence.engineVersion !== "guardian-action-catalog-v1" ||
+    (evidence.evidenceVersion === 1 &&
+      evidence.engineVersion !== "guardian-action-catalog-v1") ||
+    (evidence.evidenceVersion === 2 &&
+      evidence.engineVersion !== "guardian-workspace-rules-v2") ||
     evidence.executionMode !== "deterministic_fixture" ||
     evidence.modelInference !== false ||
     evidence.toolCallOrigin !== "controlled_fixture_not_llm" ||
-    evidence.evidenceVersion !== 1 ||
+    (evidence.evidenceVersion !== 1 && evidence.evidenceVersion !== 2) ||
     evidence.decision !== "require_approval" ||
     evidence.synthetic !== true ||
-    (evidence.agentId !== "agent-fixture-support-demo-v1" &&
-      evidence.agentId !== "agent-fixture-email-demo-v1") ||
+    typeof evidence.agentId !== "string" ||
+    evidence.agentId.length < 1 ||
+    evidence.agentId.length > 120 ||
     evidence.workspaceId !== expected.workspaceId ||
     evidence.requestedByUserId !== expected.requestedByUserId ||
     evidence.actionType !== expected.actionType ||
@@ -208,11 +309,38 @@ export function verifyGenericActionEvidence(
   }
   const evaluated = evaluateApprovalAction(evidence.actionType, evidence.arguments);
   if (
-    (evidence.actionType !== "guardian.support.reply.send.v1" &&
-      evidence.actionType !== "guardian.email.send.external.v1") ||
     !evaluated.ok ||
-    evaluated.decision !== "require_approval" ||
-    evaluated.ruleId !== evidence.ruleId
+    (evidence.evidenceVersion === 1 &&
+      ((evidence.actionType !== "guardian.support.reply.send.v1" &&
+        evidence.actionType !== "guardian.email.send.external.v1") ||
+        evaluated.decision !== "require_approval" ||
+        evaluated.ruleId !== evidence.ruleId))
+  ) {
+    return null;
+  }
+  if (
+    evidence.evidenceVersion === 2 &&
+    (!evidence.ruleVersionId ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(evidence.ruleVersionId) ||
+      !evidence.ruleDocument ||
+      evidence.ruleDocument.version !== 1 ||
+      sha256(evidence.ruleDocument) !== evidence.ruleDocumentSha256)
+  ) {
+    return null;
+  }
+  const effectiveDecision = evidence.evidenceVersion === 2
+    ? evaluateWorkspaceActionRule({
+        actionType: evidence.actionType,
+        arguments: evaluated.args,
+        document: evidence.ruleDocument!,
+        ruleVersionId: evidence.ruleVersionId!,
+      })
+    : null;
+  if (
+    effectiveDecision &&
+    (effectiveDecision.decision !== "require_approval" ||
+      effectiveDecision.ruleId !== evidence.ruleId ||
+      effectiveDecision.ruleVersionId !== evidence.ruleVersionId)
   ) {
     return null;
   }
@@ -220,7 +348,7 @@ export function verifyGenericActionEvidence(
   const display = genericActionDisplay(evidence.actionType, evaluated.args);
   if (
     !display ||
-    display.agentId !== evidence.agentId ||
+    (evidence.evidenceVersion === 1 && display.agentId !== evidence.agentId) ||
     display.summary !== evidence.summary ||
     display.messagePreview !== evidence.messagePreview ||
     hashes.argumentsSha256 !== evidence.argumentsSha256 ||
@@ -231,6 +359,9 @@ export function verifyGenericActionEvidence(
       actionType: expected.actionType,
       actionSha256: expected.actionSha256,
       ruleId: evidence.ruleId,
+      ...(evidence.evidenceVersion === 2 && evidence.ruleVersionId
+        ? { ruleVersionId: evidence.ruleVersionId }
+        : {}),
     }) !== evidence.proposalSha256
   ) {
     return null;
