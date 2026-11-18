@@ -66,6 +66,32 @@ test("API test target guard rejects a remote database URL", async () => {
   });
 });
 
+test("API test target guard blocks a Replit-style URL without lab markers", () => {
+  assert.equal(
+    isSafeApiTestTarget({
+      NODE_ENV: "development",
+      DATABASE_URL: "postgresql://synthetic:synthetic@managed.invalid:5432/dev",
+    }),
+    false,
+  );
+});
+
+test("API test target guard rejects lab markers that do not match the URL database", async () => {
+  await withPrivateLabSocket(async ({ env }) => {
+    const wrongMarker = {
+      ...env,
+      GUARDIAN_APPROVAL_E2E_DATABASE_NAME: "guardian_approval_lab_other",
+    };
+    assert.equal(isSafeApiTestTarget(wrongMarker), false);
+
+    const wrongRuntimeDatabase = { ...env };
+    const runtimeUrl = new URL(wrongRuntimeDatabase.APP_RUNTIME_DATABASE_URL!);
+    runtimeUrl.pathname = "/guardian_approval_lab_other";
+    wrongRuntimeDatabase.APP_RUNTIME_DATABASE_URL = runtimeUrl.toString();
+    assert.equal(isSafeApiTestTarget(wrongRuntimeDatabase), false);
+  });
+});
+
 test("API test target guard rejects missing lab markers or connection URLs", async () => {
   await withPrivateLabSocket(async ({ env }) => {
     const noMarker = { ...env };

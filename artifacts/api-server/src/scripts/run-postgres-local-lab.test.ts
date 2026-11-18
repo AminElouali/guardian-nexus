@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseSafeNodeTestFailures } from "./run-postgres-local-lab";
+import {
+  parseSafeNodeTestFailures,
+  sanitizeChildOutputForReport,
+} from "./run-postgres-local-lab";
 
 const testFileName = "ai-assessment-synthetic-approval-e2e.test.ts";
 const testSource = [
@@ -113,4 +116,52 @@ test("truncates safe assertion messages to 300 characters", () => {
     testSource,
   );
   assert.equal(failures[0]?.message?.length, 300);
+});
+
+test("sanitizes captured stdout and stderr before writing a failure report", () => {
+  const output = sanitizeChildOutputForReport({
+    stage: "api_unit_tests",
+    stdout: [
+      "not ok 1 - synthetic database test",
+      "  error: Connection to postgresql://user:TOP_SECRET@db.example/app failed",
+      "  code: 'ERR_ASSERTION'",
+      "  stack: at suite (security.test.ts:25:4)",
+    ].join("\n"),
+    stderr: [
+      "APP_RUNTIME_DATABASE_URL=postgresql://runtime:OTHER_SECRET@127.0.0.1/db",
+      "Authorization: Bearer SENTINEL_BEARER_VALUE",
+      "-----BEGIN PRIVATE KEY-----",
+      "SENTINEL_PRIVATE_KEY",
+      "-----END PRIVATE KEY-----",
+    ].join("\n"),
+    exitCode: 1,
+    signal: null,
+  });
+
+  const serialized = JSON.stringify(output);
+  assert.equal(output.stage, "api_unit_tests");
+  assert.equal(output.exitCode, 1);
+  assert.match(output.stdout, /not ok 1 - synthetic database test/);
+  assert.match(output.stdout, /security\.test\.ts:25:4/);
+  assert.doesNotMatch(
+    serialized,
+    /TOP_SECRET|OTHER_SECRET|SENTINEL_|postgresql:\/\/|127\.0\.0\.1|db\.example|Bearer [A-Za-z0-9_-]+/,
+  );
+  assert.match(serialized, /\[redacted URL\]/);
+  assert.match(serialized, /\[redacted private key\]/);
+});
+
+test("bounds sanitized child output and marks when it was truncated", () => {
+  const output = sanitizeChildOutputForReport({
+    stage: "api_unit_tests",
+    // Ordinary diagnostic words exercise the size limit without matching the
+    // sanitizer's long-token rule for possible credentials.
+    stdout: `${"ordinary diagnostic ".repeat(1_000)}\nnot ok 119 - final failing subtest`,
+    stderr: "",
+    exitCode: 1,
+    signal: null,
+  });
+  assert.equal(output.truncated, true);
+  assert.match(output.stdout, /\[\.\.\.middle output omitted\.\.\.\]/);
+  assert.match(output.stdout, /not ok 119 - final failing subtest$/);
 });

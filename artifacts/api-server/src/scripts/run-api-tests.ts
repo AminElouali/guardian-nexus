@@ -22,6 +22,7 @@ const testFiles = [
   "src/lib/generic-action-evidence.test.ts",
   "src/lib/safe-http-request-log.test.ts",
   "src/lib/api-test-target-guard.test.ts",
+  "src/scripts/run-postgres-local-lab.test.ts",
   "src/middlewares/ai-assessment-json.test.ts",
 ];
 

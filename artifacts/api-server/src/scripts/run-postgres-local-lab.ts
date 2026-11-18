@@ -96,6 +96,7 @@ type SafeReport = {
   approvalE2eFailureErrorCode?: string;
   approvalE2eFailureType?: string;
   approvalE2ePassed?: boolean;
+  failureOutput?: SafeChildOutput;
   failureStage?: Stage;
 };
 
@@ -120,8 +121,110 @@ export type SafeNodeTestFailure = {
   location?: string;
 };
 
+export type SafeChildOutput = {
+  stage: Stage;
+  stdout: string;
+  stderr: string;
+  exitCode: number | null;
+  signal: string | null;
+  truncated: boolean;
+  captureError?: "child_start_failed" | "child_timeout" | "child_output_limit";
+};
+
 const allowedChildEnvironmentKeys = ["PATH", "HOME", "LANG", "LC_ALL"] as const;
 const MAX_CAPTURED_TEST_OUTPUT_BYTES = 256 * 1024;
+const MAX_SAFE_CHILD_OUTPUT_CHARACTERS = 12_000;
+
+let latestFailureOutput: SafeChildOutput | undefined;
+
+function redactChildOutput(value: string): {
+  text: string;
+  truncated: boolean;
+} {
+  let text = value
+    .replace(/\u001b\[[0-9;]*m/g, "")
+    .replace(
+      /-----BEGIN [^-]*PRIVATE KEY-----[\s\S]*?-----END [^-]*PRIVATE KEY-----/gi,
+      "[redacted private key]",
+    )
+    .replace(
+      /\b(?:postgres(?:ql)?|https?):\/\/[^\s"'<>]+/gi,
+      "[redacted URL]",
+    )
+    .replace(
+      /\b(?:DATABASE_URL|APP_RUNTIME_DATABASE_URL|APP_RUNTIME_DB_PASSWORD|APPROVAL_LEDGER_ED25519_PRIVATE_KEY|SESSION_SECRET|CLERK_SECRET_KEY)\b["']?\s*[:=]\s*["']?[^,\s"'{}]+/gi,
+      "[redacted environment value]",
+    )
+    .replace(/\bBearer\s+\S+/gi, "Bearer [redacted]")
+    .replace(/\bgnx_agent_v1_[A-Za-z0-9_-]{20,}\b/g, "[redacted agent credential]")
+    .replace(
+      /\b(?:token|secret|password|credential|authorization)\s*[:=]\s*[^\s,;'"{}]+/gi,
+      "[redacted credential]",
+    )
+    .replace(
+      /\b(?:\d{1,3}\.){3}\d{1,3}(?::\d{1,5})?\b|\[[0-9a-f:]+\](?::\d{1,5})?\b/gi,
+      "[redacted address]",
+    )
+    .replace(
+      /\b[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+(?:\:\d{1,5})?\b/gi,
+      (candidate) =>
+        /\.(?:[cm]?[jt]sx?|json|sql|md|ya?ml)(?::\d+)?$/i.test(candidate)
+          ? candidate
+          : "[redacted host]",
+    )
+    .replace(/\b[A-Za-z0-9_+/=-]{40,}\b/g, "[redacted long value]")
+    .replace(/\b[0-9a-f]{8}-[0-9a-f-]{27,}\b/gi, "[redacted identifier]")
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, " ");
+  const truncated = text.length > MAX_SAFE_CHILD_OUTPUT_CHARACTERS;
+  if (truncated) {
+    const marker = "\n[...middle output omitted...]\n";
+    const retainedCharacters = MAX_SAFE_CHILD_OUTPUT_CHARACTERS - marker.length;
+    const headCharacters = Math.ceil(retainedCharacters / 2);
+    const tailCharacters = Math.floor(retainedCharacters / 2);
+    text = `${text.slice(0, headCharacters)}${marker}${text.slice(-tailCharacters)}`;
+  }
+  return { text, truncated };
+}
+
+export function sanitizeChildOutputForReport(input: {
+  stage: Stage;
+  stdout: string;
+  stderr: string;
+  exitCode: number | null;
+  signal: string | null;
+}): SafeChildOutput {
+  const stdout = redactChildOutput(input.stdout);
+  const stderr = redactChildOutput(input.stderr);
+  return {
+    stage: input.stage,
+    stdout: stdout.text,
+    stderr: stderr.text,
+    exitCode: input.exitCode,
+    signal: input.signal,
+    truncated: stdout.truncated || stderr.truncated,
+  };
+}
+
+function recordCaptureError(
+  stage: Stage,
+  captureError: NonNullable<SafeChildOutput["captureError"]>,
+  stdout: readonly Buffer[],
+  stderr: readonly Buffer[],
+  truncated = false,
+): void {
+  const sanitized = sanitizeChildOutputForReport({
+    stage,
+    stdout: Buffer.concat(stdout).toString("utf8"),
+    stderr: Buffer.concat(stderr).toString("utf8"),
+    exitCode: null,
+    signal: null,
+  });
+  latestFailureOutput = {
+    ...sanitized,
+    truncated: sanitized.truncated || truncated,
+    captureError,
+  };
+}
 
 function safeChildEnvironment(home: string): NodeJS.ProcessEnv {
   const environment: NodeJS.ProcessEnv = {};
@@ -163,15 +266,45 @@ function run(
     const child = spawn(command, args, {
       cwd,
       env,
-      stdio: ["ignore", "ignore", "ignore"],
+      stdio: ["ignore", "pipe", "pipe"],
     });
+    const stdout: Buffer[] = [];
+    const stderr: Buffer[] = [];
+    let stdoutBytes = 0;
+    let stderrBytes = 0;
+    let outputTruncated = false;
+    const capture = (
+      target: Buffer[],
+      chunk: Buffer,
+      stream: "stdout" | "stderr",
+    ) => {
+      const currentBytes = stream === "stdout" ? stdoutBytes : stderrBytes;
+      const combined = Buffer.concat([...target, chunk]);
+      if (combined.length > MAX_CAPTURED_TEST_OUTPUT_BYTES) {
+        outputTruncated = true;
+        const tail = combined.subarray(
+          combined.length - MAX_CAPTURED_TEST_OUTPUT_BYTES,
+        );
+        target.splice(0, target.length, tail);
+        if (stream === "stdout") stdoutBytes = tail.length;
+        else stderrBytes = tail.length;
+      } else {
+        target.push(chunk);
+        if (stream === "stdout") stdoutBytes = currentBytes + chunk.length;
+        else stderrBytes = currentBytes + chunk.length;
+      }
+    };
+    child.stdout.on("data", (chunk: Buffer) => capture(stdout, chunk, "stdout"));
+    child.stderr.on("data", (chunk: Buffer) => capture(stderr, chunk, "stderr"));
     const timeout = setTimeout(() => {
       child.kill("SIGTERM");
       setTimeout(() => child.kill("SIGKILL"), 3000).unref();
+      recordCaptureError(stage, "child_timeout", stdout, stderr, outputTruncated);
       reject(new Error(`child_timeout:${stage}`));
     }, timeoutMs);
     child.once("error", () => {
       clearTimeout(timeout);
+      recordCaptureError(stage, "child_start_failed", stdout, stderr, outputTruncated);
       reject(new Error(`child_start_failed:${stage}`));
     });
     child.once("exit", (code, signal) => {
@@ -179,6 +312,17 @@ function run(
       if (code === 0 && signal === null) {
         resolve();
       } else {
+        const sanitized = sanitizeChildOutputForReport({
+          stage,
+          stdout: Buffer.concat(stdout).toString("utf8"),
+          stderr: Buffer.concat(stderr).toString("utf8"),
+          exitCode: code,
+          signal,
+        });
+        latestFailureOutput = {
+          ...sanitized,
+          truncated: sanitized.truncated || outputTruncated,
+        };
         reject(new Error(`child_failed:${stage}`));
       }
     });
@@ -212,6 +356,12 @@ function runAndCapture(
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
+      const captureError = error.message.startsWith("child_timeout:")
+        ? "child_timeout"
+        : error.message.startsWith("child_output_limit:")
+          ? "child_output_limit"
+          : "child_start_failed";
+      recordCaptureError(stage, captureError, stdout, stderr);
       reject(error);
     };
     const timeout = setTimeout(() => {
@@ -223,6 +373,7 @@ function runAndCapture(
       if (settled) return;
       if (capturedBytes + chunk.length > MAX_CAPTURED_TEST_OUTPUT_BYTES) {
         child.kill("SIGTERM");
+        recordCaptureError(stage, "child_output_limit", stdout, stderr, true);
         finishWithError(new Error(`child_output_limit:${stage}`));
         return;
       }
@@ -239,6 +390,15 @@ function runAndCapture(
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
+      if (code !== 0 || signal !== null) {
+        latestFailureOutput = sanitizeChildOutputForReport({
+          stage,
+          stdout: Buffer.concat(stdout).toString("utf8"),
+          stderr: Buffer.concat(stderr).toString("utf8"),
+          exitCode: code,
+          signal,
+        });
+      }
       resolve({
         stdout: Buffer.concat(stdout).toString("utf8"),
         stderr: Buffer.concat(stderr).toString("utf8"),
@@ -717,6 +877,7 @@ async function configureRuntimeLoginScram(pgData: string): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  latestFailureOutput = undefined;
   let currentStage: Stage = "preflight";
   let labRoot: string | null = null;
   let pgCtl: string | null = null;
@@ -1102,6 +1263,8 @@ async function main(): Promise<void> {
     const apiTestEnv = {
       ...safeChildEnvironment(labRoot),
       NODE_ENV: "development",
+      GUARDIAN_APPROVAL_E2E_DISPOSABLE: "1",
+      GUARDIAN_APPROVAL_E2E_DATABASE_NAME: databaseName,
       DATABASE_URL: databaseUrl(databaseName, socketDirectory),
       APP_RUNTIME_DATABASE_URL: runtimeUrl(
         databaseName,
@@ -1426,6 +1589,7 @@ async function main(): Promise<void> {
         approvalE2eFailureErrorCode,
         approvalE2eFailureType,
         approvalE2ePassed,
+        failureOutput: latestFailureOutput,
         failureStage: currentStage,
       }).catch(() => undefined);
     }
