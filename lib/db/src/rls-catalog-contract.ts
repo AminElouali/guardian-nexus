@@ -17,6 +17,9 @@ export const expectedRlsPolicyCounts = {
   host_boundary_attestation_challenges: 3,
   ai_assessment_approval_requests: 3,
   workspace_approval_ledger: 2,
+  workspace_action_rule_heads: 3,
+  workspace_action_rule_versions: 2,
+  workspace_agents: 4,
 } as const;
 
 export const expectedRlsPolicyCount = Object.values(
@@ -29,6 +32,7 @@ export const expectedRlsTableNames = Object.keys(
 
 export const appendOnlyRlsTableNames = [
   "workspace_approval_ledger",
+  "workspace_action_rule_versions",
 ] as const satisfies readonly (keyof typeof expectedRlsPolicyCounts)[];
 
 export const expectedDisposableRlsTableOwner = "postgres";

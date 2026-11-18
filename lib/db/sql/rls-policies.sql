@@ -914,4 +914,273 @@ CREATE POLICY workspace_approval_ledger_insert_owner_admin
     )
   );
 
+CREATE TABLE IF NOT EXISTS public.workspace_action_rule_versions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id uuid NOT NULL
+    REFERENCES public.workspaces(id) ON DELETE CASCADE,
+  action_type text NOT NULL
+    CHECK (action_type IN (
+      'guardian.synthetic.support.refund.v1',
+      'guardian.synthetic.finance.bank-change.v1',
+      'guardian.support.reply.send.v1',
+      'guardian.email.send.external.v1'
+    )),
+  version integer NOT NULL CHECK (version > 0),
+  rule_document jsonb NOT NULL
+    CHECK (jsonb_typeof(rule_document) = 'object'),
+  created_by_user_id text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS
+  workspace_action_rule_versions_workspace_action_version_uidx
+  ON public.workspace_action_rule_versions
+    (workspace_id, action_type, version);
+CREATE INDEX IF NOT EXISTS workspace_action_rule_versions_workspace_created_idx
+  ON public.workspace_action_rule_versions (workspace_id, created_at);
+REVOKE ALL PRIVILEGES ON TABLE public.workspace_action_rule_versions
+  FROM app_runtime;
+GRANT SELECT, INSERT ON TABLE public.workspace_action_rule_versions TO app_runtime;
+ALTER TABLE public.workspace_action_rule_versions
+  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.workspace_action_rule_versions
+  FORCE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS workspace_action_rule_versions_select_member
+  ON public.workspace_action_rule_versions;
+CREATE POLICY workspace_action_rule_versions_select_member
+  ON public.workspace_action_rule_versions FOR SELECT TO app_runtime
+  USING (
+    workspace_id::text = NULLIF(current_setting('app.workspace_id', true), '')
+    AND EXISTS (
+      SELECT 1
+      FROM public.workspace_memberships AS membership
+      WHERE membership.workspace_id =
+        workspace_action_rule_versions.workspace_id
+        AND membership.user_id =
+          NULLIF(current_setting('app.user_id', true), '')
+    )
+  );
+
+DROP POLICY IF EXISTS workspace_action_rule_versions_insert_admin
+  ON public.workspace_action_rule_versions;
+CREATE POLICY workspace_action_rule_versions_insert_admin
+  ON public.workspace_action_rule_versions FOR INSERT TO app_runtime
+  WITH CHECK (
+    workspace_id::text = NULLIF(current_setting('app.workspace_id', true), '')
+    AND created_by_user_id =
+      NULLIF(current_setting('app.user_id', true), '')
+    AND EXISTS (
+      SELECT 1
+      FROM public.workspace_memberships AS membership
+      WHERE membership.workspace_id =
+        workspace_action_rule_versions.workspace_id
+        AND membership.user_id =
+          NULLIF(current_setting('app.user_id', true), '')
+        AND membership.role IN ('owner', 'admin')
+    )
+  );
+
+CREATE TABLE IF NOT EXISTS public.workspace_action_rule_heads (
+  workspace_id uuid NOT NULL
+    REFERENCES public.workspaces(id) ON DELETE CASCADE,
+  action_type text NOT NULL
+    CHECK (action_type IN (
+      'guardian.synthetic.support.refund.v1',
+      'guardian.synthetic.finance.bank-change.v1',
+      'guardian.support.reply.send.v1',
+      'guardian.email.send.external.v1'
+    )),
+  active_version integer,
+  draft_version integer,
+  updated_by_user_id text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT workspace_action_rule_heads_pkey
+    PRIMARY KEY (workspace_id, action_type),
+  CONSTRAINT workspace_action_rule_heads_active_version_fk
+    FOREIGN KEY (workspace_id, action_type, active_version)
+    REFERENCES public.workspace_action_rule_versions
+      (workspace_id, action_type, version),
+  CONSTRAINT workspace_action_rule_heads_draft_version_fk
+    FOREIGN KEY (workspace_id, action_type, draft_version)
+    REFERENCES public.workspace_action_rule_versions
+      (workspace_id, action_type, version),
+  CONSTRAINT workspace_action_rule_heads_versions_check
+    CHECK (
+      (active_version IS NULL OR active_version > 0)
+      AND (draft_version IS NULL OR draft_version > 0)
+    ),
+  CONSTRAINT workspace_action_rule_heads_version_state_check
+    CHECK (
+      active_version IS NULL
+      OR draft_version IS NULL
+      OR active_version <> draft_version
+    )
+);
+GRANT SELECT, INSERT, UPDATE ON TABLE public.workspace_action_rule_heads
+  TO app_runtime;
+ALTER TABLE public.workspace_action_rule_heads
+  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.workspace_action_rule_heads
+  FORCE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS workspace_action_rule_heads_select_member
+  ON public.workspace_action_rule_heads;
+CREATE POLICY workspace_action_rule_heads_select_member
+  ON public.workspace_action_rule_heads FOR SELECT TO app_runtime
+  USING (
+    workspace_id::text = NULLIF(current_setting('app.workspace_id', true), '')
+    AND EXISTS (
+      SELECT 1
+      FROM public.workspace_memberships AS membership
+      WHERE membership.workspace_id =
+        workspace_action_rule_heads.workspace_id
+        AND membership.user_id =
+          NULLIF(current_setting('app.user_id', true), '')
+    )
+  );
+
+DROP POLICY IF EXISTS workspace_action_rule_heads_insert_admin
+  ON public.workspace_action_rule_heads;
+CREATE POLICY workspace_action_rule_heads_insert_admin
+  ON public.workspace_action_rule_heads FOR INSERT TO app_runtime
+  WITH CHECK (
+    workspace_id::text = NULLIF(current_setting('app.workspace_id', true), '')
+    AND updated_by_user_id =
+      NULLIF(current_setting('app.user_id', true), '')
+    AND EXISTS (
+      SELECT 1
+      FROM public.workspace_memberships AS membership
+      WHERE membership.workspace_id = workspace_action_rule_heads.workspace_id
+        AND membership.user_id =
+          NULLIF(current_setting('app.user_id', true), '')
+        AND membership.role IN ('owner', 'admin')
+    )
+  );
+
+DROP POLICY IF EXISTS workspace_action_rule_heads_update_admin
+  ON public.workspace_action_rule_heads;
+CREATE POLICY workspace_action_rule_heads_update_admin
+  ON public.workspace_action_rule_heads FOR UPDATE TO app_runtime
+  USING (
+    workspace_id::text = NULLIF(current_setting('app.workspace_id', true), '')
+    AND EXISTS (
+      SELECT 1
+      FROM public.workspace_memberships AS membership
+      WHERE membership.workspace_id = workspace_action_rule_heads.workspace_id
+        AND membership.user_id =
+          NULLIF(current_setting('app.user_id', true), '')
+        AND membership.role IN ('owner', 'admin')
+    )
+  )
+  WITH CHECK (
+    workspace_id::text = NULLIF(current_setting('app.workspace_id', true), '')
+    AND updated_by_user_id =
+      NULLIF(current_setting('app.user_id', true), '')
+    AND EXISTS (
+      SELECT 1
+      FROM public.workspace_memberships AS membership
+      WHERE membership.workspace_id = workspace_action_rule_heads.workspace_id
+        AND membership.user_id =
+          NULLIF(current_setting('app.user_id', true), '')
+        AND membership.role IN ('owner', 'admin')
+    )
+  );
+
+CREATE TABLE IF NOT EXISTS public.workspace_agents (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id uuid NOT NULL
+    REFERENCES public.workspaces(id) ON DELETE CASCADE,
+  display_name text NOT NULL
+    CHECK (length(btrim(display_name)) BETWEEN 1 AND 120),
+  principal_user_id text NOT NULL,
+  credential_sha256 text NOT NULL UNIQUE
+    CHECK (credential_sha256 ~ '^[a-f0-9]{64}$'),
+  credential_version integer NOT NULL DEFAULT 1
+    CHECK (credential_version > 0),
+  created_by_user_id text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  revoked_at timestamptz,
+  last_used_at timestamptz
+);
+CREATE INDEX IF NOT EXISTS workspace_agents_workspace_created_idx
+  ON public.workspace_agents (workspace_id, created_at);
+GRANT SELECT, INSERT, UPDATE ON TABLE public.workspace_agents TO app_runtime;
+ALTER TABLE public.workspace_agents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.workspace_agents FORCE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS workspace_agents_select_admin
+  ON public.workspace_agents;
+CREATE POLICY workspace_agents_select_admin
+  ON public.workspace_agents FOR SELECT TO app_runtime
+  USING (
+    workspace_id::text = NULLIF(current_setting('app.workspace_id', true), '')
+    AND EXISTS (
+      SELECT 1
+      FROM public.workspace_memberships AS membership
+      WHERE membership.workspace_id = workspace_agents.workspace_id
+        AND membership.user_id =
+          NULLIF(current_setting('app.user_id', true), '')
+        AND membership.role IN ('owner', 'admin')
+    )
+  );
+
+DROP POLICY IF EXISTS workspace_agents_authenticate_exact_credential
+  ON public.workspace_agents;
+CREATE POLICY workspace_agents_authenticate_exact_credential
+  ON public.workspace_agents FOR SELECT TO app_runtime
+  USING (
+    workspace_id::text = NULLIF(current_setting('app.workspace_id', true), '')
+    AND credential_sha256 =
+      NULLIF(current_setting('app.agent_credential_sha256', true), '')
+    AND revoked_at IS NULL
+  );
+
+DROP POLICY IF EXISTS workspace_agents_insert_admin
+  ON public.workspace_agents;
+CREATE POLICY workspace_agents_insert_admin
+  ON public.workspace_agents FOR INSERT TO app_runtime
+  WITH CHECK (
+    workspace_id::text = NULLIF(current_setting('app.workspace_id', true), '')
+    AND created_by_user_id =
+      NULLIF(current_setting('app.user_id', true), '')
+    AND principal_user_id =
+      NULLIF(current_setting('app.user_id', true), '')
+    AND EXISTS (
+      SELECT 1
+      FROM public.workspace_memberships AS membership
+      WHERE membership.workspace_id = workspace_agents.workspace_id
+        AND membership.user_id =
+          NULLIF(current_setting('app.user_id', true), '')
+        AND membership.role IN ('owner', 'admin')
+    )
+  );
+
+DROP POLICY IF EXISTS workspace_agents_update_admin
+  ON public.workspace_agents;
+CREATE POLICY workspace_agents_update_admin
+  ON public.workspace_agents FOR UPDATE TO app_runtime
+  USING (
+    workspace_id::text = NULLIF(current_setting('app.workspace_id', true), '')
+    AND EXISTS (
+      SELECT 1
+      FROM public.workspace_memberships AS membership
+      WHERE membership.workspace_id = workspace_agents.workspace_id
+        AND membership.user_id =
+          NULLIF(current_setting('app.user_id', true), '')
+        AND membership.role IN ('owner', 'admin')
+    )
+  )
+  WITH CHECK (
+    workspace_id::text = NULLIF(current_setting('app.workspace_id', true), '')
+    AND EXISTS (
+      SELECT 1
+      FROM public.workspace_memberships AS membership
+      WHERE membership.workspace_id = workspace_agents.workspace_id
+        AND membership.user_id =
+          NULLIF(current_setting('app.user_id', true), '')
+        AND membership.role IN ('owner', 'admin')
+    )
+  );
+
 COMMIT;

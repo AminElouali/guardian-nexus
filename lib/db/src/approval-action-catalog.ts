@@ -60,6 +60,13 @@ export type ApprovalActionDefinition = {
   label: string;
   description: string;
   riskClass: "low" | "medium" | "high";
+  riskCategories: readonly (
+    | "money"
+    | "internal_email"
+    | "external_email"
+    | "customer_data"
+    | "infrastructure"
+  )[];
   defaultDecision: "deny";
   allowedApproverRoles: readonly ("owner" | "admin")[];
   receiptExpirySeconds: number;
@@ -86,6 +93,7 @@ export const APPROVAL_ACTION_CATALOG: readonly ApprovalActionDefinition[] = [
     label: "Reembolso sintético",
     description: "Fixture existente; solo simula cambios en memoria.",
     riskClass: "medium",
+    riskCategories: ["money", "customer_data"],
     defaultDecision: "deny",
     allowedApproverRoles: ["owner", "admin"],
     receiptExpirySeconds: 300,
@@ -108,6 +116,7 @@ export const APPROVAL_ACTION_CATALOG: readonly ApprovalActionDefinition[] = [
     label: "Cambio bancario sintético",
     description: "Fixture existente; solo simula cambios en memoria.",
     riskClass: "high",
+    riskCategories: ["money", "infrastructure"],
     defaultDecision: "deny",
     allowedApproverRoles: ["owner", "admin"],
     receiptExpirySeconds: 300,
@@ -130,6 +139,7 @@ export const APPROVAL_ACTION_CATALOG: readonly ApprovalActionDefinition[] = [
     label: "Responder a soporte",
     description: "Solo ejemplos sintéticos dirigidos a dominios de prueba.",
     riskClass: "medium",
+    riskCategories: ["customer_data", "internal_email", "external_email"],
     defaultDecision: "deny",
     allowedApproverRoles: ["owner", "admin"],
     receiptExpirySeconds: 300,
@@ -158,6 +168,7 @@ export const APPROVAL_ACTION_CATALOG: readonly ApprovalActionDefinition[] = [
     label: "Enviar correo externo de prueba",
     description: "Entrega solo a un buzón sandbox local; no usa proveedores externos.",
     riskClass: "high",
+    riskCategories: ["external_email"],
     defaultDecision: "deny",
     allowedApproverRoles: ["owner", "admin"],
     receiptExpirySeconds: 300,

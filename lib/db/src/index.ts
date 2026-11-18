@@ -21,6 +21,7 @@ export {
 } from "./rls-readiness-diagnostics";
 export type { RlsReadinessViolationCode } from "./rls-readiness-diagnostics";
 export * from "./approval-action-catalog";
+export * from "./workspace-action-rule-engine";
 
 const { Pool } = pg;
 
