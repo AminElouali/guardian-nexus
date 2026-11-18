@@ -6,7 +6,8 @@
 - **IMPLEMENTADO:** autenticación de propuestas de agente con una credencial bearer, validación de workspace, estado de revocación y pertenencia del principal. La evidencia de propuesta registra el UUID del agente y la versión de regla.
 - **IMPLEMENTADO:** rotación (invalida la credencial anterior e incrementa la versión), revocación, bloqueo de credenciales inválidas/revocadas/de otro workspace y prohibición de autoaprobación por el principal humano.
 - **IMPLEMENTADO:** migración SQL versionada `lib/db/migrations/0002_workspace_agents.sql`, validada solo en el PostgreSQL desechable de `lab:local`.
-- **PROYECTADO:** aplicación de la migración en desarrollo o producción. Ninguna base compartida fue modificada.
+- **IMPLEMENTADO:** tablas de reglas y agentes aplicadas a la base de desarrollo el 18 de noviembre de 2026 y verificadas con 16 tablas, 173 columnas, 44 índices, 72 constraints, 45 policies y 3 roles. Producción no se tocó.
+- **PROYECTADO:** aplicación equivalente en producción.
 - **PROYECTADO:** credenciales por acción o scopes configurables por agente, atestación de proceso y aislamiento del agente respecto a su principal humano.
 
 ## Cambios de catálogo
@@ -28,7 +29,7 @@ La migración `0002_workspace_agents.sql` añade:
 | Policies | 4 |
 | Roles | 0 |
 
-Con ambas migraciones aplicadas al catálogo desechable, el inventario completo esperado desde la base anterior es **16 tablas, 173 columnas, 44 índices, 72 constraints, 45 policies y 3 roles**. Las dos tablas de reglas aportan 15 columnas, 4 índices y 11 constraints; la tabla de agentes aporta 5 constraints. El resultado se deriva de las fuentes actuales y se verifica en la auditoría del laboratorio.
+Con las migraciones 0001, 0002 y 0003 aplicadas al catálogo, el inventario completo esperado desde la base anterior es **16 tablas, 173 columnas, 44 índices, 72 constraints, 45 policies y 3 roles**. Las dos tablas de reglas aportan 14 columnas, 4 índices, 13 constraints y 5 policies; la tabla de agentes aporta 10 columnas, 3 índices, 5 constraints y 4 policies. La migración 0003 añade la constraint única al índice ya existente sin crear un índice adicional.
 
 ## Procedimiento futuro para una base compartida
 
@@ -36,7 +37,7 @@ Este procedimiento es una guía, no una autorización de ejecución.
 
 1. Crear y verificar un punto de restauración de Replit para la base seleccionada.
 2. Ejecutar el auditor de catálogo de solo lectura antes de cambiar nada. Confirmar la identidad de base y la matriz de privilegios. Si hay diferencias ajenas al inventario documentado, parar.
-3. Aplicar `0001_workspace_action_rules.sql` y `0002_workspace_agents.sql` en ese orden, cada una en transacción separada. No ejecutar bootstrap de roles ni cambiar contraseñas como parte de estas migraciones.
+3. Aplicar `0001_workspace_action_rules.sql`, `0002_workspace_agents.sql` y `0003_workspace_rule_version_unique_constraint.sql` en ese orden, cada una en transacción separada. No ejecutar bootstrap de roles ni cambiar contraseñas como parte de estas migraciones.
 4. Ejecutar el auditor completo y comprobar exactamente **16/173/44/72/45/3**, 0 violaciones, RLS habilitado y forzado en las tres tablas y políticas de workspace.
 5. Probar como owner/admin la creación, rotación y revocación; como viewer, el rechazo de administración; con credencial inválida o de otro workspace, el rechazo de propuestas; y la imposibilidad de que el principal apruebe su propia propuesta.
 6. Confirmar que no se exponen credenciales en logs, listados ni respuestas posteriores. Si una verificación falla, parar y considerar restaurar el punto de restauración anterior.

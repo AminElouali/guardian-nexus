@@ -4,8 +4,9 @@
 
 - **IMPLEMENTADO:** manifiesto versionado de acciones y reglas iniciales; evaluación determinista; borradores y versiones inmutables por workspace; activación, simulación de borradores y reversión creando una versión nueva; auditoría de cada cambio; interfaz de reglas, plantillas de inicio y casos sintéticos.
 - **IMPLEMENTADO:** las propuestas y previsualizaciones genéricas leen la regla activa. Sin configuración, el resultado es `deny` (`workspace_rule_not_configured`). Las decisiones persistidas incorporan el identificador y el hash de la versión usada.
-- **IMPLEMENTADO:** migración SQL versionada `lib/db/migrations/0001_workspace_action_rules.sql`, probada únicamente mediante `lab:local` con PostgreSQL desechable.
-- **PROYECTADO:** aplicar la migración a una base compartida. No se ejecutó en desarrollo ni producción. La reversión operativa de una regla consiste en crear y activar una versión nueva basada en una anterior; no borra el historial.
+- **IMPLEMENTADO:** migraciones SQL versionadas `0001_workspace_action_rules.sql` y `0003_workspace_rule_version_unique_constraint.sql`, probadas con PostgreSQL local desechable. La segunda adjunta el índice único existente como constraint, sin crear otro índice ni modificar filas.
+- **IMPLEMENTADO:** aplicadas a la base de desarrollo el 18 de noviembre de 2026; la auditoría posterior confirmó 16 tablas, 173 columnas, 44 índices, 72 constraints, 45 policies y 3 roles. Producción no se tocó.
+- **PROYECTADO:** aplicar cambios equivalentes a producción. La reversión operativa de una regla consiste en crear y activar una versión nueva basada en una anterior; no borra el historial.
 
 ## Cambios de catálogo
 
@@ -22,14 +23,14 @@ La auditoría deriva los objetos desde Drizzle, SQL y el contrato de roles. Resp
 
 | Categoría | Antes | Añadido | Esperado después |
 |---|---:|---:|---:|
-| Tablas | 13 | 2 | 15 |
-| Columnas | 149 | 14 | 163 |
-| Índices | 37 | 4 | 41 |
-| Constraints | 54 | 12 | 66 |
-| Policies | 36 | 5 | 41 |
+| Tablas | 13 | 3 | 16 |
+| Columnas | 149 | 24 | 173 |
+| Índices | 37 | 7 | 44 |
+| Constraints | 54 | 18 | 72 |
+| Policies | 36 | 9 | 45 |
 | Roles | 3 | 0 | 3 |
 
-Los valores exactos se recalculan desde el contrato actual durante la auditoría; no deben copiarse manualmente a otra versión del esquema. La tabla de agentes de la migración 0002 añade su propio delta, documentado en `docs/agent-identity-migration-plan.md`.
+El delta incluye 14 columnas, 4 índices, 13 constraints y 5 policies de las dos tablas de reglas; la tabla de agentes añade 10 columnas, 3 índices, 5 constraints y 4 policies. La migración 0003 convierte el índice único ya contado en una constraint respaldada por ese mismo índice, por lo que el total de índices no aumenta. No se ajustaron los conteos para ocultar diferencias: se alineó el SQL versionado con la constraint `unique(...)` del esquema Drizzle.
 
 ## Procedimiento futuro para una base compartida
 
@@ -38,7 +39,7 @@ Este procedimiento es una guía, no una autorización de ejecución.
 1. Crear y verificar un punto de restauración de Replit para la base seleccionada.
 2. Confirmar explícitamente el entorno, la base y la ventana de mantenimiento. No usar `drizzle-kit push` como sustituto de la migración versionada.
 3. Ejecutar el auditor de catálogo en modo solo lectura y guardar el informe saneado. Debe coincidir con el inventario previo conocido; ante objetos sobrantes, cambios de grants o cualquier deriva no explicada, parar.
-4. Aplicar `0001_workspace_action_rules.sql` dentro de su propia transacción mediante el mecanismo de migración aprobado para esa base.
+4. Aplicar `0001_workspace_action_rules.sql`, `0002_workspace_agents.sql` y `0003_workspace_rule_version_unique_constraint.sql` dentro de transacciones, en ese orden, mediante el mecanismo de migración aprobado para esa base.
 5. Volver a ejecutar el auditor completo. Verificar tabla, columnas, índices, constraints, policies, roles y la matriz de privilegios. Confirmar en particular RLS habilitado y forzado y que las versiones no conceden `UPDATE`, `DELETE` o `TRUNCATE` a `app_runtime`.
 6. Probar lectura, creación de borrador, activación, simulación, reversión como nueva versión y rechazo a un miembro que no sea owner/admin.
 7. Si una comprobación falla, no continuar con la migración siguiente ni corregir datos automáticamente. Evaluar restaurar el punto anterior.
