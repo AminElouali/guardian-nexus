@@ -19,14 +19,17 @@ import { fileURLToPath } from "node:url";
 import pg from "pg";
 import {
   auditRlsPostPushCatalog,
+  canonicalizeRlsExpression,
   deriveDrizzleRlsTableNames,
   expectedPostPushRoleNames,
   readRlsCatalogPhaseSnapshot,
   runPostSchemaAuditBarrier,
+  type RlsCatalogPhaseSnapshot,
 } from "@workspace/db/rls-catalog-phase-audit";
 import {
   parseRlsCatalogContract,
   auditRlsCatalog,
+  type RlsCatalogSnapshot,
 } from "@workspace/db/rls-catalog-audit";
 import {
   runApprovalLedgerRlsProbes,
@@ -62,6 +65,7 @@ type Stage =
   | "runtime_role_verification"
   | "runtime_login_connection"
   | "final_audit"
+  | "versioned_migration_audit"
   | "api_unit_tests"
   | "development_read_only_catalog_audit"
   | "approval_ledger_rls_probes"
@@ -96,8 +100,41 @@ type SafeReport = {
   approvalE2eFailureErrorCode?: string;
   approvalE2eFailureType?: string;
   approvalE2ePassed?: boolean;
+  versionedMigrationAudit?: VersionedMigrationAuditReport;
   failureOutput?: SafeChildOutput;
   failureStage?: Stage;
+};
+
+type CatalogCounts = {
+  tables: number;
+  columns: number;
+  indexes: number;
+  constraints: number;
+  policies: number;
+  roles: number;
+};
+
+type VersionedMigrationAuditReport = {
+  status: "running" | "passed" | "failed";
+  baselineSourceCommit: string;
+  baselineStrategy: "clone_drizzle_catalog_and_remove_new_tables";
+  baselineExpected: CatalogCounts;
+  baselineActual?: CatalogCounts;
+  baselineMatchesDrizzleProjection?: boolean;
+  drizzleCatalog?: CatalogCounts;
+  migratedCatalog?: CatalogCounts;
+  migrationsApplied: string[];
+  migration0003Idempotent?: boolean;
+  inventoryMatchesDrizzle?: {
+    tables: boolean;
+    columns: boolean;
+    indexes: boolean;
+    constraints: boolean;
+    policies: boolean;
+    roles: boolean;
+    privilegeMatrix: boolean;
+  };
+  violationCodes: string[];
 };
 
 type NodeTestSummary = {
@@ -741,6 +778,519 @@ async function writeSafeReport(
   });
 }
 
+const legacyRlsTableNames = [
+  "workspaces",
+  "workspace_memberships",
+  "assets",
+  "workspace_monthly_usage",
+  "workspace_audit_events",
+  "workspace_integrations",
+  "provider_connections",
+  "connector_oauth_states",
+  "connector_jobs",
+  "ai_assessment_jobs",
+  "host_boundary_attestation_challenges",
+  "ai_assessment_approval_requests",
+  "workspace_approval_ledger",
+] as const;
+
+const versionedMigrationTableNames = [
+  "workspace_action_rule_heads",
+  "workspace_action_rule_versions",
+  "workspace_agents",
+] as const;
+
+const legacyCatalogCounts: CatalogCounts = {
+  tables: 13,
+  columns: 149,
+  indexes: 37,
+  constraints: 54,
+  policies: 36,
+  roles: 3,
+};
+
+const fullCatalogCounts: CatalogCounts = {
+  tables: 16,
+  columns: 173,
+  indexes: 44,
+  constraints: 72,
+  policies: 45,
+  roles: 3,
+};
+
+const baselineSourceCommit =
+  "1aeb2d5b30f9bf19f35a012c5ced75d6fb310bac";
+
+function stableValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stableValue);
+  if (value !== null && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return Object.fromEntries(
+      Object.keys(record)
+        .sort()
+        .map((key) => [key, stableValue(record[key])]),
+    );
+  }
+  return value;
+}
+
+function stableJson(value: unknown): string {
+  return JSON.stringify(stableValue(value)) ?? "undefined";
+}
+
+function sameValue(left: unknown, right: unknown): boolean {
+  return stableJson(left) === stableJson(right);
+}
+
+function catalogCounts(
+  phase: RlsCatalogPhaseSnapshot,
+): CatalogCounts {
+  return {
+    tables: phase.tables.length,
+    columns: phase.columns.length,
+    indexes: phase.indexes.length,
+    constraints: phase.constraints.length,
+    policies: phase.policies.length,
+    roles: phase.roles.length,
+  };
+}
+
+function canonicalIndexes(
+  indexes: RlsCatalogPhaseSnapshot["indexes"],
+): RlsCatalogPhaseSnapshot["indexes"] {
+  return indexes.map((index) => ({
+    ...index,
+    where: canonicalizeRlsExpression(index.where, index.tableName),
+  }));
+}
+
+function canonicalConstraints(
+  constraints: RlsCatalogPhaseSnapshot["constraints"],
+): RlsCatalogPhaseSnapshot["constraints"] {
+  return constraints.map((constraint) => ({
+    ...constraint,
+    expression: canonicalizeRlsExpression(
+      constraint.expression,
+      constraint.tableName,
+    ),
+  }));
+}
+
+function canonicalPolicies(
+  policies: RlsCatalogPhaseSnapshot["policies"],
+): RlsCatalogPhaseSnapshot["policies"] {
+  return policies.map((policy) => ({
+    ...policy,
+    qual: canonicalizeRlsExpression(policy.qual, policy.tableName),
+    withCheck: canonicalizeRlsExpression(
+      policy.withCheck,
+      policy.tableName,
+    ),
+  }));
+}
+
+function phaseSnapshotForTables(
+  snapshot: RlsCatalogPhaseSnapshot,
+  tableNames: readonly string[],
+): RlsCatalogPhaseSnapshot {
+  const allowed = new Set(tableNames);
+  return {
+    ...snapshot,
+    tables: snapshot.tables.filter((table) => allowed.has(table.tableName)),
+    columns: snapshot.columns.filter((column) =>
+      allowed.has(column.tableName)
+    ),
+    indexes: snapshot.indexes.filter((index) =>
+      allowed.has(index.tableName)
+    ),
+    constraints: snapshot.constraints.filter((constraint) =>
+      allowed.has(constraint.tableName)
+    ),
+    policies: snapshot.policies.filter((policy) =>
+      allowed.has(policy.tableName)
+    ),
+  };
+}
+
+function grantSnapshotForTables(
+  snapshot: RlsCatalogSnapshot,
+  tableNames: readonly string[],
+): RlsCatalogSnapshot {
+  const allowed = new Set(tableNames);
+  return {
+    ...snapshot,
+    tables: snapshot.tables.filter((table) => allowed.has(table.tableName)),
+    policies: snapshot.policies.filter((policy) =>
+      allowed.has(policy.tableName)
+    ),
+    tablePrivileges: snapshot.tablePrivileges.filter((privilege) =>
+      allowed.has(privilege.tableName)
+    ),
+    updateColumns: snapshot.updateColumns.filter((column) =>
+      allowed.has(column.tableName)
+    ),
+    tableColumns: snapshot.tableColumns.filter((table) =>
+      allowed.has(table.tableName)
+    ),
+  };
+}
+
+function compareCatalogInventories(
+  leftPhase: RlsCatalogPhaseSnapshot,
+  leftGrants: RlsCatalogSnapshot,
+  rightPhase: RlsCatalogPhaseSnapshot,
+  rightGrants: RlsCatalogSnapshot,
+): NonNullable<VersionedMigrationAuditReport["inventoryMatchesDrizzle"]> {
+  return {
+    tables: sameValue(leftPhase.tables, rightPhase.tables),
+    columns: sameValue(
+      {
+        phase: leftPhase.columns,
+        grantInventory: leftGrants.tableColumns,
+      },
+      {
+        phase: rightPhase.columns,
+        grantInventory: rightGrants.tableColumns,
+      },
+    ),
+    indexes: sameValue(
+      canonicalIndexes(leftPhase.indexes),
+      canonicalIndexes(rightPhase.indexes),
+    ),
+    constraints: sameValue(
+      canonicalConstraints(leftPhase.constraints),
+      canonicalConstraints(rightPhase.constraints),
+    ),
+    policies: sameValue(
+      canonicalPolicies(leftPhase.policies),
+      canonicalPolicies(rightPhase.policies),
+    ),
+    roles: sameValue(
+      {
+        roles: leftPhase.roles,
+        memberships: leftPhase.memberships,
+        pgHasRole: leftGrants.pgHasRole,
+      },
+      {
+        roles: rightPhase.roles,
+        memberships: rightPhase.memberships,
+        pgHasRole: rightGrants.pgHasRole,
+      },
+    ),
+    privilegeMatrix: sameValue(
+      {
+        tablePrivileges: leftGrants.tablePrivileges,
+        updateColumns: leftGrants.updateColumns,
+      },
+      {
+        tablePrivileges: rightGrants.tablePrivileges,
+        updateColumns: rightGrants.updateColumns,
+      },
+    ),
+  };
+}
+
+function safeSqlState(error: unknown): string | undefined {
+  if (!error || typeof error !== "object" || !("code" in error)) {
+    return undefined;
+  }
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "string" && /^[0-9A-Z]{5}$/.test(code)
+    ? code
+    : undefined;
+}
+
+async function applyVersionedMigration(
+  client: InstanceType<typeof Client>,
+  filename: string,
+): Promise<void> {
+  const sqlText = await readFile(
+    path.join(repoRoot, "lib/db/migrations", filename),
+    "utf8",
+  );
+  const lines = sqlText.split(/\r?\n/);
+  let firstExecutableLine = 0;
+  while (firstExecutableLine < lines.length) {
+    const line = lines[firstExecutableLine]?.trim() ?? "";
+    if (!line || line.startsWith("--")) {
+      firstExecutableLine += 1;
+      continue;
+    }
+    break;
+  }
+  const firstExecutableSql = lines.slice(firstExecutableLine).join("\n");
+  if (
+    !/^\s*BEGIN\s*;/i.test(firstExecutableSql) ||
+    !/COMMIT\s*;\s*$/i.test(sqlText) ||
+    [...sqlText.matchAll(/\bBEGIN\s*;/gi)].length !== 1 ||
+    [...sqlText.matchAll(/\bCOMMIT\s*;/gi)].length !== 1
+  ) {
+    throw new Error("versioned_migration_transaction_boundary_invalid");
+  }
+  try {
+    await client.query(sqlText);
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    const state = safeSqlState(error);
+    throw new Error(
+      state
+        ? `versioned_migration_sql_failed:${state}`
+        : "versioned_migration_sql_failed",
+    );
+  }
+}
+
+function safeVersionedMigrationFailureCode(error: unknown): string {
+  if (!(error instanceof Error)) return "versioned_migration_audit_failed";
+  const message = error.message;
+  if (
+    message === "versioned_migration_transaction_boundary_invalid" ||
+    message === "versioned_migration_database_identity_mismatch" ||
+    message === "versioned_migration_connection_identity_mismatch" ||
+    message === "versioned_migration_baseline_source_mismatch" ||
+    message === "versioned_migration_baseline_new_tables_not_empty" ||
+    message === "versioned_migration_baseline_reconstruction_failed" ||
+    message === "versioned_migration_baseline_mismatch" ||
+    message === "versioned_migration_catalog_mismatch"
+  ) {
+    return message;
+  }
+  const sqlState = message.match(/^versioned_migration_sql_failed:([0-9A-Z]{5})$/)?.[1];
+  return sqlState
+    ? `versioned_migration_sqlstate_${sqlState}`
+    : "versioned_migration_audit_failed";
+}
+
+async function runVersionedMigrationAudit(input: {
+  socketDirectory: string;
+  sourceDatabaseName: string;
+  nonce: string;
+  tableNames: string[];
+  roleNames: string[];
+  contract: ReturnType<typeof parseRlsCatalogContract>;
+  drizzlePhase: RlsCatalogPhaseSnapshot;
+  drizzleGrants: RlsCatalogSnapshot;
+  report: VersionedMigrationAuditReport;
+}): Promise<void> {
+  const {
+    socketDirectory,
+    sourceDatabaseName,
+    nonce,
+    tableNames,
+    roleNames,
+    contract,
+    drizzlePhase,
+    drizzleGrants,
+    report,
+  } = input;
+  const suffix = randomBytes(12).toString("hex");
+  const migrationDatabaseName = `guardian_migrations_${suffix}`;
+  const admin = new Client({
+    host: socketDirectory,
+    port: 5432,
+    user: "postgres",
+    database: "postgres",
+    application_name: "guardian-nexus-versioned-migration-lab-admin",
+    connectionTimeoutMillis: 5000,
+  });
+  await admin.connect();
+  try {
+    await admin.query(
+      `CREATE DATABASE "${migrationDatabaseName}" TEMPLATE "${sourceDatabaseName}"`,
+    );
+    await admin.query(
+      `COMMENT ON DATABASE "${migrationDatabaseName}" IS 'guardian-nexus-versioned-migrations:${nonce}'`,
+    );
+    const identity = await admin.query(
+      `SELECT shobj_description(oid, 'pg_database') AS comment
+         FROM pg_database
+        WHERE datname = $1`,
+      [migrationDatabaseName],
+    );
+    if (
+      identity.rows.length !== 1 ||
+      identity.rows[0]?.comment !==
+        `guardian-nexus-versioned-migrations:${nonce}`
+    ) {
+      throw new Error("versioned_migration_database_identity_mismatch");
+    }
+  } finally {
+    await admin.end().catch(() => undefined);
+  }
+
+  const migrationClient = new Client({
+    host: socketDirectory,
+    port: 5432,
+    user: "postgres",
+    database: migrationDatabaseName,
+    application_name: "guardian-nexus-versioned-migration-lab",
+    connectionTimeoutMillis: 5000,
+    statement_timeout: 15000,
+  });
+  const migrationPool = new Pool({
+    host: socketDirectory,
+    port: 5432,
+    user: "postgres",
+    database: migrationDatabaseName,
+    application_name: "guardian-nexus-versioned-migration-catalog",
+    max: 5,
+    connectionTimeoutMillis: 5000,
+    statement_timeout: 15000,
+  });
+  await migrationClient.connect();
+  try {
+    const databaseIdentity = await migrationClient.query(
+      `SELECT current_database() AS database_name,
+              current_setting('guardian_nexus.lab_nonce', true) AS nonce`,
+    );
+    if (
+      databaseIdentity.rows.length !== 1 ||
+      databaseIdentity.rows[0]?.database_name !== migrationDatabaseName ||
+      databaseIdentity.rows[0]?.nonce !== nonce
+    ) {
+      throw new Error("versioned_migration_connection_identity_mismatch");
+    }
+
+    const currentTableSet = [...tableNames].sort();
+    const legacyTableSet = [...legacyRlsTableNames].sort();
+    const actualLegacyTableSet = tableNames
+      .filter(
+        (tableName) =>
+          !versionedMigrationTableNames.includes(
+            tableName as (typeof versionedMigrationTableNames)[number],
+          ),
+      )
+      .sort();
+    if (!sameValue(currentTableSet.length, 16) ||
+      !sameValue(actualLegacyTableSet, legacyTableSet)) {
+      throw new Error("versioned_migration_baseline_source_mismatch");
+    }
+
+    const newTableRows = await migrationClient.query(
+      `SELECT
+         (SELECT count(*) FROM public.workspace_action_rule_heads) +
+         (SELECT count(*) FROM public.workspace_action_rule_versions) +
+         (SELECT count(*) FROM public.workspace_agents) AS row_count`,
+    );
+    if (Number(newTableRows.rows[0]?.row_count) !== 0) {
+      throw new Error("versioned_migration_baseline_new_tables_not_empty");
+    }
+
+    await migrationClient.query("BEGIN");
+    try {
+      await migrationClient.query(
+        `DROP TABLE public.workspace_action_rule_heads;
+         DROP TABLE public.workspace_agents;
+         DROP TABLE public.workspace_action_rule_versions;`,
+      );
+      await migrationClient.query("COMMIT");
+    } catch {
+      await migrationClient.query("ROLLBACK").catch(() => undefined);
+      throw new Error("versioned_migration_baseline_reconstruction_failed");
+    }
+
+    const baselinePhase = await readRlsCatalogPhaseSnapshot(
+      migrationPool,
+      [...legacyTableSet],
+      roleNames,
+    );
+    const { snapshot: baselineGrantSnapshot } = await readCatalogSnapshot(
+      migrationPool,
+      [...legacyTableSet],
+      roleNames,
+    );
+    report.baselineActual = catalogCounts(baselinePhase);
+    report.baselineMatchesDrizzleProjection = Object.values(
+      compareCatalogInventories(
+        phaseSnapshotForTables(drizzlePhase, legacyTableSet),
+        grantSnapshotForTables(drizzleGrants, legacyTableSet),
+        baselinePhase,
+        baselineGrantSnapshot,
+      ),
+    ).every(Boolean);
+    const baselineRlsValid = baselinePhase.tables.every(
+      (table) => table.rlsEnabled && table.rlsForced,
+    );
+    if (
+      !sameValue(report.baselineActual, report.baselineExpected) ||
+      !baselineRlsValid ||
+      !report.baselineMatchesDrizzleProjection
+    ) {
+      report.violationCodes.push("versioned_migration_baseline_mismatch");
+      throw new Error("versioned_migration_baseline_mismatch");
+    }
+
+    const migrationFiles = [
+      "0001_workspace_action_rules.sql",
+      "0002_workspace_agents.sql",
+      "0003_workspace_rule_version_unique_constraint.sql",
+    ];
+    for (const filename of migrationFiles) {
+      await applyVersionedMigration(migrationClient, filename);
+      report.migrationsApplied.push(filename);
+      if (filename === "0003_workspace_rule_version_unique_constraint.sql") {
+        await applyVersionedMigration(migrationClient, filename);
+        report.migration0003Idempotent = true;
+      }
+    }
+
+    const migratedPhase = await readRlsCatalogPhaseSnapshot(
+      migrationPool,
+      tableNames,
+      roleNames,
+    );
+    const migratedGrants = await readCatalogSnapshot(
+      migrationPool,
+      tableNames,
+      roleNames,
+    );
+    report.migratedCatalog = catalogCounts(migratedPhase);
+    report.drizzleCatalog = catalogCounts(drizzlePhase);
+    const phaseAudit = auditRlsPostPushCatalog(
+      contract,
+      migratedPhase,
+      "final",
+    );
+    const grantAudit = auditRlsCatalog(contract, migratedGrants.snapshot);
+    const comparison = compareCatalogInventories(
+      drizzlePhase,
+      drizzleGrants,
+      migratedPhase,
+      migratedGrants.snapshot,
+    );
+    report.inventoryMatchesDrizzle = comparison;
+    const mismatchedCategories = Object.entries(comparison)
+      .filter(([, matches]) => !matches)
+      .map(([category]) => `migration_vs_drizzle_${category}_mismatch`);
+    const auditViolations = [
+      ...phaseAudit.violations,
+      ...grantAudit.violations,
+      ...mismatchedCategories,
+    ].sort();
+    if (
+      !phaseAudit.passed ||
+      !grantAudit.passed ||
+      !sameValue(report.migratedCatalog, fullCatalogCounts) ||
+      !report.migration0003Idempotent ||
+      auditViolations.length > 0
+    ) {
+      report.violationCodes.push(...auditViolations);
+      if (auditViolations.length === 0) {
+        report.violationCodes.push("versioned_migration_catalog_mismatch");
+      }
+      throw new Error("versioned_migration_catalog_mismatch");
+    }
+  } catch (error) {
+    if (report.violationCodes.length === 0) {
+      report.violationCodes.push(safeVersionedMigrationFailureCode(error));
+    }
+    throw new Error("versioned_migration_audit_failed");
+  } finally {
+    await migrationPool.end().catch(() => undefined);
+    await migrationClient.end().catch(() => undefined);
+  }
+}
+
 function databaseUrl(databaseName: string, socketDirectory: string): string {
   const url = new URL(`postgresql://postgres@127.0.0.1:5432/${databaseName}`);
   url.searchParams.set("host", socketDirectory);
@@ -918,6 +1468,9 @@ async function main(): Promise<void> {
     policies: 0,
     roles: 0,
   };
+  let drizzleCatalogPhase: RlsCatalogPhaseSnapshot | undefined;
+  let drizzleCatalogGrants: RlsCatalogSnapshot | undefined;
+  let versionedMigrationAudit: VersionedMigrationAuditReport | undefined;
   let violations: string[] = [];
   let databaseName = "";
   let runtimePassword = "";
@@ -1228,6 +1781,7 @@ async function main(): Promise<void> {
         tableNames,
         Object.keys(contract.roles).sort(),
       );
+      drizzleCatalogPhase = finalSnapshot;
       const finalAudit = auditRlsPostPushCatalog(
         contract,
         finalSnapshot,
@@ -1238,6 +1792,7 @@ async function main(): Promise<void> {
         tableNames,
         Object.keys(contract.roles).sort(),
       );
+      drizzleCatalogGrants = completeSnapshot;
       const grantAudit = auditRlsCatalog(contract, completeSnapshot);
       violations = [...finalAudit.violations, ...grantAudit.violations].sort();
       expectedObjectDiagnostics = finalAudit.diagnostics;
@@ -1258,6 +1813,34 @@ async function main(): Promise<void> {
     } finally {
       await finalPool.end();
     }
+
+    currentStage = "versioned_migration_audit";
+    if (!drizzleCatalogPhase || !drizzleCatalogGrants) {
+      throw new Error("drizzle_catalog_snapshot_unavailable");
+    }
+    versionedMigrationAudit = {
+      status: "running",
+      baselineSourceCommit,
+      baselineStrategy: "clone_drizzle_catalog_and_remove_new_tables",
+      baselineExpected: legacyCatalogCounts,
+      migrationsApplied: [],
+      violationCodes: [],
+    };
+    await runVersionedMigrationAudit({
+      socketDirectory,
+      sourceDatabaseName: databaseName,
+      nonce,
+      tableNames,
+      roleNames: Object.keys(contract.roles).sort(),
+      contract,
+      drizzlePhase: drizzleCatalogPhase,
+      drizzleGrants: drizzleCatalogGrants,
+      report: versionedMigrationAudit,
+    });
+    versionedMigrationAudit.status = "passed";
+    console.log(
+      `Versioned migration catalog: baseline=${versionedMigrationAudit.baselineActual?.tables}/${versionedMigrationAudit.baselineActual?.columns}/${versionedMigrationAudit.baselineActual?.indexes}/${versionedMigrationAudit.baselineActual?.constraints}/${versionedMigrationAudit.baselineActual?.policies}/${versionedMigrationAudit.baselineActual?.roles} migrated=${versionedMigrationAudit.migratedCatalog?.tables}/${versionedMigrationAudit.migratedCatalog?.columns}/${versionedMigrationAudit.migratedCatalog?.indexes}/${versionedMigrationAudit.migratedCatalog?.constraints}/${versionedMigrationAudit.migratedCatalog?.policies}/${versionedMigrationAudit.migratedCatalog?.roles} migration_0003_idempotent=${versionedMigrationAudit.migration0003Idempotent === true}.`,
+    );
 
     currentStage = "api_unit_tests";
     const apiTestEnv = {
@@ -1556,6 +2139,7 @@ async function main(): Promise<void> {
       approvalLedgerRlsProbeCount,
       approvalE2eSummary,
       approvalE2ePassed,
+      versionedMigrationAudit,
     });
     console.log("Disposable PostgreSQL lab passed; sanitized reports were written.");
   } catch (error) {
@@ -1564,6 +2148,15 @@ async function main(): Promise<void> {
         safeApprovalLedgerRlsProbeFailureCode(error);
     }
     const status = `Disposable PostgreSQL lab failed at stage: ${currentStage}.`;
+    if (versionedMigrationAudit?.status === "running") {
+      versionedMigrationAudit.status = "failed";
+      if (versionedMigrationAudit.violationCodes.length === 0) {
+        versionedMigrationAudit.violationCodes.push(
+          "versioned_migration_audit_failed",
+        );
+      }
+      violations = versionedMigrationAudit.violationCodes;
+    }
     if (reportDirectory) {
       await writeSafeReport(reportDirectory, {
         version: 1,
@@ -1589,6 +2182,7 @@ async function main(): Promise<void> {
         approvalE2eFailureErrorCode,
         approvalE2eFailureType,
         approvalE2ePassed,
+        versionedMigrationAudit,
         failureOutput: latestFailureOutput,
         failureStage: currentStage,
       }).catch(() => undefined);
