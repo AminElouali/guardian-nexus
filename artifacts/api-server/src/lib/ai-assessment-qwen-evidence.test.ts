@@ -905,6 +905,10 @@ test("offline RLS grants match the runtime privilege preflight", () => {
     new URL("./ai-assessment-approval-actions.ts", import.meta.url),
     "utf8",
   );
+  const approvalLedgerServiceSource = readFileSync(
+    new URL("./approval-ledger-service.ts", import.meta.url),
+    "utf8",
+  );
   const persistentApprovalE2eSource = readFileSync(
     new URL("../ai-assessment-synthetic-approval-e2e.test.ts", import.meta.url),
     "utf8",
@@ -1199,19 +1203,25 @@ test("offline RLS grants match the runtime privilege preflight", () => {
   assert.match(workerApprovalInsert, /toolCallOrigin:\s*candidate\.toolCallOrigin/);
   assert.match(workerApprovalInsert, /onConflictDoNothing\(\)/);
 
-  const atomicDecisionUpdate = routeSource.match(
+  const atomicDecisionUpdate = approvalLedgerServiceSource.match(
     /const \[updated\] = await tx[\s\S]*?\.update\(aiAssessmentApprovalRequestsTable\)[\s\S]*?\.returning\(\);/,
   )?.[0];
   assert.ok(atomicDecisionUpdate, "approval decision must use one conditional database update");
-  assert.match(atomicDecisionUpdate, /eq\(aiAssessmentApprovalRequestsTable\.workspaceId, workspaceId\)/);
+  assert.match(
+    atomicDecisionUpdate,
+    /eq\(aiAssessmentApprovalRequestsTable\.workspaceId, input\.workspaceId\)/,
+  );
   assert.match(atomicDecisionUpdate, /eq\(aiAssessmentApprovalRequestsTable\.status, "pending"\)/);
-  assert.match(atomicDecisionUpdate, /proposalBindingSha256,\s*expectedBinding/);
-  assert.match(atomicDecisionUpdate, /gt\(aiAssessmentApprovalRequestsTable\.expiresAt, now\)/);
+  assert.match(atomicDecisionUpdate, /proposalBindingSha256,\s*input\.expectedBindingSha256/);
+  assert.match(
+    atomicDecisionUpdate,
+    /gt\(aiAssessmentApprovalRequestsTable\.expiresAt, input\.now\)/,
+  );
   assert.match(atomicDecisionUpdate, /isNull\(aiAssessmentApprovalRequestsTable\.simulatedAt\)/);
   assert.match(
-    routeSource,
-    /if \(!updated\) return \{ kind: "already_decided" as const \};/,
-    "a lost concurrent compare-and-set must not report a successful replay",
+    approvalLedgerServiceSource,
+    /if \(!updated\) return null;/,
+    "a lost concurrent compare-and-set must not report a successful approval",
   );
   assert.match(
     routeSource,

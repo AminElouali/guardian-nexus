@@ -62,6 +62,7 @@ type Stage =
   | "runtime_role_verification"
   | "runtime_login_connection"
   | "final_audit"
+  | "api_unit_tests"
   | "development_read_only_catalog_audit"
   | "approval_ledger_rls_probes"
   | "demo_member_seed_tests"
