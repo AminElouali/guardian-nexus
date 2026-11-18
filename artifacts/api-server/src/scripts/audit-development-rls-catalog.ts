@@ -6,6 +6,7 @@ import {
   parseRlsCatalogContract,
   type RlsCatalogContract,
 } from "@workspace/db/rls-catalog-audit";
+import { appendOnlyRlsTableNames } from "@workspace/db/rls-catalog-contract";
 import {
   deriveDrizzleRlsTableNames,
   deriveRlsCatalogPhaseSnapshot,
@@ -67,6 +68,9 @@ async function readAppendOnlyRuntimePrivileges(
   query: RlsCatalogQueryRunner,
   postgresMajor: number,
 ): Promise<Record<string, unknown>[]> {
+  const tableParameters = appendOnlyRlsTableNames
+    .map((_, index) => `$${index + 1}`)
+    .join(", ");
   const maintainExpression = postgresMajor >= 17
     ? `COALESCE((
         SELECT has_table_privilege(runtime.oid, ledger.oid, 'MAINTAIN')
@@ -75,12 +79,15 @@ async function readAppendOnlyRuntimePrivileges(
           JOIN pg_namespace AS namespace ON namespace.oid = ledger.relnamespace
          WHERE runtime.rolname = 'app_runtime'
            AND namespace.nspname = 'public'
-           AND ledger.relname = 'workspace_approval_ledger'
+            AND ledger.relname = append_only.table_name
       ), false)`
     : "false";
   const { rows } = await query("append_only_privileges", `
+    WITH append_only AS (
+      SELECT unnest(ARRAY[${tableParameters}]::text[]) AS table_name
+    )
     SELECT
-      'workspace_approval_ledger'::text AS table_name,
+      append_only.table_name,
       COALESCE((
         SELECT has_table_privilege(runtime.oid, ledger.oid, 'SELECT')
           FROM pg_roles AS runtime
@@ -88,7 +95,7 @@ async function readAppendOnlyRuntimePrivileges(
           JOIN pg_namespace AS namespace ON namespace.oid = ledger.relnamespace
          WHERE runtime.rolname = 'app_runtime'
            AND namespace.nspname = 'public'
-           AND ledger.relname = 'workspace_approval_ledger'
+            AND ledger.relname = append_only.table_name
       ), false) AS can_select,
       COALESCE((
         SELECT has_table_privilege(runtime.oid, ledger.oid, 'INSERT')
@@ -97,7 +104,7 @@ async function readAppendOnlyRuntimePrivileges(
           JOIN pg_namespace AS namespace ON namespace.oid = ledger.relnamespace
          WHERE runtime.rolname = 'app_runtime'
            AND namespace.nspname = 'public'
-           AND ledger.relname = 'workspace_approval_ledger'
+            AND ledger.relname = append_only.table_name
       ), false) AS can_insert,
       COALESCE((
         SELECT has_table_privilege(runtime.oid, ledger.oid, 'UPDATE')
@@ -106,7 +113,7 @@ async function readAppendOnlyRuntimePrivileges(
           JOIN pg_namespace AS namespace ON namespace.oid = ledger.relnamespace
          WHERE runtime.rolname = 'app_runtime'
            AND namespace.nspname = 'public'
-           AND ledger.relname = 'workspace_approval_ledger'
+            AND ledger.relname = append_only.table_name
       ), false) AS can_update,
       COALESCE((
         SELECT has_table_privilege(runtime.oid, ledger.oid, 'DELETE')
@@ -115,7 +122,7 @@ async function readAppendOnlyRuntimePrivileges(
           JOIN pg_namespace AS namespace ON namespace.oid = ledger.relnamespace
          WHERE runtime.rolname = 'app_runtime'
            AND namespace.nspname = 'public'
-           AND ledger.relname = 'workspace_approval_ledger'
+            AND ledger.relname = append_only.table_name
       ), false) AS can_delete,
       COALESCE((
         SELECT has_table_privilege(runtime.oid, ledger.oid, 'TRUNCATE')
@@ -124,7 +131,7 @@ async function readAppendOnlyRuntimePrivileges(
           JOIN pg_namespace AS namespace ON namespace.oid = ledger.relnamespace
          WHERE runtime.rolname = 'app_runtime'
            AND namespace.nspname = 'public'
-           AND ledger.relname = 'workspace_approval_ledger'
+            AND ledger.relname = append_only.table_name
       ), false) AS can_truncate,
       COALESCE((
         SELECT has_table_privilege(runtime.oid, ledger.oid, 'REFERENCES')
@@ -133,7 +140,7 @@ async function readAppendOnlyRuntimePrivileges(
           JOIN pg_namespace AS namespace ON namespace.oid = ledger.relnamespace
          WHERE runtime.rolname = 'app_runtime'
            AND namespace.nspname = 'public'
-           AND ledger.relname = 'workspace_approval_ledger'
+            AND ledger.relname = append_only.table_name
       ), false) AS can_references,
       COALESCE((
         SELECT has_table_privilege(runtime.oid, ledger.oid, 'TRIGGER')
@@ -142,7 +149,7 @@ async function readAppendOnlyRuntimePrivileges(
           JOIN pg_namespace AS namespace ON namespace.oid = ledger.relnamespace
          WHERE runtime.rolname = 'app_runtime'
            AND namespace.nspname = 'public'
-           AND ledger.relname = 'workspace_approval_ledger'
+            AND ledger.relname = append_only.table_name
       ), false) AS can_trigger,
       ${maintainExpression} AS can_maintain,
       ${postgresMajor >= 17} AS maintain_supported,
@@ -156,7 +163,7 @@ async function readAppendOnlyRuntimePrivileges(
           JOIN pg_attribute AS attribute ON attribute.attrelid = ledger.oid
          WHERE runtime.rolname = 'app_runtime'
            AND namespace.nspname = 'public'
-           AND ledger.relname = 'workspace_approval_ledger'
+            AND ledger.relname = append_only.table_name
            AND attribute.attnum > 0
            AND NOT attribute.attisdropped
       ), false) AS column_update,
@@ -170,11 +177,13 @@ async function readAppendOnlyRuntimePrivileges(
           JOIN pg_attribute AS attribute ON attribute.attrelid = ledger.oid
          WHERE runtime.rolname = 'app_runtime'
            AND namespace.nspname = 'public'
-           AND ledger.relname = 'workspace_approval_ledger'
+            AND ledger.relname = append_only.table_name
            AND attribute.attnum > 0
            AND NOT attribute.attisdropped
       ), false) AS column_references
-  `);
+    FROM append_only
+    ORDER BY append_only.table_name
+   `, [...appendOnlyRlsTableNames]);
   return rows;
 }
 

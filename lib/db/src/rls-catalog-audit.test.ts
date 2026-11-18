@@ -232,6 +232,23 @@ test("RLS catalog contract is derived from Drizzle, SQL and role bootstrap sourc
       },
     ],
   );
+  assert.deepEqual(
+    contract.grants.filter(
+      (grant) => grant.tableName === "workspace_action_rule_versions",
+    ),
+    [
+      {
+        roleName: "app_runtime",
+        tableName: "workspace_action_rule_versions",
+        privilege: "SELECT",
+      },
+      {
+        roleName: "app_runtime",
+        tableName: "workspace_action_rule_versions",
+        privilege: "INSERT",
+      },
+    ],
+  );
   assert.equal(
     contract.policies.filter(
       (policy) =>

@@ -1204,13 +1204,13 @@ async function main(): Promise<void> {
       developmentAuditReport.expected?.tables !== 16 ||
       developmentAuditReport.expected?.columns !== 173 ||
       developmentAuditReport.expected?.indexes !== 44 ||
-      developmentAuditReport.expected?.constraints !== 71 ||
+      developmentAuditReport.expected?.constraints !== 72 ||
       developmentAuditReport.expected?.policies !== 45 ||
       developmentAuditReport.expected?.roles !== 3 ||
       developmentAuditReport.actual?.tables !== 16 ||
       developmentAuditReport.actual?.columns !== 173 ||
       developmentAuditReport.actual?.indexes !== 44 ||
-      developmentAuditReport.actual?.constraints !== 71 ||
+      developmentAuditReport.actual?.constraints !== 72 ||
       developmentAuditReport.actual?.policies !== 45 ||
       developmentAuditReport.actual?.roles !== 3 ||
       !Array.isArray(developmentAuditReport.violationCodes) ||
@@ -1223,7 +1223,7 @@ async function main(): Promise<void> {
     }
     developmentReadOnlyCatalogAuditPassed = true;
     console.log(
-      "Development read-only catalog audit passed on the disposable runtime connection: tables=16 columns=173 indexes=44 constraints=71 policies=45 roles=3.",
+      "Development read-only catalog audit passed on the disposable runtime connection: tables=16 columns=173 indexes=44 constraints=72 policies=45 roles=3.",
     );
 
     currentStage = "approval_ledger_rls_probes";
