@@ -234,6 +234,7 @@ const persistedRuleState: WorkspaceActionRuleState = {
     },
   ],
   warnings: ["La regla abierta ha sido bloqueada por defecto."],
+  openRuleIds: [],
 };
 
 test("saved rule interface exposes immutable history and limits editing to administrators", () => {

@@ -4595,6 +4595,7 @@ export interface WorkspaceActionRuleState {
   draftRules: WorkspaceActionRule[];
   history: WorkspaceActionRuleVersion[];
   warnings: string[];
+  openRuleIds: string[];
 }
 
 export interface WorkspaceActionRuleStarterTemplate {
@@ -4604,9 +4605,66 @@ export interface WorkspaceActionRuleStarterTemplate {
   document: WorkspaceActionRuleDocumentInput;
 }
 
+export type WorkspaceActionRuleProfileId = typeof WorkspaceActionRuleProfileId[keyof typeof WorkspaceActionRuleProfileId];
+
+
+export const WorkspaceActionRuleProfileId = {
+  'prudent-v1': 'prudent-v1',
+  'balanced-v1': 'balanced-v1',
+  'read-only-v1': 'read-only-v1',
+} as const;
+
+export interface WorkspaceActionRuleProfile {
+  id: WorkspaceActionRuleProfileId;
+  label: string;
+  description: string;
+  /**
+     * @minimum 1
+     * @maximum 1000000
+     */
+  defaultRefundLimitCents: number;
+}
+
 export interface WorkspaceActionRulesResponse {
   actions: WorkspaceActionRuleState[];
   starterTemplates: WorkspaceActionRuleStarterTemplate[];
+  ruleProfiles: WorkspaceActionRuleProfile[];
+}
+
+export interface ApplyWorkspaceActionRuleProfileInput {
+  /**
+     * @minimum 1
+     * @maximum 1000000
+     */
+  refundLimitCents: number;
+}
+
+export type ApplyWorkspaceActionRuleProfileResponseProfileId = typeof ApplyWorkspaceActionRuleProfileResponseProfileId[keyof typeof ApplyWorkspaceActionRuleProfileResponseProfileId];
+
+
+export const ApplyWorkspaceActionRuleProfileResponseProfileId = {
+  'prudent-v1': 'prudent-v1',
+  'balanced-v1': 'balanced-v1',
+  'read-only-v1': 'read-only-v1',
+} as const;
+
+export type ApplyWorkspaceActionRuleProfileResponseVersionsItem = {
+  actionType: string;
+  versionId: string;
+  /** @minimum 1 */
+  version: number;
+  createdAt: string;
+  active: false;
+};
+
+export interface ApplyWorkspaceActionRuleProfileResponse {
+  profileId: ApplyWorkspaceActionRuleProfileResponseProfileId;
+  /**
+     * @minimum 1
+     * @maximum 1000000
+     */
+  refundLimitCents: number;
+  versions: ApplyWorkspaceActionRuleProfileResponseVersionsItem[];
 }
 
 export interface WorkspaceActionRuleVersionResponse {

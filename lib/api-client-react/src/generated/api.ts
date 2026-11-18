@@ -37,6 +37,8 @@ import type {
   AiAssessmentLabJob,
   AiAssessmentLabJobRequest,
   AiEvaluationRun,
+  ApplyWorkspaceActionRuleProfileInput,
+  ApplyWorkspaceActionRuleProfileResponse,
   ApprovalLedgerBundleV1,
   Asset,
   AssetInput,
@@ -3513,6 +3515,98 @@ export function useListWorkspaceActionRules<TData = Awaited<ReturnType<typeof li
 
 
 
+export const getApplyWorkspaceActionRuleProfileDraftUrl = (workspaceId: string,
+    profileId: 'prudent-v1' | 'balanced-v1' | 'read-only-v1',) => {
+
+
+
+
+  return `/api/workspaces/${workspaceId}/action-rules/profiles/${profileId}/draft`
+}
+
+/**
+ * Creates drafts only; no rule is activated by applying a profile.
+ * @summary Create draft versions for every action in a starter profile
+ */
+export const applyWorkspaceActionRuleProfileDraft = async (workspaceId: string,
+    profileId: 'prudent-v1' | 'balanced-v1' | 'read-only-v1',
+    applyWorkspaceActionRuleProfileInput: ApplyWorkspaceActionRuleProfileInput, options?: Parameters<typeof customFetch>[1]): Promise<ApplyWorkspaceActionRuleProfileResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ApplyWorkspaceActionRuleProfileResponse>(getApplyWorkspaceActionRuleProfileDraftUrl(workspaceId,profileId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(applyWorkspaceActionRuleProfileInput)
+  }
+);}
+
+
+
+
+
+export const getApplyWorkspaceActionRuleProfileDraftMutationKey = () => ['applyWorkspaceActionRuleProfileDraft'] as const;
+
+export const getApplyWorkspaceActionRuleProfileDraftMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof applyWorkspaceActionRuleProfileDraft>>, TError,ApplyWorkspaceActionRuleProfileDraftMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof applyWorkspaceActionRuleProfileDraft>>, TError,ApplyWorkspaceActionRuleProfileDraftMutationVariables, TContext> => {
+
+const mutationKey = getApplyWorkspaceActionRuleProfileDraftMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof applyWorkspaceActionRuleProfileDraft>>, ApplyWorkspaceActionRuleProfileDraftMutationVariables> = (props) => {
+          const {workspaceId,profileId,data} = props ?? {};
+
+          return  applyWorkspaceActionRuleProfileDraft(workspaceId,profileId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ApplyWorkspaceActionRuleProfileDraftMutationResult = NonNullable<Awaited<ReturnType<typeof applyWorkspaceActionRuleProfileDraft>>>
+    export type ApplyWorkspaceActionRuleProfileDraftMutationBody = BodyType<ApplyWorkspaceActionRuleProfileInput>
+    export type ApplyWorkspaceActionRuleProfileDraftMutationError = ErrorType<void>
+    export type ApplyWorkspaceActionRuleProfileDraftMutationVariables = {workspaceId: string;profileId: 'prudent-v1' | 'balanced-v1' | 'read-only-v1';data: BodyType<ApplyWorkspaceActionRuleProfileInput>}
+
+    /**
+ * @summary Create draft versions for every action in a starter profile
+ */
+export const useApplyWorkspaceActionRuleProfileDraft = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof applyWorkspaceActionRuleProfileDraft>>, TError,ApplyWorkspaceActionRuleProfileDraftMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof applyWorkspaceActionRuleProfileDraft>>,
+        TError,
+        ApplyWorkspaceActionRuleProfileDraftMutationVariables,
+        TContext
+      > => {
+      return useMutation(getApplyWorkspaceActionRuleProfileDraftMutationOptions(options), queryClient);
+    }
+
 export const getSaveWorkspaceActionRuleDraftUrl = (workspaceId: string,
     actionType: string,) => {
 
@@ -3690,7 +3784,7 @@ export const getRollbackWorkspaceActionRuleUrl = (workspaceId: string,
 }
 
 /**
- * @summary Create and activate a new version copied from history
+ * @summary Create a draft version copied from history
  */
 export const rollbackWorkspaceActionRule = async (workspaceId: string,
     actionType: string,
@@ -3758,7 +3852,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type RollbackWorkspaceActionRuleMutationVariables = {workspaceId: string;actionType: string;data: BodyType<WorkspaceActionRuleRollbackInput>}
 
     /**
- * @summary Create and activate a new version copied from history
+ * @summary Create a draft version copied from history
  */
 export const useRollbackWorkspaceActionRule = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rollbackWorkspaceActionRule>>, TError,RollbackWorkspaceActionRuleMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}

@@ -2,12 +2,14 @@ import React, { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Activity, ArrowDownToLine, Check, ChevronRight, CircleAlert, Code2, Copy, GitBranch, KeyRound, LockKeyhole, Network, RotateCw, Shield, SlidersHorizontal, Trash2 } from "lucide-react";
 import type {
   WorkspaceActionRule,
+  WorkspaceActionRuleProfile,
   WorkspaceActionRuleStarterTemplate,
   WorkspaceActionRuleSimulationResponse,
   WorkspaceActionRuleState,
   WorkspaceAgent,
   WorkspaceAgentCredentialResponse,
 } from "@workspace/api-client-react";
+import { WorkspaceRulesEditor } from "./WorkspaceRulesEditor";
 
 export type GatewayArgumentField = {
   name: string;
@@ -87,10 +89,15 @@ export type GuardianActionGatewayPanelProps = {
   actionTemplates: GatewayActionTemplate[];
   ruleActions?: WorkspaceActionRuleState[];
   starterTemplates?: WorkspaceActionRuleStarterTemplate[];
+  ruleProfiles?: WorkspaceActionRuleProfile[];
   rulesLoading?: boolean;
   rulesError?: string | null;
   onRetryRules?: () => void;
   onSaveRuleDraft?: (actionType: string, rules: WorkspaceActionRule[]) => Promise<unknown>;
+  onApplyRuleProfile?: (
+    profileId: WorkspaceActionRuleProfile["id"],
+    refundLimitCents: number,
+  ) => Promise<unknown>;
   onActivateRuleDraft?: (actionType: string) => Promise<unknown>;
   onRollbackRule?: (actionType: string, version: number) => Promise<unknown>;
   onSimulateRule?: (actionType: string, versionId: string | undefined, args: Record<string, string | number | boolean>) => Promise<WorkspaceActionRuleSimulationResponse>;
@@ -278,10 +285,12 @@ export function GuardianActionGatewayPanel({
   actionTemplates,
   ruleActions = [],
   starterTemplates = [],
+  ruleProfiles = [],
   rulesLoading = false,
   rulesError = null,
   onRetryRules = () => undefined,
   onSaveRuleDraft = async () => { throw new Error("Rule API unavailable"); },
+  onApplyRuleProfile = async () => { throw new Error("Rule profile API unavailable"); },
   onActivateRuleDraft = async () => { throw new Error("Rule API unavailable"); },
   onRollbackRule = async () => { throw new Error("Rule API unavailable"); },
   onSimulateRule = async () => { throw new Error("Rule API unavailable"); },
@@ -751,6 +760,22 @@ export function GuardianActionGatewayPanel({
 
       {section === "rules" && !loading && <div className="gateway-section">
         <div className="gateway-section-title"><div><span className="gateway-kicker">01 / POLÍTICA DECLARATIVA</span><h2>Reglas por plantillas</h2><p>Consulta el estado persistido del workspace, prepara borradores y activa cambios de forma explícita.</p></div><span className="gateway-count">{rulesLoading || rulesError ? unavailable : ruleActions.length} acciones configurables</span></div>
+        <WorkspaceRulesEditor
+          actions={ruleActions}
+          profiles={ruleProfiles}
+          canManage={canManage}
+          loading={rulesLoading}
+          error={rulesError ?? null}
+          onRetry={onRetryRules}
+          onApplyProfile={onApplyRuleProfile}
+          onSaveRuleDraft={onSaveRuleDraft}
+          onActivateRuleDraft={onActivateRuleDraft}
+          onRollbackRule={onRollbackRule}
+          onSimulateRule={onSimulateRule}
+        />
+        <details className="gateway-advanced-rules">
+          <summary>Editor avanzado por acción</summary>
+          <p>La edición visual es la opción recomendada. Esta herramienta avanzada conserva acceso al formato estructurado y aplica las mismas validaciones del servidor.</p>
         <section className="gateway-persisted" aria-labelledby="gateway-persisted-title" data-testid="gateway-persisted-rules">
           <div className="gateway-persisted-head"><div><span className="gateway-kicker">ESTADO DEL WORKSPACE</span><h3 id="gateway-persisted-title">Reglas guardadas</h3><p>La fuente de verdad es el estado recibido del servicio. Los borradores no sustituyen la versión activa.</p></div><span className="gateway-persisted-tag"><LockKeyhole size={13} /> Persistencia explícita</span></div>
           {rulesLoading && <div className="gateway-skeleton" role="status" data-testid="gateway-rules-loading"><span /><span /><span />Cargando reglas guardadas…</div>}
@@ -836,6 +861,7 @@ export function GuardianActionGatewayPanel({
             </div>
           </div>}
         </section>
+        </details>
         <div className="gateway-default-block" data-testid="gateway-default-block"><LockKeyhole size={17} /><div><b>Acciones no listadas: bloqueadas por defecto</b><span>Es una regla de diseño para el futuro gateway; esta demostración no intercepta llamadas.</span></div><code>DEFAULT · DENY</code></div>
         {actionTemplates.length === 0 ? <div className="gateway-empty" data-testid="gateway-empty-templates">No hay plantillas suministradas. No se crean reglas de ejemplo.</div> : <div className="gateway-template-list">
           {actionTemplates.map((template) => <article className="gateway-template" key={`${template.actionType}-${template.version}`} data-testid={`gateway-template-${template.actionType}`}>

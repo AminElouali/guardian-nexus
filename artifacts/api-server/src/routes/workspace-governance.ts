@@ -4,10 +4,15 @@ import {
   workspaceAuditEventsTable,
   workspaceActionRuleVersionsTable,
   workspaceAgentsTable,
-  getStarterWorkspaceRuleTemplates,
+  buildWorkspaceActionRuleProfileDocuments,
+  getWorkspaceActionRuleProfiles,
   validateWorkspaceActionRuleDocument,
+  getStarterWorkspaceRuleTemplates,
 } from "@workspace/db";
 import {
+  ApplyWorkspaceActionRuleProfileDraftParams,
+  ApplyWorkspaceActionRuleProfileDraftBody,
+  ApplyWorkspaceActionRuleProfileDraftResponse,
   ActivateWorkspaceActionRuleDraftParams,
   ActivateWorkspaceActionRuleDraftResponse,
   CreateWorkspaceAgentActionProposalBody,
@@ -97,7 +102,86 @@ router.get(
     res.json(ListWorkspaceActionRulesResponse.parse({
       actions: access.value,
       starterTemplates: getStarterWorkspaceRuleTemplates(),
+      ruleProfiles: getWorkspaceActionRuleProfiles(),
     }));
+  },
+);
+
+router.post(
+  "/workspaces/:workspaceId/action-rules/profiles/:profileId/draft",
+  async (req, res): Promise<void> => {
+    const params = ApplyWorkspaceActionRuleProfileDraftParams.safeParse(req.params);
+    const body = ApplyWorkspaceActionRuleProfileDraftBody.safeParse(req.body);
+    if (!params.success || !body.success) {
+      res.status(400).json({ error: "El límite debe ser positivo y no superar 10.000 €." });
+      return;
+    }
+    const profile = buildWorkspaceActionRuleProfileDocuments(
+      params.data.profileId,
+      body.data.refundLimitCents,
+    );
+    if (!profile.ok) {
+      res.status(400).json({
+        error: profile.issues.includes("refund_limit_out_of_range")
+          ? "El límite debe ser positivo y no superar 10.000 €."
+          : "La plantilla seleccionada no está disponible.",
+        code: profile.issues[0] ?? "invalid_rule_profile",
+      });
+      return;
+    }
+    const access = await withWorkspaceUserTransaction(
+      req.authUserId!,
+      params.data.workspaceId,
+      async (tx, membership) => {
+        if (!canRunAiEvaluation(membership.role)) {
+          return { kind: "forbidden" as const };
+        }
+        const versions = [];
+        for (const item of profile.documents) {
+          const created = await createWorkspaceActionRuleVersion(tx, {
+            workspaceId: params.data.workspaceId,
+            actionType: item.actionType,
+            actorUserId: req.authUserId!,
+            document: item.document,
+            activate: false,
+          });
+          if (created.kind !== "created") {
+            throw new Error("rule_profile_draft_transaction_failed");
+          }
+          versions.push({
+            actionType: created.version.actionType,
+            versionId: created.version.id,
+            version: created.version.version,
+            createdAt: created.version.createdAt,
+            active: false as const,
+          });
+        }
+        return { kind: "created" as const, versions };
+      },
+    ).catch(() => null);
+    if (!access) {
+      res.status(503).json({ error: "No se pudo guardar el borrador de la plantilla." });
+      return;
+    }
+    if (!access.authorized) {
+      res.status(403).json({ error: "Workspace membership required" });
+      return;
+    }
+    if (access.value.kind === "forbidden") {
+      res.status(403).json({ error: "Workspace administrator required" });
+      return;
+    }
+    if (access.value.kind !== "created") {
+      res.status(503).json({ error: "No se pudo guardar el borrador de la plantilla." });
+      return;
+    }
+    res.status(201).json(
+      ApplyWorkspaceActionRuleProfileDraftResponse.parse({
+        profileId: profile.profile.id,
+        refundLimitCents: body.data.refundLimitCents,
+        versions: access.value.versions,
+      }),
+    );
   },
 );
 
@@ -257,7 +341,7 @@ router.post(
         version: access.value.version.version,
         rules: access.value.version.ruleDocument.rules,
         createdAt: access.value.version.createdAt,
-        active: true,
+        active: false,
       }),
     );
   },

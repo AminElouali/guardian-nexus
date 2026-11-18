@@ -5,10 +5,12 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { WorkspaceActionRuleProfile } from './workspaceActionRuleProfile';
 import type { WorkspaceActionRuleStarterTemplate } from './workspaceActionRuleStarterTemplate';
 import type { WorkspaceActionRuleState } from './workspaceActionRuleState';
 
 export interface WorkspaceActionRulesResponse {
   actions: WorkspaceActionRuleState[];
   starterTemplates: WorkspaceActionRuleStarterTemplate[];
+  ruleProfiles: WorkspaceActionRuleProfile[];
 }

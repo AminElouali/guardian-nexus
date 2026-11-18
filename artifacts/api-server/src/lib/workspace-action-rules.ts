@@ -145,6 +145,14 @@ export async function listWorkspaceActionRuleStates(
     const draftDoc = draftVersion
       ? { version: 1 as const, rules: draftVersion.rules }
       : null;
+    const warningDetails = [
+      ...(activeDoc
+        ? getWorkspaceRuleWarnings(definition.actionType, activeDoc)
+        : []),
+      ...(draftDoc
+        ? getWorkspaceRuleWarnings(definition.actionType, draftDoc)
+        : []),
+    ];
     return {
       actionType: definition.actionType,
       label: definition.label,
@@ -156,14 +164,15 @@ export async function listWorkspaceActionRuleStates(
       activeRules: activeVersion?.rules ?? [],
       draftRules: draftVersion?.rules ?? [],
       history: actionVersions,
-      warnings: [
-        ...(activeDoc
-          ? getWorkspaceRuleWarnings(definition.actionType, activeDoc)
-          : []),
-        ...(draftDoc
-          ? getWorkspaceRuleWarnings(definition.actionType, draftDoc)
-          : []),
-      ].map((warning) => warning.message),
+      warnings: warningDetails.map((warning) => warning.message),
+      openRuleIds: [...new Set(
+        warningDetails
+          .filter((warning) =>
+            warning.code === "unconditional_allow" ||
+            warning.code === "unbounded_recipient",
+          )
+          .flatMap((warning) => warning.ruleIds),
+      )],
     };
   });
 }
@@ -350,7 +359,7 @@ export async function rollbackWorkspaceActionRule(
     actionType: input.actionType,
     actorUserId: input.actorUserId,
     document: parsed.document,
-    activate: true,
+    activate: false,
   });
   if (created.kind !== "created") return created;
   await tx.insert(workspaceAuditEventsTable).values({
@@ -363,6 +372,7 @@ export async function rollbackWorkspaceActionRule(
       actionType: input.actionType,
       sourceVersion: input.sourceVersion,
       newVersion: created.version.version,
+      activated: false,
     },
   });
   return { kind: "rolled_back" as const, version: created.version };

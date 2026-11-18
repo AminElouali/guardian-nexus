@@ -125,7 +125,7 @@ export const APPROVAL_ACTION_CATALOG: readonly ApprovalActionDefinition[] = [
       additionalProperties: false,
       properties: {
         ticket_id: { type: "string", required: true, pattern: syntheticTicket },
-        amount_cents: { type: "integer", required: true, min: 1, max: 5000 },
+        amount_cents: { type: "integer", required: true, min: 1, max: 1000000 },
       },
     },
     rules: [

@@ -24,4 +24,5 @@ export interface WorkspaceActionRuleState {
   draftRules: WorkspaceActionRule[];
   history: WorkspaceActionRuleVersion[];
   warnings: string[];
+  openRuleIds: string[];
 }

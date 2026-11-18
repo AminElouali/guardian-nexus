@@ -13280,6 +13280,8 @@ export const listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesIt
 
 export const listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesMax = 50;
 
+export const listWorkspaceActionRulesResponseRuleProfilesItemDefaultRefundLimitCentsMax = 1000000;
+
 
 
 export const ListWorkspaceActionRulesResponse = zod.object({
@@ -13347,7 +13349,8 @@ export const ListWorkspaceActionRulesResponse = zod.object({
   "isActive": zod.boolean(),
   "isDraft": zod.boolean()
 })),
-  "warnings": zod.array(zod.string())
+  "warnings": zod.array(zod.string()),
+  "openRuleIds": zod.array(zod.string())
 })),
   "starterTemplates": zod.array(zod.object({
   "id": zod.string(),
@@ -13372,6 +13375,47 @@ export const ListWorkspaceActionRulesResponse = zod.object({
 })
 })).max(listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesMax)
 })
+})),
+  "ruleProfiles": zod.array(zod.object({
+  "id": zod.enum(['prudent-v1', 'balanced-v1', 'read-only-v1']),
+  "label": zod.string(),
+  "description": zod.string(),
+  "defaultRefundLimitCents": zod.int().min(1).max(listWorkspaceActionRulesResponseRuleProfilesItemDefaultRefundLimitCentsMax)
+}))
+})
+
+
+/**
+ * Creates drafts only; no rule is activated by applying a profile.
+ * @summary Create draft versions for every action in a starter profile
+ */
+export const ApplyWorkspaceActionRuleProfileDraftParams = zod.object({
+  "workspaceId": zod.uuid(),
+  "profileId": zod.enum(['prudent-v1', 'balanced-v1', 'read-only-v1'])
+})
+
+export const applyWorkspaceActionRuleProfileDraftBodyRefundLimitCentsMax = 1000000;
+
+
+
+export const ApplyWorkspaceActionRuleProfileDraftBody = zod.object({
+  "refundLimitCents": zod.int().min(1).max(applyWorkspaceActionRuleProfileDraftBodyRefundLimitCentsMax)
+})
+
+export const applyWorkspaceActionRuleProfileDraftResponseRefundLimitCentsMax = 1000000;
+
+
+
+
+export const ApplyWorkspaceActionRuleProfileDraftResponse = zod.object({
+  "profileId": zod.enum(['prudent-v1', 'balanced-v1', 'read-only-v1']),
+  "refundLimitCents": zod.int().min(1).max(applyWorkspaceActionRuleProfileDraftResponseRefundLimitCentsMax),
+  "versions": zod.array(zod.object({
+  "actionType": zod.string(),
+  "versionId": zod.uuid(),
+  "version": zod.int().min(1),
+  "createdAt": zod.coerce.date(),
+  "active": zod.literal(false)
 }))
 })
 
@@ -13541,7 +13585,7 @@ export const ActivateWorkspaceActionRuleDraftResponse = zod.object({
 
 
 /**
- * @summary Create and activate a new version copied from history
+ * @summary Create a draft version copied from history
  */
 export const rollbackWorkspaceActionRulePathActionTypeMax = 120;
 

@@ -18,6 +18,7 @@ import {
   useSaveWorkspaceActionRuleDraft,
   useActivateWorkspaceActionRuleDraft,
   useRollbackWorkspaceActionRule,
+  useApplyWorkspaceActionRuleProfileDraft,
   useSimulateWorkspaceActionRule,
   useListWorkspaceAgents,
   useCreateWorkspaceAgent,
@@ -44,6 +45,7 @@ import {
   type ApprovalLedgerBundleV1,
   type Workspace,
   type WorkspaceActionRule,
+  type WorkspaceActionRuleProfile,
   type WorkspaceActionRuleSimulationResponse,
   type WorkspaceAgentCredentialResponse,
 } from '@workspace/api-client-react';
@@ -1019,6 +1021,7 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
   const saveActionRuleDraft = useSaveWorkspaceActionRuleDraft();
   const activateActionRuleDraft = useActivateWorkspaceActionRuleDraft();
   const rollbackActionRule = useRollbackWorkspaceActionRule();
+  const applyActionRuleProfile = useApplyWorkspaceActionRuleProfileDraft();
   const simulateActionRule = useSimulateWorkspaceActionRule();
   const createAgent = useCreateWorkspaceAgent();
   const rotateAgentCredential = useRotateWorkspaceAgentCredential();
@@ -1352,6 +1355,21 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
       workspaceId: workspace.id,
       actionType,
       data: { version: 1, rules },
+    });
+    await cache.invalidateQueries({
+      queryKey: getListWorkspaceActionRulesQueryKey(workspace.id),
+    });
+    return result;
+  }
+
+  async function applyGatewayRuleProfile(
+    profileId: WorkspaceActionRuleProfile["id"],
+    refundLimitCents: number,
+  ) {
+    const result = await applyActionRuleProfile.mutateAsync({
+      workspaceId: workspace.id,
+      profileId,
+      data: { refundLimitCents },
     });
     await cache.invalidateQueries({
       queryKey: getListWorkspaceActionRulesQueryKey(workspace.id),
@@ -1881,10 +1899,12 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
         actionTemplates={gatewayTemplates}
         ruleActions={actionRules.data?.actions ?? []}
         starterTemplates={actionRules.data?.starterTemplates ?? []}
+        ruleProfiles={actionRules.data?.ruleProfiles ?? []}
         rulesLoading={actionRules.isLoading}
         rulesError={actionRules.isError ? 'No se pudieron cargar las reglas guardadas.' : null}
         onRetryRules={() => void actionRules.refetch()}
         onSaveRuleDraft={saveGatewayRuleDraft}
+        onApplyRuleProfile={applyGatewayRuleProfile}
         onActivateRuleDraft={activateGatewayRuleDraft}
         onRollbackRule={rollbackGatewayRule}
         onSimulateRule={simulateGatewayRule}

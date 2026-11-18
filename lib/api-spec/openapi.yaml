@@ -937,6 +937,39 @@ paths:
               schema: { $ref: "#/components/schemas/WorkspaceActionRulesResponse" }
         "403":
           description: Workspace membership required
+  /workspaces/{workspaceId}/action-rules/profiles/{profileId}/draft:
+    post:
+      operationId: applyWorkspaceActionRuleProfileDraft
+      tags: [ai-evaluations]
+      summary: Create draft versions for every action in a starter profile
+      description: Creates drafts only; no rule is activated by applying a profile.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: profileId
+          required: true
+          schema:
+            type: string
+            enum: [prudent-v1, balanced-v1, read-only-v1]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ApplyWorkspaceActionRuleProfileInput" }
+      responses:
+        "201":
+          description: Draft versions created for the selected profile
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApplyWorkspaceActionRuleProfileResponse" }
+        "400":
+          description: Unknown profile or invalid refund threshold
+        "403":
+          description: Workspace owner or administrator required
   /workspaces/{workspaceId}/action-rules/{actionType}/draft:
     put:
       operationId: saveWorkspaceActionRuleDraft
@@ -996,7 +1029,7 @@ paths:
     post:
       operationId: rollbackWorkspaceActionRule
       tags: [ai-evaluations]
-      summary: Create and activate a new version copied from history
+      summary: Create a draft version copied from history
       security: [{ bearerAuth: [] }]
       parameters:
         - in: path
@@ -2058,7 +2091,10 @@ components:
         warnings:
           type: array
           items: { type: string }
-      required: [actionType, label, description, riskClass, riskCategories, activeVersionId, draftVersionId, activeRules, draftRules, history, warnings]
+        openRuleIds:
+          type: array
+          items: { type: string }
+      required: [actionType, label, description, riskClass, riskCategories, activeVersionId, draftVersionId, activeRules, draftRules, history, warnings, openRuleIds]
     WorkspaceActionRuleStarterTemplate:
       type: object
       additionalProperties: false
@@ -2078,7 +2114,44 @@ components:
         starterTemplates:
           type: array
           items: { $ref: "#/components/schemas/WorkspaceActionRuleStarterTemplate" }
-      required: [actions, starterTemplates]
+        ruleProfiles:
+          type: array
+          items: { $ref: "#/components/schemas/WorkspaceActionRuleProfile" }
+      required: [actions, starterTemplates, ruleProfiles]
+    WorkspaceActionRuleProfile:
+      type: object
+      additionalProperties: false
+      properties:
+        id: { type: string, enum: [prudent-v1, balanced-v1, read-only-v1] }
+        label: { type: string }
+        description: { type: string }
+        defaultRefundLimitCents: { type: integer, minimum: 1, maximum: 1000000 }
+      required: [id, label, description, defaultRefundLimitCents]
+    ApplyWorkspaceActionRuleProfileInput:
+      type: object
+      additionalProperties: false
+      properties:
+        refundLimitCents: { type: integer, minimum: 1, maximum: 1000000 }
+      required: [refundLimitCents]
+    ApplyWorkspaceActionRuleProfileResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        profileId: { type: string, enum: [prudent-v1, balanced-v1, read-only-v1] }
+        refundLimitCents: { type: integer, minimum: 1, maximum: 1000000 }
+        versions:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            properties:
+              actionType: { type: string }
+              versionId: { type: string, format: uuid }
+              version: { type: integer, minimum: 1 }
+              createdAt: { type: string, format: date-time }
+              active: { type: boolean, const: false }
+            required: [actionType, versionId, version, createdAt, active]
+      required: [profileId, refundLimitCents, versions]
     WorkspaceActionRuleVersionResponse:
       type: object
       additionalProperties: false

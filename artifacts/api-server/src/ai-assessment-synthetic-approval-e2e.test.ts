@@ -1073,7 +1073,7 @@ test(
         active: boolean;
       };
       assert.equal(rollbackData.version, 3);
-      assert.equal(rollbackData.active, true);
+      assert.equal(rollbackData.active, false);
       const finalRules = await request(
         workspaceAAdmin,
         `/api/workspaces/${workspaceA}/action-rules`,
@@ -1087,13 +1087,15 @@ test(
         actions: Array<{
           actionType: string;
           activeVersionId: string | null;
+          draftVersionId: string | null;
           history: Array<{ version: number }>;
         }>;
       };
       const finalSupportState = finalRulesData.actions.find(
         (action) => action.actionType === supportAction,
       );
-      assert.equal(finalSupportState?.activeVersionId, rollbackData.versionId);
+      assert.equal(finalSupportState?.activeVersionId, secondVersion.versionId);
+      assert.equal(finalSupportState?.draftVersionId, rollbackData.versionId);
       assert.deepEqual(
         finalSupportState?.history.map((version) => version.version).sort(),
         [1, 2, 3],
@@ -1126,11 +1128,223 @@ test(
         decision: string;
         ruleVersionId: string | null;
       };
-      assert.equal(simulatedActiveData.decision, "require_approval");
-      assert.equal(simulatedActiveData.ruleVersionId, rollbackData.versionId);
+      assert.equal(simulatedActiveData.decision, "deny");
+      assert.equal(simulatedActiveData.ruleVersionId, secondVersion.versionId);
+    });
+    await t.test("starter profiles create bounded drafts and the server simulator uses their versions", async () => {
+      const rulesPath = `/api/workspaces/${workspaceA}/action-rules`;
+      const profilePath = (profileId: string) =>
+        `/api/workspaces/${workspaceA}/action-rules/profiles/${profileId}/draft`;
+      const listedBefore = await request(workspaceAViewer, rulesPath);
+      assert.equal(listedBefore.status, 200);
+      const beforeData = await listedBefore.json() as {
+        ruleProfiles: Array<{ id: string; label: string; defaultRefundLimitCents: number }>;
+        actions: Array<{ actionType: string; activeVersionId: string | null }>;
+      };
+      assert.deepEqual(
+        beforeData.ruleProfiles.map(({ id, label, defaultRefundLimitCents }) => ({
+          id,
+          label,
+          defaultRefundLimitCents,
+        })),
+        [
+          { id: "prudent-v1", label: "Prudente", defaultRefundLimitCents: 5000 },
+          { id: "balanced-v1", label: "Equilibrada", defaultRefundLimitCents: 5000 },
+          { id: "read-only-v1", label: "Solo lectura", defaultRefundLimitCents: 5000 },
+        ],
+      );
+      assert.equal(
+        (await request(workspaceAViewer, profilePath("balanced-v1"), "POST", {
+          refundLimitCents: 6500,
+        })).status,
+        403,
+        "viewers can read rules but cannot create profile drafts",
+      );
+      assert.equal(
+        (await request(workspaceAOwner, profilePath("balanced-v1"), "POST", {
+          refundLimitCents: 0,
+        })).status,
+        400,
+        "zero is not a valid refund threshold",
+      );
+      assert.equal(
+        (await request(workspaceAOwner, profilePath("balanced-v1"), "POST", {
+          refundLimitCents: 1_000_001,
+        })).status,
+        400,
+        "the server rejects thresholds above 10,000 euros",
+      );
+
+      const createdResponse = await request(
+        workspaceAOwner,
+        profilePath("balanced-v1"),
+        "POST",
+        { refundLimitCents: 6500 },
+      );
+      assert.equal(createdResponse.status, 201);
+      const createdProfile = await createdResponse.json() as {
+        profileId: string;
+        refundLimitCents: number;
+        versions: Array<{
+          actionType: string;
+          versionId: string;
+          version: number;
+          active: boolean;
+        }>;
+      };
+      assert.equal(createdProfile.profileId, "balanced-v1");
+      assert.equal(createdProfile.refundLimitCents, 6500);
+      assert.equal(createdProfile.versions.length, 4);
+      assert.ok(createdProfile.versions.every((version) => version.active === false));
+
+      const refundAction = "guardian.synthetic.support.refund.v1";
+      const refundVersion = createdProfile.versions.find(
+        (version) => version.actionType === refundAction,
+      );
+      assert.ok(refundVersion);
+      const refundPath = `${rulesPath}/${refundAction}`;
+      const simulateRefund = (amountCents: number) =>
+        request(workspaceAViewer, `${refundPath}/simulate`, "POST", {
+          versionId: refundVersion.versionId,
+          arguments: {
+            ticket_id: "TICKET-SYNTH-RULE-PROFILE",
+            amount_cents: amountCents,
+          },
+        });
+      const atLimit = await simulateRefund(6500);
+      const atLimitResult = await atLimit.json() as {
+        decision: string;
+        ruleId: string | null;
+        ruleVersionId: string | null;
+        persisted: boolean;
+        dispatched: boolean;
+      };
+      assert.equal(atLimitResult.decision, "allow");
+      assert.equal(atLimitResult.ruleId, "refund-within-threshold");
+      assert.equal(atLimitResult.ruleVersionId, refundVersion.versionId);
+      assert.equal(atLimitResult.persisted, false);
+      assert.equal(atLimitResult.dispatched, false);
+      const overLimit = await simulateRefund(6501);
+      const overLimitResult = await overLimit.json() as {
+        decision: string;
+        ruleId: string | null;
+        ruleVersionId: string | null;
+      };
+      assert.equal(overLimitResult.decision, "require_approval");
+      assert.equal(overLimitResult.ruleId, "refund-above-threshold");
+      assert.equal(overLimitResult.ruleVersionId, refundVersion.versionId);
+
+      const changedResponse = await request(
+        workspaceAAdmin,
+        profilePath("balanced-v1"),
+        "POST",
+        { refundLimitCents: 7500 },
+      );
+      assert.equal(changedResponse.status, 201);
+      const changedProfile = await changedResponse.json() as {
+        versions: Array<{
+          actionType: string;
+          versionId: string;
+          version: number;
+          active: boolean;
+        }>;
+      };
+      const changedRefundVersion = changedProfile.versions.find(
+        (version) => version.actionType === refundAction,
+      );
+      assert.ok(changedRefundVersion);
+      assert.equal(changedRefundVersion.version, refundVersion.version + 1);
+      assert.equal(changedRefundVersion.active, false);
+
+      const listedAfter = await request(workspaceAAdmin, rulesPath);
+      const afterData = await listedAfter.json() as {
+        actions: Array<{
+          actionType: string;
+          activeVersionId: string | null;
+          draftVersionId: string | null;
+          history: Array<{
+            rules: Array<{
+              when: {
+                all?: Array<{ field: string; value: string | number | boolean }>;
+              };
+            }>;
+          }>;
+        }>;
+      };
+      const refundState = afterData.actions.find(
+        (action) => action.actionType === refundAction,
+      );
+      assert.ok(refundState);
+      assert.equal(
+        refundState.activeVersionId,
+        beforeData.actions.find((action) => action.actionType === refundAction)
+          ?.activeVersionId ?? null,
+        "choosing a profile never activates its draft",
+      );
+      assert.equal(refundState.draftVersionId, changedRefundVersion.versionId);
+      const savedThresholds = refundState.history.flatMap((version) =>
+        version.rules.flatMap((rule) =>
+          (rule.when.all ?? [])
+            .filter((condition) => condition.field === "amount_cents")
+            .map((condition) => condition.value),
+        ),
+      );
+      assert.ok(savedThresholds.includes(6500));
+      assert.ok(savedThresholds.includes(7500));
+
+      const openRuleDraft = await request(
+        workspaceAAdmin,
+        `${rulesPath}/guardian.email.send.external.v1/draft`,
+        "PUT",
+        {
+          version: 1,
+          rules: [{ id: "unbounded-email-allow", decision: "allow", when: {} }],
+        },
+      );
+      assert.equal(openRuleDraft.status, 201);
+      const listedOpenRules = await request(workspaceAAdmin, rulesPath);
+      const openRules = await listedOpenRules.json() as {
+        actions: Array<{ actionType: string; openRuleIds: string[] }>;
+      };
+      assert.ok(
+        openRules.actions.find(
+          (action) => action.actionType === "guardian.email.send.external.v1",
+        )?.openRuleIds.includes("unbounded-email-allow"),
+        "the server identifies an unconditional external-email allow as open",
+      );
     });
     await t.test("agent credentials are scoped, revocable, renewable and cannot self-approve", async () => {
       const agentsPath = `/api/workspaces/${workspaceA}/agents`;
+      const supportRulePath =
+        `/api/workspaces/${workspaceA}/action-rules/guardian.support.reply.send.v1`;
+      const approvalRuleDraft = await request(
+        workspaceAAdmin,
+        `${supportRulePath}/draft`,
+        "PUT",
+        {
+          version: 1,
+          rules: [{
+            id: "agent-proposal-requires-human-review",
+            decision: "require_approval",
+            when: {},
+          }],
+        },
+      );
+      assert.equal(
+        approvalRuleDraft.status,
+        201,
+        "the agent test creates its own approval policy rather than relying on prior subtests",
+      );
+      const approvalRuleActivation = await request(
+        workspaceAAdmin,
+        `${supportRulePath}/activate`,
+        "POST",
+      );
+      assert.equal(
+        approvalRuleActivation.status,
+        200,
+        "the agent test activates the explicit human-review policy",
+      );
       const viewerAgentCreate = await request(
         workspaceAViewer,
         agentsPath,
