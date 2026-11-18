@@ -35,6 +35,8 @@ import {
   runApprovalLedgerRlsProbes,
   safeApprovalLedgerRlsProbeFailureCode,
 } from "./approval-ledger-rls-probes";
+import { diagnoseGitHubActionsApprovalLabTarget } from "../lib/approval-e2e-db-guard";
+import { acquireGitHubActionsOidcToken } from "../lib/github-actions-oidc";
 import { readCatalogSnapshot } from "./verify-rls-catalog";
 
 const { Client, Pool } = pg;
@@ -136,6 +138,13 @@ type VersionedMigrationAuditReport = {
     privilegeMatrix: boolean;
   };
   violationCodes: string[];
+};
+
+type VersionedMigrationDatabaseConnection = {
+  host: string;
+  port: number;
+  user: string;
+  password?: string;
 };
 
 type NodeTestSummary = {
@@ -1048,6 +1057,9 @@ function safeVersionedMigrationFailureCode(error: unknown): string {
     message === "versioned_migration_transaction_boundary_invalid" ||
     message === "versioned_migration_database_identity_mismatch" ||
     message === "versioned_migration_connection_identity_mismatch" ||
+    message === "versioned_migration_source_database_mismatch" ||
+    message === "versioned_migration_commit_sha_invalid" ||
+    message === "versioned_migration_connection_configuration_invalid" ||
     message === "versioned_migration_baseline_source_mismatch" ||
     message === "versioned_migration_baseline_new_tables_not_empty" ||
     message === "versioned_migration_baseline_reconstruction_failed" ||
@@ -1063,9 +1075,10 @@ function safeVersionedMigrationFailureCode(error: unknown): string {
 }
 
 async function runVersionedMigrationAudit(input: {
-  socketDirectory: string;
+  connection: VersionedMigrationDatabaseConnection;
   sourceDatabaseName: string;
   nonce: string;
+  serverNonce?: string;
   tableNames: string[];
   roleNames: string[];
   contract: ReturnType<typeof parseRlsCatalogContract>;
@@ -1074,9 +1087,10 @@ async function runVersionedMigrationAudit(input: {
   report: VersionedMigrationAuditReport;
 }): Promise<void> {
   const {
-    socketDirectory,
+    connection,
     sourceDatabaseName,
     nonce,
+    serverNonce,
     tableNames,
     roleNames,
     contract,
@@ -1087,9 +1101,7 @@ async function runVersionedMigrationAudit(input: {
   const suffix = randomBytes(12).toString("hex");
   const migrationDatabaseName = `guardian_migrations_${suffix}`;
   const admin = new Client({
-    host: socketDirectory,
-    port: 5432,
-    user: "postgres",
+    ...connection,
     database: "postgres",
     application_name: "guardian-nexus-versioned-migration-lab-admin",
     connectionTimeoutMillis: 5000,
@@ -1120,18 +1132,14 @@ async function runVersionedMigrationAudit(input: {
   }
 
   const migrationClient = new Client({
-    host: socketDirectory,
-    port: 5432,
-    user: "postgres",
+    ...connection,
     database: migrationDatabaseName,
     application_name: "guardian-nexus-versioned-migration-lab",
     connectionTimeoutMillis: 5000,
     statement_timeout: 15000,
   });
   const migrationPool = new Pool({
-    host: socketDirectory,
-    port: 5432,
-    user: "postgres",
+    ...connection,
     database: migrationDatabaseName,
     application_name: "guardian-nexus-versioned-migration-catalog",
     max: 5,
@@ -1142,12 +1150,19 @@ async function runVersionedMigrationAudit(input: {
   try {
     const databaseIdentity = await migrationClient.query(
       `SELECT current_database() AS database_name,
-              current_setting('guardian_nexus.lab_nonce', true) AS nonce`,
+              current_setting('guardian_nexus.lab_nonce', true) AS server_nonce,
+              shobj_description(
+                (SELECT oid FROM pg_database WHERE datname = current_database()),
+                'pg_database'
+              ) AS database_comment`,
     );
     if (
       databaseIdentity.rows.length !== 1 ||
       databaseIdentity.rows[0]?.database_name !== migrationDatabaseName ||
-      databaseIdentity.rows[0]?.nonce !== nonce
+      databaseIdentity.rows[0]?.database_comment !==
+        `guardian-nexus-versioned-migrations:${nonce}` ||
+      (serverNonce !== undefined &&
+        databaseIdentity.rows[0]?.server_nonce !== serverNonce)
     ) {
       throw new Error("versioned_migration_connection_identity_mismatch");
     }
@@ -1298,10 +1313,120 @@ async function runVersionedMigrationAudit(input: {
   }
 }
 
+export async function runVersionedMigrationAuditForCi(
+  databaseUrl: string,
+  commitSha: string,
+): Promise<VersionedMigrationAuditReport> {
+  const report: VersionedMigrationAuditReport = {
+    status: "running",
+    baselineSourceCommit,
+    baselineStrategy: "clone_drizzle_catalog_and_remove_new_tables",
+    baselineExpected: legacyCatalogCounts,
+    migrationsApplied: [],
+    violationCodes: [],
+  };
+
+  try {
+    const target = await diagnoseGitHubActionsApprovalLabTarget(
+      process.env,
+      "approval-e2e",
+      acquireGitHubActionsOidcToken,
+    );
+    if (!target.accepted) {
+      report.violationCodes = [
+        `ci_target_rejected_${target.category}`,
+        ...(target.subcategory ? [`ci_oidc_rejected_${target.subcategory}`] : []),
+      ];
+      report.status = "failed";
+      return report;
+    }
+    if (!/^[a-f0-9]{40}$/i.test(commitSha)) {
+      throw new Error("versioned_migration_commit_sha_invalid");
+    }
+    const sourceDatabaseName = decodeURIComponent(
+      new URL(databaseUrl).pathname.replace(/^\/+/, ""),
+    );
+    if (sourceDatabaseName !== "guardian_approval_lab_ci") {
+      throw new Error("versioned_migration_source_database_mismatch");
+    }
+
+    const sources = await loadContractSources();
+    const contract = parseRlsCatalogContract(sources);
+    const tableNames = deriveDrizzleRlsTableNames();
+    const roleNames = Object.keys(contract.roles).sort();
+    const sourcePool = new Pool({
+      connectionString: databaseUrl,
+      application_name: "guardian-nexus-versioned-migration-source-audit",
+      max: 5,
+      connectionTimeoutMillis: 5000,
+      statement_timeout: 15000,
+    });
+
+    let drizzlePhase: RlsCatalogPhaseSnapshot;
+    let drizzleGrants: RlsCatalogSnapshot;
+    try {
+      drizzlePhase = await readRlsCatalogPhaseSnapshot(
+        sourcePool,
+        tableNames,
+        roleNames,
+      );
+      const grantResult = await readCatalogSnapshot(
+        sourcePool,
+        tableNames,
+        roleNames,
+      );
+      drizzleGrants = grantResult.snapshot;
+    } finally {
+      await sourcePool.end().catch(() => undefined);
+    }
+
+    report.drizzleCatalog = catalogCounts(drizzlePhase);
+    await runVersionedMigrationAudit({
+      connection: migrationConnectionFromUrl(databaseUrl),
+      sourceDatabaseName,
+      nonce: randomBytes(32).toString("hex"),
+      tableNames,
+      roleNames,
+      contract,
+      drizzlePhase,
+      drizzleGrants,
+      report,
+    });
+    report.status = "passed";
+  } catch (error) {
+    report.status = "failed";
+    if (report.violationCodes.length === 0) {
+      report.violationCodes.push(safeVersionedMigrationFailureCode(error));
+    }
+  }
+
+  return report;
+}
+
 function databaseUrl(databaseName: string, socketDirectory: string): string {
   const url = new URL(`postgresql://postgres@127.0.0.1:5432/${databaseName}`);
   url.searchParams.set("host", socketDirectory);
   return url.toString();
+}
+
+function migrationConnectionFromUrl(
+  databaseUrl: string,
+): VersionedMigrationDatabaseConnection {
+  const url = new URL(databaseUrl);
+  const port = Number(url.port || "5432");
+  const host = url.searchParams.get("host") ?? url.hostname;
+  const user = decodeURIComponent(url.username);
+  const password = decodeURIComponent(url.password);
+  if (
+    !host ||
+    !Number.isInteger(port) ||
+    port < 1 ||
+    port > 65535 ||
+    !user
+  ) {
+    throw new Error("versioned_migration_connection_configuration_invalid");
+  }
+  return { host, port, user, ...(password ? { password } : {}) };
 }
 
 function runtimeUrl(
@@ -1834,9 +1959,12 @@ async function main(): Promise<void> {
       violationCodes: [],
     };
     await runVersionedMigrationAudit({
-      socketDirectory,
+      connection: migrationConnectionFromUrl(
+        databaseUrl(databaseName, socketDirectory),
+      ),
       sourceDatabaseName: databaseName,
       nonce,
+      serverNonce: nonce,
       tableNames,
       roleNames: Object.keys(contract.roles).sort(),
       contract,

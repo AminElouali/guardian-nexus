@@ -114,6 +114,13 @@ jobs:
           APP_RUNTIME_DATABASE_URL: postgresql://app_runtime_login:${{ format('guardian-runtime-{0}-{1}-{2}', github.run_id, github.run_attempt, github.sha) }}@127.0.0.1:5432/guardian_approval_lab_ci
         run: pnpm --filter @workspace/api-server exec tsx src/scripts/verify-rls-catalog.ts
 
+      - name: Audit versioned SQL migrations against Drizzle catalog
+        env:
+          GUARDIAN_APPROVAL_E2E_CI_STAGE: approval-e2e
+          DATABASE_URL: postgresql://postgres:${{ format('guardian-ci-{0}-{1}-{2}', github.run_id, github.run_attempt, github.sha) }}@127.0.0.1:5432/guardian_approval_lab_ci
+          APP_RUNTIME_DATABASE_URL: postgresql://app_runtime_login:${{ format('guardian-runtime-{0}-{1}-{2}', github.run_id, github.run_attempt, github.sha) }}@127.0.0.1:5432/guardian_approval_lab_ci
+        run: pnpm --filter @workspace/api-server exec tsx src/scripts/run-versioned-migration-audit-ci.ts
+
       - name: Run persistent synthetic approval E2E
         env:
           GUARDIAN_APPROVAL_E2E_CI_STAGE: approval-e2e
@@ -130,5 +137,6 @@ jobs:
           path: |
             ${{ runner.temp }}/guardian-postgres-rls-catalog-post-schema-report.json
             ${{ runner.temp }}/guardian-postgres-rls-catalog-report.json
+            ${{ runner.temp }}/guardian-postgres-versioned-migration-report.json
           if-no-files-found: ignore
           retention-days: 14
