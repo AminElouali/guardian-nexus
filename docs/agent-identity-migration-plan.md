@@ -6,7 +6,7 @@
 - **IMPLEMENTADO:** autenticación de propuestas de agente con una credencial bearer, validación de workspace, estado de revocación y pertenencia del principal. La evidencia de propuesta registra el UUID del agente y la versión de regla.
 - **IMPLEMENTADO:** rotación (invalida la credencial anterior e incrementa la versión), revocación, bloqueo de credenciales inválidas/revocadas/de otro workspace y prohibición de autoaprobación por el principal humano.
 - **IMPLEMENTADO:** migración SQL versionada `lib/db/migrations/0002_workspace_agents.sql`, validada solo en el PostgreSQL desechable de `lab:local`.
-- **IMPLEMENTADO (repositorio):** `lib/db/migrations/0004_align_rule_check_constraint_names.sql` comprueba y alinea los nombres de dos constraints CHECK heredados de 0001/0002 con los nombres del esquema Drizzle, sin cambiar filas. Su validación completa depende del laboratorio local.
+- **IMPLEMENTADO (repositorio y laboratorio desechable):** `lib/db/migrations/0004_align_rule_check_constraint_names.sql` comprueba y alinea con Drizzle los nombres de dos constraints CHECK y tres claves foráneas heredadas de 0001/0002, sin cambiar filas. La migración y su segunda ejecución pasaron en `lab:local`.
 - **IMPLEMENTADO:** tablas de reglas y agentes aplicadas a la base de desarrollo el 18 de noviembre de 2026 y verificadas con 16 tablas, 173 columnas, 44 índices, 72 constraints, 45 policies y 3 roles. Producción no se tocó.
 - **PROYECTADO:** aplicar 0004 a la base de desarrollo; todavía no está aplicada allí. Aplicación equivalente en producción.
 - **PROYECTADO:** credenciales por acción o scopes configurables por agente, atestación de proceso y aislamiento del agente respecto a su principal humano.
@@ -38,7 +38,7 @@ Este procedimiento es una guía, no una autorización de ejecución.
 
 1. Crear y verificar un punto de restauración de Replit para la base seleccionada.
 2. Ejecutar el auditor de catálogo de solo lectura antes de cambiar nada. Confirmar la identidad de base y la matriz de privilegios. Si hay diferencias ajenas al inventario documentado, parar.
-3. Aplicar `0001_workspace_action_rules.sql`, `0002_workspace_agents.sql`, `0003_workspace_rule_version_unique_constraint.sql` y `0004_align_rule_check_constraint_names.sql` en ese orden, cada una en transacción separada. La 0004 verifica las dos expresiones CHECK antes de renombrarlas y no modifica filas. No ejecutar bootstrap de roles ni cambiar contraseñas como parte de estas migraciones.
+3. Aplicar `0001_workspace_action_rules.sql`, `0002_workspace_agents.sql`, `0003_workspace_rule_version_unique_constraint.sql` y `0004_align_rule_check_constraint_names.sql` en ese orden, cada una en transacción separada. La 0004 verifica las dos expresiones CHECK y las tres referencias a `workspaces` antes de renombrarlas; no modifica filas. No ejecutar bootstrap de roles ni cambiar contraseñas como parte de estas migraciones.
 4. Ejecutar el auditor completo y comprobar exactamente **16/173/44/72/45/3**, 0 violaciones, RLS habilitado y forzado en las tres tablas y políticas de workspace.
 5. Probar como owner/admin la creación, rotación y revocación; como viewer, el rechazo de administración; con credencial inválida o de otro workspace, el rechazo de propuestas; y la imposibilidad de que el principal apruebe su propia propuesta.
 6. Confirmar que no se exponen credenciales en logs, listados ni respuestas posteriores. Si una verificación falla, parar y considerar restaurar el punto de restauración anterior.
