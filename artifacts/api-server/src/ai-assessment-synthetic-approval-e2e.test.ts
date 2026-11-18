@@ -55,6 +55,7 @@ import {
   signApprovalLedgerCheckpointV1,
   signApprovalReceiptV1,
   type ApprovalLedgerBundleV1,
+  type SignedApprovalReceiptV1,
 } from "./lib/approval-ledger-crypto";
 
 /*
@@ -956,6 +957,7 @@ test(
     const expireFuture = () => new Date(Date.now() + 60 * 60 * 1000);
     const queuePath = `/api/workspaces/${workspaceA}/ai-security-assessments/lab/jobs`;
     const previewPath = `/api/workspaces/${workspaceA}/ai-security-assessments/lab/policy-preview`;
+    let agentApprovalReceipt: SignedApprovalReceiptV1 | null = null;
     await t.test("saved rules are admin-managed, versioned, simulated and default-deny", async () => {
       const supportAction = "guardian.support.reply.send.v1";
       const rulePath =
@@ -1229,19 +1231,25 @@ test(
         403,
         "the agent principal cannot approve its own proposal",
       );
+      const agentApprovalResponse = await request(
+        workspaceAAdmin2,
+        `/api/workspaces/${workspaceA}/ai-security-assessments/approvals/${proposal.approval!.id}/decision`,
+        "POST",
+        {
+          decision: "approve",
+          proposalBindingSha256: proposal.approval!.proposalBindingSha256,
+        },
+      );
       assert.equal(
-        (await request(
-          workspaceAAdmin2,
-          `/api/workspaces/${workspaceA}/ai-security-assessments/approvals/${proposal.approval!.id}/decision`,
-          "POST",
-          {
-            decision: "approve",
-            proposalBindingSha256: proposal.approval!.proposalBindingSha256,
-          },
-        )).status,
+        agentApprovalResponse.status,
         200,
         "a different workspace administrator can approve",
       );
+      const agentDecision = DecideWorkspaceAiAssessmentApprovalResponse.parse(
+        await agentApprovalResponse.json(),
+      );
+      assert.ok(agentDecision.receipt);
+      agentApprovalReceipt = agentDecision.receipt;
 
       const rotatedResponse = await request(
         workspaceAAdmin,
@@ -1267,16 +1275,37 @@ test(
         401,
         "rotation invalidates the prior credential",
       );
+      const rotatedProposalResponse = await request(
+        null,
+        agentProposalPath,
+        "POST",
+        { ...proposalBody, idempotencyKey: randomUUID() },
+        { authorization: `Bearer ${rotated.credential}` },
+      );
       assert.equal(
-        (await request(
-          null,
-          agentProposalPath,
-          "POST",
-          { ...proposalBody, idempotencyKey: randomUUID() },
-          { authorization: `Bearer ${rotated.credential}` },
-        )).status,
+        rotatedProposalResponse.status,
         201,
         "the replacement credential is usable",
+      );
+      const rotatedProposal =
+        CreateWorkspaceGenericActionProposalResponse.parse(
+          await rotatedProposalResponse.json(),
+        );
+      assert.equal(rotatedProposal.decision, "require_approval");
+      assert.ok(rotatedProposal.approval);
+      assert.equal(
+        (await request(
+          workspaceAAdmin2,
+          `/api/workspaces/${workspaceA}/ai-security-assessments/approvals/${rotatedProposal.approval!.id}/decision`,
+          "POST",
+          {
+            decision: "deny",
+            proposalBindingSha256:
+              rotatedProposal.approval!.proposalBindingSha256,
+          },
+        )).status,
+        200,
+        "the replacement-credential proposal is resolved before the next scenario",
       );
       assert.equal(
         (await request(
@@ -2340,6 +2369,7 @@ test(
     const publicKeyPem = createPublicKey(
       createPrivateKey(process.env.APPROVAL_LEDGER_ED25519_PRIVATE_KEY!),
     ).export({ format: "pem", type: "spki" }).toString();
+    assert.ok(agentApprovalReceipt, "the agent approval produced a signed receipt");
     const eventsPath =
       `/api/workspaces/${workspaceA}/ai-security-assessments/approval-ledger/events`;
     const exportPath =
@@ -2371,7 +2401,7 @@ test(
     assert.equal(
       (
         await request(workspaceAViewer, exportPath, "POST", {
-          receipts: [financeReceipt, supportReceipt],
+          receipts: [financeReceipt, supportReceipt, agentApprovalReceipt],
         })
       ).status,
       403,
@@ -2387,7 +2417,7 @@ test(
       "export refuses to omit an earlier workspace receipt",
     );
     const exportResponse = await request(workspaceAAdmin, exportPath, "POST", {
-      receipts: [financeReceipt, supportReceipt],
+      receipts: [financeReceipt, supportReceipt, agentApprovalReceipt],
     });
     assert.equal(exportResponse.status, 200);
     const portableBundle = ExportWorkspaceApprovalLedgerBundleResponse.parse(
@@ -2502,7 +2532,13 @@ test(
       workspaceAAdmin,
       exportPath,
       "POST",
-      { receipts: [financeReceipt, supportReceipt] },
+      {
+        receipts: [
+          financeReceipt,
+          supportReceipt,
+          agentApprovalReceipt,
+        ],
+      },
     );
     assert.equal(consumedBundleResponse.status, 200);
     const consumedBundle = ExportWorkspaceApprovalLedgerBundleResponse.parse(
@@ -2597,7 +2633,7 @@ test(
       assert.ok(parsed.receipt);
     }
     for (const [workspaceId, expectedCount] of [
-      [workspaceA, 6],
+      [workspaceA, 7],
       [workspaceB, 1],
     ] as const) {
       const chain = await fixturePool.query<{
@@ -3138,14 +3174,7 @@ test(
     );
 
     const concurrentAction = {
-      actionType: "guardian.support.reply.send.v1",
-      arguments: {
-        ticket_id: "TICKET-SYNTH-987",
-        recipient_email: "demo@guardian.invalid",
-        recipient_type: "external",
-        compensation_cents: 5000,
-        template_id: "synthetic-support-reply-v1",
-      },
+      ...sandboxAction,
       idempotencyKey: randomUUID(),
     };
     const concurrentProposalResponse = await request(

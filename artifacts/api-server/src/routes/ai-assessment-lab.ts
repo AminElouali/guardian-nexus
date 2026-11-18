@@ -650,9 +650,16 @@ function verifyPersistedApprovalEvidence(
   }
   const raw = job.result as unknown as Record<string, unknown>;
   if (raw.engine === "guardian_action_gateway") {
+    const expectedGenericEngineVersion =
+      raw.evidenceVersion === 1
+        ? "guardian-action-catalog-v1"
+        : raw.evidenceVersion === 2
+          ? "guardian-workspace-rules-v2"
+          : null;
     if (
       approval.bindingVersion !== 3 ||
-      job.engineVersion !== "guardian-action-catalog-v1" ||
+      !expectedGenericEngineVersion ||
+      job.engineVersion !== expectedGenericEngineVersion ||
       raw.engineVersion !== job.engineVersion ||
       approval.modelInference !== false ||
       approval.executionMode !== "deterministic_fixture" ||
