@@ -1918,10 +1918,11 @@ components:
         decision: { type: string, enum: [allow, deny, require_approval] }
         reasonCode: { type: string }
         ruleId: { type: ["string", "null"] }
+        ruleVersionId: { type: ["string", "null"], format: uuid }
         actionSha256: { type: ["string", "null"], pattern: "^[a-f0-9]{64}$" }
         persisted: { type: boolean, const: false }
         dispatched: { type: boolean, const: false }
-      required: [decision, reasonCode, ruleId, actionSha256, persisted, dispatched]
+      required: [decision, reasonCode, ruleId, ruleVersionId, actionSha256, persisted, dispatched]
     GenericActionCatalogResponse:
       type: object
       additionalProperties: false
@@ -2058,6 +2059,15 @@ components:
           type: array
           items: { type: string }
       required: [actionType, label, description, riskClass, riskCategories, activeVersionId, draftVersionId, activeRules, draftRules, history, warnings]
+    WorkspaceActionRuleStarterTemplate:
+      type: object
+      additionalProperties: false
+      properties:
+        id: { type: string }
+        label: { type: string }
+        actionType: { type: string }
+        document: { $ref: "#/components/schemas/WorkspaceActionRuleDocumentInput" }
+      required: [id, label, actionType, document]
     WorkspaceActionRulesResponse:
       type: object
       additionalProperties: false
@@ -2065,7 +2075,10 @@ components:
         actions:
           type: array
           items: { $ref: "#/components/schemas/WorkspaceActionRuleState" }
-      required: [actions]
+        starterTemplates:
+          type: array
+          items: { $ref: "#/components/schemas/WorkspaceActionRuleStarterTemplate" }
+      required: [actions, starterTemplates]
     WorkspaceActionRuleVersionResponse:
       type: object
       additionalProperties: false

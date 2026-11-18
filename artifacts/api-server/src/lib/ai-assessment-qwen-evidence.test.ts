@@ -878,6 +878,14 @@ test("offline RLS grants match the runtime privilege preflight", () => {
     new URL("../../../../lib/db/src/index.ts", import.meta.url),
     "utf8",
   );
+  const rlsRuntimeReadinessSource = readFileSync(
+    new URL("../../../../lib/db/src/rls-runtime-readiness.ts", import.meta.url),
+    "utf8",
+  );
+  const rlsCatalogContractSource = readFileSync(
+    new URL("../../../../lib/db/src/rls-catalog-contract.ts", import.meta.url),
+    "utf8",
+  );
   const schemaSource = readFileSync(
     new URL(
       "../../../../lib/db/src/schema/ai-assessment-jobs.ts",
@@ -1079,36 +1087,40 @@ test("offline RLS grants match the runtime privilege preflight", () => {
     rlsSql,
     /ALTER TABLE public\.ai_assessment_approval_requests FORCE ROW LEVEL SECURITY;/,
   );
-  const approvalReadinessTables = dbRuntimeSource.match(
-    /relname IN \(([\s\S]*?)\n\s*\)/,
-  )?.[1];
-  assert.ok(approvalReadinessTables);
   assert.match(
-    approvalReadinessTables,
-    /'ai_assessment_approval_requests'/,
-    "API readiness must fail closed unless approval requests are checked too",
+    dbRuntimeSource,
+    /c\.relname IN \(\$\{rlsRuntimeTableNamesSql\}\)/,
+    "API readiness must use the shared contract-derived runtime inventory",
+  );
+  assert.match(
+    rlsRuntimeReadinessSource,
+    /rlsRuntimeTableNames = expectedRlsTableNames/,
+    "runtime readiness must derive its table list from the shared RLS contract",
+  );
+  assert.match(
+    rlsCatalogContractSource,
+    /ai_assessment_approval_requests/,
+    "the shared contract must include approval requests in its RLS inventory",
+  );
+  assert.match(
+    rlsCatalogContractSource,
+    /ai_assessment_approval_requests:\s*3/,
+    "the shared contract must require three tenant-scoped approval policies",
   );
   assert.match(
     dbRuntimeSource,
-    /ai_assessment_approval_requests:\s*3/,
-    "runtime readiness must require the three tenant-scoped approval policies",
+    /protected\.relname = ANY\(ARRAY\[\$\{rlsRuntimeTableNamesSql\}\]\)/,
+    "owner checks must use the shared table inventory",
   );
-  const ownedTableList = dbRuntimeSource.match(
-    /protected\.relname = ANY\(ARRAY\[([\s\S]*?)\]\)/,
-  )?.[1];
-  assert.ok(ownedTableList);
-  assert.match(ownedTableList, /'ai_assessment_approval_requests'/);
   const protectedTableLists = [
     ...dbRuntimeSource.matchAll(
-      /FROM unnest\(ARRAY\[\s*([\s\S]*?)\]\) AS protected\(table_name\)/g,
+      /FROM unnest\(ARRAY\[\s*\$\{rlsRuntimeTableNamesSql\}\]\) AS protected\(table_name\)/g,
     ),
   ];
   assert.equal(protectedTableLists.length, 2);
   assert.ok(
-    protectedTableLists.every((match) =>
-      match[1].includes("'ai_assessment_approval_requests'"),
-    ),
-    "approval requests must be included in owner, grant, and login-access checks",
+    protectedTableLists.every((match) => match[0].includes("rlsRuntimeTableNamesSql")),
+    "grant and login-access checks must use the shared contract inventory",
   );
   const approvalGrantBranch = dbRuntimeSource.match(
     /WHEN protected\.table_name = 'ai_assessment_approval_requests'([\s\S]*?)\n\s*ELSE has_table_privilege/,

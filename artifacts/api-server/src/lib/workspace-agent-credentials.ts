@@ -8,9 +8,13 @@ export function issueWorkspaceAgentCredential(): {
   credentialSha256: string;
 } {
   const credential = `${AGENT_CREDENTIAL_PREFIX}${randomBytes(32).toString("base64url")}`;
+  const credentialSha256 = hashWorkspaceAgentCredential(credential);
+  if (credentialSha256 === null) {
+    throw new Error("agent_credential_generation_invalid");
+  }
   return {
     credential,
-    credentialSha256: hashWorkspaceAgentCredential(credential),
+    credentialSha256,
   };
 }
 

@@ -411,6 +411,7 @@ export * from './workspaceActionRuleSimulationInputArguments';
 export * from './workspaceActionRuleSimulationResponse';
 export * from './workspaceActionRuleSimulationResponseDecision';
 export * from './workspaceActionRulesResponse';
+export * from './workspaceActionRuleStarterTemplate';
 export * from './workspaceActionRuleState';
 export * from './workspaceActionRuleStateRiskCategoriesItem';
 export * from './workspaceActionRuleStateRiskClass';

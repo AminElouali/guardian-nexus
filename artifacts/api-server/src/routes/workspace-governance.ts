@@ -1,8 +1,9 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type RequestHandler } from "express";
 import {
   workspaceActionRuleVersionsTable,
   workspaceAgentsTable,
+  getStarterWorkspaceRuleTemplates,
   validateWorkspaceActionRuleDocument,
 } from "@workspace/db";
 import {
@@ -52,7 +53,6 @@ import {
 } from "../lib/tenant-db";
 import { formatApproval } from "./ai-assessment-lab";
 
-const router: IRouter = Router();
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -68,7 +68,11 @@ function publicAgent(agent: typeof workspaceAgentsTable.$inferSelect) {
   };
 }
 
-router.use("/workspaces", requireAuth);
+export function createWorkspaceGovernanceRouter(
+  authMiddleware: RequestHandler = requireAuth,
+): IRouter {
+const router: IRouter = Router();
+router.use("/workspaces", authMiddleware);
 
 router.get(
   "/workspaces/:workspaceId/action-rules",
@@ -89,6 +93,7 @@ router.get(
     }
     res.json(ListWorkspaceActionRulesResponse.parse({
       actions: access.value,
+      starterTemplates: getStarterWorkspaceRuleTemplates(),
     }));
   },
 );
@@ -440,7 +445,6 @@ router.post(
             and(
               eq(workspaceAgentsTable.workspaceId, params.data.workspaceId),
               eq(workspaceAgentsTable.id, params.data.agentId),
-              isNull(workspaceAgentsTable.revokedAt),
             ),
           )
           .returning();
@@ -631,4 +635,7 @@ router.post(
   },
 );
 
-export default router;
+return router;
+}
+
+export default createWorkspaceGovernanceRouter();

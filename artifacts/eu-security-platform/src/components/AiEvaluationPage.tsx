@@ -6,12 +6,23 @@ import {
   getListWorkspaceApprovalLedgerEventsQueryKey,
   getListWorkspaceAiAssessmentLabJobsQueryKey,
   getListWorkspaceAiEvaluationsQueryKey,
+  getListWorkspaceActionRulesQueryKey,
+  getListWorkspaceAgentsQueryKey,
   useDecideWorkspaceAiAssessmentApproval,
   useConsumeWorkspaceAiAssessmentApprovalReceipt,
   useExportWorkspaceApprovalLedgerBundle,
   useCreateWorkspaceAiAssessmentLabJob,
   useCreateWorkspaceSyntheticRefundProposal,
   useCreateWorkspaceGenericActionProposal,
+  useListWorkspaceActionRules,
+  useSaveWorkspaceActionRuleDraft,
+  useActivateWorkspaceActionRuleDraft,
+  useRollbackWorkspaceActionRule,
+  useSimulateWorkspaceActionRule,
+  useListWorkspaceAgents,
+  useCreateWorkspaceAgent,
+  useRotateWorkspaceAgentCredential,
+  useRevokeWorkspaceAgent,
   useGetWorkspaceAiAssessmentLabAvailability,
   useGetWorkspaceGenericActionCatalog,
   usePreviewWorkspaceGenericAction,
@@ -32,6 +43,9 @@ import {
   type AiAssessmentApprovalReceiptConsumeResponse,
   type ApprovalLedgerBundleV1,
   type Workspace,
+  type WorkspaceActionRule,
+  type WorkspaceActionRuleSimulationResponse,
+  type WorkspaceAgentCredentialResponse,
 } from '@workspace/api-client-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -973,6 +987,20 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
       refetchOnWindowFocus: false,
     },
   });
+  const actionRules = useListWorkspaceActionRules(workspace.id, {
+    query: {
+      enabled: activeSection === 'gateway',
+      queryKey: getListWorkspaceActionRulesQueryKey(workspace.id),
+      refetchOnWindowFocus: false,
+    },
+  });
+  const workspaceAgents = useListWorkspaceAgents(workspace.id, {
+    query: {
+      enabled: activeSection === 'gateway',
+      queryKey: getListWorkspaceAgentsQueryKey(workspace.id),
+      refetchOnWindowFocus: false,
+    },
+  });
   const ledgerEvents = useListWorkspaceApprovalLedgerEvents(workspace.id, {
     query: {
       enabled: canRun && (activeSection === 'approvals' || activeSection === 'gateway'),
@@ -988,6 +1016,13 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
   const exportApprovalLedgerMutation = useExportWorkspaceApprovalLedgerBundle();
   const createSyntheticRefund = useCreateWorkspaceSyntheticRefundProposal();
   const createGenericActionProposal = useCreateWorkspaceGenericActionProposal();
+  const saveActionRuleDraft = useSaveWorkspaceActionRuleDraft();
+  const activateActionRuleDraft = useActivateWorkspaceActionRuleDraft();
+  const rollbackActionRule = useRollbackWorkspaceActionRule();
+  const simulateActionRule = useSimulateWorkspaceActionRule();
+  const createAgent = useCreateWorkspaceAgent();
+  const rotateAgentCredential = useRotateWorkspaceAgentCredential();
+  const revokeAgent = useRevokeWorkspaceAgent();
   const previewGenericAction = usePreviewWorkspaceGenericAction();
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -1308,6 +1343,88 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
     const result = await previewGenericAction.mutateAsync({
       workspaceId: workspace.id,
       data: { actionType, arguments: args },
+    });
+    return result;
+  }
+
+  async function saveGatewayRuleDraft(actionType: string, rules: WorkspaceActionRule[]) {
+    const result = await saveActionRuleDraft.mutateAsync({
+      workspaceId: workspace.id,
+      actionType,
+      data: { version: 1, rules },
+    });
+    await cache.invalidateQueries({
+      queryKey: getListWorkspaceActionRulesQueryKey(workspace.id),
+    });
+    return result;
+  }
+
+  async function activateGatewayRuleDraft(actionType: string) {
+    const result = await activateActionRuleDraft.mutateAsync({
+      workspaceId: workspace.id,
+      actionType,
+    });
+    await cache.invalidateQueries({
+      queryKey: getListWorkspaceActionRulesQueryKey(workspace.id),
+    });
+    return result;
+  }
+
+  async function rollbackGatewayRule(actionType: string, version: number) {
+    const result = await rollbackActionRule.mutateAsync({
+      workspaceId: workspace.id,
+      actionType,
+      data: { version },
+    });
+    await cache.invalidateQueries({
+      queryKey: getListWorkspaceActionRulesQueryKey(workspace.id),
+    });
+    return result;
+  }
+
+  async function simulateGatewayRule(
+    actionType: string,
+    versionId: string | undefined,
+    args: Record<string, string | number | boolean>,
+  ): Promise<WorkspaceActionRuleSimulationResponse> {
+    return simulateActionRule.mutateAsync({
+      workspaceId: workspace.id,
+      actionType,
+      data: { ...(versionId ? { versionId } : {}), arguments: args },
+    });
+  }
+
+  async function createGatewayAgent(displayName: string): Promise<WorkspaceAgentCredentialResponse> {
+    const result = await createAgent.mutateAsync({
+      workspaceId: workspace.id,
+      data: { displayName },
+    });
+    await cache.invalidateQueries({
+      queryKey: getListWorkspaceAgentsQueryKey(workspace.id),
+    });
+    createAgent.reset();
+    return result;
+  }
+
+  async function rotateGatewayAgent(agentId: string): Promise<WorkspaceAgentCredentialResponse> {
+    const result = await rotateAgentCredential.mutateAsync({
+      workspaceId: workspace.id,
+      agentId,
+    });
+    await cache.invalidateQueries({
+      queryKey: getListWorkspaceAgentsQueryKey(workspace.id),
+    });
+    rotateAgentCredential.reset();
+    return result;
+  }
+
+  async function revokeGatewayAgent(agentId: string) {
+    const result = await revokeAgent.mutateAsync({
+      workspaceId: workspace.id,
+      agentId,
+    });
+    await cache.invalidateQueries({
+      queryKey: getListWorkspaceAgentsQueryKey(workspace.id),
     });
     return result;
   }
@@ -1759,7 +1876,25 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
     >
       <GuardianActionGatewayPanel
         workspaceId={workspace.id}
+        isVisible={activeSection === 'gateway'}
+        canManage={canRun}
         actionTemplates={gatewayTemplates}
+        ruleActions={actionRules.data?.actions ?? []}
+        starterTemplates={actionRules.data?.starterTemplates ?? []}
+        rulesLoading={actionRules.isLoading}
+        rulesError={actionRules.isError ? 'No se pudieron cargar las reglas guardadas.' : null}
+        onRetryRules={() => void actionRules.refetch()}
+        onSaveRuleDraft={saveGatewayRuleDraft}
+        onActivateRuleDraft={activateGatewayRuleDraft}
+        onRollbackRule={rollbackGatewayRule}
+        onSimulateRule={simulateGatewayRule}
+        agents={workspaceAgents.data?.agents ?? []}
+        agentsLoading={workspaceAgents.isLoading}
+        agentsError={workspaceAgents.isError ? 'No se pudo cargar la lista de agentes.' : null}
+        onRetryAgents={() => void workspaceAgents.refetch()}
+        onCreateAgent={createGatewayAgent}
+        onRotateAgent={rotateGatewayAgent}
+        onRevokeAgent={revokeGatewayAgent}
         approvals={gatewayApprovals}
         ledgerEvents={gatewayLedgerEvents}
         accessState={!canRun ? 'restricted' : ledgerEvents.isError ? 'unavailable' : 'available'}

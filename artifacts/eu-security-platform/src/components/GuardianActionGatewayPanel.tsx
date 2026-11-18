@@ -1,5 +1,13 @@
-import React, { useMemo, useState, type FormEvent } from "react";
-import { Activity, ArrowDownToLine, Check, ChevronRight, CircleAlert, Code2, GitBranch, LockKeyhole, Network, Shield, SlidersHorizontal } from "lucide-react";
+import React, { useEffect, useMemo, useState, type FormEvent } from "react";
+import { Activity, ArrowDownToLine, Check, ChevronRight, CircleAlert, Code2, Copy, GitBranch, KeyRound, LockKeyhole, Network, RotateCw, Shield, SlidersHorizontal, Trash2 } from "lucide-react";
+import type {
+  WorkspaceActionRule,
+  WorkspaceActionRuleStarterTemplate,
+  WorkspaceActionRuleSimulationResponse,
+  WorkspaceActionRuleState,
+  WorkspaceAgent,
+  WorkspaceAgentCredentialResponse,
+} from "@workspace/api-client-react";
 
 export type GatewayArgumentField = {
   name: string;
@@ -65,6 +73,7 @@ export type GatewayPreviewResult = {
   decision: "allow" | "deny" | "require_approval";
   reasonCode: string;
   ruleId: string | null;
+  ruleVersionId: string | null;
   persisted: false;
   dispatched: false;
 };
@@ -73,7 +82,25 @@ export type GatewayAccessState = "available" | "restricted" | "unavailable";
 
 export type GuardianActionGatewayPanelProps = {
   workspaceId: string;
+  isVisible?: boolean;
+  canManage?: boolean;
   actionTemplates: GatewayActionTemplate[];
+  ruleActions?: WorkspaceActionRuleState[];
+  starterTemplates?: WorkspaceActionRuleStarterTemplate[];
+  rulesLoading?: boolean;
+  rulesError?: string | null;
+  onRetryRules?: () => void;
+  onSaveRuleDraft?: (actionType: string, rules: WorkspaceActionRule[]) => Promise<unknown>;
+  onActivateRuleDraft?: (actionType: string) => Promise<unknown>;
+  onRollbackRule?: (actionType: string, version: number) => Promise<unknown>;
+  onSimulateRule?: (actionType: string, versionId: string | undefined, args: Record<string, string | number | boolean>) => Promise<WorkspaceActionRuleSimulationResponse>;
+  agents?: WorkspaceAgent[];
+  agentsLoading?: boolean;
+  agentsError?: string | null;
+  onRetryAgents?: () => void;
+  onCreateAgent?: (displayName: string) => Promise<WorkspaceAgentCredentialResponse>;
+  onRotateAgent?: (agentId: string) => Promise<WorkspaceAgentCredentialResponse>;
+  onRevokeAgent?: (agentId: string) => Promise<unknown>;
   approvals: GatewayApprovalRecord[];
   ledgerEvents: GatewayLedgerEvent[];
   accessState: GatewayAccessState;
@@ -104,6 +131,7 @@ const sections: { id: Section; label: string; icon: typeof Shield }[] = [
   { id: "connect", label: "Conectar agente", icon: Network },
 ];
 const unconfiguredAreaTemplates = [
+  { id: "guardian-template-internal-email-v1", label: "Correo interno" },
   { id: "guardian-template-customer-data-v1", label: "Datos de clientes" },
   { id: "guardian-template-infrastructure-v1", label: "Infraestructura" },
 ];
@@ -124,10 +152,146 @@ const statusLabel = (status: string) => {
   } as Record<string, string>)[status];
   return label ?? (status || unavailable);
 };
+const decisionLabel = (decision: string) => ({
+  allow: "Permitir",
+  deny: "Bloquear",
+  require_approval: "Requerir aprobación",
+} as Record<string, string>)[decision] ?? decision;
+const conditionText = (rule: WorkspaceActionRule) => {
+  const parts = [
+    ...(rule.when.all ?? []).map((item) => `${item.field} ${item.op} ${String(item.value)}`),
+    ...(rule.when.any ?? []).map((item) => `${item.field} ${item.op} ${String(item.value)} (cualquiera)`),
+  ];
+  return parts.length ? parts.join(" · ") : "Sin condiciones";
+};
+const syntheticRuleExamples: Record<
+  string,
+  Array<{ label: string; arguments: Record<string, string | number | boolean> }>
+> = {
+  "guardian.synthetic.support.refund.v1": [
+    {
+      label: "Reembolso ficticio de 25 €",
+      arguments: { ticket_id: "TICKET-SYNTH-DEMO-1", amount_cents: 2500 },
+    },
+  ],
+  "guardian.synthetic.finance.bank-change.v1": [
+    {
+      label: "Cambio bancario de laboratorio",
+      arguments: {
+        account_id: "LAB-ACCOUNT-DEMO-1",
+        new_iban: "DE00LAB1234567890ABCD",
+      },
+    },
+  ],
+  "guardian.support.reply.send.v1": [
+    {
+      label: "Cliente interno, sin compensación",
+      arguments: {
+        ticket_id: "TICKET-SYNTH-DEMO-2",
+        recipient_email: "demo@example.test",
+        recipient_type: "internal",
+        compensation_cents: 0,
+        template_id: "synthetic-support-reply-v1",
+      },
+    },
+    {
+      label: "Destinatario externo, compensación ficticia de 75 €",
+      arguments: {
+        ticket_id: "TICKET-SYNTH-DEMO-3",
+        recipient_email: "qa@example.test",
+        recipient_type: "external",
+        compensation_cents: 7500,
+        template_id: "synthetic-support-reply-v1",
+      },
+    },
+  ],
+  "guardian.email.send.external.v1": [
+    {
+      label: "Correo externo al buzón sandbox",
+      arguments: {
+        to: "qa@example.test",
+        template_id: "guardian-demo-email-v1",
+      },
+    },
+  ],
+};
+
+function isScalarRecord(
+  value: unknown,
+): value is Record<string, string | number | boolean> {
+  return value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.values(value).every((item) =>
+      typeof item === "string" ||
+      typeof item === "boolean" ||
+      (typeof item === "number" && Number.isSafeInteger(item))
+    );
+}
+
+function isRuleDocumentArray(value: unknown): value is WorkspaceActionRule[] {
+  if (!Array.isArray(value)) return false;
+  return value.every((candidate) => {
+    if (
+      candidate === null ||
+      typeof candidate !== "object" ||
+      Array.isArray(candidate) ||
+      Object.keys(candidate).sort().join(",") !== "decision,id,when"
+    ) return false;
+    if (
+      typeof candidate.id !== "string" ||
+      candidate.id.length < 1 ||
+      candidate.id.length > 120 ||
+      !["allow", "deny", "require_approval"].includes(candidate.decision) ||
+      candidate.when === null ||
+      typeof candidate.when !== "object" ||
+      Array.isArray(candidate.when) ||
+      Object.keys(candidate.when).some((key) => key !== "all" && key !== "any")
+    ) return false;
+    const when = candidate.when;
+    return ["all", "any"].every((key) => {
+      const conditions = when[key];
+      if (conditions === undefined) return true;
+      return Array.isArray(conditions) && conditions.length <= 8 &&
+        conditions.every((condition) => {
+          if (
+            condition === null ||
+            typeof condition !== "object" ||
+            Array.isArray(condition) ||
+            Object.keys(condition).sort().join(",") !== "field,op,value"
+          ) return false;
+          return typeof condition.field === "string" &&
+            condition.field.length <= 80 &&
+            ["eq", "gt", "lte"].includes(condition.op) &&
+            (typeof condition.value === "string" ||
+              typeof condition.value === "boolean" ||
+              (typeof condition.value === "number" && Number.isSafeInteger(condition.value)));
+        });
+    });
+  });
+}
 
 export function GuardianActionGatewayPanel({
   workspaceId,
+  isVisible = true,
+  canManage = false,
   actionTemplates,
+  ruleActions = [],
+  starterTemplates = [],
+  rulesLoading = false,
+  rulesError = null,
+  onRetryRules = () => undefined,
+  onSaveRuleDraft = async () => { throw new Error("Rule API unavailable"); },
+  onActivateRuleDraft = async () => { throw new Error("Rule API unavailable"); },
+  onRollbackRule = async () => { throw new Error("Rule API unavailable"); },
+  onSimulateRule = async () => { throw new Error("Rule API unavailable"); },
+  agents = [],
+  agentsLoading = false,
+  agentsError = null,
+  onRetryAgents = () => undefined,
+  onCreateAgent = async () => { throw new Error("Agent API unavailable"); },
+  onRotateAgent = async () => { throw new Error("Agent API unavailable"); },
+  onRevokeAgent = async () => { throw new Error("Agent API unavailable"); },
   approvals,
   ledgerEvents,
   accessState,
@@ -154,10 +318,69 @@ export function GuardianActionGatewayPanel({
   const [decisionPendingId, setDecisionPendingId] = useState<string | null>(null);
   const [decisionResult, setDecisionResult] = useState("");
   const [framework, setFramework] = useState("gateway");
+  const [selectedRuleAction, setSelectedRuleAction] = useState("");
+  const [ruleEditorText, setRuleEditorText] = useState("[]");
+  const [ruleArgumentsText, setRuleArgumentsText] = useState("{}");
+  const [simulationVersionId, setSimulationVersionId] = useState("");
+  const [ruleActionMessage, setRuleActionMessage] = useState("");
+  const [ruleBusy, setRuleBusy] = useState(false);
+  const [ruleSimulation, setRuleSimulation] = useState<WorkspaceActionRuleSimulationResponse | null>(null);
+  const [agentName, setAgentName] = useState("");
+  const [agentCredential, setAgentCredential] = useState<WorkspaceAgentCredentialResponse | null>(null);
+  const [agentMessage, setAgentMessage] = useState("");
+  const [agentBusyId, setAgentBusyId] = useState("");
+  const [copiedCredential, setCopiedCredential] = useState(false);
   const selectedTemplate = useMemo(
     () => actionTemplates.find((template) => template.actionType === selectedAction) ?? actionTemplates[0],
     [actionTemplates, selectedAction],
   );
+  const selectedRule = ruleActions.find((action) => action.actionType === selectedRuleAction) ?? ruleActions[0];
+  const selectedStarterTemplate = selectedRule
+    ? starterTemplates.find((template) => template.actionType === selectedRule.actionType)
+    : undefined;
+  const selectedRuleExamples = selectedRule
+    ? syntheticRuleExamples[selectedRule.actionType] ?? []
+    : [];
+  const simulationVersions = selectedRule
+    ? [
+        ...(selectedRule.draftVersionId
+          ? [{
+              id: selectedRule.draftVersionId,
+              label: `Borrador · v${selectedRule.history.find((entry) => entry.id === selectedRule.draftVersionId)?.version ?? "?"}`,
+            }]
+          : []),
+        ...(selectedRule.activeVersionId
+          ? [{
+              id: selectedRule.activeVersionId,
+              label: `Activa · v${selectedRule.history.find((entry) => entry.id === selectedRule.activeVersionId)?.version ?? "?"}`,
+            }]
+          : []),
+        ...selectedRule.history.map((entry) => ({
+          id: entry.id,
+          label: `Histórica · v${entry.version}`,
+        })),
+      ].filter((entry, index, entries) =>
+        entries.findIndex((item) => item.id === entry.id) === index
+      )
+    : [];
+  useEffect(() => {
+    if (!selectedRule) return;
+    setSelectedRuleAction(selectedRule.actionType);
+    setRuleEditorText(JSON.stringify(
+      selectedRule.draftVersionId ? selectedRule.draftRules : selectedRule.activeRules,
+      null,
+      2,
+    ));
+    setSimulationVersionId(
+      selectedRule.draftVersionId ?? selectedRule.activeVersionId ?? "",
+    );
+  }, [selectedRule?.actionType, selectedRule?.draftVersionId, selectedRule?.activeVersionId]);
+  useEffect(() => {
+    if (!isVisible) {
+      setAgentCredential(null);
+      setCopiedCredential(false);
+    }
+  }, [isVisible]);
   const receiptIndex = useMemo(
     () => new Map(receipts.map((receipt) => [
       receipt.receiptId,
@@ -226,7 +449,7 @@ export function GuardianActionGatewayPanel({
         ? "Pedir aprobación"
         : result.decision === "allow" ? "Permitir" : "Bloquear";
       setSimulationResult(
-        `${label} · ${result.reasonCode} · regla ${result.ruleId ?? "predeterminada"}. ` +
+        `${label} · ${result.reasonCode} · regla ${result.ruleId ?? "predeterminada"} · versión ${result.ruleVersionId ?? "no disponible"}. ` +
           "Simulación en memoria; no se guardó ni ejecutó nada.",
       );
     } catch {
@@ -255,6 +478,156 @@ export function GuardianActionGatewayPanel({
       setDecisionResult("No se pudo registrar la decisión. No se despachó ninguna herramienta.");
     } finally {
       setDecisionPendingId(null);
+    }
+  };
+  const parseRuleDocument = (): WorkspaceActionRule[] | null => {
+    try {
+      const parsed: unknown = JSON.parse(ruleEditorText);
+      if (!isRuleDocumentArray(parsed)) throw new Error("invalid");
+      return parsed;
+    } catch {
+      setRuleActionMessage("Revisa el JSON: se espera una lista de reglas estructuradas con id, decision y when.");
+      return null;
+    }
+  };
+  const loadStarterTemplate = () => {
+    if (!selectedRule || !canManage) return;
+    const starter = starterTemplates.find(
+      (template) => template.actionType === selectedRule.actionType,
+    );
+    if (!starter) {
+      setRuleActionMessage("No hay una plantilla inicial disponible para esta acción.");
+      return;
+    }
+    setRuleEditorText(JSON.stringify(starter.document.rules, null, 2));
+    setRuleActionMessage(
+      `Plantilla «${starter.label}» (${starter.id}) cargada en el editor. Revísala y guárdala como borrador; todavía no está activa.`,
+    );
+  };
+  const saveRuleDraft = async () => {
+    if (!selectedRule || !canManage) return;
+    const rules = parseRuleDocument();
+    if (!rules) return;
+    setRuleBusy(true);
+    setRuleActionMessage("");
+    try {
+      await onSaveRuleDraft(selectedRule.actionType, rules);
+      setRuleActionMessage("Borrador guardado. La versión activa no cambia hasta que la actives explícitamente.");
+    } catch {
+      setRuleActionMessage("No se pudo guardar el borrador. La versión activa no ha cambiado.");
+    } finally {
+      setRuleBusy(false);
+    }
+  };
+  const activateRuleDraft = async () => {
+    if (!selectedRule?.draftVersionId || !canManage || !window.confirm("Activar este borrador cambiará la versión de reglas activa. ¿Continuar?")) return;
+    setRuleBusy(true);
+    setRuleActionMessage("");
+    try {
+      await onActivateRuleDraft(selectedRule.actionType);
+      setRuleActionMessage("Borrador activado. El cambio quedó registrado en el historial.");
+    } catch {
+      setRuleActionMessage("No se pudo activar el borrador. La versión activa no ha cambiado.");
+    } finally {
+      setRuleBusy(false);
+    }
+  };
+  const rollbackRule = async (version: number) => {
+    if (!selectedRule || !canManage || !window.confirm(`Crear una nueva versión a partir de la versión ${version}?`)) return;
+    setRuleBusy(true);
+    setRuleActionMessage("");
+    try {
+      await onRollbackRule(selectedRule.actionType, version);
+      setRuleActionMessage(`Se creó un borrador nuevo a partir de la versión ${version}; la versión activa no cambia hasta activarlo.`);
+    } catch {
+      setRuleActionMessage("No se pudo crear la versión de reversión.");
+    } finally {
+      setRuleBusy(false);
+    }
+  };
+  const simulateSavedRules = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!selectedRule) return;
+    let parsedArguments: Record<string, string | number | boolean>;
+    try {
+      const parsed: unknown = JSON.parse(ruleArgumentsText);
+      if (!isScalarRecord(parsed)) throw new Error("invalid");
+      parsedArguments = parsed;
+    } catch {
+      setRuleActionMessage("Los argumentos deben ser un objeto JSON con valores de texto, número o booleano.");
+      return;
+    }
+    setRuleBusy(true);
+    setRuleActionMessage("");
+    setRuleSimulation(null);
+    try {
+      const result = await onSimulateRule(
+        selectedRule.actionType,
+        simulationVersionId || undefined,
+        parsedArguments,
+      );
+      setRuleSimulation(result);
+    } catch {
+      setRuleActionMessage("No se pudo completar la simulación. No se guardó ni despachó ninguna acción.");
+    } finally {
+      setRuleBusy(false);
+    }
+  };
+  const submitAgent = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!canManage || !agentName.trim()) return;
+    setAgentBusyId("create");
+    setAgentMessage("");
+    setCopiedCredential(false);
+    setAgentCredential(null);
+    try {
+      const result = await onCreateAgent(agentName.trim());
+      if (result.shownOnce) setAgentCredential(result);
+      setAgentName("");
+      setAgentMessage("Agente registrado. Guarda ahora la credencial: solo se muestra en esta respuesta.");
+    } catch {
+      setAgentMessage("No se pudo registrar el agente. No se ha mostrado ninguna credencial.");
+    } finally {
+      setAgentBusyId("");
+    }
+  };
+  const rotateAgent = async (agentId: string) => {
+    if (!canManage || !window.confirm("Rotar la credencial invalidará la credencial anterior. ¿Continuar?")) return;
+    setAgentBusyId(agentId);
+    setAgentCredential(null);
+    setCopiedCredential(false);
+    setAgentMessage("");
+    try {
+      const result = await onRotateAgent(agentId);
+      if (result.shownOnce) setAgentCredential(result);
+      setAgentMessage("Credencial rotada. Guarda la nueva credencial ahora; la anterior deja de ser válida.");
+    } catch {
+      setAgentMessage("No se pudo rotar la credencial.");
+    } finally {
+      setAgentBusyId("");
+    }
+  };
+  const revokeAgent = async (agentId: string) => {
+    if (!canManage || !window.confirm("Revocar este agente impedirá que use su credencial. ¿Continuar?")) return;
+    setAgentBusyId(agentId);
+    setAgentCredential(null);
+    setAgentMessage("");
+    try {
+      await onRevokeAgent(agentId);
+      setAgentMessage("Agente revocado.");
+    } catch {
+      setAgentMessage("No se pudo revocar el agente.");
+    } finally {
+      setAgentBusyId("");
+    }
+  };
+  const copyAgentCredential = async () => {
+    if (!agentCredential) return;
+    try {
+      await navigator.clipboard.writeText(agentCredential.credential);
+      setCopiedCredential(true);
+    } catch {
+      setAgentMessage("No se pudo copiar automáticamente. Selecciona y copia la credencial manualmente.");
     }
   };
 
@@ -308,6 +681,42 @@ export function GuardianActionGatewayPanel({
       .gateway-connect-card h3{margin-top:14px;font-size:17px}.gateway-connect-card ol{display:grid;gap:9px;padding-left:20px;color:#62716a;font-size:11px;line-height:1.55}
       .gateway-command{display:grid;gap:8px;margin-top:17px;padding:13px;border-radius:7px;background:#233549;color:#e4ece7}.gateway-command span{color:#a7b9b4;font:9px var(--font-mono,'DM Mono',monospace)}.gateway-command code{font:11px var(--font-mono,'DM Mono',monospace);overflow-wrap:anywhere}.gateway-command button{justify-self:start!important}
       .gateway-connect-caveat{display:flex;align-items:center;gap:7px;margin-top:13px}.gateway-connect-caveat svg{flex:none;color:var(--gw-green)}
+      .gateway-persisted{margin:18px 0 22px;padding:18px;border:1px solid #cbd8ce;border-radius:9px;background:#f4f7f1}
+      .gateway-persisted-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:15px}
+      .gateway-persisted-head h3{margin:5px 0;color:var(--gw-ink);font:700 17px var(--font-display,'Manrope',sans-serif)}
+      .gateway-persisted-head p,.gateway-rule-meta,.gateway-permission-note{margin:0;color:var(--gw-muted);font-size:11px;line-height:1.55}
+      .gateway-persisted-tag{display:inline-flex;align-items:center;gap:6px;padding:6px 9px;border:1px solid #cbd8ce;border-radius:999px;color:#486954;background:#edf3ec;font:9px var(--font-mono,'DM Mono',monospace);white-space:nowrap}
+      .gateway-persisted-grid{display:grid;grid-template-columns:minmax(0,1.12fr) minmax(270px,.88fr);gap:13px}
+      .gateway-persisted-card{min-width:0;padding:14px;border:1px solid var(--gw-line);border-radius:8px;background:var(--gw-card)}
+      .gateway-persisted-card h4{margin:0 0 10px;color:#344b43;font:700 13px var(--font-display,'Manrope',sans-serif)}
+      .gateway-rule-select,.gateway-persisted textarea{margin:6px 0 12px;width:100%;border:1px solid #d6d8ce;border-radius:6px;padding:9px 10px;color:var(--gw-ink);background:#fffefa;font-size:11px}
+      .gateway-persisted textarea{display:block;min-height:172px;resize:vertical;font:10px/1.6 var(--font-mono,'DM Mono',monospace)}
+      .gateway-rule-list{display:grid;gap:7px;margin:0;padding:0;list-style:none}
+      .gateway-rule-list li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:start;padding:9px;border:1px solid #eceae2;border-radius:6px;background:#fbfaf5;font-size:10px}
+      .gateway-rule-list li span{color:#62716a;overflow-wrap:anywhere}.gateway-rule-list li b{color:var(--gw-green);white-space:nowrap}
+      .gateway-warning{margin:10px 0 0;padding:9px 11px;border-left:3px solid #b98a3f;background:#faf6eb;color:#675c47;font-size:10px;line-height:1.5}
+      .gateway-rule-actions{display:flex;flex-wrap:wrap;gap:7px;margin-top:9px}
+      .guardian-gateway .gateway-rule-actions button,.guardian-gateway .gateway-agent-actions button{min-height:34px;padding:0 10px;font-size:10px}
+      .guardian-gateway .gateway-rule-actions .gateway-quiet-button,.guardian-gateway .gateway-agent-actions .gateway-quiet-button{color:#53645d;background:transparent;border-color:#cfd5cb}
+      .gateway-history{display:grid;gap:7px;margin:0;padding:0;list-style:none}
+      .gateway-history li{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #eeece5;font-size:10px}
+      .gateway-history li>div{display:grid;gap:3px;min-width:0}.gateway-history small{color:var(--gw-muted)}
+      .gateway-rule-error{padding:10px;border:1px solid #e8c9c3;border-radius:6px;background:#fbefec;color:#914f45;font-size:11px}
+      .gateway-agent-list{display:grid;gap:10px;margin-top:16px}
+      .gateway-agent{padding:14px;border:1px solid var(--gw-line);border-radius:8px;background:var(--gw-card)}
+      .gateway-agent-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+      .gateway-agent-head h4{margin:0 0 4px;color:#344b43;font:700 13px var(--font-display,'Manrope',sans-serif)}
+      .gateway-agent-id{display:block;overflow-wrap:anywhere;color:#71807a;font:10px var(--font-mono,'DM Mono',monospace)}
+      .gateway-agent-actions{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
+      .gateway-credential{margin-top:13px;padding:13px;border:1px solid #d4dfd2;border-radius:8px;background:#edf3ec}
+      .gateway-credential code{display:block;margin:8px 0;overflow-wrap:anywhere;color:#273e34;font:11px/1.55 var(--font-mono,'DM Mono',monospace);user-select:all}
+      .gateway-credential small{display:block;color:#5f7064;font-size:10px;line-height:1.5}
+      .gateway-agent-form{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:10px}
+      .gateway-agent-form label{display:grid;gap:6px;color:#53645d;font-size:11px;font-weight:600}
+      .gateway-agent-form input{width:100%;min-height:39px;border:1px solid #d6d8ce;border-radius:6px;padding:8px 10px;background:#fffefa;font-size:12px}
+      .gateway-agent-note{margin:10px 0 0;color:#78837c;font-size:10px;line-height:1.55}
+      .gateway-result code{font:10px var(--font-mono,'DM Mono',monospace)}
+      @media(max-width:700px){.gateway-persisted-grid{grid-template-columns:1fr}.gateway-persisted-head{flex-direction:column}.gateway-agent-form{grid-template-columns:1fr}.gateway-agent-head{flex-direction:column}.gateway-history li{align-items:flex-start;flex-direction:column}}
       @media(max-width:700px){.guardian-gateway{padding:17px}.gateway-header{flex-direction:column}.gateway-mode{white-space:normal}.gateway-nav{margin-inline:-17px;padding-inline:17px}.gateway-tab{padding-inline:10px}.gateway-tab-arrow{display:none}.gateway-section-title{align-items:flex-start;flex-direction:column}.gateway-rule-head,.gateway-rule-row{grid-template-columns:1fr;gap:4px}.gateway-rule-head{display:none}.gateway-rule-row{padding:10px}.gateway-rule-row span:first-child:before{content:'Condición: ';color:#89928b}.gateway-rule-row b:before{content:'Decisión: ';font-weight:400;color:#89928b}.gateway-rule-row span:last-child:before{content:'Aprobador: ';color:#89928b}.gateway-facts{grid-template-columns:1fr}.gateway-metrics{grid-template-columns:1fr}.gateway-event-list li{grid-template-columns:38px 1fr}.gateway-receipt-state{grid-column:2}.gateway-export{align-items:flex-start;flex-direction:column}.gateway-template-head{flex-direction:column}.gateway-default-block{align-items:flex-start;flex-wrap:wrap}.gateway-default-block code{margin-left:29px}}
       @media(prefers-reduced-motion:reduce){.guardian-gateway *{scroll-behavior:auto!important;transition:none!important}}
     `}</style>
@@ -319,12 +728,12 @@ export function GuardianActionGatewayPanel({
       </div>
       <div className="gateway-mode" data-testid="gateway-shadow-mode"><span /> Modo sombra · no intercepta herramientas</div>
     </header>
-    <div className="gateway-disclosure" role="note" data-testid="gateway-fictitious-notice">
-      <CircleAlert size={17} /><p><b>Alcance honesto.</b> Los ejemplos y buzones son sintéticos. Las plantillas no se editan ni guardan; las propuestas de prueba sí se registran para aprobación, pero no se despachan aquí. No hay pagos ni efectos externos.</p>
+       <div className="gateway-disclosure" role="note" data-testid="gateway-fictitious-notice">
+       <CircleAlert size={17} /><p><b>Dos ámbitos, sin confusión.</b> Las reglas y credenciales que aparecen como guardadas proceden del espacio de trabajo. El catálogo y los escenarios de demostración son sintéticos; no hay conectores reales configurados. Simular no guarda reglas ni despacha acciones. Las propuestas registradas conservan su flujo actual de aprobación.</p>
     </div>
 
     <nav className="gateway-nav" role="tablist" aria-label="Secciones de la pasarela">
-      {sections.map(({ id, label, icon: Icon }) => <button key={id} id={`gateway-tab-${id}`} type="button" role="tab" aria-selected={section === id} aria-controls={`gateway-panel-${id}`} className={section === id ? "gateway-tab gateway-tab-active" : "gateway-tab"} onClick={() => setSection(id)} data-testid={`gateway-tab-${id}`}>
+      {sections.map(({ id, label, icon: Icon }) => <button key={id} id={`gateway-tab-${id}`} type="button" role="tab" aria-selected={section === id} aria-controls={`gateway-panel-${id}`} className={section === id ? "gateway-tab gateway-tab-active" : "gateway-tab"} onClick={() => { if (section === "connect" && id !== "connect") { setAgentCredential(null); setCopiedCredential(false); } setSection(id); }} data-testid={`gateway-tab-${id}`}>
         <Icon size={16} /><span>{label}</span><ChevronRight size={14} className="gateway-tab-arrow" />
       </button>)}
     </nav>
@@ -334,7 +743,92 @@ export function GuardianActionGatewayPanel({
       {loading && <div className="gateway-skeleton" role="status" data-testid="gateway-loading"><span /><span /><span />Cargando datos suministrados…</div>}
 
       {section === "rules" && !loading && <div className="gateway-section">
-        <div className="gateway-section-title"><div><span className="gateway-kicker">01 / POLÍTICA DECLARATIVA</span><h2>Reglas por plantillas</h2><p>Las reglas describen decisiones; no se guardan ni se aplican desde esta vista.</p></div><span className="gateway-count">{actionTemplates.length} plantillas</span></div>
+        <div className="gateway-section-title"><div><span className="gateway-kicker">01 / POLÍTICA DECLARATIVA</span><h2>Reglas por plantillas</h2><p>Consulta el estado persistido del workspace, prepara borradores y activa cambios de forma explícita.</p></div><span className="gateway-count">{rulesLoading || rulesError ? unavailable : ruleActions.length} acciones configurables</span></div>
+        <section className="gateway-persisted" aria-labelledby="gateway-persisted-title" data-testid="gateway-persisted-rules">
+          <div className="gateway-persisted-head"><div><span className="gateway-kicker">ESTADO DEL WORKSPACE</span><h3 id="gateway-persisted-title">Reglas guardadas</h3><p>La fuente de verdad es el estado recibido del servicio. Los borradores no sustituyen la versión activa.</p></div><span className="gateway-persisted-tag"><LockKeyhole size={13} /> Persistencia explícita</span></div>
+          {rulesLoading && <div className="gateway-skeleton" role="status" data-testid="gateway-rules-loading"><span /><span /><span />Cargando reglas guardadas…</div>}
+          {rulesError && <div className="gateway-rule-error" role="alert" data-testid="gateway-rules-error">{rulesError} <button type="button" className="gateway-quiet-button" onClick={onRetryRules} data-testid="gateway-retry-rules">Reintentar</button></div>}
+          {!rulesLoading && !rulesError && ruleActions.length === 0 && <div className="gateway-empty" data-testid="gateway-empty-persisted-rules">El servicio no ha devuelto acciones configurables. No se han creado reglas de ejemplo.</div>}
+          {!rulesLoading && !rulesError && selectedRule && <div className="gateway-persisted-grid">
+            <div className="gateway-persisted-card">
+              <label className="gateway-connect-label" htmlFor="gateway-rule-action-select">Acción</label>
+              <select id="gateway-rule-action-select" className="gateway-rule-select" value={selectedRule.actionType} onChange={(event) => { setSelectedRuleAction(event.target.value); setRuleActionMessage(""); setRuleSimulation(null); }} data-testid="gateway-rule-action-select">
+                {ruleActions.map((action) => <option key={action.actionType} value={action.actionType}>{action.label} · {action.actionType}</option>)}
+              </select>
+              <div className="gateway-template-head"><div><h3>{selectedRule.label}</h3><p>{selectedRule.description || unavailable}</p><div className="gateway-template-meta"><span>Riesgo: {selectedRule.riskClass}</span><span>Categorías: {selectedRule.riskCategories.length ? selectedRule.riskCategories.join(", ") : unavailable}</span></div></div></div>
+              <div className="gateway-rule-meta" data-testid="gateway-rule-version-state">
+                Versión activa: <code>{selectedRule.activeVersionId ?? "Sin versión activa"}</code>
+                {" · "}Borrador: <code>{selectedRule.draftVersionId ?? "Ninguno"}</code>
+              </div>
+              <h4 style={{ marginTop: 14 }}>Reglas activas</h4>
+              {!selectedRule.activeRules.length ? <div className="gateway-empty" data-testid="gateway-empty-active-rules">Sin reglas activas; las acciones no listadas se bloquean por defecto.</div> : <ul className="gateway-rule-list" data-testid="gateway-active-rules">{selectedRule.activeRules.map((rule) => <li key={rule.id} data-testid={`gateway-active-rule-${rule.id}`}><span><code>{rule.id}</code><br />{conditionText(rule)}</span><b>{decisionLabel(rule.decision)}</b></li>)}</ul>}
+              {selectedRule.warnings.map((warning, index) => <p className="gateway-warning" key={`${selectedRule.actionType}-warning-${index}`} role="note" data-testid={`gateway-rule-warning-${index}`}>{warning}</p>)}
+            </div>
+            <div className="gateway-persisted-card">
+              <h4>Editor de borrador</h4>
+              <p className="gateway-rule-meta">Edita la lista JSON estructurada. Guardar crea un borrador; solo «Activar borrador» cambia la política activa.</p>
+              <label className="sr-only" htmlFor="gateway-rule-editor">Reglas JSON del borrador</label>
+              <textarea id="gateway-rule-editor" value={ruleEditorText} onChange={(event) => setRuleEditorText(event.target.value)} disabled={!canManage} spellCheck={false} data-testid="gateway-rule-editor" aria-describedby="gateway-rule-editor-help" />
+              <small id="gateway-rule-editor-help" className="gateway-rule-meta">Campos por regla: id, decision (allow, deny o require_approval) y when con all / any. El formato se valida en el servicio.</small>
+              {!canManage && <p className="gateway-permission-note" data-testid="gateway-rules-readonly">Solo owner/admin puede editar, activar o revertir reglas. Esta vista es de solo lectura.</p>}
+              {canManage && <div className="gateway-rule-actions">
+                <button type="button" className="gateway-quiet-button" disabled={ruleBusy || !selectedStarterTemplate} onClick={loadStarterTemplate} data-testid="gateway-load-rule-starter">Cargar plantilla inicial{selectedStarterTemplate ? `: ${selectedStarterTemplate.label}` : ""}</button>
+                <button type="button" disabled={ruleBusy} onClick={() => void saveRuleDraft()} data-testid="gateway-save-rule-draft">{ruleBusy ? "Guardando…" : "Guardar borrador"}</button>
+                <button type="button" className="gateway-quiet-button" disabled={ruleBusy || !selectedRule.draftVersionId} onClick={() => void activateRuleDraft()} data-testid="gateway-activate-rule-draft">Activar borrador</button>
+              </div>}
+              {ruleActionMessage && <p className="gateway-result" role="status" data-testid="gateway-rule-action-result">{ruleActionMessage}</p>}
+            </div>
+            <div className="gateway-persisted-card">
+              <h4>Historial de versiones</h4>
+              {!selectedRule.history.length ? <p className="gateway-rule-meta" data-testid="gateway-empty-rule-history">El servicio no ha devuelto versiones anteriores.</p> : <ol className="gateway-history" data-testid="gateway-rule-history">
+                {selectedRule.history.map((entry) => <li key={entry.id} data-testid={`gateway-history-version-${entry.version}`}>
+                  <div><b>v{entry.version} {entry.isActive ? "· activa" : entry.isDraft ? "· borrador" : ""}</b><small>{new Date(entry.createdAt).toLocaleString("es-ES")} · usuario {entry.createdByUserId}</small><small>{entry.rules.length} reglas</small></div>
+                  {canManage && <button type="button" className="gateway-quiet-button" disabled={ruleBusy} onClick={() => void rollbackRule(entry.version)} data-testid={`gateway-rollback-version-${entry.version}`}>Crear versión desde aquí</button>}
+                </li>)}
+              </ol>}
+              <p className="gateway-rule-meta">Revertir crea una nueva versión; no borra el historial ni activa el cambio automáticamente.</p>
+            </div>
+            <div className="gateway-persisted-card">
+              <h4>Simulador de reglas guardadas</h4>
+              <form onSubmit={simulateSavedRules} data-testid="gateway-saved-rule-simulator">
+                <label className="gateway-connect-label" htmlFor="gateway-rule-simulation-version">Versión que se simula</label>
+                <select
+                  id="gateway-rule-simulation-version"
+                  value={simulationVersionId || selectedRule.draftVersionId || selectedRule.activeVersionId || ""}
+                  onChange={(event) => setSimulationVersionId(event.target.value)}
+                  disabled={simulationVersions.length === 0}
+                  data-testid="gateway-rule-simulation-version"
+                >
+                  {simulationVersions.length === 0
+                    ? <option value="">Sin versión guardada</option>
+                    : simulationVersions.map((version) => <option key={version.id} value={version.id}>{version.label}</option>)}
+                </select>
+                <label className="gateway-connect-label">Casos de prueba ficticios</label>
+                <div className="gateway-rule-actions" data-testid="gateway-synthetic-rule-cases">
+                  {selectedRuleExamples.map((example) => <button
+                    key={example.label}
+                    type="button"
+                    className="gateway-quiet-button"
+                    onClick={() => {
+                      setRuleArgumentsText(JSON.stringify(example.arguments, null, 2));
+                      setRuleActionMessage(`${example.label}: caso ficticio cargado; pulsa «Simular» para evaluar la versión seleccionada.`);
+                    }}
+                  >{example.label}</button>)}
+                  {selectedRuleExamples.length === 0 && <span className="gateway-rule-meta">No hay caso sintético para esta acción.</span>}
+                </div>
+                <label className="gateway-connect-label" htmlFor="gateway-rule-simulation-arguments">Argumentos JSON</label>
+                <textarea id="gateway-rule-simulation-arguments" value={ruleArgumentsText} onChange={(event) => setRuleArgumentsText(event.target.value)} spellCheck={false} data-testid="gateway-rule-simulation-arguments" />
+                <button type="submit" disabled={ruleBusy} data-testid="gateway-simulate-saved-rules">{ruleBusy ? "Evaluando…" : "Simular versión seleccionada"}</button>
+              </form>
+              <p className="gateway-simulator-note">Puedes simular un borrador antes de activarlo. La API no guarda cambios, no crea una propuesta y no despacha herramientas.</p>
+              {ruleSimulation && <div className="gateway-result" role="status" data-testid="gateway-rule-simulation-result">
+                <b>{decisionLabel(ruleSimulation.decision)}</b> · {ruleSimulation.reasonCode} · {ruleSimulation.ruleId ? `Regla ${ruleSimulation.ruleId}` : "sin regla coincidente"}
+                <br />Versión: {ruleSimulation.ruleVersionId ?? "predeterminada"} · Persistido: no · Despachado: no
+                {ruleSimulation.issues.length > 0 && <ul>{ruleSimulation.issues.map((issue) => <li key={issue}>{issue}</li>)}</ul>}
+              </div>}
+            </div>
+          </div>}
+        </section>
         <div className="gateway-default-block" data-testid="gateway-default-block"><LockKeyhole size={17} /><div><b>Acciones no listadas: bloqueadas por defecto</b><span>Es una regla de diseño para el futuro gateway; esta demostración no intercepta llamadas.</span></div><code>DEFAULT · DENY</code></div>
         {actionTemplates.length === 0 ? <div className="gateway-empty" data-testid="gateway-empty-templates">No hay plantillas suministradas. No se crean reglas de ejemplo.</div> : <div className="gateway-template-list">
           {actionTemplates.map((template) => <article className="gateway-template" key={`${template.actionType}-${template.version}`} data-testid={`gateway-template-${template.actionType}`}>
@@ -358,7 +852,7 @@ export function GuardianActionGatewayPanel({
             {selectedTemplate?.argumentFields.map((field) => <label className="gateway-field" key={field.name} htmlFor={`gateway-arg-${field.name}`}>{field.label}{field.required && <span aria-hidden="true"> · obligatorio</span>}{field.description && <small>{field.description}</small>}
               {field.type === "boolean" ? <input id={`gateway-arg-${field.name}`} type="checkbox" checked={Boolean(args[field.name])} onChange={(event) => setArgs((previous) => ({ ...previous, [field.name]: event.target.checked }))} data-testid={`gateway-argument-${field.name}`} /> : <input id={`gateway-arg-${field.name}`} type={field.type === "number" ? "number" : "text"} required={field.required} placeholder={field.placeholder ?? undefined} value={textOrNumberInputValue(args[field.name])} onChange={(event) => setArgs((previous) => ({ ...previous, [field.name]: field.type === "number" && event.target.value ? Number(event.target.value) : event.target.value }))} data-testid={`gateway-argument-${field.name}`} />}
             </label>)}
-            <p className="gateway-simulator-note">La previsualización evalúa la misma plantilla sin guardar. Enviar propuesta sí registra la solicitud y, si procede, crea una aprobación; ninguna opción ejecuta una herramienta.</p>
+            <p className="gateway-simulator-note">La previsualización consulta la regla activa guardada para el workspace y no persiste ni despacha nada; si falta una regla activa, bloquea por defecto. Enviar propuesta registra la solicitud y, si procede, crea una aprobación; ninguna opción ejecuta una herramienta.</p>
             <div className="gateway-actions">
               <button type="button" disabled={!selectedTemplate || actionPending} onClick={() => void simulateAction()} data-testid="gateway-button-simulate">Simular decisión</button>
               <button type="submit" disabled={!selectedTemplate || !selectedTemplate.proposalEnabled || actionPending || !canPropose} data-testid="gateway-button-propose">{actionPending ? "Procesando…" : "Enviar propuesta"}</button>
@@ -414,7 +908,40 @@ export function GuardianActionGatewayPanel({
       </div>}
 
       {section === "connect" && <div className="gateway-section">
-        <div className="gateway-section-title"><div><span className="gateway-kicker">04 / INTEGRACIÓN FUTURA</span><h2>Conectar agente</h2><p>Guía de preparación. No establece conexiones ni genera credenciales.</p></div><span className="gateway-count">Sin conexión activa</span></div>
+        <div className="gateway-section-title"><div><span className="gateway-kicker">04 / IDENTIDAD DEL AGENTE</span><h2>Conectar agente</h2><p>Registra principales del workspace y administra sus credenciales. El registro no conecta por sí solo herramientas ni habilita enforcement.</p></div><span className="gateway-count">{agentsLoading || agentsError ? unavailable : agents.length} agentes registrados</span></div>
+        <section className="gateway-persisted" aria-labelledby="gateway-agent-management-title" data-testid="gateway-agent-management">
+          <div className="gateway-persisted-head"><div><span className="gateway-kicker">ADMINISTRACIÓN DEL WORKSPACE</span><h3 id="gateway-agent-management-title">Agentes registrados</h3><p>Las credenciales completas solo se entregan en la respuesta inmediata de creación o rotación.</p></div><span className="gateway-persisted-tag"><KeyRound size={13} /> Acceso administrativo</span></div>
+          {!canManage && <p className="gateway-permission-note" data-testid="gateway-agents-readonly">Solo owner/admin puede registrar agentes, rotar credenciales o revocar acceso.</p>}
+          {canManage && <form className="gateway-agent-form" onSubmit={submitAgent} data-testid="gateway-create-agent-form">
+            <label htmlFor="gateway-agent-name">Nombre visible del agente<input id="gateway-agent-name" value={agentName} maxLength={120} onChange={(event) => setAgentName(event.target.value)} required placeholder="Nombre identificable" data-testid="gateway-agent-name" /></label>
+            <button type="submit" disabled={!agentName.trim() || !!agentBusyId} data-testid="gateway-create-agent">{agentBusyId === "create" ? "Registrando…" : "Registrar agente"}</button>
+          </form>}
+          <p className="gateway-agent-note">Al crear o rotar, copia la credencial y guárdala en un gestor seguro ahora. No se almacena en el navegador; al cambiar de sección o recargar esta pantalla deja de mostrarse.</p>
+          {agentsLoading && <div className="gateway-skeleton" role="status" data-testid="gateway-agents-loading"><span /><span /><span />Cargando agentes registrados…</div>}
+          {agentsError && <div className="gateway-rule-error" role="alert" data-testid="gateway-agents-error">{agentsError} <button type="button" className="gateway-quiet-button" onClick={onRetryAgents} data-testid="gateway-retry-agents">Reintentar</button></div>}
+          {!agentsLoading && !agentsError && agents.length === 0 && <div className="gateway-empty" data-testid="gateway-empty-agents">No hay agentes registrados en este workspace.</div>}
+          {!agentsLoading && !agentsError && agents.length > 0 && <div className="gateway-agent-list">{agents.map((agent) => <article className="gateway-agent" key={agent.id} data-testid={`gateway-agent-${agent.id}`}>
+            <div className="gateway-agent-head"><div><h4>{agent.displayName}</h4><code className="gateway-agent-id" data-testid={`gateway-agent-id-${agent.id}`}>{agent.id}</code></div><span className={`gateway-status ${agent.revokedAt ? "gateway-status-rejected" : "gateway-status-approved"}`} data-testid={`gateway-agent-status-${agent.id}`}>{agent.revokedAt ? "Revocado" : "Activo"}</span></div>
+            <dl className="gateway-facts">
+              <div><dt>Principal</dt><dd><code>{agent.principalUserId}</code></dd></div>
+              <div><dt>Versión de credencial</dt><dd>v{agent.credentialVersion}</dd></div>
+              <div><dt>Registrado</dt><dd>{new Date(agent.createdAt).toLocaleString("es-ES")}</dd></div>
+              <div><dt>Último uso</dt><dd>{agent.lastUsedAt ? new Date(agent.lastUsedAt).toLocaleString("es-ES") : unavailable}</dd></div>
+              {agent.revokedAt && <div><dt>Revocado</dt><dd>{new Date(agent.revokedAt).toLocaleString("es-ES")}</dd></div>}
+            </dl>
+            {canManage && <div className="gateway-agent-actions">
+              {!agent.revokedAt && <button type="button" className="gateway-quiet-button" disabled={!!agentBusyId} onClick={() => void rotateAgent(agent.id)} data-testid={`gateway-rotate-agent-${agent.id}`}><RotateCw size={14} />Rotar credencial</button>}
+              {!agent.revokedAt && <button type="button" className="gateway-reject" disabled={!!agentBusyId} onClick={() => void revokeAgent(agent.id)} data-testid={`gateway-revoke-agent-${agent.id}`}><Trash2 size={14} />Revocar agente</button>}
+            </div>}
+          </article>)}</div>}
+          {agentCredential && <div className="gateway-credential" role="status" aria-live="polite" data-testid="gateway-agent-one-time-credential">
+            <b>Credencial de una sola visualización</b>
+            <code>{agentCredential.credential}</code>
+            <small>La respuesta confirma shownOnce. Guárdala de forma segura; no volveremos a mostrar este valor completo.</small>
+            <div className="gateway-agent-actions"><button type="button" onClick={() => void copyAgentCredential()} data-testid="gateway-copy-agent-credential"><Copy size={14} />{copiedCredential ? "Copiada" : "Copiar credencial"}</button><button type="button" className="gateway-quiet-button" onClick={() => { setAgentCredential(null); setCopiedCredential(false); }} data-testid="gateway-hide-agent-credential">Ocultar credencial</button></div>
+          </div>}
+          {agentMessage && <p className="gateway-result" role="status" data-testid="gateway-agent-action-result">{agentMessage}</p>}
+        </section>
         <label className="gateway-connect-label" htmlFor="gateway-framework">Punto de integración</label>
         <select id="gateway-framework" value={framework} onChange={(event) => setFramework(event.target.value)} data-testid="gateway-framework-select">
           <option value="gateway">Gateway HTTP propio</option><option value="framework">Framework de agentes</option><option value="library">Biblioteca cliente</option><option value="api">API directa</option>
@@ -426,7 +953,7 @@ export function GuardianActionGatewayPanel({
           {framework === "api" && <><h3>Preparar una futura integración API</h3><ol><li>Espera el contrato publicado por el equipo integrador.</li><li>Valida versión, ámbito y vínculo de propuesta en el lado servidor.</li><li>No envíes secretos ni asumas que esta vista protege operaciones.</li></ol></>}
           <div className="gateway-command"><span>Comando de prueba seguro · local · no ejecuta acciones</span><code>{"printf '%s\\n' '{\"actionType\":\"example.v1\",\"args\":{}}'"}</code><button type="button" onClick={() => setSimulationResult("Comando local de ejemplo seleccionado; no se ha ejecutado.")} data-testid="gateway-button-safe-command">Ver confirmación del comando</button></div>
         </div>
-        <p className="gateway-connect-caveat"><GitBranch size={15} /> Guía ilustrativa ficticia. El contrato, autenticación, validación de servidor y enforcement están fuera de este componente.</p>
+        <p className="gateway-connect-caveat"><GitBranch size={15} /> La guía no establece conexiones ni genera credenciales por sí misma. Registrar una identidad no garantiza enforcement; confirma la implementación y permisos en el lado servidor.</p>
       </div>}
     </div>
   </section>;

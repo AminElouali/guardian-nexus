@@ -65,10 +65,6 @@ export const workspaceActionRuleVersionsTable = pgTable(
       sql`${table.actionType} IN (${actionRefList})`,
     ),
     check(
-      "workspace_action_rule_versions_action_type_check",
-      sql`${table.actionType} IN (${actionRefList})`,
-    ),
-    check(
       "workspace_action_rule_versions_version_check",
       sql`${table.version} > 0`,
     ),

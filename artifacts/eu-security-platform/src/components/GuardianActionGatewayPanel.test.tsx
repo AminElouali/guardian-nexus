@@ -6,6 +6,10 @@ import {
   GuardianActionGatewayPanel,
   type GuardianActionGatewayPanelProps,
 } from "./GuardianActionGatewayPanel";
+import type {
+  WorkspaceActionRuleState,
+  WorkspaceAgent,
+} from "@workspace/api-client-react";
 
 const template: GuardianActionGatewayPanelProps["actionTemplates"][number] = {
   actionType: "support.refund.v1",
@@ -59,6 +63,7 @@ function props(overrides: Partial<GuardianActionGatewayPanelProps> = {}): Guardi
       decision: "require_approval",
       reasonCode: "human_approval_required",
       ruleId: "rule-test",
+      ruleVersionId: "rule-version-test",
       persisted: false,
       dispatched: false,
     }),
@@ -94,9 +99,10 @@ test("templates show versioned rule and simulator controls with default-block la
   assert.match(html, /DEFAULT · DENY/);
   assert.match(html, /Sin regla específica/);
   assert.match(html, /Modo sombra · no intercepta herramientas/);
-  assert.match(html, /Enviar propuesta sí registra la solicitud/i);
+  assert.match(html, /La previsualización consulta la regla activa guardada/i);
   assert.match(html, /data-testid="gateway-simulator"/);
   assert.match(html, /guardian-template-customer-data-v1/);
+  assert.match(html, /guardian-template-internal-email-v1/);
   assert.match(html, /guardian-template-infrastructure-v1/);
   assert.match(html, /data-testid="gateway-action-select"/);
   assert.match(html, /data-testid="gateway-argument-caseId"/);
@@ -179,4 +185,148 @@ test("agent connection offers safe setup guidance without generating credentials
   assert.match(html, /example\.v1/);
   assert.match(html, /ni genera credenciales/i);
   assert.doesNotMatch(html, /api[_ -]?key|token secreto|generar clave/i);
+});
+
+const persistedRuleState: WorkspaceActionRuleState = {
+  actionType: "guardian.support.reply.send.v1",
+  label: "Responder a soporte",
+  description: "Acción sintética de soporte.",
+  riskClass: "medium",
+  riskCategories: ["money", "customer_data", "external_email"],
+  activeVersionId: "version-active",
+  draftVersionId: "version-draft",
+  activeRules: [{
+    id: "review-under-50-eur",
+    decision: "require_approval",
+    when: { all: [{ field: "compensation_cents", op: "lte", value: 5000 }] },
+  }],
+  draftRules: [{
+    id: "block-external",
+    decision: "deny",
+    when: { all: [{ field: "recipient_type", op: "eq", value: "external" }] },
+  }],
+  history: [
+    {
+      id: "version-draft",
+      version: 2,
+      rules: [{
+        id: "block-external",
+        decision: "deny",
+        when: { all: [{ field: "recipient_type", op: "eq", value: "external" }] },
+      }],
+      createdByUserId: "user-admin",
+      createdAt: "2026-11-17T12:00:00.000Z",
+      isActive: false,
+      isDraft: true,
+    },
+    {
+      id: "version-active",
+      version: 1,
+      rules: [{
+        id: "review-under-50-eur",
+        decision: "require_approval",
+        when: { all: [{ field: "compensation_cents", op: "lte", value: 5000 }] },
+      }],
+      createdByUserId: "user-owner",
+      createdAt: "2026-11-16T12:00:00.000Z",
+      isActive: true,
+      isDraft: false,
+    },
+  ],
+  warnings: ["La regla abierta ha sido bloqueada por defecto."],
+};
+
+test("saved rule interface exposes immutable history and limits editing to administrators", () => {
+  const readOnly = markup({
+    initialSection: "rules",
+    ruleActions: [persistedRuleState],
+    canManage: false,
+  });
+  assert.match(readOnly, /data-testid="gateway-persisted-rules"/);
+  assert.match(readOnly, /data-testid="gateway-rule-history"/);
+  assert.match(readOnly, /data-testid="gateway-history-version-1"/);
+  assert.match(readOnly, /data-testid="gateway-history-version-2"/);
+  assert.match(readOnly, /Solo owner\/admin puede editar/);
+  assert.match(readOnly, /textarea[^>]*disabled=""[^>]*data-testid="gateway-rule-editor"/);
+  assert.doesNotMatch(readOnly, /data-testid="gateway-rollback-version-1"/);
+
+  const administrator = markup({
+    initialSection: "rules",
+    ruleActions: [persistedRuleState],
+    canManage: true,
+  });
+  assert.match(administrator, /data-testid="gateway-save-rule-draft"/);
+  assert.match(administrator, /data-testid="gateway-activate-rule-draft"/);
+  assert.match(administrator, /data-testid="gateway-rollback-version-1"/);
+});
+
+test("rule setup exposes versioned starter templates and synthetic pre-activation cases", () => {
+  const html = markup({
+    initialSection: "rules",
+    canManage: true,
+    ruleActions: [persistedRuleState],
+    starterTemplates: [{
+      id: "customer-support-v1",
+      label: "Atención al cliente",
+      actionType: "guardian.support.reply.send.v1",
+      document: {
+        version: 1,
+        rules: [{
+          id: "review-support-v1",
+          decision: "require_approval",
+          when: {},
+        }],
+      },
+    }],
+  });
+  assert.match(html, /data-testid="gateway-load-rule-starter"/);
+  assert.match(html, /Atención al cliente/);
+  assert.match(html, /data-testid="gateway-rule-simulation-version"/);
+  assert.match(html, /Borrador · v2/);
+  assert.match(html, /data-testid="gateway-synthetic-rule-cases"/);
+  assert.match(html, /Cliente interno, sin compensación/);
+  assert.match(html, /Destinatario externo, compensación ficticia de 75 €/);
+  assert.match(html, /Puedes simular un borrador antes de activarlo/);
+});
+
+test("agent management shows scoped identities and active revocation controls only to administrators", () => {
+  const agents: WorkspaceAgent[] = [
+    {
+      id: "agent-1",
+      displayName: "Agente sintético",
+      principalUserId: "user-admin",
+      credentialVersion: 2,
+      createdAt: "2026-11-17T12:00:00.000Z",
+      revokedAt: null,
+      lastUsedAt: null,
+    },
+    {
+      id: "agent-2",
+      displayName: "Agente revocado",
+      principalUserId: "user-admin",
+      credentialVersion: 1,
+      createdAt: "2026-11-16T12:00:00.000Z",
+      revokedAt: "2026-11-17T12:30:00.000Z",
+      lastUsedAt: null,
+    },
+  ];
+  const administrator = markup({
+    initialSection: "connect",
+    canManage: true,
+    agents,
+  });
+  assert.match(administrator, /data-testid="gateway-create-agent-form"/);
+  assert.match(administrator, /data-testid="gateway-rotate-agent-agent-1"/);
+  assert.match(administrator, /data-testid="gateway-revoke-agent-agent-1"/);
+  assert.match(administrator, /data-testid="gateway-agent-status-agent-2">Revocado/);
+  assert.doesNotMatch(administrator, /gateway-rotate-agent-agent-2/);
+
+  const member = markup({
+    initialSection: "connect",
+    canManage: false,
+    agents,
+  });
+  assert.match(member, /Solo owner\/admin puede registrar agentes/);
+  assert.doesNotMatch(member, /gateway-create-agent-form/);
+  assert.doesNotMatch(member, /gateway-rotate-agent-agent-1/);
 });

@@ -12,6 +12,8 @@ export interface GenericActionPreviewResponse {
   reasonCode: string;
   /** @nullable */
   ruleId: string | null;
+  /** @nullable */
+  ruleVersionId: string | null;
   /**
      * @nullable
      * @pattern ^[a-f0-9]{64}$

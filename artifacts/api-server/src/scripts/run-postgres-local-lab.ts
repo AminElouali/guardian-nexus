@@ -1097,6 +1097,39 @@ async function main(): Promise<void> {
       await finalPool.end();
     }
 
+    currentStage = "api_unit_tests";
+    const apiTestEnv = {
+      ...safeChildEnvironment(labRoot),
+      NODE_ENV: "development",
+      DATABASE_URL: databaseUrl(databaseName, socketDirectory),
+      APP_RUNTIME_DATABASE_URL: runtimeUrl(
+        databaseName,
+        runtimePassword,
+        socketDirectory,
+      ),
+    };
+    const apiTestOutput = await runAndCapture(
+      pnpm,
+      ["--filter", "@workspace/api-server", "run", "test"],
+      repoRoot,
+      apiTestEnv,
+      currentStage,
+    );
+    const apiTestSummary = parseNodeTestSummary(
+      `${apiTestOutput.stdout}\n${apiTestOutput.stderr}`,
+    );
+    console.log(
+      `node:test API unit and disposable DB suite: tests=${apiTestSummary.tests} pass=${apiTestSummary.pass} fail=${apiTestSummary.fail} skipped=${apiTestSummary.skipped}`,
+    );
+    if (
+      apiTestSummary.tests < 1 ||
+      apiTestSummary.fail > 0 ||
+      apiTestSummary.skipped > 0 ||
+      apiTestOutput.exitCode !== 0
+    ) {
+      throw new Error("api_unit_tests_failed");
+    }
+
     currentStage = "development_read_only_catalog_audit";
     const developmentAuditOutput = await runAndCapture(
       pnpm,
@@ -1132,8 +1165,22 @@ async function main(): Promise<void> {
       databaseNameMatched?: boolean;
       transactionReadOnly?: boolean;
       runtimeLoginAuthenticated?: boolean;
-      expected?: { tables?: number; policies?: number; roles?: number };
-      actual?: { tables?: number; policies?: number; roles?: number };
+      expected?: {
+        tables?: number;
+        columns?: number;
+        indexes?: number;
+        constraints?: number;
+        policies?: number;
+        roles?: number;
+      };
+      actual?: {
+        tables?: number;
+        columns?: number;
+        indexes?: number;
+        constraints?: number;
+        policies?: number;
+        roles?: number;
+      };
       violationCodes?: unknown;
     };
     const safeDevelopmentAuditCodes = Array.isArray(
@@ -1153,23 +1200,29 @@ async function main(): Promise<void> {
       developmentAuditReport.databaseNameMatched !== true ||
       developmentAuditReport.transactionReadOnly !== true ||
       developmentAuditReport.runtimeLoginAuthenticated !== true ||
-      developmentAuditReport.expected?.tables !== 13 ||
-      developmentAuditReport.expected?.policies !== 36 ||
+      developmentAuditReport.expected?.tables !== 16 ||
+      developmentAuditReport.expected?.columns !== 173 ||
+      developmentAuditReport.expected?.indexes !== 44 ||
+      developmentAuditReport.expected?.constraints !== 71 ||
+      developmentAuditReport.expected?.policies !== 45 ||
       developmentAuditReport.expected?.roles !== 3 ||
-      developmentAuditReport.actual?.tables !== 13 ||
-      developmentAuditReport.actual?.policies !== 36 ||
+      developmentAuditReport.actual?.tables !== 16 ||
+      developmentAuditReport.actual?.columns !== 173 ||
+      developmentAuditReport.actual?.indexes !== 44 ||
+      developmentAuditReport.actual?.constraints !== 71 ||
+      developmentAuditReport.actual?.policies !== 45 ||
       developmentAuditReport.actual?.roles !== 3 ||
       !Array.isArray(developmentAuditReport.violationCodes) ||
       developmentAuditReport.violationCodes.length !== 0
     ) {
       console.error(
-        `Development read-only catalog audit failed safely: status=${developmentAuditReport.status ?? "invalid"} tables=${developmentAuditReport.actual?.tables ?? "unknown"} policies=${developmentAuditReport.actual?.policies ?? "unknown"} roles=${developmentAuditReport.actual?.roles ?? "unknown"} violationCodes=${safeDevelopmentAuditCodes.join(",") || "none"}.`,
+        `Development read-only catalog audit failed safely: status=${developmentAuditReport.status ?? "invalid"} tables=${developmentAuditReport.actual?.tables ?? "unknown"} columns=${developmentAuditReport.actual?.columns ?? "unknown"} indexes=${developmentAuditReport.actual?.indexes ?? "unknown"} constraints=${developmentAuditReport.actual?.constraints ?? "unknown"} policies=${developmentAuditReport.actual?.policies ?? "unknown"} roles=${developmentAuditReport.actual?.roles ?? "unknown"} violationCodes=${safeDevelopmentAuditCodes.join(",") || "none"}.`,
       );
       throw new Error("development_read_only_catalog_audit_failed");
     }
     developmentReadOnlyCatalogAuditPassed = true;
     console.log(
-      "Development read-only catalog audit passed on the disposable runtime connection: tables=13 policies=36.",
+      "Development read-only catalog audit passed on the disposable runtime connection: tables=16 columns=173 indexes=44 constraints=71 policies=45 roles=3.",
     );
 
     currentStage = "approval_ledger_rls_probes";

@@ -91,9 +91,11 @@ export async function withAgentWorkspaceTransaction<T>(
   return db.transaction(async (tx) => {
     await tx.execute(sql`SET LOCAL ROLE app_runtime`);
     await setWorkspaceContext(tx, workspaceId);
+    await tx.execute(sql`SELECT set_config('app.user_id', '', true)`);
     await tx.execute(
       sql`SELECT set_config('app.agent_credential_sha256', ${credentialSha256}, true)`,
     );
+    await tx.execute(sql`SELECT set_config('app.agent_id', '', true)`);
     const [agent] = await tx
       .select()
       .from(workspaceAgentsTable)

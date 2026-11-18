@@ -13183,6 +13183,7 @@ export const PreviewWorkspaceGenericActionResponse = zod.object({
   "decision": zod.enum(['allow', 'deny', 'require_approval']),
   "reasonCode": zod.string(),
   "ruleId": zod.string().nullable(),
+  "ruleVersionId": zod.uuid().nullable(),
   "actionSha256": zod.string().regex(previewWorkspaceGenericActionResponseActionSha256RegExp).nullable(),
   "persisted": zod.literal(false),
   "dispatched": zod.literal(false)
@@ -13257,6 +13258,28 @@ export const listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhen
 
 export const listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAnyMax = 8;
 
+export const listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemIdMax = 120;
+
+export const listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAllItemFieldMax = 80;
+
+export const listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAllItemValueOneMax = 254;
+
+export const listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAllItemValueTwoMin = 0;
+export const listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAllItemValueTwoMax = 1000000;
+
+export const listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAllMax = 8;
+
+export const listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAnyItemFieldMax = 80;
+
+export const listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAnyItemValueOneMax = 254;
+
+export const listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAnyItemValueTwoMin = 0;
+export const listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAnyItemValueTwoMax = 1000000;
+
+export const listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAnyMax = 8;
+
+export const listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesMax = 50;
+
 
 
 export const ListWorkspaceActionRulesResponse = zod.object({
@@ -13325,6 +13348,30 @@ export const ListWorkspaceActionRulesResponse = zod.object({
   "isDraft": zod.boolean()
 })),
   "warnings": zod.array(zod.string())
+})),
+  "starterTemplates": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "actionType": zod.string(),
+  "document": zod.object({
+  "version": zod.literal(1),
+  "rules": zod.array(zod.object({
+  "id": zod.string().min(1).max(listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemIdMax),
+  "decision": zod.enum(['allow', 'deny', 'require_approval']),
+  "when": zod.object({
+  "all": zod.array(zod.object({
+  "field": zod.string().max(listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAllItemFieldMax),
+  "op": zod.enum(['eq', 'gt', 'lte']),
+  "value": zod.union([zod.string().max(listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAllItemValueOneMax),zod.int().min(listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAllItemValueTwoMin).max(listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAllItemValueTwoMax),zod.boolean()])
+})).max(listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAllMax).optional(),
+  "any": zod.array(zod.object({
+  "field": zod.string().max(listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAnyItemFieldMax),
+  "op": zod.enum(['eq', 'gt', 'lte']),
+  "value": zod.union([zod.string().max(listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAnyItemValueOneMax),zod.int().min(listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAnyItemValueTwoMin).max(listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAnyItemValueTwoMax),zod.boolean()])
+})).max(listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAnyMax).optional()
+})
+})).max(listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesMax)
+})
 }))
 })
 

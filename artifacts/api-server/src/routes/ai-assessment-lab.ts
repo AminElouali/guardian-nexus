@@ -50,6 +50,7 @@ import {
   aiAssessmentApprovalRequestsTable,
   aiAssessmentJobsTable,
   workspaceAuditEventsTable,
+  evaluateWorkspaceActionRule,
   type AiAssessmentJobEvidence,
   type AiAssessmentJob,
   type ExternalQwenProviderApprovalEvidence,
@@ -125,6 +126,7 @@ import {
   verifyGenericActionEvidence,
 } from "../lib/generic-action-evidence";
 import { createGenericActionProposalInTransaction } from "../lib/generic-action-proposal-service";
+import { getActiveWorkspaceActionRule } from "../lib/workspace-action-rules";
 import {
   createExternalQwenApprovalEvidence,
   getQwenProviderStatus,
@@ -1327,25 +1329,42 @@ routes.post(
     const access = await withWorkspaceUserTransaction(
       req.authUserId!,
       params.data.workspaceId,
-      async () => true,
+      async (tx) => {
+        const active = await getActiveWorkspaceActionRule(
+          tx,
+          params.data.workspaceId,
+          body.data.actionType,
+        );
+        const evaluated = evaluateWorkspaceActionRule({
+          actionType: body.data.actionType,
+          arguments: body.data.arguments,
+          document: active?.document ?? null,
+          ruleVersionId: active?.activeVersionId ?? null,
+        });
+        const action = evaluateApprovalAction(
+          body.data.actionType,
+          body.data.arguments,
+        );
+        return {
+          evaluated,
+          actionSha256: action.ok
+            ? hashGenericActionArguments(action.definition.actionType, action.args)
+                .actionSha256
+            : null,
+        };
+      },
     );
     if (!access.authorized) {
       res.status(403).json({ error: "Workspace membership required" });
       return;
     }
-    const evaluated = evaluateApprovalAction(
-      body.data.actionType,
-      body.data.arguments,
-    );
-    const actionSha256 = evaluated.ok
-      ? hashGenericActionArguments(evaluated.definition.actionType, evaluated.args)
-          .actionSha256
-      : null;
+    const { evaluated, actionSha256 } = access.value;
     res.json(
       PreviewWorkspaceGenericActionResponse.parse({
         decision: evaluated.decision,
         reasonCode: evaluated.reasonCode,
-        ruleId: evaluated.ok ? evaluated.ruleId : null,
+        ruleId: evaluated.ruleId,
+        ruleVersionId: evaluated.ruleVersionId,
         actionSha256,
         persisted: false,
         dispatched: false,
@@ -2119,8 +2138,9 @@ routes.post(
       );
     return;
 
-    // Kept unreachable only as historical reference for the prior stateless
-    // catalog flow; all requests return above and use the persisted rule engine.
+    /* The previous stateless catalog proposal implementation is intentionally
+       retired. Persisted workspace rules above are authoritative. The old
+       implementation is excluded here so it cannot become an alternate path.
     const { workspaceId } = params.data;
     const { actionType, arguments: rawArguments, idempotencyKey } = body.data;
     const evaluated = evaluateApprovalAction(actionType, rawArguments);
@@ -2381,7 +2401,7 @@ routes.post(
         externalSideEffect: false,
         idempotent: isIdempotent,
       }),
-    );
+    ); */
   },
 );
 

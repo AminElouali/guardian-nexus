@@ -746,6 +746,8 @@ test(
     const { workspaceApprovalLedgerTable } = await import("@workspace/db");
     const { createAiAssessmentLabRouter } =
       await import("./routes/ai-assessment-lab");
+    const { createWorkspaceGovernanceRouter } =
+      await import("./routes/workspace-governance");
     const { withWorkspaceUserTransaction } =
       await import("./lib/tenant-db");
     const { updateApprovedRequestAndAppendReceipt } =
@@ -759,6 +761,7 @@ test(
     const app = express();
     app.use(express.json({ limit: "8kb" }));
     app.use("/api", createAiAssessmentLabRouter(authForTest));
+    app.use("/api", createWorkspaceGovernanceRouter(authForTest));
 
     let workspaceA = "";
     let workspaceB = "";
@@ -938,12 +941,14 @@ test(
       path: string,
       method = "GET",
       body?: unknown,
+      extraHeaders: Record<string, string> = {},
     ) =>
       fetch(`${apiBase}${path}`, {
         method,
         headers: {
           ...(userId ? { "x-guardian-test-user": userId } : {}),
           ...(body ? { "content-type": "application/json" } : {}),
+          ...extraHeaders,
         },
         ...(body ? { body: JSON.stringify(body) } : {}),
       });
@@ -951,6 +956,362 @@ test(
     const expireFuture = () => new Date(Date.now() + 60 * 60 * 1000);
     const queuePath = `/api/workspaces/${workspaceA}/ai-security-assessments/lab/jobs`;
     const previewPath = `/api/workspaces/${workspaceA}/ai-security-assessments/lab/policy-preview`;
+    await t.test("saved rules are admin-managed, versioned, simulated and default-deny", async () => {
+      const supportAction = "guardian.support.reply.send.v1";
+      const rulePath =
+        `/api/workspaces/${workspaceA}/action-rules/${supportAction}`;
+      const supportArgs = {
+        ticket_id: "TICKET-SYNTH-42",
+        recipient_email: "demo@example.test",
+        recipient_type: "internal",
+        compensation_cents: 0,
+        template_id: "synthetic-support-reply-v1",
+      };
+      const unconfigured = await request(
+        workspaceAAdmin,
+        `/api/workspaces/${workspaceA}/ai-security-assessments/action-proposals`,
+        "POST",
+        {
+          actionType: supportAction,
+          arguments: supportArgs,
+          idempotencyKey: randomUUID(),
+        },
+      );
+      assert.equal(unconfigured.status, 200);
+      const defaultDeny = await unconfigured.json() as {
+        decision: string;
+        reasonCode: string;
+        ruleVersionId: string | null;
+        approval: unknown;
+      };
+      assert.equal(defaultDeny.decision, "deny");
+      assert.equal(defaultDeny.reasonCode, "workspace_rule_not_configured");
+      assert.equal(defaultDeny.ruleVersionId, null);
+      assert.equal(defaultDeny.approval, null);
+
+      const firstDocument = {
+        version: 1,
+        rules: [{
+          id: "review-support-v1",
+          decision: "require_approval",
+          when: {},
+        }],
+      };
+      assert.equal(
+        (await request(workspaceAViewer, `${rulePath}/draft`, "PUT", firstDocument)).status,
+        403,
+        "viewers cannot save rule drafts",
+      );
+      const firstDraft = await request(
+        workspaceAAdmin,
+        `${rulePath}/draft`,
+        "PUT",
+        firstDocument,
+      );
+      assert.equal(firstDraft.status, 201);
+      const firstVersion = await firstDraft.json() as { version: number };
+      assert.equal(firstVersion.version, 1);
+      const firstActivation = await request(
+        workspaceAAdmin,
+        `${rulePath}/activate`,
+        "POST",
+      );
+      assert.equal(firstActivation.status, 200);
+
+      const secondDraft = await request(
+        workspaceAAdmin,
+        `${rulePath}/draft`,
+        "PUT",
+        {
+          version: 1,
+          rules: [{
+            id: "block-support-v2",
+            decision: "deny",
+            when: {},
+          }],
+        },
+      );
+      assert.equal(secondDraft.status, 201);
+      const secondVersion = await secondDraft.json() as {
+        version: number;
+        versionId: string;
+      };
+      assert.equal(secondVersion.version, 2);
+      const simulatedDraft = await request(
+        workspaceAAdmin,
+        `${rulePath}/simulate`,
+        "POST",
+        { versionId: secondVersion.versionId, arguments: supportArgs },
+      );
+      assert.equal(simulatedDraft.status, 200);
+      const simulatedDraftData = await simulatedDraft.json() as {
+        decision: string;
+        ruleVersionId: string | null;
+        persisted: boolean;
+        dispatched: boolean;
+      };
+      assert.equal(simulatedDraftData.decision, "deny");
+      assert.equal(simulatedDraftData.ruleVersionId, secondVersion.versionId);
+      assert.equal(simulatedDraftData.persisted, false);
+      assert.equal(simulatedDraftData.dispatched, false);
+      assert.equal(
+        (await request(workspaceAAdmin, `${rulePath}/activate`, "POST")).status,
+        200,
+      );
+      const rollbackResponse = await request(
+        workspaceAAdmin,
+        `${rulePath}/rollback`,
+        "POST",
+        { version: 1 },
+      );
+      assert.equal(rollbackResponse.status, 201);
+      const rollbackData = await rollbackResponse.json() as {
+        version: number;
+        versionId: string;
+        active: boolean;
+      };
+      assert.equal(rollbackData.version, 3);
+      assert.equal(rollbackData.active, true);
+      const finalRules = await request(
+        workspaceAAdmin,
+        `/api/workspaces/${workspaceA}/action-rules`,
+      );
+      const finalRulesData = await finalRules.json() as {
+        starterTemplates: Array<{
+          id: string;
+          actionType: string;
+          document: { version: number; rules: unknown[] };
+        }>;
+        actions: Array<{
+          actionType: string;
+          activeVersionId: string | null;
+          history: Array<{ version: number }>;
+        }>;
+      };
+      const finalSupportState = finalRulesData.actions.find(
+        (action) => action.actionType === supportAction,
+      );
+      assert.equal(finalSupportState?.activeVersionId, rollbackData.versionId);
+      assert.deepEqual(
+        finalSupportState?.history.map((version) => version.version).sort(),
+        [1, 2, 3],
+      );
+      assert.equal(finalRulesData.starterTemplates.length, 4);
+      assert.equal(
+        finalRulesData.starterTemplates.find(
+          (template) => template.actionType === supportAction,
+        )?.id,
+        "customer-support-v1",
+      );
+      const ruleAudit = await fixturePool.query<{ action: string }>(
+        `SELECT action FROM public.workspace_audit_events
+          WHERE workspace_id = $1
+            AND resource_type = 'workspace_action_rule_version'`,
+        [workspaceA],
+      );
+      assert.equal(
+        ruleAudit.rows.length,
+        6,
+        "drafts, activations and rollback are recorded in the workspace audit history",
+      );
+      const simulatedActive = await request(
+        workspaceAAdmin,
+        `${rulePath}/simulate`,
+        "POST",
+        { arguments: supportArgs },
+      );
+      const simulatedActiveData = await simulatedActive.json() as {
+        decision: string;
+        ruleVersionId: string | null;
+      };
+      assert.equal(simulatedActiveData.decision, "require_approval");
+      assert.equal(simulatedActiveData.ruleVersionId, rollbackData.versionId);
+    });
+    await t.test("agent credentials are scoped, revocable, renewable and cannot self-approve", async () => {
+      const agentsPath = `/api/workspaces/${workspaceA}/agents`;
+      const createdResponse = await request(
+        workspaceAAdmin,
+        agentsPath,
+        "POST",
+        { displayName: "Synthetic API agent" },
+      );
+      assert.equal(createdResponse.status, 201);
+      const created = await createdResponse.json() as {
+        agent: { id: string; credentialVersion: number };
+        credential: string;
+        shownOnce: boolean;
+      };
+      assert.ok(
+        typeof created.credential === "string" &&
+          created.credential.startsWith("gnx_agent_v1_"),
+        "the credential is returned only by the registration response",
+      );
+      assert.equal(created.shownOnce, true);
+      assert.equal(created.agent.credentialVersion, 1);
+
+      const stored = await fixturePool.query<{ credential_sha256: string }>(
+        `SELECT credential_sha256 FROM public.workspace_agents
+          WHERE workspace_id = $1 AND id = $2`,
+        [workspaceA, created.agent.id],
+      );
+      const expectedCredentialHash = createHash("sha256")
+        .update(created.credential, "utf8")
+        .digest("hex");
+      assert.ok(
+        stored.rows[0]?.credential_sha256 === expectedCredentialHash,
+        "only the SHA-256 digest is stored",
+      );
+      assert.ok(
+        !stored.rows.some((row) => row.credential_sha256 === created.credential),
+        "the raw credential is not stored",
+      );
+
+      const agentProposalPath = `/api/agent/workspaces/${workspaceA}/action-proposals`;
+      const proposalBody = {
+        actionType: "guardian.support.reply.send.v1",
+        arguments: {
+          ticket_id: "TICKET-SYNTH-AGENT-1",
+          recipient_email: "demo@example.test",
+          recipient_type: "internal",
+          compensation_cents: 0,
+          template_id: "synthetic-support-reply-v1",
+        },
+        idempotencyKey: randomUUID(),
+      };
+      const wrongCredential = `gnx_agent_v1_${randomBytes(32).toString("base64url")}`;
+      assert.equal(
+        (await request(
+          null,
+          agentProposalPath,
+          "POST",
+          proposalBody,
+          { authorization: `Bearer ${wrongCredential}` },
+        )).status,
+        401,
+        "an unregistered credential is rejected",
+      );
+      assert.equal(
+        (await request(
+          null,
+          `/api/agent/workspaces/${workspaceB}/action-proposals`,
+          "POST",
+          { ...proposalBody, idempotencyKey: randomUUID() },
+          { authorization: `Bearer ${created.credential}` },
+        )).status,
+        401,
+        "an agent credential cannot be used in another workspace",
+      );
+
+      const proposalResponse = await request(
+        null,
+        agentProposalPath,
+        "POST",
+        proposalBody,
+        { authorization: `Bearer ${created.credential}` },
+      );
+      assert.equal(proposalResponse.status, 201);
+      const proposal = CreateWorkspaceGenericActionProposalResponse.parse(
+        await proposalResponse.json(),
+      );
+      assert.equal(proposal.decision, "require_approval");
+      assert.equal(proposal.approval?.proposalDetails?.agentId, created.agent.id);
+      assert.ok(proposal.approval?.proposalDetails?.ruleVersionId);
+      assert.equal(
+        (await request(
+          workspaceAAdmin,
+          `/api/workspaces/${workspaceA}/ai-security-assessments/approvals/${proposal.approval!.id}/decision`,
+          "POST",
+          {
+            decision: "approve",
+            proposalBindingSha256: proposal.approval!.proposalBindingSha256,
+          },
+        )).status,
+        403,
+        "the agent principal cannot approve its own proposal",
+      );
+      assert.equal(
+        (await request(
+          workspaceAAdmin2,
+          `/api/workspaces/${workspaceA}/ai-security-assessments/approvals/${proposal.approval!.id}/decision`,
+          "POST",
+          {
+            decision: "approve",
+            proposalBindingSha256: proposal.approval!.proposalBindingSha256,
+          },
+        )).status,
+        200,
+        "a different workspace administrator can approve",
+      );
+
+      const rotatedResponse = await request(
+        workspaceAAdmin,
+        `${agentsPath}/${created.agent.id}/rotate`,
+        "POST",
+      );
+      assert.equal(rotatedResponse.status, 200);
+      const rotated = await rotatedResponse.json() as {
+        agent: { credentialVersion: number };
+        credential: string;
+        shownOnce: boolean;
+      };
+      assert.equal(rotated.agent.credentialVersion, 2);
+      assert.equal(rotated.shownOnce, true);
+      assert.equal(
+        (await request(
+          null,
+          agentProposalPath,
+          "POST",
+          { ...proposalBody, idempotencyKey: randomUUID() },
+          { authorization: `Bearer ${created.credential}` },
+        )).status,
+        401,
+        "rotation invalidates the prior credential",
+      );
+      assert.equal(
+        (await request(
+          null,
+          agentProposalPath,
+          "POST",
+          { ...proposalBody, idempotencyKey: randomUUID() },
+          { authorization: `Bearer ${rotated.credential}` },
+        )).status,
+        201,
+        "the replacement credential is usable",
+      );
+      assert.equal(
+        (await request(
+          workspaceAAdmin,
+          `${agentsPath}/${created.agent.id}/revoke`,
+          "POST",
+        )).status,
+        200,
+      );
+      assert.equal(
+        (await request(
+          null,
+          agentProposalPath,
+          "POST",
+          { ...proposalBody, idempotencyKey: randomUUID() },
+          { authorization: `Bearer ${rotated.credential}` },
+        )).status,
+        401,
+        "revocation blocks the current credential",
+      );
+      const renewedResponse = await request(
+        workspaceAAdmin,
+        `${agentsPath}/${created.agent.id}/rotate`,
+        "POST",
+      );
+      assert.equal(renewedResponse.status, 200);
+      const renewed = await renewedResponse.json() as {
+        agent: { credentialVersion: number; revokedAt: string | null };
+        credential: string;
+        shownOnce: boolean;
+      };
+      assert.equal(renewed.agent.credentialVersion, 3);
+      assert.equal(renewed.agent.revokedAt, null);
+      assert.equal(renewed.shownOnce, true);
+    });
     const previewEvidence: Array<{
       profileId: string;
       engineVersion: string;
@@ -2537,6 +2898,30 @@ test(
         template_id: "guardian-demo-email-v1",
       },
     };
+    const emailRulePath =
+      `/api/workspaces/${workspaceB}/action-rules/guardian.email.send.external.v1`;
+    const emailRuleDraft = await request(
+      workspaceBOwner,
+      `${emailRulePath}/draft`,
+      "PUT",
+      {
+        version: 1,
+        rules: [{
+          id: "review-synthetic-email",
+          decision: "require_approval",
+          when: {},
+        }],
+      },
+    );
+    assert.equal(emailRuleDraft.status, 201);
+    assert.equal(
+      (await request(
+        workspaceBOwner,
+        `${emailRulePath}/activate`,
+        "POST",
+      )).status,
+      200,
+    );
     const actionPreviewPath =
       `/api/workspaces/${workspaceB}/ai-security-assessments/action-preview`;
     const previewResponse = await request(
@@ -2552,6 +2937,7 @@ test(
     assert.equal(previewDecision.decision, "require_approval");
     assert.equal(previewDecision.persisted, false);
     assert.equal(previewDecision.dispatched, false);
+    assert.ok(previewDecision.ruleVersionId);
     const unknownPreview = await request(
       workspaceBAdmin,
       actionPreviewPath,

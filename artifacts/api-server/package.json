@@ -8,7 +8,7 @@
     "build": "node ./build.mjs",
     "start": "node --import ./scripts/sanitize-runtime-db-env.mjs --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test src/security.test.ts src/connector-utils.test.ts src/ai-security.test.ts src/lib/ai-assessment-qwen-evidence.test.ts src/lib/assessment-broker-grant.test.ts src/lib/assessment-worker-mode.test.ts src/lib/ai-assessment-sandbox.test.ts src/lib/guardian-agent-action-adapter.test.ts src/lib/assessment-container-control.test.ts src/lib/assessment-output-limit.test.ts src/lib/policy-lab-preview.test.ts src/middlewares/ai-assessment-json.test.ts",
+    "test": "tsx --test src/security.test.ts src/connector-utils.test.ts src/ai-security.test.ts src/lib/ai-assessment-qwen-evidence.test.ts src/lib/assessment-broker-grant.test.ts src/lib/assessment-worker-mode.test.ts src/lib/ai-assessment-sandbox.test.ts src/lib/guardian-agent-action-adapter.test.ts src/lib/assessment-container-control.test.ts src/lib/assessment-output-limit.test.ts src/lib/policy-lab-preview.test.ts src/lib/workspace-agent-credentials.test.ts src/middlewares/ai-assessment-json.test.ts",
     "test:approval-ledger-phase3": "tsx --test src/lib/approval-ledger-crypto.test.ts src/lib/approval-ledger-export.test.ts src/scripts/verify-approval-ledger-bundle.test.ts src/lib/synthetic-refund-gateway.test.ts",
     "audit:development-rls-catalog": "tsx src/scripts/audit-development-rls-catalog.ts",
     "seed:demo-member": "tsx src/scripts/seed-demo-member.ts",
