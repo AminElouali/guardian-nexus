@@ -10,7 +10,7 @@ import {
   primaryKey,
   text,
   timestamp,
-  uniqueIndex,
+  unique,
   uuid,
 } from "drizzle-orm/pg-core";
 import { APPROVAL_ACTION_REFS } from "../approval-action-catalog";
@@ -54,7 +54,7 @@ export const workspaceActionRuleVersionsTable = pgTable(
       .defaultNow(),
   },
   (table) => [
-    uniqueIndex("workspace_action_rule_versions_workspace_action_version_uidx")
+    unique("workspace_action_rule_versions_workspace_action_version_uidx")
       .on(table.workspaceId, table.actionType, table.version),
     index("workspace_action_rule_versions_workspace_created_idx").on(
       table.workspaceId,

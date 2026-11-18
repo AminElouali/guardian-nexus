@@ -49,9 +49,20 @@ test("post-schema audit derives expected catalog from Drizzle and accepts policy
   assert.equal(snapshot.tables.length, 16);
   assert.equal(snapshot.columns.length, 173);
   assert.equal(snapshot.indexes.length, 44);
-  assert.equal(snapshot.constraints.length, 71);
+  assert.equal(snapshot.constraints.length, 72);
   assert.equal(snapshot.policies.length, 45);
   assert.equal(snapshot.roles.length, 2);
+  const ruleVersionKey = snapshot.constraints.find(
+    (constraint) =>
+      constraint.constraintName ===
+      "workspace_action_rule_versions_workspace_action_version_uidx",
+  );
+  assert.equal(ruleVersionKey?.kind, "unique");
+  assert.deepEqual(ruleVersionKey?.columns, [
+    "workspace_id",
+    "action_type",
+    "version",
+  ]);
   assert.equal(report.stage, "post-schema");
   assert.deepEqual(expectedPostPushRoleNames(contract), [
     "app_ai_assessment_worker",
