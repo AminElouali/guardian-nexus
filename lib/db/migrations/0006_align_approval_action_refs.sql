@@ -1,19 +1,25 @@
 -- Guardian Nexus migration 0006: align the approval action reference check.
--- The lab migration runner fills both arrays from APPROVAL_ACTION_REFS.
--- The legacy array is the two synthetic action references that existed before
--- generic support and external-email actions were added.
+-- The literal arrays are checked against APPROVAL_ACTION_REFS by an API test.
 BEGIN;
 
 DO $migration$
 DECLARE
-  legacy_action_refs text[] := ARRAY[{{LEGACY_APPROVAL_ACTION_REFS_SQL}}]::text[];
-  current_action_refs text[] := ARRAY[{{APPROVAL_ACTION_REFS_SQL}}]::text[];
+  legacy_action_refs text[] := ARRAY[
+    'guardian.synthetic.support.refund.v1',
+    'guardian.synthetic.finance.bank-change.v1'
+  ]::text[];
+  current_action_refs text[] := ARRAY[
+    'guardian.synthetic.support.refund.v1',
+    'guardian.synthetic.finance.bank-change.v1',
+    'guardian.support.reply.send.v1',
+    'guardian.email.send.external.v1'
+  ]::text[];
   sorted_legacy_action_refs text[];
   sorted_current_action_refs text[];
   actual_action_refs text[];
   action_ref_attnum smallint;
   action_sha256_attnum smallint;
-  constraint_row record;
+  found_constraint record;
   normalized_expression text;
   expected_expression_shape constant text :=
     '(((synthetic_action_ref IS NULL) AND (action_sha256 IS NULL)) OR ' ||
@@ -62,34 +68,34 @@ BEGIN
   END IF;
 
   SELECT
-    constraint_row.oid,
-    constraint_row.contype,
-    constraint_row.convalidated,
-    constraint_row.connoinherit,
-    constraint_row.condeferrable,
-    constraint_row.condeferred,
-    constraint_row.conkey,
-    pg_get_expr(constraint_row.conbin, constraint_row.conrelid) AS expression
-    INTO constraint_row
-    FROM pg_constraint AS constraint_row
-   WHERE constraint_row.conrelid =
+    catalog_constraint.oid,
+    catalog_constraint.contype,
+    catalog_constraint.convalidated,
+    catalog_constraint.connoinherit,
+    catalog_constraint.condeferrable,
+    catalog_constraint.condeferred,
+    catalog_constraint.conkey,
+    pg_get_expr(catalog_constraint.conbin, catalog_constraint.conrelid) AS expression
+    INTO found_constraint
+    FROM pg_constraint AS catalog_constraint
+   WHERE catalog_constraint.conrelid =
          'public.ai_assessment_approval_requests'::regclass
-     AND constraint_row.conname =
+     AND catalog_constraint.conname =
          'ai_assessment_approval_action_ref_check';
   IF NOT FOUND THEN
     RAISE EXCEPTION 'approval_action_ref_constraint_missing'
       USING ERRCODE = '42704';
   END IF;
 
-  IF constraint_row.contype <> 'c'
-    OR NOT constraint_row.convalidated
-    OR constraint_row.connoinherit
-    OR constraint_row.condeferrable
-    OR constraint_row.condeferred
+  IF found_constraint.contype <> 'c'
+    OR NOT found_constraint.convalidated
+    OR found_constraint.connoinherit
+    OR found_constraint.condeferrable
+    OR found_constraint.condeferred
     OR NOT (
-      constraint_row.conkey @>
+      found_constraint.conkey @>
         ARRAY[action_ref_attnum, action_sha256_attnum]::smallint[]
-      AND constraint_row.conkey <@
+      AND found_constraint.conkey <@
         ARRAY[action_ref_attnum, action_sha256_attnum]::smallint[]
     )
   THEN
@@ -100,12 +106,12 @@ BEGIN
   SELECT array_agg(captured[1] ORDER BY captured[1])
     INTO actual_action_refs
     FROM regexp_matches(
-      constraint_row.expression,
+      found_constraint.expression,
       $pattern$'([^']+)'::text$pattern$,
       'g'
     ) AS captured;
   normalized_expression := lower(
-    regexp_replace(constraint_row.expression, '[[:space:]]', '', 'g')
+    regexp_replace(found_constraint.expression, '[[:space:]]', '', 'g')
   );
   normalized_expression := regexp_replace(
     normalized_expression,

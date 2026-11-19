@@ -43,7 +43,6 @@ import { loadConnectorVaultKeyring } from "../lib/workspace-connector-vault";
 import {
   approvalActionRefConstraintExpression,
   approvalActionRefMigrationValues,
-  renderApprovalActionRefMigration,
 } from "../lib/approval-action-ref-migration";
 
 const { Client, Pool } = pg;
@@ -1064,13 +1063,10 @@ async function applyVersionedMigration(
   client: InstanceType<typeof Client>,
   filename: string,
 ): Promise<void> {
-  const sourceSql = await readFile(
+  const sqlText = await readFile(
     path.join(repoRoot, "lib/db/migrations", filename),
     "utf8",
   );
-  const sqlText = filename === "0006_align_approval_action_refs.sql"
-    ? renderApprovalActionRefMigration(sourceSql)
-    : sourceSql;
   const lines = sqlText.split(/\r?\n/);
   let firstExecutableLine = 0;
   while (firstExecutableLine < lines.length) {
@@ -1535,6 +1531,16 @@ async function runVersionedMigrationAudit(input: {
       "0006_align_approval_action_refs.sql",
     ];
     for (const filename of migrationFiles) {
+      const beforeActionRefMigration =
+        filename === "0006_align_approval_action_refs.sql"
+          ? await readApprovalActionRefConstraintState(migrationClient)
+          : null;
+      if (
+        filename === "0006_align_approval_action_refs.sql" &&
+        !beforeActionRefMigration?.isLegacy
+      ) {
+        throw new Error("versioned_migration_legacy_action_ref_not_reproduced");
+      }
       await applyVersionedMigration(migrationClient, filename);
       report.migrationsApplied.push(filename);
       if (filename === "0003_workspace_rule_version_unique_constraint.sql") {
@@ -1550,20 +1556,16 @@ async function runVersionedMigrationAudit(input: {
         report.migration0005Idempotent = true;
       }
       if (filename === "0006_align_approval_action_refs.sql") {
-        const beforeMigration = await readApprovalActionRefConstraintState(
-          migrationClient,
-        );
-        if (!beforeMigration?.isLegacy) {
+        if (beforeActionRefMigration === null) {
           throw new Error("versioned_migration_legacy_action_ref_not_reproduced");
         }
-        await applyVersionedMigration(migrationClient, filename);
         const afterMigration = await readApprovalActionRefConstraintState(
           migrationClient,
         );
         report.migration0006LegacyConstraintReplaced =
           afterMigration !== null &&
           afterMigration.isCurrent &&
-          afterMigration.oid !== beforeMigration.oid;
+          afterMigration.oid !== beforeActionRefMigration.oid;
         if (!report.migration0006LegacyConstraintReplaced) {
           throw new Error("versioned_migration_action_ref_constraint_not_updated");
         }
