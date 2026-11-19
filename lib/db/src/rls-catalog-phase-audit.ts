@@ -128,6 +128,7 @@ export type RlsCatalogQueryStep =
   | "role_membership"
   | "privileges"
   | "column_privileges"
+  | "column_insert_privileges"
   | "append_only_privileges"
   | "settings"
   | "object_inventory";

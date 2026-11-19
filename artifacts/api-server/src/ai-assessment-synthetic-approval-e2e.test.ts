@@ -25,7 +25,7 @@ import {
 import { dirname, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { test } from "node:test";
+import { test, type TestContext } from "node:test";
 import express, { type RequestHandler } from "express";
 import pg from "pg";
 import {
@@ -72,6 +72,28 @@ import {
 const workerRoot = resolve(
   fileURLToPath(new URL("../../../workers/guardian-ai-assessment", import.meta.url)),
 );
+const connectorCredentialE2eOnly =
+  process.env.GUARDIAN_LAB_CONNECTOR_CREDENTIAL_E2E_ONLY === "1";
+const agentCredentialSubtestName =
+  "agent credentials are scoped, revocable, renewable and cannot self-approve";
+const connectorCredentialSubtestName =
+  "workspace connector vault is private, encrypted, receipt-gated and idempotent";
+
+async function runApprovalE2eSubtest(
+  parent: TestContext,
+  name: string,
+  callback: (context: TestContext) => void | Promise<void>,
+): Promise<void> {
+  if (
+    connectorCredentialE2eOnly &&
+    name !== agentCredentialSubtestName &&
+    name !== connectorCredentialSubtestName
+  ) {
+    return;
+  }
+  await parent.test(name, callback);
+}
+
 const workspaceAOwner = `synthetic-e2e-owner-${randomUUID()}`;
 const workspaceAAdmin = `synthetic-e2e-admin-${randomUUID()}`;
 const workspaceAAdmin2 = `synthetic-e2e-admin2-${randomUUID()}`;
@@ -976,7 +998,7 @@ test(
     const queuePath = `/api/workspaces/${workspaceA}/ai-security-assessments/lab/jobs`;
     const previewPath = `/api/workspaces/${workspaceA}/ai-security-assessments/lab/policy-preview`;
     let agentApprovalReceipt: SignedApprovalReceiptV1 | null = null;
-    await t.test("saved rules are admin-managed, versioned, simulated and default-deny", async () => {
+    await runApprovalE2eSubtest(t, "saved rules are admin-managed, versioned, simulated and default-deny", async () => {
       const supportAction = "guardian.support.reply.send.v1";
       const rulePath =
         `/api/workspaces/${workspaceA}/action-rules/${supportAction}`;
@@ -1149,7 +1171,7 @@ test(
       assert.equal(simulatedActiveData.decision, "deny");
       assert.equal(simulatedActiveData.ruleVersionId, secondVersion.versionId);
     });
-    await t.test("rollback creates a draft that can be activated to restore the historical decision", async () => {
+    await runApprovalE2eSubtest(t, "rollback creates a draft that can be activated to restore the historical decision", async () => {
       const supportAction = "guardian.support.reply.send.v1";
       const rulePath =
         `/api/workspaces/${workspaceA}/action-rules/${supportAction}`;
@@ -1280,7 +1302,7 @@ test(
       assert.ok(activationAudit, "activation must be recorded in workspace audit");
       assert.equal(rollbackAudit.metadata.activated, false);
     });
-    await t.test("starter profiles create bounded drafts and the server simulator uses their versions", async () => {
+    await runApprovalE2eSubtest(t, "starter profiles create bounded drafts and the server simulator uses their versions", async () => {
       const rulesPath = `/api/workspaces/${workspaceA}/action-rules`;
       const profilePath = (profileId: string) =>
         `/api/workspaces/${workspaceA}/action-rules/profiles/${profileId}/draft`;
@@ -1462,7 +1484,7 @@ test(
         "the server identifies an unconditional external-email allow as open",
       );
     });
-    await t.test("history impact compares only verified stored generic arguments without writes", async () => {
+    await runApprovalE2eSubtest(t, "history impact compares only verified stored generic arguments without writes", async () => {
       const actionType = "guardian.support.reply.send.v1";
       const rulePath =
         `/api/workspaces/${workspaceA}/action-rules/${actionType}`;
@@ -1631,7 +1653,7 @@ test(
       assert.equal(empty.draftCounts, null);
     });
 
-    await t.test("agent credentials are scoped, revocable, renewable and cannot self-approve", async () => {
+    await runApprovalE2eSubtest(t, "agent credentials are scoped, revocable, renewable and cannot self-approve", async () => {
       const agentsPath = `/api/workspaces/${workspaceA}/agents`;
       const supportRulePath =
         `/api/workspaces/${workspaceA}/action-rules/guardian.support.reply.send.v1`;
@@ -4043,9 +4065,10 @@ test(
       "one-use ledger consumption permits exactly one local SMTP capture",
     );
 
-    await t.test(
+    await runApprovalE2eSubtest(
+      t,
       "workspace connector vault is private, encrypted, receipt-gated and idempotent",
-      async () => {
+      async (t) => {
         const credentialPath =
           `/api/workspaces/${workspaceB}/connector-credentials`;
         const otherWorkspaceCredentialPath =
@@ -4054,6 +4077,99 @@ test(
           `${credentialPath}/lab.fake.v1/executions`;
         const firstSecret = "lab-only-connector-secret-1234";
         const replacementSecret = "lab-only-connector-secret-5678";
+
+        const runtimeIdentityClient = await runtimePool.connect();
+        try {
+          await runtimeIdentityClient.query("BEGIN");
+          await runtimeIdentityClient.query("SET LOCAL ROLE app_runtime");
+          const identityResult = await runtimeIdentityClient.query<{
+            current_user: string;
+            session_user: string;
+            credential_id_insert: boolean;
+            credential_created_at_insert: boolean;
+            execution_id_insert: boolean;
+            execution_response_summary_insert: boolean;
+            execution_failure_code_insert: boolean;
+            execution_created_at_insert: boolean;
+            execution_updated_at_insert: boolean;
+            execution_completed_at_insert: boolean;
+          }>(`
+            SELECT
+              current_user,
+              session_user,
+              has_column_privilege(
+                'app_runtime',
+                'public.workspace_connector_credentials',
+                'id',
+                'INSERT'
+              ) AS credential_id_insert,
+              has_column_privilege(
+                'app_runtime',
+                'public.workspace_connector_credentials',
+                'created_at',
+                'INSERT'
+              ) AS credential_created_at_insert,
+              has_column_privilege(
+                'app_runtime',
+                'public.workspace_connector_executions',
+                'id',
+                'INSERT'
+              ) AS execution_id_insert,
+              has_column_privilege(
+                'app_runtime',
+                'public.workspace_connector_executions',
+                'response_summary',
+                'INSERT'
+              ) AS execution_response_summary_insert,
+              has_column_privilege(
+                'app_runtime',
+                'public.workspace_connector_executions',
+                'failure_code',
+                'INSERT'
+              ) AS execution_failure_code_insert,
+              has_column_privilege(
+                'app_runtime',
+                'public.workspace_connector_executions',
+                'created_at',
+                'INSERT'
+              ) AS execution_created_at_insert,
+              has_column_privilege(
+                'app_runtime',
+                'public.workspace_connector_executions',
+                'updated_at',
+                'INSERT'
+              ) AS execution_updated_at_insert,
+              has_column_privilege(
+                'app_runtime',
+                'public.workspace_connector_executions',
+                'completed_at',
+                'INSERT'
+              ) AS execution_completed_at_insert
+          `);
+          const identity = identityResult.rows[0];
+          assert.ok(identity);
+          assert.equal(identity.current_user, "app_runtime");
+          assert.equal(identity.session_user, "app_runtime_login");
+          assert.deepEqual(
+            [
+              identity.credential_id_insert,
+              identity.credential_created_at_insert,
+              identity.execution_id_insert,
+              identity.execution_response_summary_insert,
+              identity.execution_failure_code_insert,
+              identity.execution_created_at_insert,
+              identity.execution_updated_at_insert,
+              identity.execution_completed_at_insert,
+            ],
+            Array(8).fill(false),
+          );
+          t.diagnostic(
+            `connector insert context current_user=${identity.current_user} session_user=${identity.session_user}; omitted-column INSERT privileges are false`,
+          );
+        } finally {
+          await runtimeIdentityClient.query("ROLLBACK").catch(() => undefined);
+          runtimeIdentityClient.release();
+        }
 
         const emptyOtherWorkspace = await request(
           workspaceAOwner,
@@ -4247,7 +4363,7 @@ test(
             actionType: "guardian.synthetic.finance.bank-change.v1",
             arguments: {
               account_id: "LAB-ACCOUNT-TEST-1",
-              new_iban: "DE00LAB1234567890ABCD",
+              new_iban: "DE00LAB1234567890123456",
             },
             receipt: primary.receipt,
           },
@@ -4310,10 +4426,24 @@ test(
           request(workspaceBAdmin, executionPath, "POST", connectorRequest),
           request(workspaceBAdmin, executionPath, "POST", connectorRequest),
         ]);
+        const concurrentResponseDiagnostics = await Promise.all(
+          concurrentExecutions.map(async (response) => {
+            const body: unknown = await response.clone().json().catch(() => null);
+            const code =
+              body &&
+                typeof body === "object" &&
+                "code" in body &&
+                typeof body.code === "string"
+                ? body.code
+                : "none";
+            return { status: response.status, code };
+          }),
+        );
         assert.ok(
           concurrentExecutions.every((response) =>
             response.status === 200 || response.status === 202,
           ),
+          JSON.stringify(concurrentResponseDiagnostics),
         );
         assert.equal(
           fakeConnector.invocations.length - callsBefore,

@@ -42,8 +42,10 @@ const safeViolationCodes = new Set([
   "table_privilege_mismatch",
   "table_privilege_matrix_incomplete",
   "column_update_mismatch",
+  "column_insert_mismatch",
   "table_column_inventory_missing",
   "column_update_matrix_incomplete",
+  "column_insert_matrix_incomplete",
   "table_inventory_mismatch",
   "column_inventory_mismatch",
   "constraint_columns_mismatch",
@@ -113,6 +115,7 @@ export type DevelopmentPrivilegeDifference = {
   role: string;
   table: string;
   privilege: string;
+  column?: string;
   expectedGranted: boolean;
   actualGranted: boolean | null;
   scope: "table" | "column";
@@ -183,6 +186,7 @@ function developmentPrivilegeDifferences(
       difference.role,
       difference.table,
       difference.privilege,
+      difference.column ?? "",
     ].join(":");
     differences.set(key, difference);
   };
@@ -231,6 +235,30 @@ function developmentPrivilegeDifferences(
       role: actual.roleName,
       table: actual.tableName,
       privilege: "UPDATE",
+      column: actual.columnName,
+      expectedGranted,
+      actualGranted: actual.granted,
+      scope: "column",
+    });
+  }
+  for (const actual of snapshot.insertColumns) {
+    if (
+      !roles.includes(actual.roleName) ||
+      !tables.has(actual.tableName)
+    ) continue;
+    const grant = contract.grants.find((candidate) =>
+      candidate.roleName === actual.roleName &&
+      candidate.tableName === actual.tableName &&
+      candidate.privilege === "INSERT"
+    );
+    const expectedGranted = grant !== undefined &&
+      (grant.columns === undefined ||
+        grant.columns.includes(actual.columnName));
+    addDifference({
+      role: actual.roleName,
+      table: actual.tableName,
+      privilege: "INSERT",
+      column: actual.columnName,
       expectedGranted,
       actualGranted: actual.granted,
       scope: "column",

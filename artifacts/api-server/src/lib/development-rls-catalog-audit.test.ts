@@ -6,7 +6,6 @@ import { test } from "node:test";
 import type { PoolClient } from "pg";
 import {
   expectedRlsTableNames,
-  appendOnlyRlsTableNames,
 } from "@workspace/db/rls-catalog-contract";
 import {
   parseRlsCatalogContract,
@@ -52,6 +51,123 @@ const contract = parseRlsCatalogContract({
     "utf8",
   ),
 });
+const fixedRoleNames = [
+  "app_runtime",
+  "app_ai_assessment_worker",
+  "app_runtime_login",
+] as const;
+const fullRuntimeAccessTables = [
+  "workspaces",
+  "workspace_memberships",
+  "assets",
+  "workspace_monthly_usage",
+  "workspace_audit_events",
+  "workspace_integrations",
+  "provider_connections",
+  "connector_oauth_states",
+  "connector_jobs",
+  "ai_assessment_jobs",
+] as const;
+const fixedTableGrantKeys = new Set([
+  ...fullRuntimeAccessTables.flatMap((tableName) =>
+    ["SELECT", "INSERT", "UPDATE", "DELETE"].map(
+      (privilege) => `app_runtime:${tableName}:${privilege}`,
+    ),
+  ),
+  ...[
+    "host_boundary_attestation_challenges",
+    "ai_assessment_approval_requests",
+    "workspace_approval_ledger",
+    "workspace_action_rule_versions",
+  ].flatMap((tableName) =>
+    ["SELECT", "INSERT"].map(
+      (privilege) => `app_runtime:${tableName}:${privilege}`,
+    ),
+  ),
+  ...["workspace_action_rule_heads", "workspace_agents"].flatMap(
+    (tableName) =>
+      ["SELECT", "INSERT", "UPDATE"].map(
+        (privilege) => `app_runtime:${tableName}:${privilege}`,
+      ),
+  ),
+  "app_runtime:workspace_connector_credentials:SELECT",
+  "app_runtime:workspace_connector_credentials:DELETE",
+  "app_runtime:workspace_connector_executions:SELECT",
+]);
+const fixedInsertColumnGrantKeys = new Set([
+  ...[
+    "workspace_id",
+    "service_id",
+    "encrypted_secret",
+    "nonce",
+    "auth_tag",
+    "encryption_key_id",
+    "last_four",
+    "created_by_user_id",
+  ].map((columnName) =>
+    `app_runtime:workspace_connector_credentials:${columnName}`,
+  ),
+  ...[
+    "workspace_id",
+    "service_id",
+    "credential_id",
+    "idempotency_key_sha256",
+    "action_type",
+    "action_sha256",
+    "receipt_id",
+    "requested_by_user_id",
+    "status",
+  ].map((columnName) =>
+    `app_runtime:workspace_connector_executions:${columnName}`,
+  ),
+]);
+const fixedUpdateColumnGrantKeys = new Set([
+  ...[
+    "status",
+    "attempts",
+    "error_code",
+    "lease_owner_id",
+    "lease_expires_at",
+    "heartbeat_at",
+    "worker_slot",
+    "updated_at",
+    "started_at",
+    "completed_at",
+  ].map((columnName) =>
+    `app_ai_assessment_worker:ai_assessment_jobs:${columnName}`,
+  ),
+  ...[
+    "consumed_at",
+    "response_sha256",
+    "status",
+    "supervisor_id",
+    "updated_at",
+  ].map((columnName) =>
+    `app_runtime:host_boundary_attestation_challenges:${columnName}`,
+  ),
+  ...[
+    "decided_at",
+    "decided_by_role",
+    "decided_by_user_id",
+    "replay_binding_sha256",
+    "simulated_at",
+    "simulation_result_code",
+    "simulation_result_sha256",
+    "status",
+    "updated_at",
+  ].map((columnName) =>
+    `app_runtime:ai_assessment_approval_requests:${columnName}`,
+  ),
+  ...[
+    "completed_at",
+    "failure_code",
+    "response_summary",
+    "status",
+    "updated_at",
+  ].map((columnName) =>
+    `app_runtime:workspace_connector_executions:${columnName}`,
+  ),
+]);
 
 function roleReachable(
   memberRole: string,
@@ -84,11 +200,16 @@ function makeSnapshots(): {
   objectInventory: DevelopmentCatalogObjectInventory;
 } {
   const phaseSnapshot = deriveRlsCatalogPhaseSnapshot(contract, "final");
-  const roleNames = Object.keys(contract.roles);
+  const roleNames = fixedRoleNames;
   const specialTables = [
     "ai_assessment_jobs",
     "host_boundary_attestation_challenges",
     "ai_assessment_approval_requests",
+    "workspace_connector_credentials",
+    "workspace_connector_executions",
+  ];
+  const insertTables = [
+    "workspace_connector_credentials",
     "workspace_connector_executions",
   ];
   const privileges = ["SELECT", "INSERT", "UPDATE", "DELETE"] as const;
@@ -116,11 +237,8 @@ function makeSnapshots(): {
           roleName,
           tableName,
           privilege,
-          granted: contract.grants.some((grant) =>
-            grant.roleName === roleName &&
-            grant.tableName === tableName &&
-            grant.privilege === privilege &&
-            grant.columns === undefined
+          granted: fixedTableGrantKeys.has(
+            `${roleName}:${tableName}:${privilege}`,
           ),
         })),
       ),
@@ -129,20 +247,35 @@ function makeSnapshots(): {
       phaseSnapshot.columns
         .filter((column) => specialTables.includes(column.tableName))
         .map((column) => {
-          const grant = contract.grants.find((candidate) =>
-            candidate.roleName === roleName &&
-            candidate.tableName === column.tableName &&
-            candidate.privilege === "UPDATE"
-          );
           return {
             roleName,
             tableName: column.tableName,
             columnName: column.columnName,
-            granted: grant !== undefined &&
-              (grant.columns === undefined ||
-                grant.columns.includes(column.columnName)),
+            granted:
+              fixedTableGrantKeys.has(
+                `${roleName}:${column.tableName}:UPDATE`,
+              ) ||
+              fixedUpdateColumnGrantKeys.has(
+                `${roleName}:${column.tableName}:${column.columnName}`,
+              ),
           };
         }),
+    ),
+    insertColumns: roleNames.flatMap((roleName) =>
+      phaseSnapshot.columns
+        .filter((column) => insertTables.includes(column.tableName))
+        .map((column) => ({
+          roleName,
+          tableName: column.tableName,
+          columnName: column.columnName,
+          granted:
+            fixedTableGrantKeys.has(
+              `${roleName}:${column.tableName}:INSERT`,
+            ) ||
+            fixedInsertColumnGrantKeys.has(
+              `${roleName}:${column.tableName}:${column.columnName}`,
+            ),
+        })),
     ),
     tableColumns: specialTables.map((tableName) => ({
       tableName,
@@ -151,7 +284,10 @@ function makeSnapshots(): {
         .map((column) => column.columnName),
     })),
   };
-  const appendOnlyGrantRows = appendOnlyRlsTableNames.map((table_name) => ({
+  const appendOnlyGrantRows = [
+    "workspace_approval_ledger",
+    "workspace_action_rule_versions",
+  ].map((table_name) => ({
     table_name,
     can_select: true,
     can_insert: true,
@@ -190,7 +326,14 @@ function makeSnapshots(): {
 test("development RLS audit accepts the complete canonical catalog snapshot", () => {
   const snapshots = makeSnapshots();
   const audit = auditDevelopmentRlsCatalog({ contract, ...snapshots });
-  assert.equal(audit.passed, true, audit.violationCodes.join(","));
+  assert.equal(
+    audit.passed,
+    true,
+    JSON.stringify({
+      violationCodes: audit.violationCodes,
+      privilegeDifferences: audit.privilegeDifferences,
+    }),
+  );
   assert.equal(audit.expectedTableCount, 18);
   assert.equal(audit.expectedColumnCount, 198);
   assert.equal(audit.expectedIndexCount, 49);
@@ -329,6 +472,7 @@ test("missing ledger is listed while catalog and privilege reads complete", asyn
       rowCount: source.catalogSnapshot.tablePrivileges.length,
     },
     { rows: source.catalogSnapshot.updateColumns, rowCount: source.catalogSnapshot.updateColumns.length },
+    { rows: source.catalogSnapshot.insertColumns, rowCount: source.catalogSnapshot.insertColumns.length },
     { rows: source.catalogSnapshot.tableColumns, rowCount: source.catalogSnapshot.tableColumns.length },
     { rows: [{ version: 160000 }], rowCount: 1 },
     {
@@ -426,6 +570,51 @@ test("development RLS audit fails if runtime receives table-level UPDATE", () =>
   );
   assert.ok(
     audit.violationCodes.includes("table_privilege_mismatch"),
+  );
+});
+
+test("development RLS audit detects excessive and missing connector INSERT columns", () => {
+  const snapshots = makeSnapshots();
+  const unauthorizedId = snapshots.catalogSnapshot.insertColumns.find(
+    (item) =>
+      item.roleName === "app_runtime" &&
+      item.tableName === "workspace_connector_credentials" &&
+      item.columnName === "id",
+  );
+  const missingWorkspaceId = snapshots.catalogSnapshot.insertColumns.find(
+    (item) =>
+      item.roleName === "app_runtime" &&
+      item.tableName === "workspace_connector_executions" &&
+      item.columnName === "workspace_id",
+  );
+  assert.ok(unauthorizedId);
+  assert.ok(missingWorkspaceId);
+  unauthorizedId.granted = true;
+  missingWorkspaceId.granted = false;
+  const audit = auditDevelopmentRlsCatalog({ contract, ...snapshots });
+  assert.equal(audit.passed, false);
+  assert.ok(audit.violationCodes.includes("column_insert_mismatch"));
+  assert.ok(
+    audit.privilegeDifferences.some((difference) =>
+      difference.role === "app_runtime" &&
+      difference.table === "workspace_connector_credentials" &&
+      difference.privilege === "INSERT" &&
+      difference.column === "id" &&
+      difference.scope === "column" &&
+      difference.expectedGranted === false &&
+      difference.actualGranted === true
+    ),
+  );
+  assert.ok(
+    audit.privilegeDifferences.some((difference) =>
+      difference.role === "app_runtime" &&
+      difference.table === "workspace_connector_executions" &&
+      difference.privilege === "INSERT" &&
+      difference.column === "workspace_id" &&
+      difference.scope === "column" &&
+      difference.expectedGranted === true &&
+      difference.actualGranted === false
+    ),
   );
 });
 

@@ -26,7 +26,39 @@ export type ReplaceWorkspaceConnectorCredentialStage =
   | "replace_existing"
   | "encrypt"
   | "insert"
+  | "insert_result"
   | "audit";
+
+export type ConnectorCredentialInsertResultMetadata = {
+  id: "string" | "other";
+  serviceId: "string" | "other";
+  lastFour: "string" | "other";
+  encryptionKeyId: "string" | "other";
+  createdAt: "date" | "string" | "other";
+};
+
+class ConnectorCredentialInsertResultError extends Error {
+  readonly code = "credential_insert_result_invalid";
+
+  constructor() {
+    super("connector_credential_insert_result_invalid");
+    this.name = "ConnectorCredentialInsertResultError";
+  }
+}
+
+function parseReturnedCreatedAt(value: unknown): Date | null {
+  if (value instanceof Date) {
+    return Number.isFinite(value.getTime()) ? value : null;
+  }
+  if (
+    typeof value !== "string" ||
+    !/(?:Z|[+-]\d{2}(?::?\d{2})?)$/i.test(value)
+  ) {
+    return null;
+  }
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? new Date(timestamp) : null;
+}
 
 export type ConnectorCredentialInsertContext = {
   workspaceSetting: string | null;
@@ -66,6 +98,9 @@ export async function replaceWorkspaceConnectorCredential(
     membershipRole: string;
     onStage?: (stage: ReplaceWorkspaceConnectorCredentialStage) => void;
     onInsertContext?: (context: ConnectorCredentialInsertContext) => void;
+    onInsertResultMetadata?: (
+      metadata: ConnectorCredentialInsertResultMetadata,
+    ) => void;
   },
 ): Promise<
   | { kind: "created"; credential: SafeConnectorCredentialStatus }
@@ -121,29 +156,48 @@ export async function replaceWorkspaceConnectorCredential(
       });
     }
     input.onStage?.("insert");
-    const [row] = await tx
-      .insert(workspaceConnectorCredentialsTable)
-      .values({
-        workspaceId: input.workspaceId,
-        serviceId: input.serviceId,
-        encryptedSecret: encrypted.encryptedSecret,
-        nonce: encrypted.nonce,
-        authTag: encrypted.authTag,
-        encryptionKeyId: encrypted.encryptionKeyId,
-        lastFour: encrypted.lastFour,
-        createdByUserId: input.actorUserId,
-      })
-      .onConflictDoNothing({
-        target: workspaceConnectorCredentialsTable.nonce,
-      })
-      .returning({
-        id: workspaceConnectorCredentialsTable.id,
-        serviceId: workspaceConnectorCredentialsTable.serviceId,
-        lastFour: workspaceConnectorCredentialsTable.lastFour,
-        encryptionKeyId: workspaceConnectorCredentialsTable.encryptionKeyId,
-        createdAt: workspaceConnectorCredentialsTable.createdAt,
-      });
+    const inserted = await tx.execute(sql`
+      INSERT INTO public.workspace_connector_credentials (
+        workspace_id, service_id, encrypted_secret, nonce, auth_tag,
+        encryption_key_id, last_four, created_by_user_id
+      ) VALUES (
+        ${input.workspaceId}, ${input.serviceId}, ${encrypted.encryptedSecret},
+        ${encrypted.nonce}, ${encrypted.authTag}, ${encrypted.encryptionKeyId},
+        ${encrypted.lastFour}, ${input.actorUserId}
+      )
+      ON CONFLICT (nonce) DO NOTHING
+      RETURNING id, service_id, last_four, encryption_key_id, created_at
+    `);
+    const row = inserted.rows[0];
     if (row) {
+      input.onStage?.("insert_result");
+      const id = row.id;
+      const serviceId = row.service_id;
+      const lastFour = row.last_four;
+      const encryptionKeyId = row.encryption_key_id;
+      const createdAtValue = row.created_at;
+      const createdAt = parseReturnedCreatedAt(createdAtValue);
+      input.onInsertResultMetadata?.({
+        id: typeof id === "string" ? "string" : "other",
+        serviceId: typeof serviceId === "string" ? "string" : "other",
+        lastFour: typeof lastFour === "string" ? "string" : "other",
+        encryptionKeyId:
+          typeof encryptionKeyId === "string" ? "string" : "other",
+        createdAt: createdAt
+          ? "date"
+          : typeof createdAtValue === "string"
+          ? "string"
+          : "other",
+      });
+      if (
+        typeof id !== "string" ||
+        typeof serviceId !== "string" ||
+        typeof lastFour !== "string" ||
+        typeof encryptionKeyId !== "string" ||
+        createdAt === null
+      ) {
+        throw new ConnectorCredentialInsertResultError();
+      }
       input.onStage?.("audit");
       await tx.insert(workspaceAuditEventsTable).values({
         workspaceId: input.workspaceId,
@@ -152,12 +206,19 @@ export async function replaceWorkspaceConnectorCredential(
           ? "workspace.connector.credential.replaced"
           : "workspace.connector.credential.created",
         resourceType: "workspace_connector_credential",
-        resourceId: row.id,
+        resourceId: id,
         metadata: { serviceId: input.serviceId },
       });
       return {
         kind: existing ? "replaced" : "created",
-        credential: { ...row, configured: true },
+        credential: {
+          id,
+          serviceId,
+          lastFour,
+          encryptionKeyId,
+          createdAt,
+          configured: true,
+        },
       };
     }
   }

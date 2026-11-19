@@ -78,7 +78,7 @@ export const workspaceConnectorCredentialsTable = pgTable(
     ),
     check(
       "workspace_connector_credentials_ciphertext_check",
-      sql`${table.encryptedSecret} ~ '^[A-Za-z0-9_-]{8,5462}$'`,
+      sql`${table.encryptedSecret} ~ '^[A-Za-z0-9_-]+$' AND length(${table.encryptedSecret}) BETWEEN 8 AND 5462`,
     ),
     check(
       "workspace_connector_credentials_nonce_check",

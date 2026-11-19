@@ -18,7 +18,10 @@ CREATE TABLE IF NOT EXISTS public.workspace_connector_credentials (
   CONSTRAINT workspace_connector_credentials_service_id_check
     CHECK (service_id ~ '^[a-z0-9][a-z0-9._-]{0,63}$'),
   CONSTRAINT workspace_connector_credentials_ciphertext_check
-    CHECK (encrypted_secret ~ '^[A-Za-z0-9_-]{8,5462}$'),
+    CHECK (
+      encrypted_secret ~ '^[A-Za-z0-9_-]+$'
+      AND length(encrypted_secret) BETWEEN 8 AND 5462
+    ),
   CONSTRAINT workspace_connector_credentials_nonce_check
     CHECK (nonce ~ '^[A-Za-z0-9_-]{16}$'),
   CONSTRAINT workspace_connector_credentials_auth_tag_check

@@ -1007,6 +1007,12 @@ router.put(
                     logger.info(insertContext, contextMessage);
                     console.log(contextMessage);
                   },
+                  onInsertResultMetadata: (metadata) => {
+                    logger.info(
+                      metadata,
+                      "workspace_connector_credential_insert_result",
+                    );
+                  },
                 }
               : {}),
           });
@@ -1113,6 +1119,7 @@ router.post(
       res.status(400).json({ error: "Invalid connector execution request" });
       return;
     }
+    let failureStage = "validate";
     try {
       const result = await executeWorkspaceConnectorAction({
         workspaceId: params.data.workspaceId,
@@ -1123,11 +1130,23 @@ router.post(
         arguments: body.data.arguments,
         receipt: body.data.receipt,
         adapters: connectorAdapters,
+        onStage: (stage) => {
+          failureStage = stage;
+        },
       });
       const response = ExecuteWorkspaceConnectorActionResponse.parse(result);
       res.status(result.status === "pending" ? 202 : 200).json(response);
     } catch (error) {
       const code = mapConnectorExecutionError(error);
+      const errorChain = safeConnectorCredentialErrorChain(error);
+      const diagnosticCode = errorChain[0]?.code ?? errorChain[0]?.name ?? "Error";
+      const safeStage = /^[a-z_]{1,32}$/.test(failureStage)
+        ? failureStage
+        : "unknown";
+      logger.error(
+        { failureStage: safeStage, errorChain },
+        `workspace_connector_execution_failed stage=${safeStage} code=${diagnosticCode} chain=${formatSafeConnectorCredentialErrorChain(errorChain)}`,
+      );
       const status =
         code === "workspace_membership_required" ||
         code === "workspace_admin_required"

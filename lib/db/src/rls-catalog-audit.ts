@@ -11,6 +11,10 @@ const specialUpdateTables = [
   "ai_assessment_approval_requests",
   "workspace_connector_executions",
 ] as const;
+const specialInsertTables = [
+  "workspace_connector_credentials",
+  "workspace_connector_executions",
+] as const;
 const applicationRoles = new Set([
   "app_runtime",
   "app_runtime_login",
@@ -108,6 +112,12 @@ export type RlsCatalogSnapshot = {
     granted: boolean;
   }>;
   updateColumns: Array<{
+    roleName: string;
+    tableName: string;
+    columnName: string;
+    granted: boolean;
+  }>;
+  insertColumns: Array<{
     roleName: string;
     tableName: string;
     columnName: string;
@@ -632,6 +642,7 @@ export type RlsCatalogAudit = {
   pgHasRole: RlsCatalogSnapshot["pgHasRole"];
   tablePrivileges: RlsCatalogSnapshot["tablePrivileges"];
   updateColumns: RlsCatalogSnapshot["updateColumns"];
+  insertColumns: RlsCatalogSnapshot["insertColumns"];
   tableColumns: RlsCatalogSnapshot["tableColumns"];
   limitations: string[];
 };
@@ -826,6 +837,23 @@ export function auditRlsCatalog(
       );
     }
   }
+  for (const actual of snapshot.insertColumns) {
+    const grant = grantFor(
+      contract,
+      actual.roleName,
+      actual.tableName,
+      "INSERT",
+    );
+    const expected =
+      grant !== undefined &&
+      (grant.columns === undefined ||
+        grant.columns.includes(actual.columnName));
+    if (actual.granted !== expected) {
+      violations.push(
+        `column_insert_mismatch:${actual.roleName}:${actual.tableName}:${actual.columnName}`,
+      );
+    }
+  }
   for (const tableName of specialUpdateTables) {
     const expectedColumns = snapshot.tableColumns.find(
       (item) => item.tableName === tableName,
@@ -846,6 +874,30 @@ export function auditRlsCatalog(
       ) {
         violations.push(
           `column_update_matrix_incomplete:${roleName}:${tableName}`,
+        );
+      }
+    }
+  }
+  for (const tableName of specialInsertTables) {
+    const expectedColumns = snapshot.tableColumns.find(
+      (item) => item.tableName === tableName,
+    );
+    if (!expectedColumns?.columnNames.length) {
+      violations.push(`table_column_inventory_missing:${tableName}`);
+      continue;
+    }
+    for (const roleName of roleNames) {
+      const actualColumns = snapshot.insertColumns
+        .filter(
+          (item) => item.tableName === tableName && item.roleName === roleName,
+        )
+        .map((item) => item.columnName)
+        .sort();
+      if (
+        sortedKey(actualColumns) !== sortedKey(expectedColumns.columnNames)
+      ) {
+        violations.push(
+          `column_insert_matrix_incomplete:${roleName}:${tableName}`,
         );
       }
     }
@@ -874,6 +926,11 @@ export function auditRlsCatalog(
     tablePrivileges: [...snapshot.tablePrivileges].sort((a, b) =>
       `${a.roleName}:${a.tableName}:${a.privilege}`.localeCompare(
         `${b.roleName}:${b.tableName}:${b.privilege}`,
+      ),
+    ),
+    insertColumns: [...snapshot.insertColumns].sort((a, b) =>
+      `${a.roleName}:${a.tableName}:${a.columnName}`.localeCompare(
+        `${b.roleName}:${b.tableName}:${b.columnName}`,
       ),
     ),
     updateColumns: [...snapshot.updateColumns].sort((a, b) =>

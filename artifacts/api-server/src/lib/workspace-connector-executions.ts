@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import {
   aiAssessmentApprovalRequestsTable,
@@ -54,6 +54,7 @@ export type ConnectorExecutionRequest = {
   arguments: Record<string, ApprovalActionValue>;
   receipt: unknown;
   adapters: ReadonlyMap<string, ConnectorExecutionAdapter>;
+  onStage?: (stage: ConnectorExecutionStage) => void;
 };
 
 export type ConnectorExecutionResult = {
@@ -63,6 +64,25 @@ export type ConnectorExecutionResult = {
   responseSummary: string | null;
   failureCode: string | null;
 };
+
+export type ConnectorExecutionStage =
+  | "validate"
+  | "claim_transaction"
+  | "claim_lock"
+  | "claim_lookup"
+  | "credential_lookup"
+  | "approval_lookup"
+  | "consume_receipt"
+  | "insert_pending"
+  | "audit_pending"
+  | "replay_return"
+  | "complete_transaction"
+  | "complete_lock"
+  | "execution_lookup"
+  | "credential_lock"
+  | "adapter"
+  | "update_result"
+  | "audit_result";
 
 export type ConnectorExecutionFailureCode =
   | "workspace_membership_required"
@@ -251,6 +271,7 @@ function auditExecution(
 export async function executeWorkspaceConnectorAction(
   input: ConnectorExecutionRequest,
 ): Promise<ConnectorExecutionResult> {
+  input.onStage?.("validate");
   const adapter = input.adapters.get(input.serviceId);
   if (!adapter || adapter.serviceId !== input.serviceId) {
     throw new ConnectorExecutionError("connector_unavailable");
@@ -290,6 +311,7 @@ export async function executeWorkspaceConnectorAction(
   }
 
   const keyHash = sha256(input.idempotencyKey);
+  input.onStage?.("claim_transaction");
   const claim = await withWorkspaceUserTransaction(
     input.userId,
     input.workspaceId,
@@ -297,9 +319,11 @@ export async function executeWorkspaceConnectorAction(
       if (!isAdministrator(membership)) {
         throw new ConnectorExecutionError("workspace_admin_required");
       }
+      input.onStage?.("claim_lock");
       await tx.execute(
         sql`SELECT pg_advisory_xact_lock(hashtext(${input.workspaceId}), hashtext(${`${input.serviceId}:${keyHash}`}))`,
       );
+      input.onStage?.("claim_lookup");
       const [existing] = await tx
         .select()
         .from(workspaceConnectorExecutionsTable)
@@ -315,6 +339,7 @@ export async function executeWorkspaceConnectorAction(
         )
         .limit(1);
       if (existing) {
+        input.onStage?.("replay_return");
         return {
           kind: "replay" as const,
           result: replayResult(
@@ -326,6 +351,7 @@ export async function executeWorkspaceConnectorAction(
         };
       }
 
+      input.onStage?.("credential_lookup");
       const [credential] = await tx
         .select({
           id: workspaceConnectorCredentialsTable.id,
@@ -342,6 +368,7 @@ export async function executeWorkspaceConnectorAction(
         throw new ConnectorExecutionError("credential_not_configured");
       }
 
+      input.onStage?.("approval_lookup");
       const [approval] = await tx
         .select()
         .from(aiAssessmentApprovalRequestsTable)
@@ -364,6 +391,7 @@ export async function executeWorkspaceConnectorAction(
       ) {
         throw new ConnectorExecutionError("receipt_not_approved");
       }
+      input.onStage?.("consume_receipt");
       await consumeApprovalReceipt(tx, {
         workspaceId: input.workspaceId,
         approvalId: approval.id,
@@ -378,18 +406,23 @@ export async function executeWorkspaceConnectorAction(
           approvedByRole: approval.decidedByRole,
         },
       });
-      const executionId = randomUUID();
-      await tx.insert(workspaceConnectorExecutionsTable).values({
-        id: executionId,
-        workspaceId: input.workspaceId,
-        serviceId: input.serviceId,
-        credentialId: credential.id,
-        idempotencyKeySha256: keyHash,
-        actionType: input.actionType,
-        actionSha256: actionHash,
-        receiptId: receiptClaims.payload.receiptId,
-        requestedByUserId: input.userId,
-      });
+      input.onStage?.("insert_pending");
+      const executionInsert = await tx.execute(sql`
+        INSERT INTO public.workspace_connector_executions (
+          workspace_id, service_id, credential_id, idempotency_key_sha256,
+          action_type, action_sha256, receipt_id, requested_by_user_id
+        ) VALUES (
+          ${input.workspaceId}, ${input.serviceId}, ${credential.id},
+          ${keyHash}, ${input.actionType}, ${actionHash},
+          ${receiptClaims.payload.receiptId}, ${input.userId}
+        )
+        RETURNING id
+      `);
+      const executionId = executionInsert.rows[0]?.id;
+      if (typeof executionId !== "string") {
+        throw new ConnectorExecutionError("execution_unavailable");
+      }
+      input.onStage?.("audit_pending");
       await auditExecution(tx, {
         workspaceId: input.workspaceId,
         actorUserId: input.userId,
@@ -413,6 +446,7 @@ export async function executeWorkspaceConnectorAction(
   const claimedExecutionId = claim.value.executionId;
   const claimedCredentialId = claim.value.credentialId;
 
+  input.onStage?.("complete_transaction");
   const completed = await withWorkspaceUserTransaction(
     input.userId,
     input.workspaceId,
@@ -420,9 +454,11 @@ export async function executeWorkspaceConnectorAction(
       if (!isAdministrator(membership)) {
         throw new ConnectorExecutionError("workspace_admin_required");
       }
+      input.onStage?.("complete_lock");
       await tx.execute(
         sql`SELECT set_config('app.connector_execution_writer', '1', true)`,
       );
+      input.onStage?.("execution_lookup");
       const [execution] = await tx
         .select()
         .from(workspaceConnectorExecutionsTable)
@@ -437,6 +473,11 @@ export async function executeWorkspaceConnectorAction(
       if (!execution || execution.status !== "pending") {
         throw new ConnectorExecutionError("execution_unavailable");
       }
+      input.onStage?.("credential_lock");
+      // Coordinate with replacement/disconnect without granting UPDATE on credentials.
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtext(${input.workspaceId}), hashtext(${input.serviceId}))`,
+      );
       const [credential] = await tx
         .select()
         .from(workspaceConnectorCredentialsTable)
@@ -447,7 +488,6 @@ export async function executeWorkspaceConnectorAction(
             eq(workspaceConnectorCredentialsTable.serviceId, input.serviceId),
           ),
         )
-        .for("update")
         .limit(1);
       let status: "executed" | "failed" = "failed";
       let responseSummary: string | null = null;
@@ -462,6 +502,7 @@ export async function executeWorkspaceConnectorAction(
             keyring,
           );
           try {
+            input.onStage?.("adapter");
             const adapterResult = await adapter.execute({
               workspaceId: input.workspaceId,
               actionType: input.actionType,
@@ -491,6 +532,7 @@ export async function executeWorkspaceConnectorAction(
         }
       }
       const completedAt = new Date();
+      input.onStage?.("update_result");
       const [updated] = await tx
         .update(workspaceConnectorExecutionsTable)
         .set({
@@ -515,6 +557,7 @@ export async function executeWorkspaceConnectorAction(
       if (!updated) {
         throw new ConnectorExecutionError("execution_unavailable");
       }
+      input.onStage?.("audit_result");
       await auditExecution(tx, {
         workspaceId: input.workspaceId,
         actorUserId: input.userId,

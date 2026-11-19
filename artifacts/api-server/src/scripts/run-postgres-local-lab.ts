@@ -972,6 +972,9 @@ function grantSnapshotForTables(
     updateColumns: snapshot.updateColumns.filter((column) =>
       allowed.has(column.tableName)
     ),
+    insertColumns: snapshot.insertColumns.filter((column) =>
+      allowed.has(column.tableName)
+    ),
     tableColumns: snapshot.tableColumns.filter((table) =>
       allowed.has(table.tableName)
     ),
@@ -1024,10 +1027,12 @@ function compareCatalogInventories(
       {
         tablePrivileges: leftGrants.tablePrivileges,
         updateColumns: leftGrants.updateColumns,
+        insertColumns: leftGrants.insertColumns,
       },
       {
         tablePrivileges: rightGrants.tablePrivileges,
         updateColumns: rightGrants.updateColumns,
+        insertColumns: rightGrants.insertColumns,
       },
     ),
   };
@@ -2271,6 +2276,9 @@ async function main(): Promise<void> {
         socketDirectory,
       ),
       WORKSPACE_CONNECTOR_KEYRING_JSON: connectorVaultKeyringJson,
+      ...(connectorCredentialE2eOnly
+        ? { GUARDIAN_LAB_CONNECTOR_CREDENTIAL_E2E_ONLY: "1" }
+        : {}),
     };
     const e2eArgs = [
       "--filter",
@@ -2283,7 +2291,7 @@ async function main(): Promise<void> {
       "--test-reporter=tap",
       ...(connectorCredentialE2eOnly
         ? [
-            "--test-name-pattern=workspace connector vault is private, encrypted, receipt-gated and idempotent",
+            "--test-name-pattern=^(?:deterministic approval E2E exports signed history and gates refund simulation|agent credentials are scoped, revocable, renewable and cannot self-approve|workspace connector vault is private, encrypted, receipt-gated and idempotent)$",
           ]
         : []),
       "src/ai-assessment-synthetic-approval-e2e.test.ts",
@@ -2299,10 +2307,37 @@ async function main(): Promise<void> {
       `${e2eOutput.stdout}\n${e2eOutput.stderr}`,
     );
     approvalE2eSummary = nodeTestSummary;
+    const combinedE2eOutput = `${e2eOutput.stdout}\n${e2eOutput.stderr}`;
     console.log(
       `node:test approval E2E: tests=${nodeTestSummary.tests} pass=${nodeTestSummary.pass} fail=${nodeTestSummary.fail} skipped=${nodeTestSummary.skipped}`,
     );
-    const combinedE2eOutput = `${e2eOutput.stdout}\n${e2eOutput.stderr}`;
+    if (connectorCredentialE2eOnly) {
+      const targetSubtestName =
+        "workspace connector vault is private, encrypted, receipt-gated and idempotent";
+      if (!combinedE2eOutput.includes(targetSubtestName)) {
+        throw new Error("focused_connector_subtest_not_observed");
+      }
+      const focusedEvidenceLines = combinedE2eOutput
+        .split(/\r?\n/)
+        .filter(
+          (line) =>
+            line.includes(targetSubtestName) ||
+            line.includes("connector insert context current_user=") ||
+            line.includes("workspace_connector_credential_insert_result") ||
+            line.includes("workspace_connector_execution_failed") ||
+            /^# (tests|pass|fail|cancelled|skipped) \d+$/.test(line),
+        );
+      console.log(
+        `Focused connector TAP evidence: ${JSON.stringify(focusedEvidenceLines)}`,
+      );
+      const roleDiagnostic = combinedE2eOutput.match(
+        /connector insert context current_user=app_runtime session_user=app_runtime_login; omitted-column INSERT privileges are false/,
+      )?.[0];
+      if (!roleDiagnostic) {
+        throw new Error("focused_connector_role_diagnostic_missing");
+      }
+      console.log(`Focused connector role: ${roleDiagnostic}`);
+    }
     const connectorContextRecords = new Set<string>();
     for (const contextDiagnostic of combinedE2eOutput.matchAll(
       /workspace_connector_credential_insert_context (\{"workspaceSetting":"(?:[0-9a-f-]{36}|invalid)","userSetting":"[A-Za-z0-9._-]{1,128}","databaseRole":"[A-Za-z_][A-Za-z0-9_]{0,62}","membershipRole":"(?:owner|admin|analyst|viewer)","credentialExisted":(?:true|false)\})/g,

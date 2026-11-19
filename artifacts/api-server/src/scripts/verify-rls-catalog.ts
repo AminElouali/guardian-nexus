@@ -26,8 +26,17 @@ const specialUpdateTables = [
   "ai_assessment_jobs",
   "host_boundary_attestation_challenges",
   "ai_assessment_approval_requests",
+  "workspace_connector_credentials",
   "workspace_connector_executions",
 ];
+const specialInsertTables = [
+  "workspace_connector_credentials",
+  "workspace_connector_executions",
+];
+const specialColumnTables = [...new Set([
+  ...specialUpdateTables,
+  ...specialInsertTables,
+])];
 const privilegeNames = ["SELECT", "INSERT", "UPDATE", "DELETE"] as const;
 
 type QueryClient = Pick<pg.PoolClient, "query">;
@@ -85,6 +94,7 @@ export async function readCatalogSnapshot(
     pgHasRoleResult,
     privilegeResult,
     updateResult,
+    insertResult,
     columnResult,
     versionResult,
   ] = await Promise.all([
@@ -197,6 +207,26 @@ export async function readCatalogSnapshot(
       [roleNames, specialUpdateTables],
     ),
     runQuery(
+      "column_insert_privileges",
+      `SELECT role.rolname AS "roleName",
+                c.relname AS "tableName",
+                attribute.attname AS "columnName",
+                has_column_privilege(
+                  role.oid, c.oid, attribute.attnum, 'INSERT'
+                ) AS granted
+           FROM pg_roles AS role
+           CROSS JOIN pg_class AS c
+           JOIN pg_namespace AS n ON n.oid = c.relnamespace
+           JOIN pg_attribute AS attribute ON attribute.attrelid = c.oid
+          WHERE role.rolname = ANY($1::text[])
+            AND n.nspname = 'public'
+            AND c.relname = ANY($2::text[])
+            AND attribute.attnum > 0
+            AND NOT attribute.attisdropped
+          ORDER BY role.rolname, c.relname, attribute.attnum`,
+      [roleNames, specialInsertTables],
+    ),
+    runQuery(
       "column_inventory",
       `SELECT c.relname AS "tableName",
                 array_agg(attribute.attname::text ORDER BY attribute.attnum)::text[]
@@ -210,7 +240,7 @@ export async function readCatalogSnapshot(
             AND NOT attribute.attisdropped
           GROUP BY c.relname
           ORDER BY c.relname`,
-      [specialUpdateTables],
+      [specialColumnTables],
     ),
     runQuery(
       "settings",
@@ -266,6 +296,12 @@ export async function readCatalogSnapshot(
       granted: Boolean(row.granted),
     })),
     updateColumns: updateResult.rows.map((row) => ({
+      roleName: String(row.roleName),
+      tableName: String(row.tableName),
+      columnName: String(row.columnName),
+      granted: Boolean(row.granted),
+    })),
+    insertColumns: insertResult.rows.map((row) => ({
       roleName: String(row.roleName),
       tableName: String(row.tableName),
       columnName: String(row.columnName),

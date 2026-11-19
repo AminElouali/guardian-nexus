@@ -36,10 +36,58 @@ const sources = {
 
 const contract = parseRlsCatalogContract(sources);
 const tableNames = Object.keys(expectedRlsPolicyCounts);
+const roleNames = [
+  "app_runtime",
+  "app_ai_assessment_worker",
+  "app_runtime_login",
+] as const;
+const fullRuntimeAccessTables = [
+  "workspaces",
+  "workspace_memberships",
+  "assets",
+  "workspace_monthly_usage",
+  "workspace_audit_events",
+  "workspace_integrations",
+  "provider_connections",
+  "connector_oauth_states",
+  "connector_jobs",
+  "ai_assessment_jobs",
+] as const;
+const fixedTableGrantKeys = new Set([
+  ...fullRuntimeAccessTables.flatMap((tableName) =>
+    ["SELECT", "INSERT", "UPDATE", "DELETE"].map(
+      (privilege) => `app_runtime:${tableName}:${privilege}`,
+    ),
+  ),
+  ...[
+    "host_boundary_attestation_challenges",
+    "ai_assessment_approval_requests",
+    "workspace_approval_ledger",
+    "workspace_action_rule_versions",
+  ].flatMap((tableName) =>
+    ["SELECT", "INSERT"].map(
+      (privilege) => `app_runtime:${tableName}:${privilege}`,
+    ),
+  ),
+  ...["workspace_action_rule_heads", "workspace_agents"].flatMap(
+    (tableName) =>
+      ["SELECT", "INSERT", "UPDATE"].map(
+        (privilege) => `app_runtime:${tableName}:${privilege}`,
+      ),
+  ),
+  "app_runtime:workspace_connector_credentials:SELECT",
+  "app_runtime:workspace_connector_credentials:DELETE",
+  "app_runtime:workspace_connector_executions:SELECT",
+]);
 const specialTables = [
   "ai_assessment_jobs",
   "host_boundary_attestation_challenges",
   "ai_assessment_approval_requests",
+  "workspace_connector_credentials",
+  "workspace_connector_executions",
+];
+const insertTables = [
+  "workspace_connector_credentials",
   "workspace_connector_executions",
 ];
 const testColumns: Record<string, string[]> = {
@@ -73,6 +121,18 @@ const testColumns: Record<string, string[]> = {
     "proposal_sha256",
     "workspace_id",
   ],
+  workspace_connector_credentials: [
+    "id",
+    "workspace_id",
+    "service_id",
+    "encrypted_secret",
+    "nonce",
+    "auth_tag",
+    "encryption_key_id",
+    "last_four",
+    "created_by_user_id",
+    "created_at",
+  ],
   workspace_connector_executions: [
     "id",
     "workspace_id",
@@ -91,6 +151,75 @@ const testColumns: Record<string, string[]> = {
     "completed_at",
   ],
 };
+const fixedInsertColumnGrantKeys = new Set([
+  ...[
+    "workspace_id",
+    "service_id",
+    "encrypted_secret",
+    "nonce",
+    "auth_tag",
+    "encryption_key_id",
+    "last_four",
+    "created_by_user_id",
+  ].map((columnName) =>
+    `app_runtime:workspace_connector_credentials:${columnName}`,
+  ),
+  ...[
+    "workspace_id",
+    "service_id",
+    "credential_id",
+    "idempotency_key_sha256",
+    "action_type",
+    "action_sha256",
+    "receipt_id",
+    "requested_by_user_id",
+    "status",
+  ].map((columnName) =>
+    `app_runtime:workspace_connector_executions:${columnName}`,
+  ),
+]);
+const fixedUpdateColumnGrantKeys = new Set([
+  ...[
+    "id",
+    "workspace_id",
+    "requested_by_user_id",
+    "profile_id",
+    "status",
+    "result",
+  ].map((columnName) => `app_runtime:ai_assessment_jobs:${columnName}`),
+  "app_ai_assessment_worker:ai_assessment_jobs:status",
+  ...[
+    "consumed_at",
+    "status",
+    "response_sha256",
+    "supervisor_id",
+    "updated_at",
+  ].map((columnName) =>
+    `app_runtime:host_boundary_attestation_challenges:${columnName}`,
+  ),
+  ...[
+    "status",
+    "decided_by_user_id",
+    "decided_by_role",
+    "decided_at",
+    "simulated_at",
+    "simulation_result_code",
+    "simulation_result_sha256",
+    "replay_binding_sha256",
+    "updated_at",
+  ].map((columnName) =>
+    `app_runtime:ai_assessment_approval_requests:${columnName}`,
+  ),
+  ...[
+    "status",
+    "response_summary",
+    "failure_code",
+    "updated_at",
+    "completed_at",
+  ].map((columnName) =>
+    `app_runtime:workspace_connector_executions:${columnName}`,
+  ),
+]);
 const privileges = ["SELECT", "INSERT", "UPDATE", "DELETE"] as const;
 
 function hasRole(
@@ -121,7 +250,6 @@ function hasRole(
 }
 
 function makeSnapshot(): RlsCatalogSnapshot {
-  const roleNames = Object.keys(contract.roles);
   const tables = tableNames.map((tableName) => ({
     tableName,
     owner: "postgres",
@@ -162,12 +290,8 @@ function makeSnapshot(): RlsCatalogSnapshot {
         roleName,
         tableName,
         privilege,
-        granted: contract.grants.some(
-          (grant) =>
-            grant.roleName === roleName &&
-            grant.tableName === tableName &&
-            grant.privilege === privilege &&
-            grant.columns === undefined,
+        granted: fixedTableGrantKeys.has(
+          `${roleName}:${tableName}:${privilege}`,
         ),
       })),
     ),
@@ -179,21 +303,27 @@ function makeSnapshot(): RlsCatalogSnapshot {
   const updateColumns = roleNames.flatMap((roleName) =>
     tableColumns.flatMap(({ tableName, columnNames }) =>
       columnNames.map((columnName) => {
-        const grant = contract.grants.find(
-          (candidate) =>
-            candidate.roleName === roleName &&
-            candidate.tableName === tableName &&
-            candidate.privilege === "UPDATE",
-        );
         return {
           roleName,
           tableName,
           columnName,
-          granted:
-            grant !== undefined &&
-            (grant.columns === undefined || grant.columns.includes(columnName)),
+          granted: fixedUpdateColumnGrantKeys.has(
+            `${roleName}:${tableName}:${columnName}`,
+          ),
         };
       }),
+    ),
+  );
+  const insertColumns = roleNames.flatMap((roleName) =>
+    insertTables.flatMap((tableName) =>
+      testColumns[tableName]!.map((columnName) => ({
+        roleName,
+        tableName,
+        columnName,
+        granted: fixedInsertColumnGrantKeys.has(
+          `${roleName}:${tableName}:${columnName}`,
+        ),
+      })),
     ),
   );
   return {
@@ -204,6 +334,7 @@ function makeSnapshot(): RlsCatalogSnapshot {
     pgHasRole,
     tablePrivileges,
     updateColumns,
+    insertColumns,
     tableColumns,
   };
 }
@@ -488,7 +619,8 @@ test("complete synthetic PostgreSQL catalog snapshot satisfies the contract", ()
   assert.equal(report.expectedPolicyCount, 51);
   assert.equal(report.policies.length, 51);
   assert.equal(report.tablePrivileges.length, 3 * 18 * 4);
-  assert.equal(report.updateColumns.length, 3 * (6 + 6 + 12 + 15));
+  assert.equal(report.updateColumns.length, 3 * (6 + 6 + 12 + 10 + 15));
+  assert.equal(report.insertColumns.length, 3 * (10 + 15));
 });
 
 test("catalog audit checks exact execution UPDATE grants and complete column coverage", () => {
@@ -525,7 +657,57 @@ test("catalog audit checks exact execution UPDATE grants and complete column cov
   );
 });
 
-test("catalog audit fails closed for missing RLS, policy drift, role grants and column updates", () => {
+test("catalog audit checks exact connector INSERT grants and complete column coverage", () => {
+  const extraInsert = makeSnapshot();
+  const unauthorizedCredentialId = extraInsert.insertColumns.find(
+    (item) =>
+      item.roleName === "app_runtime" &&
+      item.tableName === "workspace_connector_credentials" &&
+      item.columnName === "id",
+  );
+  assert.ok(unauthorizedCredentialId);
+  unauthorizedCredentialId.granted = true;
+  const extraInsertAudit = auditRlsCatalog(contract, extraInsert);
+  assert.ok(
+    extraInsertAudit.violations.includes(
+      "column_insert_mismatch:app_runtime:workspace_connector_credentials:id",
+    ),
+  );
+
+  const missingInsert = makeSnapshot();
+  const approvedCredentialWorkspaceId = missingInsert.insertColumns.find(
+    (item) =>
+      item.roleName === "app_runtime" &&
+      item.tableName === "workspace_connector_credentials" &&
+      item.columnName === "workspace_id",
+  );
+  assert.ok(approvedCredentialWorkspaceId);
+  approvedCredentialWorkspaceId.granted = false;
+  const missingInsertAudit = auditRlsCatalog(contract, missingInsert);
+  assert.ok(
+    missingInsertAudit.violations.includes(
+      "column_insert_mismatch:app_runtime:workspace_connector_credentials:workspace_id",
+    ),
+  );
+
+  const incompleteMatrix = makeSnapshot();
+  incompleteMatrix.insertColumns = incompleteMatrix.insertColumns.filter(
+    (item) =>
+      !(
+        item.roleName === "app_runtime" &&
+        item.tableName === "workspace_connector_executions" &&
+        item.columnName === "workspace_id"
+      ),
+  );
+  const incompleteAudit = auditRlsCatalog(contract, incompleteMatrix);
+  assert.ok(
+    incompleteAudit.violations.includes(
+      "column_insert_matrix_incomplete:app_runtime:workspace_connector_executions",
+    ),
+  );
+});
+
+test("catalog audit fails closed for missing RLS, policy drift, role grants and column permissions", () => {
   const cases: Array<[string, (snapshot: RlsCatalogSnapshot) => void]> = [
     [
       "unexpected table owner",
@@ -584,6 +766,17 @@ test("catalog audit fails closed for missing RLS, policy drift, role grants and 
           (item) =>
             item.roleName === "app_runtime" &&
             item.tableName === "host_boundary_attestation_challenges" &&
+            item.columnName === "id",
+        )!.granted = true;
+      },
+    ],
+    [
+      "extra connector-column INSERT",
+      (snapshot) => {
+        snapshot.insertColumns.find(
+          (item) =>
+            item.roleName === "app_runtime" &&
+            item.tableName === "workspace_connector_credentials" &&
             item.columnName === "id",
         )!.granted = true;
       },
