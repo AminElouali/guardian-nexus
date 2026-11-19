@@ -4712,6 +4712,64 @@ export interface WorkspaceActionRuleSimulationResponse {
   dispatched: false;
 }
 
+export interface WorkspaceActionRuleHistoryImpactDecisionCounts {
+  /** @minimum 0 */
+  allow: number;
+  /** @minimum 0 */
+  requireApproval: number;
+  /** @minimum 0 */
+  deny: number;
+}
+
+export type WorkspaceActionRuleHistoryImpactDecisionChangeFrom = typeof WorkspaceActionRuleHistoryImpactDecisionChangeFrom[keyof typeof WorkspaceActionRuleHistoryImpactDecisionChangeFrom];
+
+
+export const WorkspaceActionRuleHistoryImpactDecisionChangeFrom = {
+  allow: 'allow',
+  require_approval: 'require_approval',
+  deny: 'deny',
+} as const;
+
+export type WorkspaceActionRuleHistoryImpactDecisionChangeTo = typeof WorkspaceActionRuleHistoryImpactDecisionChangeTo[keyof typeof WorkspaceActionRuleHistoryImpactDecisionChangeTo];
+
+
+export const WorkspaceActionRuleHistoryImpactDecisionChangeTo = {
+  allow: 'allow',
+  require_approval: 'require_approval',
+  deny: 'deny',
+} as const;
+
+export interface WorkspaceActionRuleHistoryImpactDecisionChange {
+  from: WorkspaceActionRuleHistoryImpactDecisionChangeFrom;
+  to: WorkspaceActionRuleHistoryImpactDecisionChangeTo;
+  /** @minimum 1 */
+  count: number;
+}
+
+export interface WorkspaceActionRuleHistoryImpactResponse {
+  actionType: string;
+  windowDays: 30;
+  maximumProposals: 500;
+  /** @minimum 0 */
+  totalProposalCount: number;
+  /** @minimum 0 */
+  evaluatedCount: number;
+  /** @minimum 0 */
+  notReevaluableCount: number;
+  /** @minimum 0 */
+  notProcessedByLimitCount: number;
+  isPartial: boolean;
+  /** @nullable */
+  activeVersionId: string | null;
+  /** @nullable */
+  draftVersionId: string | null;
+  activeCounts: WorkspaceActionRuleHistoryImpactDecisionCounts | null;
+  draftCounts: WorkspaceActionRuleHistoryImpactDecisionCounts | null;
+  /** @maxItems 6 */
+  changes: WorkspaceActionRuleHistoryImpactDecisionChange[];
+  readOnly: true;
+}
+
 export interface WorkspaceAgentInput {
   /**
      * @minLength 1

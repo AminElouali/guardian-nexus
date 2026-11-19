@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState, type FormEvent } from "react";
 import type {
   WorkspaceActionRule,
   WorkspaceActionRuleProfile,
+  WorkspaceActionRuleHistoryImpactResponse,
   WorkspaceActionRuleSimulationResponse,
   WorkspaceActionRuleState,
 } from "@workspace/api-client-react";
@@ -25,6 +26,9 @@ export type WorkspaceRulesEditorProps = {
     versionId: string | undefined,
     args: Record<string, string | number | boolean>,
   ) => Promise<WorkspaceActionRuleSimulationResponse>;
+  onCompareHistory: (
+    actionType: string,
+  ) => Promise<WorkspaceActionRuleHistoryImpactResponse>;
 };
 
 export type RuleDecision = "allow" | "deny" | "require_approval";
@@ -147,6 +151,33 @@ export function formatSimulationResult(result: WorkspaceActionRuleSimulationResp
   return `${decision} · regla ${result.ruleId ?? "predeterminada"} · versión ${result.ruleVersionId ?? "no disponible"}`;
 }
 
+const historyDecisionLabels: Record<string, string> = {
+  allow: "Permitirían sin aprobación",
+  require_approval: "Pedirían aprobación",
+  deny: "Se bloquearían",
+};
+
+export function formatHistoryImpactCoverage(
+  result: WorkspaceActionRuleHistoryImpactResponse,
+): string {
+  if (result.totalProposalCount === 0) {
+    return "Cobertura: no se encontraron propuestas de esta acción en los últimos 30 días.";
+  }
+  const text = `Calculado con ${result.evaluatedCount} de ${result.totalProposalCount} acciones; ${result.notReevaluableCount} no se pueden re-evaluar porque no hay argumentos verificables guardados.`;
+  return result.notProcessedByLimitCount > 0
+    ? `${text} Otras ${result.notProcessedByLimitCount} quedaron sin revisar por el límite de ${result.maximumProposals}.`
+    : text;
+}
+
+export function historyImpactEmptyMessage(
+  result: WorkspaceActionRuleHistoryImpactResponse,
+): string | null {
+  if (result.evaluatedCount > 0) return null;
+  return result.totalProposalCount === 0
+    ? "Todavía no hay acciones de tus agentes. Cuando las haya, verás qué habría cambiado con estas reglas."
+    : "No hay propuestas re-evaluables: no se guardó contenido verificable para esta acción. No se reconstruyen argumentos desde hashes ni ejemplos.";
+}
+
 type ActionKind = "refund" | "bank" | "email" | "support";
 type ActionGroup = "Dinero (alto)" | "Sale de la empresa (alto)" | "Hablar con clientes (medio)";
 type ActionConfig = {
@@ -259,6 +290,7 @@ export function WorkspaceRulesEditor({
   onActivateRuleDraft,
   onRollbackRule,
   onSimulateRule,
+  onCompareHistory,
 }: WorkspaceRulesEditorProps) {
   const [refundLimit, setRefundLimit] = useState(String(DEFAULT_REFUND_LIMIT_CENTS / 100));
   const [limitError, setLimitError] = useState("");
@@ -273,6 +305,10 @@ export function WorkspaceRulesEditor({
   const [simError, setSimError] = useState("");
   const [manageActionType, setManageActionType] = useState(actions[0]?.actionType ?? "");
   const [rollbackVersion, setRollbackVersion] = useState("");
+  const [historyActionType, setHistoryActionType] = useState(actions[0]?.actionType ?? "");
+  const [historyImpact, setHistoryImpact] = useState<WorkspaceActionRuleHistoryImpactResponse | null>(null);
+  const [historyImpactError, setHistoryImpactError] = useState("");
+  const [historyImpactBusy, setHistoryImpactBusy] = useState(false);
 
   useEffect(() => {
     setDecisions(initialDecisions(actions));
@@ -292,11 +328,42 @@ export function WorkspaceRulesEditor({
     ?? supportedActions[0]?.action;
   const manageAction = actions.find((action) => action.actionType === manageActionType)
     ?? actions[0];
+  const historyAction = actions.find((action) => action.actionType === historyActionType)
+    ?? actions[0];
   const manageDraft = manageAction?.history.find((item) => item.id === manageAction.draftVersionId);
   const manageActive = manageAction?.history.find((item) => item.id === manageAction.activeVersionId);
   const availableRollbackVersions = manageAction?.history.filter(
     (item) => !item.isActive && item.id !== manageAction.draftVersionId,
   ) ?? [];
+
+  useEffect(() => {
+    setHistoryActionType((current) =>
+      actions.some((action) => action.actionType === current)
+        ? current
+        : actions[0]?.actionType ?? "",
+    );
+    setHistoryImpact(null);
+    setHistoryImpactError("");
+  }, [actions]);
+
+  useEffect(() => {
+    setHistoryImpact(null);
+    setHistoryImpactError("");
+  }, [historyAction?.actionType, historyAction?.activeVersionId, historyAction?.draftVersionId]);
+
+  const compareHistory = async () => {
+    if (!historyAction?.draftVersionId || historyImpactBusy) return;
+    setHistoryImpactBusy(true);
+    setHistoryImpact(null);
+    setHistoryImpactError("");
+    try {
+      setHistoryImpact(await onCompareHistory(historyAction.actionType));
+    } catch {
+      setHistoryImpactError("No se pudo comparar el historial. No se modificó ninguna propuesta ni regla.");
+    } finally {
+      setHistoryImpactBusy(false);
+    }
+  };
 
   const validateLimit = () => {
     const parsed = parseRefundLimitEuros(refundLimit);
@@ -578,6 +645,73 @@ export function WorkspaceRulesEditor({
         </section>)}
       </section>
 
+      <section className="wre-history-impact" aria-labelledby="history-impact-heading" data-testid="rule-history-impact">
+        <div className="wre-history-impact-intro">
+          <p className="wre-index">04 / COMPARACIÓN HISTÓRICA · SOLO LECTURA</p>
+          <h2 id="history-impact-heading">Qué habría pasado</h2>
+          <p>Compara las propuestas de los últimos 30 días con la versión activa y el borrador. Solo se usan argumentos genéricos guardados y verificados.</p>
+          <p className="wre-history-impact-safety">No crea aprobaciones ni recibos, no escribe en el ledger o la auditoría y no ejecuta acciones.</p>
+        </div>
+        <div className="wre-history-impact-content">
+          {historyAction ? <>
+            <label htmlFor="history-impact-action">Acción
+              <select
+                id="history-impact-action"
+                value={historyAction.actionType}
+                onChange={(event) => {
+                  setHistoryActionType(event.target.value);
+                  setHistoryImpact(null);
+                  setHistoryImpactError("");
+                }}
+                data-testid="history-impact-action"
+              >
+                {actions.map((action) => <option key={action.actionType} value={action.actionType}>{action.label}</option>)}
+              </select>
+            </label>
+            {!historyAction.draftVersionId && <p className="wre-history-impact-empty" data-testid="history-impact-no-draft">No hay un borrador guardado para comparar con la versión activa.</p>}
+            <button
+              type="button"
+              className="wre-history-impact-button"
+              disabled={!historyAction.draftVersionId || historyImpactBusy}
+              onClick={() => void compareHistory()}
+              data-testid="history-impact-run"
+            >{historyImpactBusy ? "Calculando…" : "Ver qué cambia"}</button>
+          </> : <p className="wre-history-impact-empty">No hay acciones disponibles para comparar.</p>}
+          {historyImpactError && <p className="wre-history-impact-error" role="alert" data-testid="history-impact-error">{historyImpactError}</p>}
+          {historyImpact && <>
+            <p className="wre-history-impact-coverage" role="status" data-testid="history-impact-coverage">
+              {formatHistoryImpactCoverage(historyImpact)}
+            </p>
+            {historyImpactEmptyMessage(historyImpact) ? (
+              <p className="wre-history-impact-empty" data-testid="history-impact-empty">
+                {historyImpactEmptyMessage(historyImpact)}
+              </p>
+            ) : <>
+              <div className="wre-history-impact-columns" data-testid="history-impact-counts">
+                <HistoryImpactCounts
+                  title={`Versión activa · ${historyImpact.activeVersionId ? "guardada" : "denegación predeterminada"}`}
+                  counts={historyImpact.activeCounts}
+                  testId="active"
+                />
+                <HistoryImpactCounts
+                  title={`Borrador · ${historyImpact.draftVersionId ? "disponible" : "no disponible"}`}
+                  counts={historyImpact.draftCounts}
+                  testId="draft"
+                />
+              </div>
+              <div className="wre-history-impact-changes" data-testid="history-impact-changes">
+                <h3>Cambios de decisión</h3>
+                {historyImpact.changes.length
+                  ? <ul>{historyImpact.changes.map((change) => <li key={`${change.from}-${change.to}`}>
+                      <b>{change.count}</b> {change.count === 1 ? "acción" : "acciones"} pasarían de {historyDecisionLabels[change.from]} a {historyDecisionLabels[change.to]}.
+                    </li>)}</ul>
+                  : <p>No cambiaría la decisión de las propuestas evaluables.</p>}
+              </div>
+            </>}
+          </>}
+        </div>
+      </section>
+
       <section className="wre-simulator" aria-labelledby="simulator-heading" data-testid="rules-simulator">
         <div className="wre-simulator-intro">
           <p className="wre-index">03 / COMPROBACIÓN LOCAL</p>
@@ -658,4 +792,29 @@ export function WorkspaceRulesEditor({
       </footer>}
     </>}
   </section>;
+}
+
+function HistoryImpactCounts({
+  title,
+  counts,
+  testId,
+}: {
+  title: string;
+  counts: WorkspaceActionRuleHistoryImpactResponse["activeCounts"];
+  testId: string;
+}) {
+  if (!counts) {
+    return <div className="wre-history-impact-version" data-testid={`history-impact-${testId}-unavailable`}>
+      <h3>{title}</h3>
+      <p>No disponible para esta comparación.</p>
+    </div>;
+  }
+  return <div className="wre-history-impact-version" data-testid={`history-impact-${testId}`}>
+    <h3>{title}</h3>
+    <dl>
+      <div><dt>Pasarían solas</dt><dd data-testid={`history-impact-${testId}-allow`}>{counts.allow}</dd></div>
+      <div><dt>Pedirían aprobación</dt><dd data-testid={`history-impact-${testId}-approval`}>{counts.requireApproval}</dd></div>
+      <div><dt>Se bloquearían</dt><dd data-testid={`history-impact-${testId}-deny`}>{counts.deny}</dd></div>
+    </dl>
+  </div>;
 }

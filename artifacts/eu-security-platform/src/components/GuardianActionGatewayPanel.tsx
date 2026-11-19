@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Activity, ArrowDownToLine, Check, ChevronRight, CircleAlert, Code2, Copy, GitBranch, KeyRound, LockKeyhole, Network, RotateCw, Shield, SlidersHorizontal, Trash2 } from "lucide-react";
 import type {
   WorkspaceActionRule,
+  WorkspaceActionRuleHistoryImpactResponse,
   WorkspaceActionRuleProfile,
   WorkspaceActionRuleStarterTemplate,
   WorkspaceActionRuleSimulationResponse,
@@ -101,6 +102,7 @@ export type GuardianActionGatewayPanelProps = {
   onActivateRuleDraft?: (actionType: string) => Promise<unknown>;
   onRollbackRule?: (actionType: string, version: number) => Promise<unknown>;
   onSimulateRule?: (actionType: string, versionId: string | undefined, args: Record<string, string | number | boolean>) => Promise<WorkspaceActionRuleSimulationResponse>;
+  onCompareHistory?: (actionType: string) => Promise<WorkspaceActionRuleHistoryImpactResponse>;
   agents?: WorkspaceAgent[];
   agentsLoading?: boolean;
   agentsError?: string | null;
@@ -294,6 +296,7 @@ export function GuardianActionGatewayPanel({
   onActivateRuleDraft = async () => { throw new Error("Rule API unavailable"); },
   onRollbackRule = async () => { throw new Error("Rule API unavailable"); },
   onSimulateRule = async () => { throw new Error("Rule API unavailable"); },
+  onCompareHistory = async () => { throw new Error("Rule history comparison API unavailable"); },
   agents = [],
   agentsLoading = false,
   agentsError = null,
@@ -772,6 +775,7 @@ export function GuardianActionGatewayPanel({
           onActivateRuleDraft={onActivateRuleDraft}
           onRollbackRule={onRollbackRule}
           onSimulateRule={onSimulateRule}
+          onCompareHistory={onCompareHistory}
         />
         <details className="gateway-advanced-rules">
           <summary>Editor avanzado por acción</summary>

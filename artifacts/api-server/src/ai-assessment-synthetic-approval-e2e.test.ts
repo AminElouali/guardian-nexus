@@ -39,6 +39,7 @@ import {
   PreviewWorkspaceAiAssessmentPolicyLabResponse,
   CreateWorkspaceSyntheticRefundProposalResponse,
   CreateWorkspaceGenericActionProposalResponse,
+  GetWorkspaceActionRuleHistoryImpactResponse,
   GetWorkspaceGenericActionCatalogResponse,
   PreviewWorkspaceGenericActionResponse,
   RollbackWorkspaceActionRuleResponse,
@@ -1451,6 +1452,175 @@ test(
         "the server identifies an unconditional external-email allow as open",
       );
     });
+    await t.test("history impact compares only verified stored generic arguments without writes", async () => {
+      const actionType = "guardian.support.reply.send.v1";
+      const rulePath =
+        `/api/workspaces/${workspaceA}/action-rules/${actionType}`;
+      const proposalsPath =
+        `/api/workspaces/${workspaceA}/ai-security-assessments/action-proposals`;
+      const activeDocument = {
+        version: 1,
+        rules: [{
+          id: "history-impact-review",
+          decision: "require_approval",
+          when: {},
+        }],
+      };
+      const draftDocument = {
+        version: 1,
+        rules: [{
+          id: "history-impact-block",
+          decision: "deny",
+          when: {},
+        }],
+      };
+      const createdRule = await request(
+        workspaceAAdmin,
+        `${rulePath}/draft`,
+        "PUT",
+        activeDocument,
+      );
+      assert.equal(createdRule.status, 201);
+      assert.equal(
+        (await request(workspaceAAdmin, `${rulePath}/activate`, "POST")).status,
+        200,
+      );
+
+      const proposalBody = () => ({
+        actionType,
+        arguments: {
+          ticket_id: "TICKET-SYNTH-COUNTERFACTUAL",
+          recipient_email: "counterfactual@example.test",
+          recipient_type: "internal",
+          compensation_cents: 0,
+          template_id: "synthetic-support-reply-v1",
+        },
+        idempotencyKey: randomUUID(),
+      });
+      const firstProposal = await request(
+        workspaceAAdmin,
+        proposalsPath,
+        "POST",
+        proposalBody(),
+      );
+      assert.equal(firstProposal.status, 201);
+      const firstProposalData = CreateWorkspaceGenericActionProposalResponse.parse(
+        await firstProposal.json(),
+      );
+      assert.equal(firstProposalData.decision, "require_approval");
+      assert.ok(firstProposalData.approval);
+
+      const legacyProposal = await request(
+        workspaceAAdmin,
+        proposalsPath,
+        "POST",
+        proposalBody(),
+      );
+      assert.equal(legacyProposal.status, 201);
+      const legacyProposalData = CreateWorkspaceGenericActionProposalResponse.parse(
+        await legacyProposal.json(),
+      );
+      assert.ok(legacyProposalData.approval);
+      await fixturePool.query(
+        `UPDATE public.ai_assessment_jobs
+            SET result = result - 'arguments'
+          WHERE workspace_id = $1 AND id = $2`,
+        [workspaceA, legacyProposalData.approval.jobId],
+      );
+      await fixturePool.query(
+        `UPDATE public.ai_assessment_approval_requests
+            SET expires_at = now() - interval '1 minute'
+          WHERE workspace_id = $1 AND id = ANY($2::uuid[])`,
+        [
+          workspaceA,
+          [
+            firstProposalData.approval.id,
+            legacyProposalData.approval.id,
+          ],
+        ],
+      );
+
+      const draftResponse = await request(
+        workspaceAAdmin,
+        `${rulePath}/draft`,
+        "PUT",
+        draftDocument,
+      );
+      assert.equal(draftResponse.status, 201);
+
+      const countSnapshot = async () => {
+        const result = await fixturePool.query<{
+          jobs: number;
+          approvals: number;
+          ledger: number;
+          audit: number;
+        }>(
+          `SELECT
+             (SELECT count(*)::int FROM public.ai_assessment_jobs WHERE workspace_id = $1) AS jobs,
+             (SELECT count(*)::int FROM public.ai_assessment_approval_requests WHERE workspace_id = $1) AS approvals,
+             (SELECT count(*)::int FROM public.workspace_approval_ledger WHERE workspace_id = $1) AS ledger,
+             (SELECT count(*)::int FROM public.workspace_audit_events WHERE workspace_id = $1) AS audit`,
+          [workspaceA],
+        );
+        return result.rows[0];
+      };
+      const before = await countSnapshot();
+
+      const comparisonResponse = await request(
+        workspaceAViewer,
+        `/api/workspaces/${workspaceA}/action-rules/${actionType}/history-impact`,
+      );
+      assert.equal(comparisonResponse.status, 200);
+      const comparison = GetWorkspaceActionRuleHistoryImpactResponse.parse(
+        await comparisonResponse.json(),
+      );
+      assert.equal(comparison.totalProposalCount, 2);
+      assert.equal(comparison.evaluatedCount, 1);
+      assert.equal(comparison.notReevaluableCount, 1);
+      assert.equal(comparison.notProcessedByLimitCount, 0);
+      assert.equal(comparison.isPartial, false);
+      assert.deepEqual(comparison.activeCounts, {
+        allow: 0,
+        requireApproval: 1,
+        deny: 0,
+      });
+      assert.deepEqual(comparison.draftCounts, {
+        allow: 0,
+        requireApproval: 0,
+        deny: 1,
+      });
+      assert.deepEqual(comparison.changes, [{
+        from: "require_approval",
+        to: "deny",
+        count: 1,
+      }]);
+      assert.equal(comparison.readOnly, true);
+      const publicResponse = JSON.stringify(comparison);
+      assert.doesNotMatch(publicResponse, /counterfactual@example\.test|TICKET-SYNTH-COUNTERFACTUAL/);
+      assert.deepEqual(await countSnapshot(), before);
+
+      assert.equal(
+        (await request(
+          workspaceBOwner,
+          `/api/workspaces/${workspaceA}/action-rules/${actionType}/history-impact`,
+        )).status,
+        403,
+        "history comparison is isolated to workspace members",
+      );
+      const emptyResponse = await request(
+        workspaceBOwner,
+        `/api/workspaces/${workspaceB}/action-rules/guardian.empty.test.v1/history-impact`,
+      );
+      assert.equal(emptyResponse.status, 200);
+      const empty = GetWorkspaceActionRuleHistoryImpactResponse.parse(
+        await emptyResponse.json(),
+      );
+      assert.equal(empty.totalProposalCount, 0);
+      assert.equal(empty.evaluatedCount, 0);
+      assert.equal(empty.activeCounts, null);
+      assert.equal(empty.draftCounts, null);
+    });
+
     await t.test("agent credentials are scoped, revocable, renewable and cannot self-approve", async () => {
       const agentsPath = `/api/workspaces/${workspaceA}/agents`;
       const supportRulePath =

@@ -2,6 +2,7 @@ import React, { useState, type KeyboardEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Activity, AlertTriangle, Check, Clock3, FlaskConical, LockKeyhole, ShieldAlert, ShieldCheck, Sparkles, WifiOff } from 'lucide-react';
 import {
+  getWorkspaceActionRuleHistoryImpact,
   getListWorkspaceAiAssessmentApprovalsQueryKey,
   getListWorkspaceApprovalLedgerEventsQueryKey,
   getListWorkspaceAiAssessmentLabJobsQueryKey,
@@ -1908,6 +1909,9 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
         onActivateRuleDraft={activateGatewayRuleDraft}
         onRollbackRule={rollbackGatewayRule}
         onSimulateRule={simulateGatewayRule}
+        onCompareHistory={(actionType) =>
+          getWorkspaceActionRuleHistoryImpact(workspace.id, actionType)
+        }
         agents={workspaceAgents.data?.agents ?? []}
         agentsLoading={workspaceAgents.isLoading}
         agentsError={workspaceAgents.isError ? 'No se pudo cargar la lista de agentes.' : null}

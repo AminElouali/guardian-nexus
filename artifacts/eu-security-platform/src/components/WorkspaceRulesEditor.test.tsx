@@ -4,6 +4,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type {
   WorkspaceActionRuleProfile,
+  WorkspaceActionRuleHistoryImpactResponse,
   WorkspaceActionRuleSimulationResponse,
   WorkspaceActionRuleState,
 } from "@workspace/api-client-react";
@@ -13,6 +14,8 @@ import {
   DEFAULT_REFUND_LIMIT_CENTS,
   defaultRuleDecisions,
   formatSimulationResult,
+  formatHistoryImpactCoverage,
+  historyImpactEmptyMessage,
   IMMUTABLE_DEFAULT_DENY,
   parseRefundLimitEuros,
   PROFILE_DRAFT_STATUS,
@@ -116,6 +119,22 @@ function props(overrides: Partial<WorkspaceRulesEditorProps> = {}): WorkspaceRul
       issues: [],
       persisted: false,
       dispatched: false,
+    }),
+    onCompareHistory: async (): Promise<WorkspaceActionRuleHistoryImpactResponse> => ({
+      actionType: actions[0].actionType,
+      windowDays: 30,
+      maximumProposals: 500,
+      totalProposalCount: 0,
+      evaluatedCount: 0,
+      notReevaluableCount: 0,
+      notProcessedByLimitCount: 0,
+      isPartial: false,
+      activeVersionId: null,
+      draftVersionId: null,
+      activeCounts: null,
+      draftCounts: null,
+      changes: [],
+      readOnly: true,
     }),
     ...overrides,
   };
@@ -234,4 +253,74 @@ test("bottom controls identify active and draft versions and history shows edito
   assert.match(html, /dateTime="2026-01-01T00:00:00.000Z"/);
   assert.match(html, /data-testid="rollback-version"/);
   assert.match(html, /data-testid="bottom-activate"/);
+});
+
+test("history comparison is visible to members and clearly requires a saved draft", () => {
+  const html = markup({ canManage: false });
+  assert.match(html, /Qué habría pasado/);
+  assert.match(html, /data-testid="rule-history-impact"/);
+  assert.match(html, />Ver qué cambia<\/button>/);
+  assert.match(html, /data-testid="history-impact-no-draft"/);
+  assert.match(html, /Solo se usan argumentos genéricos guardados y verificados/);
+  assert.match(html, /no escribe en el ledger o la auditoría/);
+});
+
+test("history comparison coverage explains excluded and limit-skipped proposals", () => {
+  const mixed = {
+    actionType: actions[0].actionType,
+    windowDays: 30 as const,
+    maximumProposals: 500 as const,
+    totalProposalCount: 52,
+    evaluatedCount: 40,
+    notReevaluableCount: 12,
+    notProcessedByLimitCount: 0,
+    isPartial: false,
+    activeVersionId: "active-v1",
+    draftVersionId: "draft-v2",
+    activeCounts: { allow: 3, requireApproval: 30, deny: 7 },
+    draftCounts: { allow: 1, requireApproval: 20, deny: 19 },
+    changes: [],
+    readOnly: true as const,
+  };
+  assert.equal(
+    formatHistoryImpactCoverage(mixed),
+    "Calculado con 40 de 52 acciones; 12 no se pueden re-evaluar porque no hay argumentos verificables guardados.",
+  );
+  assert.equal(historyImpactEmptyMessage(mixed), null);
+
+  const partial = {
+    ...mixed,
+    notProcessedByLimitCount: 3,
+    isPartial: true,
+  };
+  assert.match(formatHistoryImpactCoverage(partial), /3 quedaron sin revisar por el límite de 500/);
+});
+
+test("history comparison empty states distinguish no proposals from missing stored content", () => {
+  const empty = {
+    actionType: actions[0].actionType,
+    windowDays: 30 as const,
+    maximumProposals: 500 as const,
+    totalProposalCount: 0,
+    evaluatedCount: 0,
+    notReevaluableCount: 0,
+    notProcessedByLimitCount: 0,
+    isPartial: false,
+    activeVersionId: null,
+    draftVersionId: "draft-v1",
+    activeCounts: null,
+    draftCounts: null,
+    changes: [],
+    readOnly: true as const,
+  };
+  assert.equal(
+    historyImpactEmptyMessage(empty),
+    "Todavía no hay acciones de tus agentes. Cuando las haya, verás qué habría cambiado con estas reglas.",
+  );
+  const noArguments = {
+    ...empty,
+    totalProposalCount: 3,
+    notReevaluableCount: 3,
+  };
+  assert.match(historyImpactEmptyMessage(noArguments) ?? "", /no se guardó contenido verificable/);
 });

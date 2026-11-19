@@ -70,6 +70,7 @@ import type {
   SyntheticRefundProposalResponse,
   Workspace,
   WorkspaceActionRuleDocumentInput,
+  WorkspaceActionRuleHistoryImpactResponse,
   WorkspaceActionRuleRollbackInput,
   WorkspaceActionRuleSimulationInput,
   WorkspaceActionRuleSimulationResponse,
@@ -3955,6 +3956,116 @@ export const useSimulateWorkspaceActionRule = <TError = ErrorType<void>,
       > => {
       return useMutation(getSimulateWorkspaceActionRuleMutationOptions(options), queryClient);
     }
+
+export const getGetWorkspaceActionRuleHistoryImpactUrl = (workspaceId: string,
+    actionType: string,) => {
+
+
+
+
+  return `/api/workspaces/${workspaceId}/action-rules/${actionType}/history-impact`
+}
+
+/**
+ * Re-evaluates at most 500 recent proposals only when their validated generic-action evidence contains the original arguments. Proposals whose arguments were not stored are counted as not re-evaluable; no arguments are reconstructed from hashes or fixtures. This endpoint is read-only, tenant-scoped, and never creates approvals, receipts, audit events, or ledger entries.
+ * @summary Compare recent saved proposals against active and draft rules
+ */
+export const getWorkspaceActionRuleHistoryImpact = async (workspaceId: string,
+    actionType: string, options?: Parameters<typeof customFetch>[1]): Promise<WorkspaceActionRuleHistoryImpactResponse> => {
+
+  return customFetch<WorkspaceActionRuleHistoryImpactResponse>(getGetWorkspaceActionRuleHistoryImpactUrl(workspaceId,actionType),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetWorkspaceActionRuleHistoryImpactQueryKey = (workspaceId: string,
+    actionType: string,) => {
+    return [
+    `/api/workspaces/${workspaceId}/action-rules/${actionType}/history-impact`
+    ] as const;
+    }
+
+
+export const getGetWorkspaceActionRuleHistoryImpactQueryOptions = <TData = Awaited<ReturnType<typeof getWorkspaceActionRuleHistoryImpact>>, TError = ErrorType<void>>(workspaceId: string,
+    actionType: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWorkspaceActionRuleHistoryImpact>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetWorkspaceActionRuleHistoryImpactQueryKey(workspaceId,actionType);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getWorkspaceActionRuleHistoryImpact>>> = ({ signal }) => getWorkspaceActionRuleHistoryImpact(workspaceId,actionType, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: workspaceId !== null && workspaceId !== undefined && actionType !== null && actionType !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getWorkspaceActionRuleHistoryImpact>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetWorkspaceActionRuleHistoryImpactQueryResult = NonNullable<Awaited<ReturnType<typeof getWorkspaceActionRuleHistoryImpact>>>
+export type GetWorkspaceActionRuleHistoryImpactQueryError = ErrorType<void>
+
+
+export function useGetWorkspaceActionRuleHistoryImpact<TData = Awaited<ReturnType<typeof getWorkspaceActionRuleHistoryImpact>>, TError = ErrorType<void>>(
+ workspaceId: string,
+    actionType: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWorkspaceActionRuleHistoryImpact>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getWorkspaceActionRuleHistoryImpact>>,
+          TError,
+          Awaited<ReturnType<typeof getWorkspaceActionRuleHistoryImpact>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetWorkspaceActionRuleHistoryImpact<TData = Awaited<ReturnType<typeof getWorkspaceActionRuleHistoryImpact>>, TError = ErrorType<void>>(
+ workspaceId: string,
+    actionType: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWorkspaceActionRuleHistoryImpact>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getWorkspaceActionRuleHistoryImpact>>,
+          TError,
+          Awaited<ReturnType<typeof getWorkspaceActionRuleHistoryImpact>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetWorkspaceActionRuleHistoryImpact<TData = Awaited<ReturnType<typeof getWorkspaceActionRuleHistoryImpact>>, TError = ErrorType<void>>(
+ workspaceId: string,
+    actionType: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWorkspaceActionRuleHistoryImpact>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Compare recent saved proposals against active and draft rules
+ */
+
+export function useGetWorkspaceActionRuleHistoryImpact<TData = Awaited<ReturnType<typeof getWorkspaceActionRuleHistoryImpact>>, TError = ErrorType<void>>(
+ workspaceId: string,
+    actionType: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWorkspaceActionRuleHistoryImpact>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetWorkspaceActionRuleHistoryImpactQueryOptions(workspaceId,actionType,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getListWorkspaceAgentsUrl = (workspaceId: string,) => {
 

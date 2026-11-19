@@ -13689,6 +13689,74 @@ export const SimulateWorkspaceActionRuleResponse = zod.object({
 
 
 /**
+ * Re-evaluates at most 500 recent proposals only when their validated generic-action evidence contains the original arguments. Proposals whose arguments were not stored are counted as not re-evaluable; no arguments are reconstructed from hashes or fixtures. This endpoint is read-only, tenant-scoped, and never creates approvals, receipts, audit events, or ledger entries.
+ * @summary Compare recent saved proposals against active and draft rules
+ */
+export const getWorkspaceActionRuleHistoryImpactPathActionTypeMax = 120;
+
+
+
+export const GetWorkspaceActionRuleHistoryImpactParams = zod.object({
+  "workspaceId": zod.uuid(),
+  "actionType": zod.coerce.string().max(getWorkspaceActionRuleHistoryImpactPathActionTypeMax)
+})
+
+export const getWorkspaceActionRuleHistoryImpactResponseTotalProposalCountMin = 0;
+
+export const getWorkspaceActionRuleHistoryImpactResponseEvaluatedCountMin = 0;
+
+export const getWorkspaceActionRuleHistoryImpactResponseNotReevaluableCountMin = 0;
+
+export const getWorkspaceActionRuleHistoryImpactResponseNotProcessedByLimitCountMin = 0;
+
+export const getWorkspaceActionRuleHistoryImpactResponseActiveCountsOneAllowMin = 0;
+
+export const getWorkspaceActionRuleHistoryImpactResponseActiveCountsOneRequireApprovalMin = 0;
+
+export const getWorkspaceActionRuleHistoryImpactResponseActiveCountsOneDenyMin = 0;
+
+export const getWorkspaceActionRuleHistoryImpactResponseDraftCountsOneAllowMin = 0;
+
+export const getWorkspaceActionRuleHistoryImpactResponseDraftCountsOneRequireApprovalMin = 0;
+
+export const getWorkspaceActionRuleHistoryImpactResponseDraftCountsOneDenyMin = 0;
+
+
+export const getWorkspaceActionRuleHistoryImpactResponseChangesMax = 6;
+
+
+
+export const GetWorkspaceActionRuleHistoryImpactResponse = zod.object({
+  "actionType": zod.string(),
+  "windowDays": zod.literal(30),
+  "maximumProposals": zod.literal(500),
+  "totalProposalCount": zod.int().min(getWorkspaceActionRuleHistoryImpactResponseTotalProposalCountMin),
+  "evaluatedCount": zod.int().min(getWorkspaceActionRuleHistoryImpactResponseEvaluatedCountMin),
+  "notReevaluableCount": zod.int().min(getWorkspaceActionRuleHistoryImpactResponseNotReevaluableCountMin),
+  "notProcessedByLimitCount": zod.int().min(getWorkspaceActionRuleHistoryImpactResponseNotProcessedByLimitCountMin),
+  "isPartial": zod.boolean(),
+  "activeVersionId": zod.uuid().nullable(),
+  "draftVersionId": zod.uuid().nullable(),
+  "activeCounts": zod.union([zod.object({
+  "allow": zod.int().min(getWorkspaceActionRuleHistoryImpactResponseActiveCountsOneAllowMin),
+  "requireApproval": zod.int().min(getWorkspaceActionRuleHistoryImpactResponseActiveCountsOneRequireApprovalMin),
+  "deny": zod.int().min(getWorkspaceActionRuleHistoryImpactResponseActiveCountsOneDenyMin)
+}),zod.null()]),
+  "draftCounts": zod.union([zod.object({
+  "allow": zod.int().min(getWorkspaceActionRuleHistoryImpactResponseDraftCountsOneAllowMin),
+  "requireApproval": zod.int().min(getWorkspaceActionRuleHistoryImpactResponseDraftCountsOneRequireApprovalMin),
+  "deny": zod.int().min(getWorkspaceActionRuleHistoryImpactResponseDraftCountsOneDenyMin)
+}),zod.null()]),
+  "changes": zod.array(zod.object({
+  "from": zod.enum(['allow', 'require_approval', 'deny']),
+  "to": zod.enum(['allow', 'require_approval', 'deny']),
+  "count": zod.int().min(1)
+})).max(getWorkspaceActionRuleHistoryImpactResponseChangesMax),
+  "readOnly": zod.literal(true)
+})
+
+
+/**
  * @summary List agent identities without exposing credentials
  */
 export const ListWorkspaceAgentsParams = zod.object({

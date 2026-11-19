@@ -1085,6 +1085,36 @@ paths:
           description: Workspace membership required
         "404":
           description: Rule version not found
+  /workspaces/{workspaceId}/action-rules/{actionType}/history-impact:
+    get:
+      operationId: getWorkspaceActionRuleHistoryImpact
+      tags: [ai-evaluations]
+      summary: Compare recent saved proposals against active and draft rules
+      description: >
+        Re-evaluates at most 500 recent proposals only when their validated
+        generic-action evidence contains the original arguments. Proposals
+        whose arguments were not stored are counted as not re-evaluable; no
+        arguments are reconstructed from hashes or fixtures. This endpoint is
+        read-only, tenant-scoped, and never creates approvals, receipts, audit
+        events, or ledger entries.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: actionType
+          required: true
+          schema: { type: string, maxLength: 120 }
+      responses:
+        "200":
+          description: Aggregate-only comparison and data coverage
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkspaceActionRuleHistoryImpactResponse" }
+        "403":
+          description: Workspace membership required
   /workspaces/{workspaceId}/agents:
     get:
       operationId: listWorkspaceAgents
@@ -2200,6 +2230,50 @@ components:
         persisted: { type: boolean, const: false }
         dispatched: { type: boolean, const: false }
       required: [actionType, decision, reasonCode, ruleId, ruleVersionId, matched, issues, persisted, dispatched]
+    WorkspaceActionRuleHistoryImpactDecisionCounts:
+      type: object
+      additionalProperties: false
+      properties:
+        allow: { type: integer, minimum: 0 }
+        requireApproval: { type: integer, minimum: 0 }
+        deny: { type: integer, minimum: 0 }
+      required: [allow, requireApproval, deny]
+    WorkspaceActionRuleHistoryImpactDecisionChange:
+      type: object
+      additionalProperties: false
+      properties:
+        from: { type: string, enum: [allow, require_approval, deny] }
+        to: { type: string, enum: [allow, require_approval, deny] }
+        count: { type: integer, minimum: 1 }
+      required: [from, to, count]
+    WorkspaceActionRuleHistoryImpactResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        actionType: { type: string }
+        windowDays: { type: integer, const: 30 }
+        maximumProposals: { type: integer, const: 500 }
+        totalProposalCount: { type: integer, minimum: 0 }
+        evaluatedCount: { type: integer, minimum: 0 }
+        notReevaluableCount: { type: integer, minimum: 0 }
+        notProcessedByLimitCount: { type: integer, minimum: 0 }
+        isPartial: { type: boolean }
+        activeVersionId: { type: ["string", "null"], format: uuid }
+        draftVersionId: { type: ["string", "null"], format: uuid }
+        activeCounts:
+          oneOf:
+            - { $ref: "#/components/schemas/WorkspaceActionRuleHistoryImpactDecisionCounts" }
+            - { type: "null" }
+        draftCounts:
+          oneOf:
+            - { $ref: "#/components/schemas/WorkspaceActionRuleHistoryImpactDecisionCounts" }
+            - { type: "null" }
+        changes:
+          type: array
+          maxItems: 6
+          items: { $ref: "#/components/schemas/WorkspaceActionRuleHistoryImpactDecisionChange" }
+        readOnly: { type: boolean, const: true }
+      required: [actionType, windowDays, maximumProposals, totalProposalCount, evaluatedCount, notReevaluableCount, notProcessedByLimitCount, isPartial, activeVersionId, draftVersionId, activeCounts, draftCounts, changes, readOnly]
     WorkspaceAgentInput:
       type: object
       additionalProperties: false

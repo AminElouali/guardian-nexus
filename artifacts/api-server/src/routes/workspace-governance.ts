@@ -15,6 +15,8 @@ import {
   ApplyWorkspaceActionRuleProfileDraftResponse,
   ActivateWorkspaceActionRuleDraftParams,
   ActivateWorkspaceActionRuleDraftResponse,
+  GetWorkspaceActionRuleHistoryImpactParams,
+  GetWorkspaceActionRuleHistoryImpactResponse,
   CreateWorkspaceAgentActionProposalBody,
   CreateWorkspaceAgentActionProposalParams,
   CreateWorkspaceAgentActionProposalResponse,
@@ -49,6 +51,7 @@ import {
   rollbackWorkspaceActionRule,
   toWorkspaceActionRuleSimulation,
 } from "../lib/workspace-action-rules";
+import { getWorkspaceRuleHistoryImpact } from "../lib/workspace-rule-history-impact";
 import { hashWorkspaceAgentCredential, issueWorkspaceAgentCredential } from "../lib/workspace-agent-credentials";
 import { createWorkspaceAgentAttemptLimiter } from "../lib/workspace-agent-attempt-limiter";
 import {
@@ -408,6 +411,31 @@ router.post(
       return;
     }
     res.json(SimulateWorkspaceActionRuleResponse.parse(access.value.result));
+  },
+);
+
+router.get(
+  "/workspaces/:workspaceId/action-rules/:actionType/history-impact",
+  async (req, res): Promise<void> => {
+    const params = GetWorkspaceActionRuleHistoryImpactParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: "Invalid rule history comparison request" });
+      return;
+    }
+    const access = await withWorkspaceUserTransaction(
+      req.authUserId!,
+      params.data.workspaceId,
+      (tx) => getWorkspaceRuleHistoryImpact(
+        tx,
+        params.data.workspaceId,
+        params.data.actionType,
+      ),
+    );
+    if (!access.authorized) {
+      res.status(403).json({ error: "Workspace membership required" });
+      return;
+    }
+    res.json(GetWorkspaceActionRuleHistoryImpactResponse.parse(access.value));
   },
 );
 
