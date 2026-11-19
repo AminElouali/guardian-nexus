@@ -82,6 +82,9 @@ Estado por etapa:
 3. **Conector genérico configurable por el cliente — PROYECTADO:** aún no se permite que clientes definan nuevos adaptadores o acciones.
 4. **Conectores nativos para la demo — PROYECTADOS:** correo en un sandbox como Mailtrap y Stripe en modo de prueba. Ambos están pendientes de confirmar; no se presupone que estén configurados ni conectados.
 5. **Verificador “sin recibo no se abre” — PROYECTADO para producción:** `lib/guardian-guard` demuestra el patrón con SMTP local, pero todavía no es un límite de seguridad desplegado que el agente no pueda evitar.
+7. **Aislamiento de producción y objetivos de servicio — PROYECTADO:** medir p50 y p95 por separado para decisiones automáticas y aprobaciones humanas. Usar esos resultados para fijar un tiempo de respuesta verificable antes de prometerlo a clientes. Si las mediciones lo requieren, evaluar servidores en la UE y caché de reglas en memoria.
+
+**Reglas de evolución y operación — PROYECTADAS:** cada cambio de esquema debe incluir una migración versionada y una prueba que parta de la forma anterior del esquema. Además, realizar periódicamente una auditoría de solo lectura de la base de desarrollo para detectar desajustes pronto.
 
 ## 7. Estado actual
 
