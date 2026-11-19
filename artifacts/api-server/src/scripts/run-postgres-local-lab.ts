@@ -142,6 +142,12 @@ type VersionedMigrationAuditReport = {
   migration0004Idempotent?: boolean;
   migration0005Idempotent?: boolean;
   migration0006LegacyConstraintReplaced?: boolean;
+  migration0006Postcondition?: {
+    oidChanged: boolean;
+    isLegacy: boolean;
+    isCurrent: boolean;
+    referencesInPgGetExprOrder: string[];
+  };
   migration0006Idempotent?: boolean;
   migration0006UnexpectedConstraintRejected?: boolean;
   inventoryMatchesDrizzle?: {
@@ -1103,6 +1109,7 @@ type ApprovalActionRefConstraintState = {
   oid: string;
   isLegacy: boolean;
   isCurrent: boolean;
+  referencesInPgGetExprOrder: string[];
   mismatch: "constraint_shape" | "constraint_columns" | "constraint_definition" | null;
 };
 
@@ -1149,6 +1156,9 @@ async function readApprovalActionRefConstraintState(
   ) {
     return null;
   }
+  const referencesInPgGetExprOrder = [
+    ...row.expression.matchAll(/'((?:''|[^'])*)'/g),
+  ].map((match) => match[1]!.replaceAll("''", "'"));
   if (
     row.contype !== "c" ||
     row.convalidated !== true ||
@@ -1160,6 +1170,7 @@ async function readApprovalActionRefConstraintState(
       oid: row.oid,
       isLegacy: false,
       isCurrent: false,
+      referencesInPgGetExprOrder,
       mismatch: "constraint_shape",
     };
   }
@@ -1174,6 +1185,7 @@ async function readApprovalActionRefConstraintState(
       oid: row.oid,
       isLegacy: false,
       isCurrent: false,
+      referencesInPgGetExprOrder,
       mismatch: "constraint_columns",
     };
   }
@@ -1191,6 +1203,7 @@ async function readApprovalActionRefConstraintState(
     oid: row.oid,
     isLegacy: matches(refs.legacy),
     isCurrent: matches(refs.current),
+    referencesInPgGetExprOrder,
     mismatch: matches(refs.legacy) || matches(refs.current)
       ? null
       : "constraint_definition",
@@ -1562,6 +1575,15 @@ async function runVersionedMigrationAudit(input: {
         const afterMigration = await readApprovalActionRefConstraintState(
           migrationClient,
         );
+        report.migration0006Postcondition = {
+          oidChanged:
+            afterMigration !== null &&
+            afterMigration.oid !== beforeActionRefMigration.oid,
+          isLegacy: afterMigration?.isLegacy ?? false,
+          isCurrent: afterMigration?.isCurrent ?? false,
+          referencesInPgGetExprOrder:
+            afterMigration?.referencesInPgGetExprOrder ?? [],
+        };
         report.migration0006LegacyConstraintReplaced =
           afterMigration !== null &&
           afterMigration.isCurrent &&

@@ -137,10 +137,13 @@ BEGIN
     -- Already aligned: deliberately perform no DDL.
     NULL;
   ELSIF actual_action_refs = sorted_legacy_action_refs THEN
-    SELECT string_agg(quote_literal(action_ref), ', ' ORDER BY action_ref)
+    SELECT string_agg(
+        quote_literal(current_ref.action_ref),
+        ', ' ORDER BY current_ref.ordinality
+      )
       INTO rendered_action_refs
       FROM unnest(current_action_refs)
-        WITH ORDINALITY AS current_ref(action_ref, ordinality);
+      WITH ORDINALITY AS current_ref(action_ref, ordinality);
     EXECUTE format(
       'ALTER TABLE public.ai_assessment_approval_requests ' ||
       'DROP CONSTRAINT ai_assessment_approval_action_ref_check, ' ||
