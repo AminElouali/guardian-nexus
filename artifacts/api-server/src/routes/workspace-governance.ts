@@ -90,48 +90,60 @@ const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const agentAttemptLimiter = createWorkspaceAgentAttemptLimiter();
 
-function safeConnectorCredentialFailure(
+function safeConnectorCredentialErrorChain(
   error: unknown,
-  stage: string,
-): Record<string, string> {
-  const safeStage = /^[a-z_]{1,32}$/.test(stage) ? stage : "unknown";
-  if (error instanceof ConnectorVaultError) {
-    return { failureStage: safeStage, errorCode: error.code };
-  }
-  if (error && typeof error === "object") {
-    const candidate = error as {
-      code?: unknown;
-      constraint?: unknown;
-      table?: unknown;
-      name?: unknown;
+): Record<string, string>[] {
+  const chain: Record<string, string>[] = [];
+  const visited = new Set<object>();
+  let current: unknown = error;
+  for (let depth = 0; depth < 8 && current && typeof current === "object"; depth += 1) {
+    if (visited.has(current)) break;
+    visited.add(current);
+    const candidate = current as Record<string, unknown>;
+    const safe: Record<string, string> = {};
+    const read = (key: string): unknown => {
+      try {
+        return candidate[key];
+      } catch {
+        return undefined;
+      }
     };
-    if (typeof candidate.code === "string" && /^[0-9A-Z]{5}$/.test(candidate.code)) {
-      const details: Record<string, string> = {
-        failureStage: safeStage,
-        sqlState: candidate.code,
-      };
-      if (
-        typeof candidate.constraint === "string" &&
-        /^[A-Za-z_][A-Za-z0-9_]{0,62}$/.test(candidate.constraint)
-      ) {
-        details.constraint = candidate.constraint;
-      }
-      if (
-        typeof candidate.table === "string" &&
-        /^[A-Za-z_][A-Za-z0-9_]{0,62}$/.test(candidate.table)
-      ) {
-        details.table = candidate.table;
-      }
-      return details;
+    const name = read("name");
+    if (typeof name === "string" && /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(name)) {
+      safe.name = name;
     }
-    const errorName =
-      typeof candidate.name === "string" &&
-      /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(candidate.name)
-        ? candidate.name
-        : "Error";
-    return { failureStage: safeStage, errorName };
+    const code = read("code");
+    if (
+      typeof code === "string" &&
+      (/^[0-9A-Z]{5}$/.test(code) || /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(code))
+    ) {
+      safe.code = code;
+    }
+    for (const field of ["table", "constraint", "column", "routine"] as const) {
+      const value = read(field);
+      if (
+        typeof value === "string" &&
+        /^[A-Za-z_][A-Za-z0-9_]{0,62}$/.test(value)
+      ) {
+        safe[field] = value;
+      }
+    }
+    chain.push(Object.keys(safe).length > 0 ? safe : { name: "Error" });
+    current = read("cause");
   }
-  return { failureStage: safeStage, errorName: "Error" };
+  return chain.length > 0 ? chain : [{ name: "Error" }];
+}
+
+function formatSafeConnectorCredentialErrorChain(
+  chain: readonly Record<string, string>[],
+): string {
+  return chain
+    .map((level) =>
+      Object.entries(level)
+        .map(([key, value]) => `${key}:${value}`)
+        .join(","),
+    )
+    .join(";");
 }
 
 function publicAgent(agent: typeof workspaceAgentsTable.$inferSelect) {
@@ -959,9 +971,42 @@ router.put(
             actorUserId: req.authUserId!,
             serviceId: params.data.serviceId,
             secret: body.data.secret,
+            membershipRole: membership.role,
             onStage: (stage) => {
               failureStage = stage;
             },
+            ...(process.env.GUARDIAN_APPROVAL_E2E_DISPOSABLE === "1"
+              ? {
+                  onInsertContext: (context) => {
+                    const workspaceSetting =
+                      context.workspaceSetting &&
+                      UUID_PATTERN.test(context.workspaceSetting)
+                        ? context.workspaceSetting
+                        : "invalid";
+                    const userSetting =
+                      context.userSetting &&
+                      /^[A-Za-z0-9._-]{1,128}$/.test(context.userSetting)
+                        ? context.userSetting
+                        : "invalid";
+                    const databaseRole =
+                      context.databaseRole &&
+                      /^[A-Za-z_][A-Za-z0-9_]{0,62}$/.test(
+                        context.databaseRole,
+                      )
+                        ? context.databaseRole
+                        : "invalid";
+                    logger.info(
+                      {
+                        ...context,
+                        workspaceSetting,
+                        userSetting,
+                        databaseRole,
+                      },
+                      `workspace_connector_credential_insert_context workspace=${workspaceSetting} user=${userSetting} db_role=${databaseRole} membership_role=${context.membershipRole} credential_existed=${context.credentialExisted}`,
+                    );
+                  },
+                }
+              : {}),
           });
           return saved;
         },
@@ -992,20 +1037,14 @@ router.put(
         res.status(400).json({ error: "Credential value is invalid" });
         return;
       }
-      const diagnostic = safeConnectorCredentialFailure(error, failureStage);
-      const diagnosticCode =
-        diagnostic.errorCode ??
-        diagnostic.sqlState ??
-        diagnostic.errorName ??
-        "Error";
-      const diagnosticObject = diagnostic.constraint
-        ? ` constraint=${diagnostic.constraint}`
-        : diagnostic.table
-          ? ` table=${diagnostic.table}`
-          : "";
+      const errorChain = safeConnectorCredentialErrorChain(error);
+      const diagnosticCode = errorChain[0]?.code ?? errorChain[0]?.name ?? "Error";
+      const safeStage = /^[a-z_]{1,32}$/.test(failureStage)
+        ? failureStage
+        : "unknown";
       logger.error(
-        diagnostic,
-        `workspace_connector_credential_save_failed stage=${diagnostic.failureStage} code=${diagnosticCode}${diagnosticObject}`,
+        { failureStage: safeStage, errorChain },
+        `workspace_connector_credential_save_failed stage=${safeStage} code=${diagnosticCode} chain=${formatSafeConnectorCredentialErrorChain(errorChain)}`,
       );
       res.status(503).json({ error: "Credential vault is unavailable" });
     }

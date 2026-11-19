@@ -28,6 +28,14 @@ export type ReplaceWorkspaceConnectorCredentialStage =
   | "insert"
   | "audit";
 
+export type ConnectorCredentialInsertContext = {
+  workspaceSetting: string | null;
+  userSetting: string | null;
+  databaseRole: string | null;
+  membershipRole: string;
+  credentialExisted: boolean;
+};
+
 const SERVICE_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,63}$/;
 
 export async function listWorkspaceConnectorCredentialStatuses(
@@ -55,7 +63,9 @@ export async function replaceWorkspaceConnectorCredential(
     actorUserId: string;
     serviceId: string;
     secret: string;
+    membershipRole: string;
     onStage?: (stage: ReplaceWorkspaceConnectorCredentialStage) => void;
+    onInsertContext?: (context: ConnectorCredentialInsertContext) => void;
   },
 ): Promise<
   | { kind: "created"; credential: SafeConnectorCredentialStatus }
@@ -89,6 +99,27 @@ export async function replaceWorkspaceConnectorCredential(
       { workspaceId: input.workspaceId, serviceId: input.serviceId },
       keyring,
     );
+    if (input.onInsertContext) {
+      const contextResult = await tx.execute(sql`
+        SELECT current_setting('app.workspace_id', true) AS workspace_setting,
+               current_setting('app.user_id', true) AS user_setting,
+               current_user AS database_role
+      `);
+      const context = contextResult.rows[0] as
+        | {
+            workspace_setting: string | null;
+            user_setting: string | null;
+            database_role: string | null;
+          }
+        | undefined;
+      input.onInsertContext({
+        workspaceSetting: context?.workspace_setting ?? null,
+        userSetting: context?.user_setting ?? null,
+        databaseRole: context?.database_role ?? null,
+        membershipRole: input.membershipRole,
+        credentialExisted: Boolean(existing),
+      });
+    }
     input.onStage?.("insert");
     const [row] = await tx
       .insert(workspaceConnectorCredentialsTable)
