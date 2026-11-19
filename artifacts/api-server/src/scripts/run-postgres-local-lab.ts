@@ -1122,7 +1122,7 @@ async function readApprovalActionRefConstraintState(
        constraint_row.condeferrable,
        constraint_row.condeferred,
        ARRAY(
-         SELECT attribute.attname
+         SELECT attribute.attname::text
            FROM unnest(constraint_row.conkey) WITH ORDINALITY AS key(attnum, ordinality)
            JOIN pg_attribute AS attribute
              ON attribute.attrelid = constraint_row.conrelid
