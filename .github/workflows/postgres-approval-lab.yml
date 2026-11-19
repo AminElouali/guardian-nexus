@@ -127,7 +127,10 @@ jobs:
           GUARDIAN_APPROVAL_E2E_REQUIRED: "1"
           DATABASE_URL: postgresql://postgres:${{ format('guardian-ci-{0}-{1}-{2}', github.run_id, github.run_attempt, github.sha) }}@127.0.0.1:5432/guardian_approval_lab_ci
           APP_RUNTIME_DATABASE_URL: postgresql://app_runtime_login:${{ format('guardian-runtime-{0}-{1}-{2}', github.run_id, github.run_attempt, github.sha) }}@127.0.0.1:5432/guardian_approval_lab_ci
-        run: pnpm --filter @workspace/api-server exec tsx --test src/ai-assessment-synthetic-approval-e2e.test.ts
+        run: |
+          export WORKSPACE_CONNECTOR_KEYRING_JSON="$(node -e 'const { randomBytes } = require("node:crypto"); const keyId = "gha-ephemeral-v1"; process.stdout.write(JSON.stringify({ activeKeyId: keyId, keys: { [keyId]: randomBytes(32).toString("base64url") } }));')"
+          echo "::add-mask::$WORKSPACE_CONNECTOR_KEYRING_JSON"
+          pnpm --filter @workspace/api-server exec tsx --test src/ai-assessment-synthetic-approval-e2e.test.ts
 
       - name: Upload sanitized RLS catalog report
         if: always()
