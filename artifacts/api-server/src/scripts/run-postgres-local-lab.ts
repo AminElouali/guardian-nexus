@@ -40,6 +40,11 @@ import { acquireGitHubActionsOidcToken } from "../lib/github-actions-oidc";
 import { readCatalogSnapshot } from "./verify-rls-catalog";
 import { apiTestFiles } from "./run-api-tests";
 import { loadConnectorVaultKeyring } from "../lib/workspace-connector-vault";
+import {
+  approvalActionRefConstraintExpression,
+  approvalActionRefMigrationValues,
+  renderApprovalActionRefMigration,
+} from "../lib/approval-action-ref-migration";
 
 const { Client, Pool } = pg;
 type RlsCatalogContractSources = Parameters<typeof parseRlsCatalogContract>[0] & {
@@ -123,16 +128,23 @@ type CatalogCounts = {
 type VersionedMigrationAuditReport = {
   status: "running" | "passed" | "failed";
   baselineSourceCommit: string;
-  baselineStrategy: "clone_drizzle_catalog_and_remove_new_tables";
+  baselineStrategy:
+    | "clone_drizzle_catalog_remove_new_tables_and_restore_legacy_action_ref_constraint";
   baselineExpected: CatalogCounts;
   baselineActual?: CatalogCounts;
   baselineMatchesDrizzleProjection?: boolean;
+  baselineMatchesExpectedLegacyProjection?: boolean;
+  baselineLegacyActionRefConstraintVerified?: boolean;
+  baselineActionRefLegacyDifferenceOnly?: boolean;
   drizzleCatalog?: CatalogCounts;
   migratedCatalog?: CatalogCounts;
   migrationsApplied: string[];
   migration0003Idempotent?: boolean;
   migration0004Idempotent?: boolean;
   migration0005Idempotent?: boolean;
+  migration0006LegacyConstraintReplaced?: boolean;
+  migration0006Idempotent?: boolean;
+  migration0006UnexpectedConstraintRejected?: boolean;
   inventoryMatchesDrizzle?: {
     tables: boolean;
     columns: boolean;
@@ -1052,10 +1064,13 @@ async function applyVersionedMigration(
   client: InstanceType<typeof Client>,
   filename: string,
 ): Promise<void> {
-  const sqlText = await readFile(
+  const sourceSql = await readFile(
     path.join(repoRoot, "lib/db/migrations", filename),
     "utf8",
   );
+  const sqlText = filename === "0006_align_approval_action_refs.sql"
+    ? renderApprovalActionRefMigration(sourceSql)
+    : sourceSql;
   const lines = sqlText.split(/\r?\n/);
   let firstExecutableLine = 0;
   while (firstExecutableLine < lines.length) {
@@ -1088,6 +1103,164 @@ async function applyVersionedMigration(
   }
 }
 
+type ApprovalActionRefConstraintState = {
+  oid: string;
+  isLegacy: boolean;
+  isCurrent: boolean;
+};
+
+async function readApprovalActionRefConstraintState(
+  client: InstanceType<typeof Client>,
+): Promise<ApprovalActionRefConstraintState | null> {
+  const result = await client.query(
+    `SELECT
+       constraint_row.oid::text AS oid,
+       constraint_row.contype,
+       constraint_row.convalidated,
+       constraint_row.connoinherit,
+       constraint_row.condeferrable,
+       constraint_row.condeferred,
+       ARRAY(
+         SELECT attribute.attname
+           FROM unnest(constraint_row.conkey) WITH ORDINALITY AS key(attnum, ordinality)
+           JOIN pg_attribute AS attribute
+             ON attribute.attrelid = constraint_row.conrelid
+            AND attribute.attnum = key.attnum
+          ORDER BY key.ordinality
+       ) AS column_names,
+       pg_get_expr(constraint_row.conbin, constraint_row.conrelid) AS expression
+     FROM pg_constraint AS constraint_row
+    WHERE constraint_row.conrelid =
+          'public.ai_assessment_approval_requests'::regclass
+      AND constraint_row.conname =
+          'ai_assessment_approval_action_ref_check'`,
+  );
+  const row = result.rows[0] as {
+    oid?: unknown;
+    contype?: unknown;
+    convalidated?: unknown;
+    connoinherit?: unknown;
+    condeferrable?: unknown;
+    condeferred?: unknown;
+    column_names?: unknown;
+    expression?: unknown;
+  } | undefined;
+  if (
+    !row ||
+    typeof row.oid !== "string" ||
+    typeof row.expression !== "string"
+  ) {
+    return null;
+  }
+  const shapeIsExpected = row.contype === "c" &&
+    row.convalidated === true &&
+    row.connoinherit === false &&
+    row.condeferrable === false &&
+    row.condeferred === false &&
+    Array.isArray(row.column_names) &&
+    sameValue(row.column_names, ["synthetic_action_ref", "action_sha256"]);
+  if (!shapeIsExpected) {
+    return { oid: row.oid, isLegacy: false, isCurrent: false };
+  }
+  const refs = approvalActionRefMigrationValues();
+  const actualExpression = canonicalizeRlsExpression(
+    row.expression,
+    "ai_assessment_approval_requests",
+  );
+  const matches = (actionRefs: readonly string[]) =>
+    actualExpression === canonicalizeRlsExpression(
+      approvalActionRefConstraintExpression(actionRefs),
+      "ai_assessment_approval_requests",
+    );
+  return {
+    oid: row.oid,
+    isLegacy: matches(refs.legacy),
+    isCurrent: matches(refs.current),
+  };
+}
+
+async function reconstructLegacyApprovalActionRefConstraint(
+  client: InstanceType<typeof Client>,
+): Promise<boolean> {
+  const values = approvalActionRefMigrationValues();
+  const before = await readApprovalActionRefConstraintState(client);
+  if (!before?.isCurrent) {
+    throw new Error("versioned_migration_source_action_ref_constraint_mismatch");
+  }
+  const legacyExpression = approvalActionRefConstraintExpression(values.legacy);
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      `ALTER TABLE public.ai_assessment_approval_requests
+       DROP CONSTRAINT ai_assessment_approval_action_ref_check,
+       ADD CONSTRAINT ai_assessment_approval_action_ref_check
+       CHECK (${legacyExpression})`,
+    );
+    await client.query("COMMIT");
+  } catch {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw new Error("versioned_migration_legacy_constraint_setup_failed");
+  }
+  const after = await readApprovalActionRefConstraintState(client);
+  return after?.isLegacy === true;
+}
+
+async function restoreCurrentApprovalActionRefConstraint(
+  client: InstanceType<typeof Client>,
+): Promise<void> {
+  const { current } = approvalActionRefMigrationValues();
+  const currentExpression = approvalActionRefConstraintExpression(current);
+  await client.query("BEGIN");
+  try {
+    await client.query(
+      `ALTER TABLE public.ai_assessment_approval_requests
+       DROP CONSTRAINT ai_assessment_approval_action_ref_check,
+       ADD CONSTRAINT ai_assessment_approval_action_ref_check
+       CHECK (${currentExpression})`,
+    );
+    await client.query("COMMIT");
+  } catch {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw new Error("versioned_migration_current_constraint_restore_failed");
+  }
+  const restored = await readApprovalActionRefConstraintState(client);
+  if (!restored?.isCurrent) {
+    throw new Error("versioned_migration_current_constraint_restore_failed");
+  }
+}
+
+async function verifyMigration0006RejectsUnexpectedConstraint(
+  client: InstanceType<typeof Client>,
+): Promise<boolean> {
+  const { current } = approvalActionRefMigrationValues();
+  const currentExpression = approvalActionRefConstraintExpression(current);
+  await client.query("BEGIN");
+  try {
+    await client.query(
+      `ALTER TABLE public.ai_assessment_approval_requests
+       DROP CONSTRAINT ai_assessment_approval_action_ref_check,
+       ADD CONSTRAINT ai_assessment_approval_action_ref_check
+       CHECK ((${currentExpression}) AND action_sha256 <> repeat('0', 64))`,
+    );
+    await client.query("COMMIT");
+  } catch {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw new Error("versioned_migration_unexpected_constraint_setup_failed");
+  }
+  let rejected = false;
+  try {
+    await applyVersionedMigration(
+      client,
+      "0006_align_approval_action_refs.sql",
+    );
+  } catch (error) {
+    rejected = error instanceof Error &&
+      error.message === "versioned_migration_sql_failed:23514";
+  }
+  await restoreCurrentApprovalActionRefConstraint(client);
+  return rejected;
+}
+
 function safeVersionedMigrationFailureCode(error: unknown): string {
   if (!(error instanceof Error)) return "versioned_migration_audit_failed";
   const message = error.message;
@@ -1102,6 +1275,14 @@ function safeVersionedMigrationFailureCode(error: unknown): string {
     message === "versioned_migration_baseline_new_tables_not_empty" ||
     message === "versioned_migration_baseline_reconstruction_failed" ||
     message === "versioned_migration_baseline_mismatch" ||
+    message === "versioned_migration_source_action_ref_constraint_mismatch" ||
+    message === "versioned_migration_legacy_constraint_setup_failed" ||
+    message === "versioned_migration_legacy_action_ref_not_reproduced" ||
+    message === "versioned_migration_action_ref_constraint_not_updated" ||
+    message === "versioned_migration_0006_not_idempotent" ||
+    message === "versioned_migration_0006_unexpected_constraint_accepted" ||
+    message === "versioned_migration_unexpected_constraint_setup_failed" ||
+    message === "versioned_migration_current_constraint_restore_failed" ||
     message === "versioned_migration_catalog_mismatch"
   ) {
     return message;
@@ -1247,6 +1428,8 @@ async function runVersionedMigrationAudit(input: {
       throw new Error("versioned_migration_baseline_reconstruction_failed");
     }
 
+    report.baselineLegacyActionRefConstraintVerified =
+      await reconstructLegacyApprovalActionRefConstraint(migrationClient);
     const baselinePhase = await readRlsCatalogPhaseSnapshot(
       migrationPool,
       [...legacyTableSet],
@@ -1258,21 +1441,59 @@ async function runVersionedMigrationAudit(input: {
       roleNames,
     );
     report.baselineActual = catalogCounts(baselinePhase);
-    report.baselineMatchesDrizzleProjection = Object.values(
-      compareCatalogInventories(
-        phaseSnapshotForTables(drizzlePhase, legacyTableSet),
-        grantSnapshotForTables(drizzleGrants, legacyTableSet),
-        baselinePhase,
-        baselineGrantSnapshot,
+    const drizzleLegacyPhase = phaseSnapshotForTables(
+      drizzlePhase,
+      legacyTableSet,
+    );
+    const { legacy } = approvalActionRefMigrationValues();
+    const legacyActionRefExpression =
+      approvalActionRefConstraintExpression(legacy);
+    const drizzleLegacyProjection: RlsCatalogPhaseSnapshot = {
+      ...drizzleLegacyPhase,
+      constraints: drizzleLegacyPhase.constraints.map((constraint) =>
+        constraint.tableName === "ai_assessment_approval_requests" &&
+          constraint.constraintName ===
+            "ai_assessment_approval_action_ref_check"
+          ? { ...constraint, expression: legacyActionRefExpression }
+          : constraint
       ),
+    };
+    const baselineDrizzleComparison = compareCatalogInventories(
+      drizzleLegacyPhase,
+      grantSnapshotForTables(drizzleGrants, legacyTableSet),
+      baselinePhase,
+      baselineGrantSnapshot,
+    );
+    const baselineLegacyComparison = compareCatalogInventories(
+      drizzleLegacyProjection,
+      grantSnapshotForTables(drizzleGrants, legacyTableSet),
+      baselinePhase,
+      baselineGrantSnapshot,
+    );
+    report.baselineMatchesDrizzleProjection = Object.values(
+      baselineDrizzleComparison,
     ).every(Boolean);
+    report.baselineMatchesExpectedLegacyProjection = Object.values(
+      baselineLegacyComparison,
+    ).every(Boolean);
+    report.baselineActionRefLegacyDifferenceOnly =
+      baselineDrizzleComparison.tables &&
+      baselineDrizzleComparison.columns &&
+      baselineDrizzleComparison.indexes &&
+      !baselineDrizzleComparison.constraints &&
+      baselineDrizzleComparison.policies &&
+      baselineDrizzleComparison.roles &&
+      baselineDrizzleComparison.privilegeMatrix &&
+      report.baselineLegacyActionRefConstraintVerified === true;
     const baselineRlsValid = baselinePhase.tables.every(
       (table) => table.rlsEnabled && table.rlsForced,
     );
     if (
       !sameValue(report.baselineActual, report.baselineExpected) ||
       !baselineRlsValid ||
-      !report.baselineMatchesDrizzleProjection
+      !report.baselineMatchesExpectedLegacyProjection ||
+      !report.baselineLegacyActionRefConstraintVerified ||
+      !report.baselineActionRefLegacyDifferenceOnly
     ) {
       report.violationCodes.push("versioned_migration_baseline_mismatch");
       throw new Error("versioned_migration_baseline_mismatch");
@@ -1284,6 +1505,7 @@ async function runVersionedMigrationAudit(input: {
       "0003_workspace_rule_version_unique_constraint.sql",
       "0004_align_rule_check_constraint_names.sql",
       "0005_workspace_connector_foundation.sql",
+      "0006_align_approval_action_refs.sql",
     ];
     for (const filename of migrationFiles) {
       await applyVersionedMigration(migrationClient, filename);
@@ -1299,6 +1521,71 @@ async function runVersionedMigrationAudit(input: {
       if (filename === "0005_workspace_connector_foundation.sql") {
         await applyVersionedMigration(migrationClient, filename);
         report.migration0005Idempotent = true;
+      }
+      if (filename === "0006_align_approval_action_refs.sql") {
+        const beforeMigration = await readApprovalActionRefConstraintState(
+          migrationClient,
+        );
+        if (!beforeMigration?.isLegacy) {
+          throw new Error("versioned_migration_legacy_action_ref_not_reproduced");
+        }
+        await applyVersionedMigration(migrationClient, filename);
+        const afterMigration = await readApprovalActionRefConstraintState(
+          migrationClient,
+        );
+        report.migration0006LegacyConstraintReplaced =
+          afterMigration !== null &&
+          afterMigration.isCurrent &&
+          afterMigration.oid !== beforeMigration.oid;
+        if (!report.migration0006LegacyConstraintReplaced) {
+          throw new Error("versioned_migration_action_ref_constraint_not_updated");
+        }
+
+        const beforeIdempotentPhase = await readRlsCatalogPhaseSnapshot(
+          migrationPool,
+          tableNames,
+          roleNames,
+        );
+        const beforeIdempotentGrants = await readCatalogSnapshot(
+          migrationPool,
+          tableNames,
+          roleNames,
+        );
+        await applyVersionedMigration(migrationClient, filename);
+        const afterIdempotentConstraint =
+          await readApprovalActionRefConstraintState(migrationClient);
+        const afterIdempotentPhase = await readRlsCatalogPhaseSnapshot(
+          migrationPool,
+          tableNames,
+          roleNames,
+        );
+        const afterIdempotentGrants = await readCatalogSnapshot(
+          migrationPool,
+          tableNames,
+          roleNames,
+        );
+        const idempotentInventory = compareCatalogInventories(
+          beforeIdempotentPhase,
+          beforeIdempotentGrants.snapshot,
+          afterIdempotentPhase,
+          afterIdempotentGrants.snapshot,
+        );
+        report.migration0006Idempotent =
+          afterIdempotentConstraint?.isCurrent === true &&
+          afterIdempotentConstraint.oid === afterMigration.oid &&
+          sameValue(
+            catalogCounts(beforeIdempotentPhase),
+            catalogCounts(afterIdempotentPhase),
+          ) &&
+          Object.values(idempotentInventory).every(Boolean);
+        if (!report.migration0006Idempotent) {
+          throw new Error("versioned_migration_0006_not_idempotent");
+        }
+        report.migration0006UnexpectedConstraintRejected =
+          await verifyMigration0006RejectsUnexpectedConstraint(migrationClient);
+        if (!report.migration0006UnexpectedConstraintRejected) {
+          throw new Error("versioned_migration_0006_unexpected_constraint_accepted");
+        }
       }
     }
 
@@ -1342,6 +1629,9 @@ async function runVersionedMigrationAudit(input: {
       !report.migration0003Idempotent ||
       !report.migration0004Idempotent ||
       !report.migration0005Idempotent ||
+      !report.migration0006LegacyConstraintReplaced ||
+      !report.migration0006Idempotent ||
+      !report.migration0006UnexpectedConstraintRejected ||
       auditViolations.length > 0
     ) {
       report.violationCodes.push(...auditViolations);
@@ -1368,7 +1658,8 @@ export async function runVersionedMigrationAuditForCi(
   const report: VersionedMigrationAuditReport = {
     status: "running",
     baselineSourceCommit,
-    baselineStrategy: "clone_drizzle_catalog_and_remove_new_tables",
+    baselineStrategy:
+      "clone_drizzle_catalog_remove_new_tables_and_restore_legacy_action_ref_constraint",
     baselineExpected: legacyCatalogCounts,
     migrationsApplied: [],
     violationCodes: [],
@@ -2031,7 +2322,8 @@ async function main(): Promise<void> {
     versionedMigrationAudit = {
       status: "running",
       baselineSourceCommit,
-      baselineStrategy: "clone_drizzle_catalog_and_remove_new_tables",
+      baselineStrategy:
+        "clone_drizzle_catalog_remove_new_tables_and_restore_legacy_action_ref_constraint",
       baselineExpected: legacyCatalogCounts,
       migrationsApplied: [],
       violationCodes: [],
@@ -2052,7 +2344,7 @@ async function main(): Promise<void> {
     });
     versionedMigrationAudit.status = "passed";
     console.log(
-      `Versioned migration catalog: baseline=${versionedMigrationAudit.baselineActual?.tables}/${versionedMigrationAudit.baselineActual?.columns}/${versionedMigrationAudit.baselineActual?.indexes}/${versionedMigrationAudit.baselineActual?.constraints}/${versionedMigrationAudit.baselineActual?.policies}/${versionedMigrationAudit.baselineActual?.roles} migrated=${versionedMigrationAudit.migratedCatalog?.tables}/${versionedMigrationAudit.migratedCatalog?.columns}/${versionedMigrationAudit.migratedCatalog?.indexes}/${versionedMigrationAudit.migratedCatalog?.constraints}/${versionedMigrationAudit.migratedCatalog?.policies}/${versionedMigrationAudit.migratedCatalog?.roles} migration_0003_idempotent=${versionedMigrationAudit.migration0003Idempotent === true} migration_0004_idempotent=${versionedMigrationAudit.migration0004Idempotent === true} migration_0005_idempotent=${versionedMigrationAudit.migration0005Idempotent === true}.`,
+      `Versioned migration catalog: baseline=${versionedMigrationAudit.baselineActual?.tables}/${versionedMigrationAudit.baselineActual?.columns}/${versionedMigrationAudit.baselineActual?.indexes}/${versionedMigrationAudit.baselineActual?.constraints}/${versionedMigrationAudit.baselineActual?.policies}/${versionedMigrationAudit.baselineActual?.roles} migrated=${versionedMigrationAudit.migratedCatalog?.tables}/${versionedMigrationAudit.migratedCatalog?.columns}/${versionedMigrationAudit.migratedCatalog?.indexes}/${versionedMigrationAudit.migratedCatalog?.constraints}/${versionedMigrationAudit.migratedCatalog?.policies}/${versionedMigrationAudit.migratedCatalog?.roles} migration_0003_idempotent=${versionedMigrationAudit.migration0003Idempotent === true} migration_0004_idempotent=${versionedMigrationAudit.migration0004Idempotent === true} migration_0005_idempotent=${versionedMigrationAudit.migration0005Idempotent === true} migration_0006_legacy_replaced=${versionedMigrationAudit.migration0006LegacyConstraintReplaced === true} migration_0006_idempotent=${versionedMigrationAudit.migration0006Idempotent === true}.`,
     );
 
     currentStage = "api_unit_tests";

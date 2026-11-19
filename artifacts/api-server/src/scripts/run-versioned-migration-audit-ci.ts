@@ -11,6 +11,10 @@ type VersionedMigrationReport = {
   migrationsApplied: string[];
   migration0003Idempotent?: boolean;
   migration0004Idempotent?: boolean;
+  migration0005Idempotent?: boolean;
+  migration0006LegacyConstraintReplaced?: boolean;
+  migration0006Idempotent?: boolean;
+  migration0006UnexpectedConstraintRejected?: boolean;
   inventoryMatchesDrizzle?: Record<string, boolean>;
   violationCodes: string[];
 };
@@ -66,9 +70,21 @@ const artifact = {
   idempotency: {
     migration0003: report.migration0003Idempotent ?? null,
     migration0004: report.migration0004Idempotent ?? null,
+    migration0005: report.migration0005Idempotent ?? null,
+    migration0006: report.migration0006Idempotent ?? null,
   },
+  migration0006LegacyConstraintReplaced:
+    report.migration0006LegacyConstraintReplaced ?? null,
+  migration0006UnexpectedConstraintRejected:
+    report.migration0006UnexpectedConstraintRejected ?? null,
   baselineMatchesDrizzleProjection:
     report.baselineMatchesDrizzleProjection ?? null,
+  baselineMatchesExpectedLegacyProjection:
+    report.baselineMatchesExpectedLegacyProjection ?? null,
+  baselineLegacyActionRefConstraintVerified:
+    report.baselineLegacyActionRefConstraintVerified ?? null,
+  baselineActionRefLegacyDifferenceOnly:
+    report.baselineActionRefLegacyDifferenceOnly ?? null,
   inventoryMatchesDrizzle: report.inventoryMatchesDrizzle ?? null,
   migrationsApplied: report.migrationsApplied,
   versionedMigrationAudit: report,
@@ -91,7 +107,7 @@ if (
     mode: 0o600,
   });
   console.log(
-    `Versioned SQL migration audit: status=${report.status} differences=${differenceCodes.length} migration0003Idempotent=${artifact.idempotency.migration0003} migration0004Idempotent=${artifact.idempotency.migration0004}`,
+    `Versioned SQL migration audit: status=${report.status} differences=${differenceCodes.length} migration0003Idempotent=${artifact.idempotency.migration0003} migration0004Idempotent=${artifact.idempotency.migration0004} migration0005Idempotent=${artifact.idempotency.migration0005} migration0006Idempotent=${artifact.idempotency.migration0006}`,
   );
   if (report.status !== "passed" || differenceCodes.length > 0) {
     process.exitCode = 1;
