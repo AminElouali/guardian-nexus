@@ -1107,6 +1107,7 @@ type ApprovalActionRefConstraintState = {
   oid: string;
   isLegacy: boolean;
   isCurrent: boolean;
+  mismatch: "constraint_shape" | "constraint_columns" | "constraint_definition" | null;
 };
 
 async function readApprovalActionRefConstraintState(
@@ -1152,15 +1153,33 @@ async function readApprovalActionRefConstraintState(
   ) {
     return null;
   }
-  const shapeIsExpected = row.contype === "c" &&
-    row.convalidated === true &&
-    row.connoinherit === false &&
-    row.condeferrable === false &&
-    row.condeferred === false &&
-    Array.isArray(row.column_names) &&
-    sameValue(row.column_names, ["synthetic_action_ref", "action_sha256"]);
-  if (!shapeIsExpected) {
-    return { oid: row.oid, isLegacy: false, isCurrent: false };
+  if (
+    row.contype !== "c" ||
+    row.convalidated !== true ||
+    row.connoinherit !== false ||
+    row.condeferrable !== false ||
+    row.condeferred !== false
+  ) {
+    return {
+      oid: row.oid,
+      isLegacy: false,
+      isCurrent: false,
+      mismatch: "constraint_shape",
+    };
+  }
+  if (
+    !Array.isArray(row.column_names) ||
+    !sameValue(
+      [...row.column_names].sort(),
+      ["action_sha256", "synthetic_action_ref"],
+    )
+  ) {
+    return {
+      oid: row.oid,
+      isLegacy: false,
+      isCurrent: false,
+      mismatch: "constraint_columns",
+    };
   }
   const refs = approvalActionRefMigrationValues();
   const actualExpression = canonicalizeRlsExpression(
@@ -1176,6 +1195,9 @@ async function readApprovalActionRefConstraintState(
     oid: row.oid,
     isLegacy: matches(refs.legacy),
     isCurrent: matches(refs.current),
+    mismatch: matches(refs.legacy) || matches(refs.current)
+      ? null
+      : "constraint_definition",
   };
 }
 
@@ -1185,7 +1207,9 @@ async function reconstructLegacyApprovalActionRefConstraint(
   const values = approvalActionRefMigrationValues();
   const before = await readApprovalActionRefConstraintState(client);
   if (!before?.isCurrent) {
-    throw new Error("versioned_migration_source_action_ref_constraint_mismatch");
+    throw new Error(
+      `versioned_migration_source_action_ref_${before?.mismatch ?? "constraint_missing"}`,
+    );
   }
   const legacyExpression = approvalActionRefConstraintExpression(values.legacy);
   try {
@@ -1275,7 +1299,10 @@ function safeVersionedMigrationFailureCode(error: unknown): string {
     message === "versioned_migration_baseline_new_tables_not_empty" ||
     message === "versioned_migration_baseline_reconstruction_failed" ||
     message === "versioned_migration_baseline_mismatch" ||
-    message === "versioned_migration_source_action_ref_constraint_mismatch" ||
+    message === "versioned_migration_source_action_ref_constraint_missing" ||
+    message === "versioned_migration_source_action_ref_constraint_shape" ||
+    message === "versioned_migration_source_action_ref_constraint_columns" ||
+    message === "versioned_migration_source_action_ref_constraint_definition" ||
     message === "versioned_migration_legacy_constraint_setup_failed" ||
     message === "versioned_migration_legacy_action_ref_not_reproduced" ||
     message === "versioned_migration_action_ref_constraint_not_updated" ||
@@ -1571,7 +1598,9 @@ async function runVersionedMigrationAudit(input: {
           afterIdempotentGrants.snapshot,
         );
         report.migration0006Idempotent =
-          afterIdempotentConstraint?.isCurrent === true &&
+          afterMigration !== null &&
+          afterIdempotentConstraint !== null &&
+          afterIdempotentConstraint.isCurrent &&
           afterIdempotentConstraint.oid === afterMigration.oid &&
           sameValue(
             catalogCounts(beforeIdempotentPhase),

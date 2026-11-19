@@ -86,8 +86,12 @@ BEGIN
     OR constraint_row.connoinherit
     OR constraint_row.condeferrable
     OR constraint_row.condeferred
-    OR constraint_row.conkey <>
-      ARRAY[action_ref_attnum, action_sha256_attnum]::smallint[]
+    OR NOT (
+      constraint_row.conkey @>
+        ARRAY[action_ref_attnum, action_sha256_attnum]::smallint[]
+      AND constraint_row.conkey <@
+        ARRAY[action_ref_attnum, action_sha256_attnum]::smallint[]
+    )
   THEN
     RAISE EXCEPTION 'approval_action_ref_constraint_shape_invalid'
       USING ERRCODE = '23514';

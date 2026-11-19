@@ -6,6 +6,9 @@ type VersionedMigrationReport = {
   baselineExpected: Record<string, number>;
   baselineActual?: Record<string, number>;
   baselineMatchesDrizzleProjection?: boolean;
+  baselineMatchesExpectedLegacyProjection?: boolean;
+  baselineLegacyActionRefConstraintVerified?: boolean;
+  baselineActionRefLegacyDifferenceOnly?: boolean;
   drizzleCatalog?: Record<string, number>;
   migratedCatalog?: Record<string, number>;
   migrationsApplied: string[];
