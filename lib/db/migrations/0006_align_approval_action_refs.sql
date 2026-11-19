@@ -139,7 +139,8 @@ BEGIN
   ELSIF actual_action_refs = sorted_legacy_action_refs THEN
     SELECT string_agg(quote_literal(action_ref), ', ' ORDER BY action_ref)
       INTO rendered_action_refs
-      FROM unnest(current_action_refs) AS action_ref;
+      FROM unnest(current_action_refs)
+        WITH ORDINALITY AS current_ref(action_ref, ordinality);
     EXECUTE format(
       'ALTER TABLE public.ai_assessment_approval_requests ' ||
       'DROP CONSTRAINT ai_assessment_approval_action_ref_check, ' ||
