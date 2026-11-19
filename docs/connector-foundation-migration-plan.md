@@ -1,8 +1,8 @@
-# Migración 0005: base común de conectores
+# Migraciones 0005–0006: base común de conectores y acciones
 
-**Estado:** la migración está **IMPLEMENTADA en el repositorio** y se prueba en
-PostgreSQL desechable. En esta fase **no se aplica a desarrollo ni a
-producción**.
+**Estado:** las migraciones 0005 y 0006 están **IMPLEMENTADAS en el repositorio**
+y aplicadas en la base de **Development** (verificado el 2026-11-19).
+**Production no se ha tocado.**
 
 ## Cambios de catálogo
 
@@ -38,8 +38,8 @@ diferencias.
 ## Secuencia comprobada en el laboratorio
 
 El laboratorio crea una base temporal y aplica, cada una en su propia
-transacción, las migraciones SQL versionadas 0001–0005. Repite 0003, 0004 y 0005
-para comprobar idempotencia. Compara el catálogo resultante con el esquema
+transacción, las migraciones SQL versionadas 0001–0006. Repite 0003–0006 para
+comprobar idempotencia. Compara el catálogo resultante con el esquema
 Drizzle: tablas, columnas, índices, constraints, policies, roles y matriz de
 privilegios. También ejecuta la auditoría RLS/runtime y el E2E con un adaptador
 falso sin red y una clave de bóveda efímera.
@@ -64,9 +64,27 @@ confirmar que ninguna fila usa el `keyId` anterior, esa clave puede retirarse.
 No existe un endpoint para leer un secreto descifrado ni se registra en
 auditoría.
 
-## Antes de cualquier aplicación compartida
+## Antes de cualquier otra aplicación compartida
 
-Este documento no autoriza una aplicación en bases compartidas. Una tarea
-separada tendría que incluir: checkpoint verificable, auditoría previa,
-revisión de SQL, aplicación aprobada, auditoría posterior y plan de restauración.
-Hasta entonces, desarrollo y producción quedan fuera del alcance.
+La aplicación a Development registrada arriba corresponde a la autorización de
+Amin para esa operación. No autoriza cambios en Production ni futuras
+migraciones compartidas. Cada aplicación posterior requiere una tarea aprobada
+con checkpoint verificable cuando corresponda, auditoría previa, revisión del
+SQL, auditoría posterior y plan de restauración.
+
+## Estado en Development — verificado el 2026-11-19
+
+- **0005:** ya estaba aplicada al iniciar esta operación. El contrato anterior
+  a 0005 es 16/173/44/72/45/3 y el posterior es 18/198/49/92/51/3. La fecha
+  original de aplicación de 0005 no se registró en esta operación; estos son
+  los recuentos del contrato, no una medición histórica del día de aplicación.
+- **0006:** antes de aplicarla, Development tenía 18/198/49/92/51/3 y la única
+  diferencia era la constraint
+  `ai_assessment_approval_action_ref_check`, aún limitada a las dos acciones
+  sintéticas antiguas. Después de aplicar 0006, el catálogo quedó en
+  18/198/49/92/51/3, con cero diferencias respecto a Drizzle.
+- Se aplicaron de nuevo 0005 y 0006 para comprobar idempotencia. La instantánea
+  completa del catálogo tras esas segundas aplicaciones fue idéntica a la
+  obtenida tras la primera 0006. RLS quedó habilitada y forzada en las 18 tablas;
+  la auditoría de policies, roles, privilegios y append-only dio cero
+  violaciones.
