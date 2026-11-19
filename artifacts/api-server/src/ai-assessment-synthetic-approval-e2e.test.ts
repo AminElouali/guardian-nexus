@@ -61,6 +61,10 @@ import {
   type ApprovalLedgerBundleV1,
   type SignedApprovalReceiptV1,
 } from "./lib/approval-ledger-crypto";
+import {
+  FOCUSED_APPROVAL_E2E_FORBIDDEN_MESSAGE,
+  inspectApprovalE2eMode,
+} from "./lib/approval-e2e-mode";
 
 /*
  * This is an explicitly fixture-only integration harness. It executes the
@@ -72,24 +76,55 @@ import {
 const workerRoot = resolve(
   fileURLToPath(new URL("../../../workers/guardian-ai-assessment", import.meta.url)),
 );
-const connectorCredentialE2eOnly =
-  process.env.GUARDIAN_LAB_CONNECTOR_CREDENTIAL_E2E_ONLY === "1";
-const agentCredentialSubtestName =
-  "agent credentials are scoped, revocable, renewable and cannot self-approve";
-const connectorCredentialSubtestName =
-  "workspace connector vault is private, encrypted, receipt-gated and idempotent";
+const approvalE2eSubtestNames = {
+  savedRules:
+    "saved rules are admin-managed, versioned, simulated and default-deny",
+  rollback:
+    "rollback creates a draft that can be activated to restore the historical decision",
+  starterProfiles:
+    "starter profiles create bounded drafts and the server simulator uses their versions",
+  historyImpact:
+    "history impact compares only verified stored generic arguments without writes",
+  agents:
+    "agent credentials are scoped, revocable, renewable and cannot self-approve",
+  connector:
+    "workspace connector vault is private, encrypted, receipt-gated and idempotent",
+} as const;
+const allApprovalE2eSubtestNames = Object.values(approvalE2eSubtestNames);
+const allApprovalE2eSubtestNameSet = new Set<string>(
+  allApprovalE2eSubtestNames,
+);
+const focusedApprovalE2eSubtestNames = new Set<string>([
+  approvalE2eSubtestNames.agents,
+  approvalE2eSubtestNames.connector,
+]);
+const focusedOmittedSubtestNames = allApprovalE2eSubtestNames.filter(
+  (name) => !focusedApprovalE2eSubtestNames.has(name),
+);
+const approvalE2eMode = inspectApprovalE2eMode(
+  process.env,
+  focusedOmittedSubtestNames.length,
+);
+const connectorCredentialE2eOnly = approvalE2eMode.focused;
+if (approvalE2eMode.focused) {
+  console.warn(
+    `MODO FOCALIZADO: se omiten ${approvalE2eMode.omittedSubtestCount} subpruebas`,
+  );
+}
+if (approvalE2eMode.forbidden) {
+  throw new Error(FOCUSED_APPROVAL_E2E_FORBIDDEN_MESSAGE);
+}
 
 async function runApprovalE2eSubtest(
   parent: TestContext,
   name: string,
   callback: (context: TestContext) => void | Promise<void>,
 ): Promise<void> {
-  if (
-    connectorCredentialE2eOnly &&
-    name !== agentCredentialSubtestName &&
-    name !== connectorCredentialSubtestName
-  ) {
-    return;
+  if (connectorCredentialE2eOnly) {
+    if (!allApprovalE2eSubtestNameSet.has(name)) {
+      throw new Error("focused_approval_e2e_subtest_unaccounted");
+    }
+    if (!focusedApprovalE2eSubtestNames.has(name)) return;
   }
   await parent.test(name, callback);
 }
@@ -998,7 +1033,7 @@ test(
     const queuePath = `/api/workspaces/${workspaceA}/ai-security-assessments/lab/jobs`;
     const previewPath = `/api/workspaces/${workspaceA}/ai-security-assessments/lab/policy-preview`;
     let agentApprovalReceipt: SignedApprovalReceiptV1 | null = null;
-    await runApprovalE2eSubtest(t, "saved rules are admin-managed, versioned, simulated and default-deny", async () => {
+    await runApprovalE2eSubtest(t, approvalE2eSubtestNames.savedRules, async () => {
       const supportAction = "guardian.support.reply.send.v1";
       const rulePath =
         `/api/workspaces/${workspaceA}/action-rules/${supportAction}`;
@@ -1171,7 +1206,7 @@ test(
       assert.equal(simulatedActiveData.decision, "deny");
       assert.equal(simulatedActiveData.ruleVersionId, secondVersion.versionId);
     });
-    await runApprovalE2eSubtest(t, "rollback creates a draft that can be activated to restore the historical decision", async () => {
+    await runApprovalE2eSubtest(t, approvalE2eSubtestNames.rollback, async () => {
       const supportAction = "guardian.support.reply.send.v1";
       const rulePath =
         `/api/workspaces/${workspaceA}/action-rules/${supportAction}`;
@@ -1302,7 +1337,7 @@ test(
       assert.ok(activationAudit, "activation must be recorded in workspace audit");
       assert.equal(rollbackAudit.metadata.activated, false);
     });
-    await runApprovalE2eSubtest(t, "starter profiles create bounded drafts and the server simulator uses their versions", async () => {
+    await runApprovalE2eSubtest(t, approvalE2eSubtestNames.starterProfiles, async () => {
       const rulesPath = `/api/workspaces/${workspaceA}/action-rules`;
       const profilePath = (profileId: string) =>
         `/api/workspaces/${workspaceA}/action-rules/profiles/${profileId}/draft`;
@@ -1484,7 +1519,7 @@ test(
         "the server identifies an unconditional external-email allow as open",
       );
     });
-    await runApprovalE2eSubtest(t, "history impact compares only verified stored generic arguments without writes", async () => {
+    await runApprovalE2eSubtest(t, approvalE2eSubtestNames.historyImpact, async () => {
       const actionType = "guardian.support.reply.send.v1";
       const rulePath =
         `/api/workspaces/${workspaceA}/action-rules/${actionType}`;
@@ -1653,7 +1688,7 @@ test(
       assert.equal(empty.draftCounts, null);
     });
 
-    await runApprovalE2eSubtest(t, "agent credentials are scoped, revocable, renewable and cannot self-approve", async () => {
+    await runApprovalE2eSubtest(t, approvalE2eSubtestNames.agents, async () => {
       const agentsPath = `/api/workspaces/${workspaceA}/agents`;
       const supportRulePath =
         `/api/workspaces/${workspaceA}/action-rules/guardian.support.reply.send.v1`;
@@ -4067,7 +4102,7 @@ test(
 
     await runApprovalE2eSubtest(
       t,
-      "workspace connector vault is private, encrypted, receipt-gated and idempotent",
+      approvalE2eSubtestNames.connector,
       async (t) => {
         const credentialPath =
           `/api/workspaces/${workspaceB}/connector-credentials`;

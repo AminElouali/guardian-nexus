@@ -2321,6 +2321,7 @@ async function main(): Promise<void> {
         .split(/\r?\n/)
         .filter(
           (line) =>
+            line.includes("MODO FOCALIZADO:") ||
             line.includes(targetSubtestName) ||
             line.includes("connector insert context current_user=") ||
             line.includes("workspace_connector_credential_insert_result") ||

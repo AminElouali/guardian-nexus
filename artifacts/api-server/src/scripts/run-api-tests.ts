@@ -13,6 +13,7 @@ export const apiTestFiles = [
   "src/lib/ai-assessment-qwen-evidence.test.ts",
   "src/lib/assessment-broker-grant.test.ts",
   "src/lib/assessment-worker-mode.test.ts",
+  "src/lib/approval-e2e-mode.test.ts",
   "src/lib/ai-assessment-sandbox.test.ts",
   "src/lib/guardian-agent-action-adapter.test.ts",
   "src/lib/assessment-container-control.test.ts",
