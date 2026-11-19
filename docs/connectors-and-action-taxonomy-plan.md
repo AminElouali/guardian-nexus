@@ -78,13 +78,19 @@ Las plantillas son puntos de partida versionados; al seleccionarlas se deberían
 Estado por etapa:
 
 1. **Base común de conectores — IMPLEMENTADA parcialmente en código:** bóveda AES-256-GCM por workspace, identificador de clave, permisos por workspace, clasificación de las cuatro acciones del catálogo, verificación y consumo atómico del recibo v1, registro idempotente, estados pendiente/ejecutado/fallido y desconexión. Solo se registra un adaptador falso en el E2E desechable; la aplicación no registra adaptadores de proveedores y falla cerrada si no hay uno.
-2. **Proxy MCP — PROYECTADO:** situar un proxy delante de servicios que ya ofrecen MCP. Las descripciones y nombres de herramientas recibidos se tratarán como datos no fiables; Guardian clasificará la acción mediante su propio catálogo.
+2. **Proxy MCP — Fase 1 IMPLEMENTADA (solo clasificador); proxy de red PROYECTADO:** situar un proxy delante de servicios que ya ofrecen MCP. Las descripciones y nombres de herramientas recibidos se tratarán como datos no fiables; Guardian clasifica únicamente las herramientas incluidas en su lista explícita.
 3. **Conector genérico configurable por el cliente — PROYECTADO:** aún no se permite que clientes definan nuevos adaptadores o acciones.
 4. **Conectores nativos para la demo — PROYECTADOS:** correo en un sandbox como Mailtrap y Stripe en modo de prueba. Ambos están pendientes de confirmar; no se presupone que estén configurados ni conectados.
 5. **Verificador “sin recibo no se abre” — PROYECTADO para producción:** `lib/guardian-guard` demuestra el patrón con SMTP local, pero todavía no es un límite de seguridad desplegado que el agente no pueda evitar.
 7. **Aislamiento de producción y objetivos de servicio — PROYECTADO:** medir p50 y p95 por separado para decisiones automáticas y aprobaciones humanas. Usar esos resultados para fijar un tiempo de respuesta verificable antes de prometerlo a clientes. Si las mediciones lo requieren, evaluar servidores en la UE y caché de reglas en memoria.
 
 **Reglas de evolución y operación — PROYECTADAS:** cada cambio de esquema debe incluir una migración versionada y una prueba que parta de la forma anterior del esquema. Además, realizar periódicamente una auditoría de solo lectura de la base de desarrollo para detectar desajustes pronto.
+
+### Proxy MCP — fase 1 IMPLEMENTADA (solo clasificador)
+
+Hay una función pura y determinista que clasifica llamadas contra una lista explícita de dos herramientas de un servidor MCP ficticio de demostración. Recibe el texto JSON original de los argumentos para detectar claves duplicadas antes de que un parser ordinario las descarte. La acción y los riesgos proceden del catálogo de Guardian; los argumentos se validan de forma estricta y se calcula una huella canónica usando la canonicalización compartida del proyecto. Nombres o argumentos desconocidos o malformados se rechazan de forma cerrada. Las descripciones, títulos, anotaciones, esquemas y respuestas que aporte MCP no influyen en el resultado.
+
+Esta fase **no** implementa un proxy de red, registro de servidores MCP, conexión a servicios, persistencia en base de datos ni autorización para ejecutar herramientas. La clasificación tampoco equivale a aprobar o permitir una acción; las llamadas desconocidas deben bloquearse.
 
 ## 7. Estado actual
 
@@ -95,7 +101,7 @@ Esto no equivale a conectores productivos para los servicios enumerados, ni demu
 ## 8. Decisiones abiertas
 
 1. **“Qué habría pasado”, opción 3:** decidir si se guardan datos mínimos de las acciones para futuras comparaciones, qué campos se conservan y durante cuánto tiempo. Hasta entonces, no reconstruir argumentos a partir de hashes ni de fixtures.
-2. **Orden de conectores:** confirmar si se prioriza el proxy MCP antes que el conector genérico configurable por cliente.
+2. **Orden de conectores — decidido:** Amin priorizó el proxy MCP antes que el conector genérico configurable por cliente; las fases posteriores siguen proyectadas.
 3. **Correo de demostración:** confirmar Mailtrap y el alcance del sandbox.
 4. **Pagos de demostración:** confirmar Stripe exclusivamente en modo de prueba y sus límites.
 5. **Lectura:** decidir si la plantilla Solo lectura debe permitir acciones de tipo Leer, y bajo qué etiquetas de sensibilidad y volumen.
