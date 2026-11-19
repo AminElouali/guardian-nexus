@@ -2303,6 +2303,15 @@ async function main(): Promise<void> {
       `node:test approval E2E: tests=${nodeTestSummary.tests} pass=${nodeTestSummary.pass} fail=${nodeTestSummary.fail} skipped=${nodeTestSummary.skipped}`,
     );
     const combinedE2eOutput = `${e2eOutput.stdout}\n${e2eOutput.stderr}`;
+    const connectorContextRecords = new Set<string>();
+    for (const contextDiagnostic of combinedE2eOutput.matchAll(
+      /workspace_connector_credential_insert_context (\{"workspaceSetting":"(?:[0-9a-f-]{36}|invalid)","userSetting":"[A-Za-z0-9._-]{1,128}","databaseRole":"[A-Za-z_][A-Za-z0-9_]{0,62}","membershipRole":"(?:owner|admin|analyst|viewer)","credentialExisted":(?:true|false)\})/g,
+    )) {
+      connectorContextRecords.add(contextDiagnostic[1] ?? "");
+    }
+    for (const contextRecord of connectorContextRecords) {
+      console.log(`Connector credential context: ${contextRecord}`);
+    }
     if (nodeTestSummary.fail > 0 || e2eOutput.exitCode !== 0) {
       const e2eTestPath = path.join(
         repoRoot,
@@ -2331,7 +2340,7 @@ async function main(): Promise<void> {
       nodeTestSummary.cancelled !== 0
     ) {
       const connectorDiagnostic = combinedE2eOutput.match(
-        /workspace_connector_credential_save_failed stage=[a-z_]{1,32} code=(?:[0-9A-Z]{5}|[a-z0-9_]{1,64}|[A-Za-z][A-Za-z0-9_]{0,63})(?: (?:constraint|table)=[A-Za-z_][A-Za-z0-9_]{0,62})?/,
+        /workspace_connector_credential_save_failed stage=[a-z_]{1,32} code=(?:[0-9A-Z]{5}|[A-Za-z][A-Za-z0-9_]{0,63}) chain=[A-Za-z0-9_=:,.;|-]{1,1200}/,
       )?.[0];
       if (connectorDiagnostic) {
         console.error(`Connector credential diagnostic: ${connectorDiagnostic}`);

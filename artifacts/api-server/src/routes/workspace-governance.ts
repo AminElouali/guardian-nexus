@@ -995,15 +995,17 @@ router.put(
                       )
                         ? context.databaseRole
                         : "invalid";
-                    logger.info(
-                      {
-                        ...context,
-                        workspaceSetting,
-                        userSetting,
-                        databaseRole,
-                      },
-                      `workspace_connector_credential_insert_context workspace=${workspaceSetting} user=${userSetting} db_role=${databaseRole} membership_role=${context.membershipRole} credential_existed=${context.credentialExisted}`,
-                    );
+                    const insertContext = {
+                      workspaceSetting,
+                      userSetting,
+                      databaseRole,
+                      membershipRole: context.membershipRole,
+                      credentialExisted: context.credentialExisted,
+                    };
+                    const contextMessage =
+                      `workspace_connector_credential_insert_context ${JSON.stringify(insertContext)}`;
+                    logger.info(insertContext, contextMessage);
+                    console.log(contextMessage);
                   },
                 }
               : {}),
