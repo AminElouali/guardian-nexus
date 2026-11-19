@@ -89,6 +89,7 @@ function makeSnapshots(): {
     "ai_assessment_jobs",
     "host_boundary_attestation_challenges",
     "ai_assessment_approval_requests",
+    "workspace_connector_executions",
   ];
   const privileges = ["SELECT", "INSERT", "UPDATE", "DELETE"] as const;
   const catalogSnapshot: RlsCatalogSnapshot = {
@@ -331,21 +332,12 @@ test("missing ledger is listed while catalog and privilege reads complete", asyn
     { rows: source.catalogSnapshot.tableColumns, rowCount: source.catalogSnapshot.tableColumns.length },
     { rows: [{ version: 160000 }], rowCount: 1 },
     {
-      rows: [{
-        table_name: "workspace_approval_ledger",
-        can_select: false,
-        can_insert: false,
-        can_update: false,
-        can_delete: false,
-        can_truncate: false,
-        can_references: false,
-        can_trigger: false,
-        can_maintain: false,
-        maintain_supported: false,
-        column_update: false,
-        column_references: false,
-      }],
-      rowCount: 1,
+      rows: source.appendOnlyGrantRows.map((row) =>
+        row.table_name === "workspace_approval_ledger"
+          ? { ...row, can_select: false, can_insert: false }
+          : row
+      ),
+      rowCount: source.appendOnlyGrantRows.length,
     },
     { rows: [], rowCount: 0 },
   ];
