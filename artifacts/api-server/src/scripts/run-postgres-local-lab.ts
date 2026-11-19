@@ -39,6 +39,7 @@ import { diagnoseGitHubActionsApprovalLabTarget } from "../lib/approval-e2e-db-g
 import { acquireGitHubActionsOidcToken } from "../lib/github-actions-oidc";
 import { readCatalogSnapshot } from "./verify-rls-catalog";
 import { apiTestFiles } from "./run-api-tests";
+import { loadConnectorVaultKeyring } from "../lib/workspace-connector-vault";
 
 const { Client, Pool } = pg;
 type RlsCatalogContractSources = Parameters<typeof parseRlsCatalogContract>[0] & {
@@ -103,6 +104,7 @@ type SafeReport = {
   approvalE2eFailureErrorCode?: string;
   approvalE2eFailureType?: string;
   approvalE2ePassed?: boolean;
+  targetedConnectorCredentialE2e?: boolean;
   versionedMigrationAudit?: VersionedMigrationAuditReport;
   failureOutput?: SafeChildOutput;
   failureStage?: Stage;
@@ -1649,6 +1651,14 @@ async function main(): Promise<void> {
   let databaseName = "";
   let runtimePassword = "";
   let connectorVaultKeyringJson = "";
+  const connectorCredentialE2eOnly =
+    process.env.GUARDIAN_LAB_CONNECTOR_CREDENTIAL_E2E_ONLY === "1";
+  if (
+    process.env.GUARDIAN_LAB_CONNECTOR_CREDENTIAL_E2E_ONLY !== undefined &&
+    !connectorCredentialE2eOnly
+  ) {
+    throw new Error("targeted_lab_mode_invalid");
+  }
 
   try {
     assertCleanParentEnvironment();
@@ -1682,6 +1692,20 @@ async function main(): Promise<void> {
       activeKeyId: "lab-ephemeral-v1",
       keys: { "lab-ephemeral-v1": connectorVaultKey },
     });
+    const validatedConnectorKeyring = loadConnectorVaultKeyring({
+      WORKSPACE_CONNECTOR_KEYRING_JSON: connectorVaultKeyringJson,
+    } as NodeJS.ProcessEnv);
+    if (
+      validatedConnectorKeyring.activeKeyId !== "lab-ephemeral-v1" ||
+      validatedConnectorKeyring.keys.get("lab-ephemeral-v1")?.length !== 32
+    ) {
+      throw new Error("connector_vault_ephemeral_keyring_invalid");
+    }
+    if (connectorCredentialE2eOnly) {
+      console.log(
+        "Focused connector E2E keyring validation passed: one active key, 32 bytes.",
+      );
+    }
 
     currentStage = "postgres_init";
     await runAndCheck(
@@ -1994,6 +2018,7 @@ async function main(): Promise<void> {
       await finalPool.end();
     }
 
+    if (!connectorCredentialE2eOnly) {
     currentStage = "versioned_migration_audit";
     if (!drizzleCatalogPhase || !drizzleCatalogGrants) {
       throw new Error("drizzle_catalog_snapshot_unavailable");
@@ -2230,6 +2255,7 @@ async function main(): Promise<void> {
     ) {
       throw new Error("demo_member_seed_tests_failed");
     }
+    }
 
     currentStage = "approval_e2e";
     const e2eEnv = {
@@ -2246,19 +2272,25 @@ async function main(): Promise<void> {
       ),
       WORKSPACE_CONNECTOR_KEYRING_JSON: connectorVaultKeyringJson,
     };
+    const e2eArgs = [
+      "--filter",
+      "@workspace/api-server",
+      "exec",
+      "node",
+      "--import",
+      "tsx",
+      "--test",
+      "--test-reporter=tap",
+      ...(connectorCredentialE2eOnly
+        ? [
+            "--test-name-pattern=workspace connector vault is private, encrypted, receipt-gated and idempotent",
+          ]
+        : []),
+      "src/ai-assessment-synthetic-approval-e2e.test.ts",
+    ];
     const e2eOutput = await runAndCapture(
       pnpm,
-      [
-        "--filter",
-        "@workspace/api-server",
-        "exec",
-        "node",
-        "--import",
-        "tsx",
-        "--test",
-        "--test-reporter=tap",
-        "src/ai-assessment-synthetic-approval-e2e.test.ts",
-      ],
+      e2eArgs,
       repoRoot,
       e2eEnv,
       currentStage,
@@ -2294,10 +2326,16 @@ async function main(): Promise<void> {
       e2eOutput.exitCode !== 0 ||
       e2eOutput.signal !== null ||
       nodeTestSummary.pass < 1 ||
-      nodeTestSummary.skipped !== 0 ||
+      (!connectorCredentialE2eOnly && nodeTestSummary.skipped !== 0) ||
       nodeTestSummary.fail !== 0 ||
       nodeTestSummary.cancelled !== 0
     ) {
+      const connectorDiagnostic = combinedE2eOutput.match(
+        /workspace_connector_credential_save_failed stage=[a-z_]{1,32} code=(?:[0-9A-Z]{5}|[a-z0-9_]{1,64}|[A-Za-z][A-Za-z0-9_]{0,63})(?: (?:constraint|table)=[A-Za-z_][A-Za-z0-9_]{0,62})?/,
+      )?.[0];
+      if (connectorDiagnostic) {
+        console.error(`Connector credential diagnostic: ${connectorDiagnostic}`);
+      }
       if (approvalE2eFailures.length > 0) {
         console.error(
           `node:test failure diagnostics: ${JSON.stringify(approvalE2eFailures)}`,
@@ -2315,6 +2353,27 @@ async function main(): Promise<void> {
       throw new Error("approval_e2e_summary_rejected");
     }
     approvalE2ePassed = true;
+
+    if (connectorCredentialE2eOnly) {
+      await writeSafeReport(reportDirectory, {
+        version: 1,
+        stage: "final",
+        status: "passed",
+        commitSha,
+        sourceSha256: hashes,
+        counts: finalCounts,
+        violationCodes: [],
+        identityVerified,
+        runtimeLoginAuthenticated,
+        approvalE2eSummary,
+        approvalE2ePassed,
+        targetedConnectorCredentialE2e: true,
+      });
+      console.log(
+        `Focused connector credential E2E passed: tests=${nodeTestSummary.tests} pass=${nodeTestSummary.pass} skipped=${nodeTestSummary.skipped}.`,
+      );
+      return;
+    }
 
     await writeSafeReport(reportDirectory, {
       version: 1,

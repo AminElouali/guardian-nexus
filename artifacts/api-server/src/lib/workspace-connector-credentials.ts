@@ -19,6 +19,15 @@ export type SafeConnectorCredentialStatus = {
   createdAt: Date;
 };
 
+export type ReplaceWorkspaceConnectorCredentialStage =
+  | "validate"
+  | "keyring"
+  | "lock"
+  | "replace_existing"
+  | "encrypt"
+  | "insert"
+  | "audit";
+
 const SERVICE_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,63}$/;
 
 export async function listWorkspaceConnectorCredentialStatuses(
@@ -46,18 +55,23 @@ export async function replaceWorkspaceConnectorCredential(
     actorUserId: string;
     serviceId: string;
     secret: string;
+    onStage?: (stage: ReplaceWorkspaceConnectorCredentialStage) => void;
   },
 ): Promise<
   | { kind: "created"; credential: SafeConnectorCredentialStatus }
   | { kind: "replaced"; credential: SafeConnectorCredentialStatus }
 > {
+  input.onStage?.("validate");
   if (!SERVICE_ID_PATTERN.test(input.serviceId)) {
     throw new ConnectorVaultError("credential_input_invalid");
   }
+  input.onStage?.("keyring");
   const keyring = loadConnectorVaultKeyring();
+  input.onStage?.("lock");
   await tx.execute(
     sql`SELECT pg_advisory_xact_lock(hashtext(${input.workspaceId}), hashtext(${input.serviceId}))`,
   );
+  input.onStage?.("replace_existing");
   const [existing] = await tx
     .delete(workspaceConnectorCredentialsTable)
     .where(
@@ -69,11 +83,13 @@ export async function replaceWorkspaceConnectorCredential(
     .returning({ id: workspaceConnectorCredentialsTable.id });
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
+    input.onStage?.("encrypt");
     const encrypted = encryptConnectorCredential(
       input.secret,
       { workspaceId: input.workspaceId, serviceId: input.serviceId },
       keyring,
     );
+    input.onStage?.("insert");
     const [row] = await tx
       .insert(workspaceConnectorCredentialsTable)
       .values({
@@ -97,6 +113,7 @@ export async function replaceWorkspaceConnectorCredential(
         createdAt: workspaceConnectorCredentialsTable.createdAt,
       });
     if (row) {
+      input.onStage?.("audit");
       await tx.insert(workspaceAuditEventsTable).values({
         workspaceId: input.workspaceId,
         actorUserId: input.actorUserId,

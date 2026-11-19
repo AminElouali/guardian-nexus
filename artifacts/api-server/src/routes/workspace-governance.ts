@@ -51,6 +51,7 @@ import {
   ExecuteWorkspaceConnectorActionResponse,
 } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
+import { logger } from "../lib/logger";
 import { canRunAiEvaluation } from "../lib/access-control";
 import {
   activateWorkspaceActionRule,
@@ -88,6 +89,50 @@ import {
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const agentAttemptLimiter = createWorkspaceAgentAttemptLimiter();
+
+function safeConnectorCredentialFailure(
+  error: unknown,
+  stage: string,
+): Record<string, string> {
+  const safeStage = /^[a-z_]{1,32}$/.test(stage) ? stage : "unknown";
+  if (error instanceof ConnectorVaultError) {
+    return { failureStage: safeStage, errorCode: error.code };
+  }
+  if (error && typeof error === "object") {
+    const candidate = error as {
+      code?: unknown;
+      constraint?: unknown;
+      table?: unknown;
+      name?: unknown;
+    };
+    if (typeof candidate.code === "string" && /^[0-9A-Z]{5}$/.test(candidate.code)) {
+      const details: Record<string, string> = {
+        failureStage: safeStage,
+        sqlState: candidate.code,
+      };
+      if (
+        typeof candidate.constraint === "string" &&
+        /^[A-Za-z_][A-Za-z0-9_]{0,62}$/.test(candidate.constraint)
+      ) {
+        details.constraint = candidate.constraint;
+      }
+      if (
+        typeof candidate.table === "string" &&
+        /^[A-Za-z_][A-Za-z0-9_]{0,62}$/.test(candidate.table)
+      ) {
+        details.table = candidate.table;
+      }
+      return details;
+    }
+    const errorName =
+      typeof candidate.name === "string" &&
+      /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(candidate.name)
+        ? candidate.name
+        : "Error";
+    return { failureStage: safeStage, errorName };
+  }
+  return { failureStage: safeStage, errorName: "Error" };
+}
 
 function publicAgent(agent: typeof workspaceAgentsTable.$inferSelect) {
   return {
@@ -898,19 +943,25 @@ router.put(
       res.status(400).json({ error: "Invalid connector credential request" });
       return;
     }
+    let failureStage = "workspace_transaction";
     try {
       const access = await withWorkspaceUserTransaction(
         req.authUserId!,
         params.data.workspaceId,
         async (tx, membership) => {
+          failureStage = "authorization";
           if (!canRunAiEvaluation(membership.role)) {
             return { kind: "forbidden" as const };
           }
+          failureStage = "credential_save";
           const saved = await replaceWorkspaceConnectorCredential(tx, {
             workspaceId: params.data.workspaceId,
             actorUserId: req.authUserId!,
             serviceId: params.data.serviceId,
             secret: body.data.secret,
+            onStage: (stage) => {
+              failureStage = stage;
+            },
           });
           return saved;
         },
@@ -941,6 +992,21 @@ router.put(
         res.status(400).json({ error: "Credential value is invalid" });
         return;
       }
+      const diagnostic = safeConnectorCredentialFailure(error, failureStage);
+      const diagnosticCode =
+        diagnostic.errorCode ??
+        diagnostic.sqlState ??
+        diagnostic.errorName ??
+        "Error";
+      const diagnosticObject = diagnostic.constraint
+        ? ` constraint=${diagnostic.constraint}`
+        : diagnostic.table
+          ? ` table=${diagnostic.table}`
+          : "";
+      logger.error(
+        diagnostic,
+        `workspace_connector_credential_save_failed stage=${diagnostic.failureStage} code=${diagnosticCode}${diagnosticObject}`,
+      );
       res.status(503).json({ error: "Credential vault is unavailable" });
     }
   },
