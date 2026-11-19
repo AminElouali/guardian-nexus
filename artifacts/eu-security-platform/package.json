@@ -7,7 +7,8 @@
     "dev": "vite --config vite.config.ts --host 0.0.0.0",
     "build": "vite build --config vite.config.ts",
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "pnpm --filter @workspace/api-server exec tsx --tsconfig ../eu-security-platform/tsconfig.json --test ../eu-security-platform/src/components/AiEvaluationPage.integration.test.tsx ../eu-security-platform/src/components/approvalLedgerExport.test.ts ../eu-security-platform/src/components/custom-fetch.test.ts ../eu-security-platform/src/components/GuardianActionGatewayPanel.test.tsx ../eu-security-platform/src/components/RiskIntelligencePage.test.tsx ../eu-security-platform/src/components/SupportIdentifiers.test.tsx ../eu-security-platform/src/components/WorkspaceRulesEditor.test.tsx ../eu-security-platform/src/lib/dashboard-lab-status.test.ts ../eu-security-platform/src/lib/workspace-load-errors.test.ts ../eu-security-platform/src/risk-intelligence/capability-discovery.v1.test.ts"
   },
   "devDependencies": {
     "@hookform/resolvers": "^3.10.0",

@@ -1047,7 +1047,7 @@ paths:
             schema: { $ref: "#/components/schemas/WorkspaceActionRuleRollbackInput" }
       responses:
         "201":
-          description: New active version copied from the selected historical version
+          description: New draft version copied from the selected historical version; activate it separately to change the active rule
           content:
             application/json:
               schema: { $ref: "#/components/schemas/WorkspaceActionRuleVersionResponse" }

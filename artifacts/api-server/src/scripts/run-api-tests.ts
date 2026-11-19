@@ -20,6 +20,7 @@ const testFiles = [
   "src/lib/policy-lab-preview.test.ts",
   "src/lib/workspace-agent-credentials.test.ts",
   "src/lib/generic-action-evidence.test.ts",
+  "src/lib/approval-action-refund-boundary.test.ts",
   "src/lib/safe-http-request-log.test.ts",
   "src/lib/api-test-target-guard.test.ts",
   "src/scripts/run-postgres-local-lab.test.ts",

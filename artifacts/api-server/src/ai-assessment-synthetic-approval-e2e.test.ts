@@ -33,12 +33,15 @@ import {
   DecideWorkspaceAiAssessmentApprovalResponse,
   ExportWorkspaceApprovalLedgerBundleResponse,
   ListWorkspaceApprovalLedgerEventsResponse,
+  ListWorkspaceActionRulesResponse,
   ListWorkspaceAiAssessmentApprovalsResponse,
+  ActivateWorkspaceActionRuleDraftResponse,
   PreviewWorkspaceAiAssessmentPolicyLabResponse,
   CreateWorkspaceSyntheticRefundProposalResponse,
   CreateWorkspaceGenericActionProposalResponse,
   GetWorkspaceGenericActionCatalogResponse,
   PreviewWorkspaceGenericActionResponse,
+  RollbackWorkspaceActionRuleResponse,
 } from "@workspace/api-zod";
 import {
   canonicalApprovalJson,
@@ -742,7 +745,11 @@ test(
     const runtimeDatabaseUrl = process.env.APP_RUNTIME_DATABASE_URL;
     assert.ok(databaseUrl);
     assert.ok(runtimeDatabaseUrl);
-    const { assertRlsRuntimeReady, pool: appPool } =
+    const {
+      assertRlsRuntimeReady,
+      evaluateWorkspaceActionRule,
+      pool: appPool,
+    } =
       await import("@workspace/db");
     const { workspaceApprovalLedgerTable } = await import("@workspace/db");
     const { createAiAssessmentLabRouter } =
@@ -1130,6 +1137,137 @@ test(
       };
       assert.equal(simulatedActiveData.decision, "deny");
       assert.equal(simulatedActiveData.ruleVersionId, secondVersion.versionId);
+    });
+    await t.test("rollback creates a draft that can be activated to restore the historical decision", async () => {
+      const supportAction = "guardian.support.reply.send.v1";
+      const rulePath =
+        `/api/workspaces/${workspaceA}/action-rules/${supportAction}`;
+      const supportArgs = {
+        ticket_id: "TICKET-SYNTH-42",
+        recipient_email: "demo@example.test",
+        recipient_type: "internal",
+        compensation_cents: 0,
+        template_id: "synthetic-support-reply-v1",
+      };
+
+      const beforeResponse = await request(
+        workspaceAAdmin,
+        `/api/workspaces/${workspaceA}/action-rules`,
+      );
+      assert.equal(beforeResponse.status, 200);
+      const beforeData = ListWorkspaceActionRulesResponse.parse(
+        await beforeResponse.json(),
+      );
+      const beforeState = beforeData.actions.find(
+        (action) => action.actionType === supportAction,
+      );
+      assert.ok(beforeState);
+      const historicalVersion = beforeState.history.find(
+        (version) => version.version === 1,
+      );
+      assert.ok(historicalVersion);
+      assert.equal(historicalVersion.rules[0]?.decision, "require_approval");
+
+      const rollbackResponse = await request(
+        workspaceAAdmin,
+        `${rulePath}/rollback`,
+        "POST",
+        { version: historicalVersion.version },
+      );
+      assert.equal(rollbackResponse.status, 201);
+      const rollbackData = RollbackWorkspaceActionRuleResponse.parse(
+        await rollbackResponse.json(),
+      );
+      assert.equal(rollbackData.active, false);
+      assert.deepEqual(rollbackData.rules, historicalVersion.rules);
+
+      const draftStateResponse = await request(
+        workspaceAAdmin,
+        `/api/workspaces/${workspaceA}/action-rules`,
+      );
+      const draftStateData = ListWorkspaceActionRulesResponse.parse(
+        await draftStateResponse.json(),
+      );
+      const draftState = draftStateData.actions.find(
+        (action) => action.actionType === supportAction,
+      );
+      assert.ok(draftState);
+      assert.equal(draftState.activeVersionId, beforeState.activeVersionId);
+      assert.equal(draftState.draftVersionId, rollbackData.versionId);
+
+      const activationResponse = await request(
+        workspaceAAdmin,
+        `${rulePath}/activate`,
+        "POST",
+      );
+      assert.equal(activationResponse.status, 200);
+      const activated = ActivateWorkspaceActionRuleDraftResponse.parse(
+        await activationResponse.json(),
+      );
+      assert.equal(activated.versionId, rollbackData.versionId);
+      assert.equal(activated.active, true);
+
+      const activeStateResponse = await request(
+        workspaceAAdmin,
+        `/api/workspaces/${workspaceA}/action-rules`,
+      );
+      const activeStateData = ListWorkspaceActionRulesResponse.parse(
+        await activeStateResponse.json(),
+      );
+      const activeState = activeStateData.actions.find(
+        (action) => action.actionType === supportAction,
+      );
+      assert.ok(activeState);
+      assert.equal(activeState.activeVersionId, rollbackData.versionId);
+      assert.equal(activeState.draftVersionId, null);
+
+      const simulationResponse = await request(
+        workspaceAAdmin,
+        `${rulePath}/simulate`,
+        "POST",
+        { arguments: supportArgs },
+      );
+      assert.equal(simulationResponse.status, 200);
+      const simulation = await simulationResponse.json() as {
+        decision: string;
+        ruleVersionId: string | null;
+        ruleId: string | null;
+      };
+      assert.equal(simulation.decision, "require_approval");
+      assert.equal(simulation.ruleVersionId, rollbackData.versionId);
+      assert.equal(simulation.ruleId, historicalVersion.rules[0]?.id);
+
+      const engineDecision = evaluateWorkspaceActionRule({
+        actionType: supportAction,
+        arguments: supportArgs,
+        document: { version: 1, rules: historicalVersion.rules },
+        ruleVersionId: rollbackData.versionId,
+      });
+      assert.equal(engineDecision.decision, "require_approval");
+      assert.equal(engineDecision.ruleVersionId, rollbackData.versionId);
+      assert.equal(engineDecision.ruleId, historicalVersion.rules[0]?.id);
+
+      const audit = await fixturePool.query<{
+        action: string;
+        resource_id: string;
+        metadata: Record<string, unknown>;
+      }>(
+        `SELECT action, resource_id, metadata
+           FROM public.workspace_audit_events
+          WHERE workspace_id = $1
+            AND resource_type = 'workspace_action_rule_version'
+            AND resource_id = $2`,
+        [workspaceA, rollbackData.versionId],
+      );
+      const rollbackAudit = audit.rows.find(
+        (event) => event.action === "workspace.action_rule.rolled_back",
+      );
+      const activationAudit = audit.rows.find(
+        (event) => event.action === "workspace.action_rule.activated",
+      );
+      assert.ok(rollbackAudit, "rollback must be recorded in workspace audit");
+      assert.ok(activationAudit, "activation must be recorded in workspace audit");
+      assert.equal(rollbackAudit.metadata.activated, false);
     });
     await t.test("starter profiles create bounded drafts and the server simulator uses their versions", async () => {
       const rulesPath = `/api/workspaces/${workspaceA}/action-rules`;

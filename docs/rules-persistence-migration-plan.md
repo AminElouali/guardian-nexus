@@ -7,7 +7,7 @@
 - **IMPLEMENTADO:** migraciones SQL versionadas `0001_workspace_action_rules.sql` y `0003_workspace_rule_version_unique_constraint.sql`, probadas con PostgreSQL local desechable. La segunda adjunta el índice único existente como constraint, sin crear otro índice ni modificar filas.
 - **IMPLEMENTADO:** `0004_align_rule_check_constraint_names.sql` comprueba las definiciones de dos CHECK y tres claves foráneas, y renombra sus nombres para igualarlos a Drizzle; no modifica filas. Pasó dos veces en el laboratorio desechable y se aplicó dos veces a Development el 18 de noviembre de 2026; la auditoría posterior confirmó 72/72 nombres de constraints coincidentes y los conteos de filas sin cambios.
 - **IMPLEMENTADO:** aplicadas a la base de desarrollo el 18 de noviembre de 2026; la auditoría posterior confirmó 16 tablas, 173 columnas, 44 índices, 72 constraints, 45 policies y 3 roles. Producción no se tocó.
-- **PROYECTADO:** aplicar cambios equivalentes a producción. La reversión operativa de una regla consiste en crear y activar una versión nueva basada en una anterior; no borra el historial.
+- **PROYECTADO:** aplicar cambios equivalentes a producción. La reversión crea un borrador nuevo basado en una versión anterior; la persona administradora lo activa por separado. No borra el historial.
 
 ## Cambios de catálogo
 
