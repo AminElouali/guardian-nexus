@@ -1,6 +1,6 @@
 # Plan proyectado de conectores y clasificación de acciones
 
-> **Estado: PROYECTADO.** Este documento describe una propuesta de evolución; no significa que estos conectores, permisos o controles estén implementados.
+> **Estado mixto:** la taxonomía completa y los conectores de proveedores siguen **PROYECTADOS**. La base común de la etapa 1 está **IMPLEMENTADA en código y en el laboratorio local** con un adaptador falso sin red; no hay servicios reales conectados.
 
 ## 1. Principio de clasificación
 
@@ -24,6 +24,11 @@ Una acción puede llevar más de un tipo si sus efectos lo justifican. Las notas
 - Una regla de reenvío automático y la creación de un enlace público cuentan como **Borrar o exportar**.
 - Crear recursos en la nube cuenta como **Mover dinero**, además de cualquier otro tipo aplicable.
 - Pasar credenciales entre agentes queda **siempre bloqueado**.
+
+**IMPLEMENTADO en el catálogo actual:** los cuatro tipos sintéticos/de demo
+tienen `riskTypes` versionados en código. El catálogo representa los ocho
+valores, pero no hay conectores operativos para todas las áreas de esta tabla.
+Una acción desconocida o sin clasificación sigue denegada.
 
 ## 3. Etiquetas adicionales
 
@@ -70,19 +75,19 @@ Las plantillas son puntos de partida versionados; al seleccionarlas se deberían
 
 ## 6. Plan por etapas
 
-Todas las etapas siguientes son **PROYECTADAS**:
+Estado por etapa:
 
-1. **Base común de conectores:** caja fuerte de credenciales por workspace; verificación del recibo antes de ejecutar; idempotencia; registro del resultado; desconexión y revocación; y clasificación según los tipos de riesgo.
-2. **Proxy MCP:** situar un proxy delante de servicios que ya ofrecen MCP. Las descripciones y nombres de herramientas recibidos se tratan como datos no fiables; Guardian clasifica la acción mediante su propio catálogo y no delega esa decisión al servidor MCP.
-3. **Conector genérico configurable por el cliente:** permitir que cada cliente describa una conexión y sus acciones, manteniendo validación estricta, denegación por defecto y límites de riesgo.
-4. **Conectores nativos para la demo:** correo en un sandbox como Mailtrap y Stripe en modo de prueba. Mailtrap y Stripe están **pendientes de confirmar**; no se presupone que estén configurados ni conectados.
-5. **Verificador “sin recibo no se abre”:** un componente que el cliente instala en sus sistemas para comprobar el recibo antes de permitir la acción. La integración y el despliegue de ese componente siguen proyectados.
+1. **Base común de conectores — IMPLEMENTADA parcialmente en código:** bóveda AES-256-GCM por workspace, identificador de clave, permisos por workspace, clasificación de las cuatro acciones del catálogo, verificación y consumo atómico del recibo v1, registro idempotente, estados pendiente/ejecutado/fallido y desconexión. Solo se registra un adaptador falso en el E2E desechable; la aplicación no registra adaptadores de proveedores y falla cerrada si no hay uno.
+2. **Proxy MCP — PROYECTADO:** situar un proxy delante de servicios que ya ofrecen MCP. Las descripciones y nombres de herramientas recibidos se tratarán como datos no fiables; Guardian clasificará la acción mediante su propio catálogo.
+3. **Conector genérico configurable por el cliente — PROYECTADO:** aún no se permite que clientes definan nuevos adaptadores o acciones.
+4. **Conectores nativos para la demo — PROYECTADOS:** correo en un sandbox como Mailtrap y Stripe en modo de prueba. Ambos están pendientes de confirmar; no se presupone que estén configurados ni conectados.
+5. **Verificador “sin recibo no se abre” — PROYECTADO para producción:** `lib/guardian-guard` demuestra el patrón con SMTP local, pero todavía no es un límite de seguridad desplegado que el agente no pueda evitar.
 
 ## 7. Estado actual
 
-**IMPLEMENTADO hoy:** cuatro acciones sintéticas o de demostración: reembolso sintético, cambio de banco sintético, respuesta de soporte y correo externo; además, existe una entrada por API directa autenticada con credencial por agente.
+**IMPLEMENTADO hoy:** cuatro acciones sintéticas o de demostración: reembolso sintético, cambio de banco sintético, respuesta de soporte y correo externo; existe una entrada por API autenticada con credencial por agente. En la base común, las credenciales de conectores se cifran y solo se informa su estado y últimos cuatro caracteres; la ejecución requiere un recibo aprobado y un adaptador registrado, consume el recibo una sola vez y usa una clave de idempotencia. El único adaptador implementado es falso y exclusivo de pruebas, sin acceso de red.
 
-Esto no equivale a conectores productivos para los servicios enumerados, ni demuestra que una herramienta externa esté obligada a pasar por Guardian. El resto de la taxonomía, las plantillas propuestas y las etapas de conectores descritas aquí son **PROYECTADAS**.
+Esto no equivale a conectores productivos para los servicios enumerados, ni demuestra que una herramienta externa esté obligada a pasar por Guardian. La clave maestra de cifrado se proporciona mediante configuración del proceso; el laboratorio crea una clave efímera y no persistente. El despliegue, la custodia y la rotación operativa de claves maestras, la taxonomía completa y las etapas restantes de conectores son **PROYECTADOS**.
 
 ## 8. Decisiones abiertas
 

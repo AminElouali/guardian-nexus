@@ -18,6 +18,29 @@ integración MCP/framework y conector de producción. El módulo de demo no
 constituye un límite de seguridad si el agente puede alcanzar otra ruta o usar
 las credenciales directamente.
 
+## Base común de conectores
+
+**IMPLEMENTADO en código, sin proveedores reales:** la API puede guardar una
+credencial cifrada por workspace, devolver únicamente su estado y los últimos
+cuatro caracteres, y desconectarla. La ejecución exige una acción del catálogo,
+argumentos válidos, una aprobación y un recibo v1 válido y vigente. El recibo
+se consume antes del despacho; una clave idempotente evita repetir la ejecución.
+La app no registra adaptadores externos, por lo que no ejecuta acciones reales.
+El laboratorio solo inyecta un adaptador falso sin red.
+
+La bóveda usa AES-256-GCM y toma un keyring versionado por `keyId` desde la
+configuración del proceso. En laboratorio se genera una clave efímera que se
+descarta al cerrar la ejecución. Para una rotación operativa, se conserva
+temporalmente la clave anterior para descifrar credenciales existentes y se
+vuelven a introducir/reemplazar las credenciales; no se expone el secreto
+descifrado mediante una ruta de lectura. Custodia y rotación de claves en
+producción, integraciones reales y enforcement que no pueda evitarse siguen
+**PROYECTADOS**.
+
+La migración `0005` crea las tablas de credenciales y ejecuciones, con RLS
+forzada, policies de workspace y grants por columna. Solo se prueba en
+PostgreSQL desechable; no se aplica a desarrollo ni producción en esta etapa.
+
 ## Pruebas locales
 
 Desde la raíz del monorepo:

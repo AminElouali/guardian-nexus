@@ -6,7 +6,7 @@ import {
   runApiTestSuite,
 } from "../lib/api-test-target-guard";
 
-const testFiles = [
+export const apiTestFiles = [
   "src/security.test.ts",
   "src/connector-utils.test.ts",
   "src/ai-security.test.ts",
@@ -24,6 +24,9 @@ const testFiles = [
   "src/lib/generic-action-evidence.test.ts",
   "src/lib/workspace-rule-history-impact.test.ts",
   "src/lib/approval-action-refund-boundary.test.ts",
+  "src/lib/development-rls-catalog-audit.test.ts",
+  "../../lib/db/src/rls-catalog-audit.test.ts",
+  "../../lib/db/src/rls-catalog-phase-audit.test.ts",
   "src/lib/safe-http-request-log.test.ts",
   "src/lib/api-test-target-guard.test.ts",
   "src/scripts/run-postgres-local-lab.test.ts",
@@ -39,7 +42,7 @@ function launchTests(): Promise<number> {
         "tsx",
         "--test",
         "--test-reporter=tap",
-        ...testFiles,
+        ...apiTestFiles,
       ],
       {
         cwd: process.cwd(),

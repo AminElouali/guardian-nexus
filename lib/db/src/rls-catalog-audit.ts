@@ -841,16 +841,9 @@ export function auditRlsCatalog(
         )
         .map((item) => item.columnName)
         .sort();
-      const updateGrant = grantFor(
-        contract,
-        roleName,
-        tableName,
-        "UPDATE",
-      );
-      const expectedUpdateColumns = updateGrant
-        ? (updateGrant.columns ?? expectedColumns.columnNames)
-        : [];
-      if (sortedKey(actualColumns) !== sortedKey(expectedUpdateColumns)) {
+      if (
+        sortedKey(actualColumns) !== sortedKey(expectedColumns.columnNames)
+      ) {
         violations.push(
           `column_update_matrix_incomplete:${roleName}:${tableName}`,
         );

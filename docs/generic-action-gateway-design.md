@@ -36,7 +36,22 @@ del proveedor saltándose el gateway.
   para las dos acciones genéricas nuevas, aprobaciones persistentes y binding
   SHA-256 de tipo y argumentos validados. La referencia permitida de acciones
   se deriva del manifiesto para Drizzle y se refleja en
-  `lib/db/sql/rls-policies.sql`. La base de desarrollo no se ha migrado.
+  `lib/db/sql/rls-policies.sql`. En esta etapa no se aplica la migración de
+  conectores a ninguna base compartida.
+- **IMPLEMENTADO en código y laboratorio desechable:** bóveda AES-256-GCM
+  por workspace e historial de ejecuciones con clave de idempotencia. La clave
+  maestra se recibe como keyring de entorno con `keyId`; los registros conservan
+  nonce y etiqueta GCM y solo exponen estado y últimos cuatro caracteres. La
+  ejecución valida argumentos y recibo v1, comprueba la aprobación exacta,
+  consume el recibo dentro de la transacción que crea el estado `pending` y
+  llama al adaptador registrado una sola vez. Los resultados solo guardan
+  códigos y resúmenes fijos sin datos devueltos por el proveedor. La aplicación
+  no registra un adaptador real; sin adaptador la operación falla cerrada.
+- **IMPLEMENTADO en pruebas, no como integración real:** un adaptador falso
+  sin red valida aislamiento de workspace, permisos de administrador,
+  desconexión, replay y concurrencia. La migración `0005` añade dos tablas con
+  RLS habilitada/forzada, seis policies y grants mínimos; se verifica únicamente
+  en PostgreSQL desechable mediante el laboratorio.
 - **IMPLEMENTADO como prueba aislada:** `lib/guardian-guard` verifica un recibo
   v1 offline, reclama su consumo a Guardian y solo después entrega un correo
   sintético a un servidor SMTP local de captura. Ese capturador exige una
@@ -213,12 +228,16 @@ de versión incluido en el binding de toda propuesta nueva.
 
 ### Recuentos del auditor
 
-La auditoría de catálogo actual espera **13 tablas, 149 columnas, 37 índices,
-54 constraints, 36 policies y 3 roles**. Si la primera iteración solo reemplaza
-`ai_assessment_approval_action_ref_check` en el mismo objeto y no añade una
-tabla de catálogo, los recuentos estructurales esperados permanecen
-**13/149/37/54/36/3**; cambia el hash de fuente/definición de constraint, no la
-cantidad.
+La base anterior a las reglas y agentes tenía **13/149/37/54/36/3**. El esquema
+actual antes de la base común de conectores espera **16/173/44/72/45/3**. La
+migración 0005 añade `workspace_connector_credentials` (10 columnas, 3 índices
+incluida PK, 8 constraints incluida PK/FK y 3 policies) y
+`workspace_connector_executions` (15 columnas, 2 índices incluida PK, 12
+constraints incluida PK/FKs y 3 policies). Por tanto el contrato pasa a
+**18 tablas, 198 columnas, 49 índices, 92 constraints, 51 policies y 3 roles**.
+Los roles no cambian. El laboratorio compara además definiciones de policies,
+constraints e inventario de privilegios entre Drizzle y las migraciones
+versionadas. Ninguna migración de esta etapa se aplica a una base compartida.
 
 Si una fase futura decide persistir definiciones de acciones en una tabla,
 deberá presentar recuentos nuevos derivados del esquema fuente y contabilizar

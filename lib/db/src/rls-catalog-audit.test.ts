@@ -406,14 +406,14 @@ test("RLS catalog contract is derived from Drizzle, SQL and role bootstrap sourc
         tableName: "workspace_connector_credentials",
         privilege: "INSERT",
         columns: [
-          "workspace_id",
-          "service_id",
-          "encrypted_secret",
-          "nonce",
           "auth_tag",
+          "created_by_user_id",
+          "encrypted_secret",
           "encryption_key_id",
           "last_four",
-          "created_by_user_id",
+          "nonce",
+          "service_id",
+          "workspace_id",
         ],
       },
     ],
@@ -435,15 +435,15 @@ test("RLS catalog contract is derived from Drizzle, SQL and role bootstrap sourc
         tableName: "workspace_connector_executions",
         privilege: "INSERT",
         columns: [
-          "workspace_id",
-          "service_id",
+          "action_sha256",
+          "action_type",
           "credential_id",
           "idempotency_key_sha256",
-          "action_type",
-          "action_sha256",
           "receipt_id",
           "requested_by_user_id",
           "status",
+          "service_id",
+          "workspace_id",
         ],
       },
       {
@@ -451,11 +451,11 @@ test("RLS catalog contract is derived from Drizzle, SQL and role bootstrap sourc
         tableName: "workspace_connector_executions",
         privilege: "UPDATE",
         columns: [
-          "status",
-          "response_summary",
-          "failure_code",
-          "updated_at",
           "completed_at",
+          "failure_code",
+          "response_summary",
+          "status",
+          "updated_at",
         ],
       },
     ],
@@ -489,6 +489,40 @@ test("complete synthetic PostgreSQL catalog snapshot satisfies the contract", ()
   assert.equal(report.policies.length, 51);
   assert.equal(report.tablePrivileges.length, 3 * 18 * 4);
   assert.equal(report.updateColumns.length, 3 * (6 + 6 + 12 + 15));
+});
+
+test("catalog audit checks exact execution UPDATE grants and complete column coverage", () => {
+  const extraGrant = makeSnapshot();
+  const unapprovedColumn = extraGrant.updateColumns.find(
+    (item) =>
+      item.roleName === "app_runtime" &&
+      item.tableName === "workspace_connector_executions" &&
+      item.columnName === "action_sha256",
+  );
+  assert.ok(unapprovedColumn);
+  unapprovedColumn.granted = true;
+  const extraGrantAudit = auditRlsCatalog(contract, extraGrant);
+  assert.ok(
+    extraGrantAudit.violations.includes(
+      "column_update_mismatch:app_runtime:workspace_connector_executions:action_sha256",
+    ),
+  );
+
+  const incompleteMatrix = makeSnapshot();
+  incompleteMatrix.updateColumns = incompleteMatrix.updateColumns.filter(
+    (item) =>
+      !(
+        item.roleName === "app_runtime" &&
+        item.tableName === "workspace_connector_executions" &&
+        item.columnName === "action_sha256"
+      ),
+  );
+  const incompleteAudit = auditRlsCatalog(contract, incompleteMatrix);
+  assert.ok(
+    incompleteAudit.violations.includes(
+      "column_update_matrix_incomplete:app_runtime:workspace_connector_executions",
+    ),
+  );
 });
 
 test("catalog audit fails closed for missing RLS, policy drift, role grants and column updates", () => {

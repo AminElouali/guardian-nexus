@@ -190,11 +190,11 @@ test("development RLS audit accepts the complete canonical catalog snapshot", ()
   const snapshots = makeSnapshots();
   const audit = auditDevelopmentRlsCatalog({ contract, ...snapshots });
   assert.equal(audit.passed, true, audit.violationCodes.join(","));
-  assert.equal(audit.expectedTableCount, 16);
-  assert.equal(audit.expectedColumnCount, 173);
-  assert.equal(audit.expectedIndexCount, 44);
-  assert.equal(audit.expectedConstraintCount, 71);
-  assert.equal(audit.expectedPolicyCount, 45);
+  assert.equal(audit.expectedTableCount, 18);
+  assert.equal(audit.expectedColumnCount, 198);
+  assert.equal(audit.expectedIndexCount, 49);
+  assert.equal(audit.expectedConstraintCount, 92);
+  assert.equal(audit.expectedPolicyCount, 51);
   assert.equal(audit.expectedRoleCount, 3);
 });
 
@@ -624,19 +624,19 @@ test("read-only audit report exposes only safe status, counts, and fixed codes",
   assert.equal(report.credentialsIncluded, false);
   assert.equal(report.connectionCoordinatesIncluded, false);
   assert.deepEqual(report.expected, {
-    tables: 16,
-    columns: 173,
-    indexes: 44,
-    constraints: 71,
-    policies: 45,
+    tables: 18,
+    columns: 198,
+    indexes: 49,
+    constraints: 92,
+    policies: 51,
     roles: 3,
   });
   assert.deepEqual(report.actual, {
-    tables: 16,
-    columns: 173,
-    indexes: 44,
-    constraints: 71,
-    policies: 45,
+    tables: 18,
+    columns: 198,
+    indexes: 49,
+    constraints: 92,
+    policies: 51,
     roles: 3,
   });
   assert.deepEqual(report.violationCodes, []);
@@ -658,10 +658,10 @@ test("catalog failure reports its fixed step and sanitized SQLSTATE with prior c
         );
       }
       if (sql.includes("relrowsecurity")) {
-        return { rows: [], rowCount: 16 };
+        return { rows: [], rowCount: 18 };
       }
       if (sql.includes("format_type(")) {
-        return { rows: [], rowCount: 173 };
+        return { rows: [], rowCount: 198 };
       }
       return { rows: [], rowCount: 0 };
     },
@@ -701,8 +701,8 @@ test("catalog failure reports its fixed step and sanitized SQLSTATE with prior c
   assert.equal(issuedQueries.length, 3);
   assert.deepEqual(progress.completedSteps, ["rls_flags", "columns"]);
   assert.deepEqual(progress.actual, {
-    tables: 16,
-    columns: 173,
+    tables: 18,
+    columns: 198,
     indexes: null,
     constraints: null,
     policies: null,
@@ -711,11 +711,11 @@ test("catalog failure reports its fixed step and sanitized SQLSTATE with prior c
   assert.ok(failure);
   const report = createDevelopmentRlsCatalogReport({
     expectedCounts: {
-      tables: 16,
-      columns: 173,
-      indexes: 44,
-      constraints: 71,
-      policies: 45,
+      tables: 18,
+      columns: 198,
+      indexes: 49,
+      constraints: 92,
+      policies: 51,
       roles: 3,
     },
     progress,

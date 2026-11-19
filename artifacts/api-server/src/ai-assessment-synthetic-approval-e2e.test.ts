@@ -4073,6 +4073,12 @@ test(
           { secret: firstSecret },
         );
         assert.equal(viewerCreate.status, 403);
+        const viewerDisconnect = await request(
+          workspaceAViewer,
+          `${otherWorkspaceCredentialPath}/lab.fake.v1`,
+          "DELETE",
+        );
+        assert.equal(viewerDisconnect.status, 403);
 
         const malformedCredential = await request(
           workspaceBAdmin,
@@ -4365,6 +4371,7 @@ test(
         );
         assert.match(failedExecutionJson, /"status":"failed"/);
         assert.match(failedExecutionJson, /"failureCode":"connector_failed"/);
+        assert.equal(failedExecutionJson.includes(replacementSecret), false);
         const failedCallCount = fakeConnector.invocations.length;
         const failedRetry = await request(
           workspaceBAdmin,
@@ -4449,6 +4456,22 @@ test(
             row.metadata_text.includes(replacementSecret),
           ),
           false,
+        );
+        const connectorLedger = await fixturePool.query<{
+          event_text: string;
+        }>(
+          `SELECT concat_ws(' ', event_hash, payload_canonical) AS event_text
+             FROM public.workspace_approval_ledger
+            WHERE workspace_id = $1`,
+          [workspaceB],
+        );
+        assert.equal(
+          connectorLedger.rows.some((row) =>
+            row.event_text.includes(firstSecret) ||
+            row.event_text.includes(replacementSecret),
+          ),
+          false,
+          "connector secrets are never copied into ledger v1 events",
         );
         assert.ok(
           fakeConnector.invocations.every(

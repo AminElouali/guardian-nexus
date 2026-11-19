@@ -204,21 +204,19 @@ function replayResult(
 
 function sanitizeAdapterSummary(
   result: ConnectorExecutionAdapterResult,
-  credential: string,
 ): { resultCode: string; summary: string } {
   const resultCode =
-    typeof result.resultCode === "string" &&
-    /^[a-z0-9._-]{1,64}$/.test(result.resultCode)
+    result.resultCode === "captured_locally" ||
+    result.resultCode === "completed" ||
+    result.resultCode === "rejected"
       ? result.resultCode
       : "completed";
-  const candidate =
-    typeof result.summary === "string"
-      ? result.summary.replace(/[\u0000-\u001f\u007f]/g, " ").trim()
-      : "";
   const summary =
-    !candidate || candidate.includes(credential)
-      ? "El conector confirmó la acción; se omitió el detalle de respuesta."
-      : candidate.slice(0, 512);
+    resultCode === "captured_locally"
+      ? "Acción capturada por el conector de prueba; no se contactó ningún servicio."
+      : resultCode === "rejected"
+        ? "El conector rechazó la acción."
+        : "El conector confirmó la acción.";
   return { resultCode, summary };
 }
 
@@ -470,10 +468,7 @@ export async function executeWorkspaceConnectorAction(
               arguments: evaluated.args,
               credential: clearCredential,
             });
-            const safeResult = sanitizeAdapterSummary(
-              adapterResult,
-              clearCredential,
-            );
+            const safeResult = sanitizeAdapterSummary(adapterResult);
             status = "executed";
             responseSummary = safeResult.summary;
             failureCode = null;

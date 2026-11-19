@@ -38,6 +38,7 @@ import {
 import { diagnoseGitHubActionsApprovalLabTarget } from "../lib/approval-e2e-db-guard";
 import { acquireGitHubActionsOidcToken } from "../lib/github-actions-oidc";
 import { readCatalogSnapshot } from "./verify-rls-catalog";
+import { apiTestFiles } from "./run-api-tests";
 
 const { Client, Pool } = pg;
 type RlsCatalogContractSources = Parameters<typeof parseRlsCatalogContract>[0] & {
@@ -105,6 +106,7 @@ type SafeReport = {
   versionedMigrationAudit?: VersionedMigrationAuditReport;
   failureOutput?: SafeChildOutput;
   failureStage?: Stage;
+  apiUnitTestFailures?: SafeNodeTestFailure[];
 };
 
 type CatalogCounts = {
@@ -707,6 +709,28 @@ export function parseSafeNodeTestFailures(
   });
 }
 
+async function parseApiUnitTestFailures(
+  output: string,
+): Promise<SafeNodeTestFailure[]> {
+  const apiServerRoot = path.join(repoRoot, "artifacts/api-server");
+  const parsedBySource = await Promise.all(
+    apiTestFiles.map(async (fileName) => {
+      const source = await readFile(path.resolve(apiServerRoot, fileName), "utf8");
+      return parseSafeNodeTestFailures(output, path.basename(fileName), source);
+    }),
+  );
+  const failures = parsedBySource[0] ?? [];
+  return failures.map((failure, index) => {
+    const locatedFailure = parsedBySource
+      .map((items) => items[index])
+      .find((item) => item?.location);
+    return {
+      ...failure,
+      ...(locatedFailure?.location ? { location: locatedFailure.location } : {}),
+    };
+  });
+}
+
 function binaryPath(name: string): string {
   const pathValue = process.env.PATH ?? "";
   for (const directory of pathValue.split(path.delimiter)) {
@@ -1184,7 +1208,7 @@ async function runVersionedMigrationAudit(input: {
           ),
       )
       .sort();
-    if (!sameValue(currentTableSet.length, 16) ||
+    if (!sameValue(currentTableSet.length, 18) ||
       !sameValue(actualLegacyTableSet, legacyTableSet)) {
       throw new Error("versioned_migration_baseline_source_mismatch");
     }
@@ -1588,6 +1612,7 @@ async function main(): Promise<void> {
   let identityVerified = false;
   let postSchemaPassed = false;
   let runtimeLoginAuthenticated = false;
+  let apiUnitTestFailures: SafeNodeTestFailure[] = [];
   let developmentReadOnlyCatalogAuditPassed = false;
   let approvalLedgerRlsProbesPassed = false;
   let approvalLedgerRlsProbeCount = 0;
@@ -2032,6 +2057,14 @@ async function main(): Promise<void> {
       apiTestSummary.skipped > 0 ||
       apiTestOutput.exitCode !== 0
     ) {
+      apiUnitTestFailures = await parseApiUnitTestFailures(
+        `${apiTestOutput.stdout}\n${apiTestOutput.stderr}`,
+      );
+      if (apiUnitTestFailures.length > 0) {
+        console.error(
+          `Sanitized API test failures: ${JSON.stringify(apiUnitTestFailures)}`,
+        );
+      }
       throw new Error("api_unit_tests_failed");
     }
 
@@ -2105,17 +2138,17 @@ async function main(): Promise<void> {
       developmentAuditReport.databaseNameMatched !== true ||
       developmentAuditReport.transactionReadOnly !== true ||
       developmentAuditReport.runtimeLoginAuthenticated !== true ||
-      developmentAuditReport.expected?.tables !== 16 ||
-      developmentAuditReport.expected?.columns !== 173 ||
-      developmentAuditReport.expected?.indexes !== 44 ||
-      developmentAuditReport.expected?.constraints !== 72 ||
-      developmentAuditReport.expected?.policies !== 45 ||
+      developmentAuditReport.expected?.tables !== 18 ||
+      developmentAuditReport.expected?.columns !== 198 ||
+      developmentAuditReport.expected?.indexes !== 49 ||
+      developmentAuditReport.expected?.constraints !== 92 ||
+      developmentAuditReport.expected?.policies !== 51 ||
       developmentAuditReport.expected?.roles !== 3 ||
-      developmentAuditReport.actual?.tables !== 16 ||
-      developmentAuditReport.actual?.columns !== 173 ||
-      developmentAuditReport.actual?.indexes !== 44 ||
-      developmentAuditReport.actual?.constraints !== 72 ||
-      developmentAuditReport.actual?.policies !== 45 ||
+      developmentAuditReport.actual?.tables !== 18 ||
+      developmentAuditReport.actual?.columns !== 198 ||
+      developmentAuditReport.actual?.indexes !== 49 ||
+      developmentAuditReport.actual?.constraints !== 92 ||
+      developmentAuditReport.actual?.policies !== 51 ||
       developmentAuditReport.actual?.roles !== 3 ||
       !Array.isArray(developmentAuditReport.violationCodes) ||
       developmentAuditReport.violationCodes.length !== 0
@@ -2127,7 +2160,7 @@ async function main(): Promise<void> {
     }
     developmentReadOnlyCatalogAuditPassed = true;
     console.log(
-      "Development read-only catalog audit passed on the disposable runtime connection: tables=16 columns=173 indexes=44 constraints=72 policies=45 roles=3.",
+      "Development read-only catalog audit passed on the disposable runtime connection: tables=18 columns=198 indexes=49 constraints=92 policies=51 roles=3.",
     );
 
     currentStage = "approval_ledger_rls_probes";
@@ -2341,6 +2374,7 @@ async function main(): Promise<void> {
         approvalE2eFailureErrorCode,
         approvalE2eFailureType,
         approvalE2ePassed,
+        apiUnitTestFailures,
         versionedMigrationAudit,
         failureOutput: latestFailureOutput,
         failureStage: currentStage,

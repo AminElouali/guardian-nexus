@@ -209,7 +209,7 @@ export const workspaceConnectorExecutionsTable = pgTable(
       to: appRuntimeRole,
       using: workspaceMemberScope(table.workspaceId),
     }),
-    pgPolicy("workspace_connector_executions_insert_member", {
+    pgPolicy("workspace_connector_executions_insert_admin", {
       for: "insert",
       to: appRuntimeRole,
       withCheck: sql`

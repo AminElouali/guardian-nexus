@@ -105,7 +105,9 @@ function additionalAuthenticatedData(input: {
   if (
     !SERVICE_ID_PATTERN.test(input.serviceId) ||
     !KEY_ID_PATTERN.test(input.keyId) ||
-    !/^[0-9a-f-]{36}$/i.test(input.workspaceId)
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      input.workspaceId,
+    )
   ) {
     throw new ConnectorVaultError("credential_input_invalid");
   }
@@ -169,6 +171,8 @@ export function decryptConnectorCredential(
       !/^[A-Za-z0-9_-]{11,5462}$/.test(stored.encryptedSecret) ||
       !/^[A-Za-z0-9_-]{16}$/.test(stored.nonce) ||
       !/^[A-Za-z0-9_-]{22}$/.test(stored.authTag) ||
+      Buffer.from(stored.encryptedSecret, "base64url").toString("base64url") !==
+        stored.encryptedSecret ||
       Buffer.from(stored.nonce, "base64url").toString("base64url") !==
         stored.nonce ||
       Buffer.from(stored.authTag, "base64url").toString("base64url") !==

@@ -1353,12 +1353,11 @@ CREATE POLICY workspace_connector_executions_select_member
       SELECT 1 FROM public.workspace_memberships AS membership
       WHERE membership.workspace_id = workspace_connector_executions.workspace_id
         AND membership.user_id = NULLIF(current_setting('app.user_id', true), '')
-        AND membership.role IN ('owner', 'admin')
     )
   );
-DROP POLICY IF EXISTS workspace_connector_executions_insert_member
+DROP POLICY IF EXISTS workspace_connector_executions_insert_admin
   ON public.workspace_connector_executions;
-CREATE POLICY workspace_connector_executions_insert_member
+CREATE POLICY workspace_connector_executions_insert_admin
   ON public.workspace_connector_executions FOR INSERT TO app_runtime
   WITH CHECK (
     workspace_id::text = NULLIF(current_setting('app.workspace_id', true), '')
