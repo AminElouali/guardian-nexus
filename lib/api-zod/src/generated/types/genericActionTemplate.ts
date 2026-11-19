@@ -9,6 +9,7 @@ import type { GenericActionArgumentField } from './genericActionArgumentField';
 import type { GenericActionRuleRow } from './genericActionRuleRow';
 import type { GenericActionTemplateAllowedApproverRolesItem } from './genericActionTemplateAllowedApproverRolesItem';
 import type { GenericActionTemplateRiskClass } from './genericActionTemplateRiskClass';
+import type { GenericActionTemplateRiskTypesItem } from './genericActionTemplateRiskTypesItem';
 
 export interface GenericActionTemplate {
   actionType: string;
@@ -16,6 +17,7 @@ export interface GenericActionTemplate {
   label: string;
   description: string;
   riskClass: GenericActionTemplateRiskClass;
+  riskTypes: GenericActionTemplateRiskTypesItem[];
   defaultDecision: 'deny';
   approverLabel: string;
   allowedApproverRoles: GenericActionTemplateAllowedApproverRolesItem[];

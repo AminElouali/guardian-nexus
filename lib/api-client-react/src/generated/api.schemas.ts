@@ -4484,6 +4484,20 @@ export const GenericActionTemplateRiskClass = {
   high: 'high',
 } as const;
 
+export type GenericActionTemplateRiskTypesItem = typeof GenericActionTemplateRiskTypesItem[keyof typeof GenericActionTemplateRiskTypesItem];
+
+
+export const GenericActionTemplateRiskTypesItem = {
+  read: 'read',
+  internal_write: 'internal_write',
+  external_send: 'external_send',
+  money_movement: 'money_movement',
+  permission_change: 'permission_change',
+  delete_or_export: 'delete_or_export',
+  execute_or_deploy: 'execute_or_deploy',
+  corporate_commitment: 'corporate_commitment',
+} as const;
+
 export type GenericActionTemplateAllowedApproverRolesItem = typeof GenericActionTemplateAllowedApproverRolesItem[keyof typeof GenericActionTemplateAllowedApproverRolesItem];
 
 
@@ -4533,6 +4547,7 @@ export interface GenericActionTemplate {
   label: string;
   description: string;
   riskClass: GenericActionTemplateRiskClass;
+  riskTypes: GenericActionTemplateRiskTypesItem[];
   defaultDecision: 'deny';
   approverLabel: string;
   allowedApproverRoles: GenericActionTemplateAllowedApproverRolesItem[];
@@ -4809,6 +4824,126 @@ export interface WorkspaceAgentResponse {
   agent: WorkspaceAgent;
 }
 
+export interface WorkspaceConnectorCredentialInput {
+  /**
+     * @minLength 8
+     * @maxLength 4096
+     */
+  secret: string;
+}
+
+export interface WorkspaceConnectorCredentialStatus {
+  serviceId: string;
+  configured: true;
+  /**
+     * @minLength 4
+     * @maxLength 4
+     */
+  lastFour: string;
+  encryptionKeyId: string;
+  createdAt: string;
+}
+
+export interface WorkspaceConnectorCredentialsResponse {
+  credentials: WorkspaceConnectorCredentialStatus[];
+}
+
+export type WorkspaceConnectorExecutionInputArguments = {[key: string]: string | number | boolean};
+
+export type ApprovalReceiptPayloadV1ApprovedByRole = typeof ApprovalReceiptPayloadV1ApprovedByRole[keyof typeof ApprovalReceiptPayloadV1ApprovedByRole];
+
+
+export const ApprovalReceiptPayloadV1ApprovedByRole = {
+  owner: 'owner',
+  admin: 'admin',
+} as const;
+
+export interface ApprovalReceiptPayloadV1 {
+  version: 1;
+  /**
+     * @minLength 1
+     * @maxLength 64
+     * @pattern ^[A-Za-z0-9._-]+$
+     */
+  keyId: string;
+  receiptId: string;
+  workspaceId: string;
+  approvalId: string;
+  /** @pattern ^[a-f0-9]{64}$ */
+  proposalBindingSha256: string;
+  /** @pattern ^[a-f0-9]{64}$ */
+  actionSha256: string;
+  /** @minLength 1 */
+  requestedBy: string;
+  /** @minLength 1 */
+  approvedBy: string;
+  approvedByRole: ApprovalReceiptPayloadV1ApprovedByRole;
+  /**
+     * Canonical UTC ISO timestamp preserved byte-for-byte for receipt verification.
+     * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{3}Z$
+     */
+  issuedAt: string;
+  /**
+     * Canonical UTC ISO timestamp preserved byte-for-byte for receipt verification.
+     * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{3}Z$
+     */
+  expiresAt: string;
+  /**
+     * @minLength 32
+     * @maxLength 128
+     * @pattern ^[A-Za-z0-9_-]+$
+     */
+  nonce: string;
+}
+
+export interface SignedApprovalReceiptV1 {
+  payload: ApprovalReceiptPayloadV1;
+  /** @pattern ^[a-f0-9]{64}$ */
+  payloadSha256: string;
+  /** @pattern ^[A-Za-z0-9_-]{86}$ */
+  signature: string;
+}
+
+export interface WorkspaceConnectorExecutionInput {
+  /**
+     * @minLength 16
+     * @maxLength 128
+     */
+  idempotencyKey: string;
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  actionType: string;
+  arguments: WorkspaceConnectorExecutionInputArguments;
+  receipt: SignedApprovalReceiptV1;
+}
+
+export type WorkspaceConnectorExecutionResponseStatus = typeof WorkspaceConnectorExecutionResponseStatus[keyof typeof WorkspaceConnectorExecutionResponseStatus];
+
+
+export const WorkspaceConnectorExecutionResponseStatus = {
+  pending: 'pending',
+  executed: 'executed',
+  failed: 'failed',
+} as const;
+
+export interface WorkspaceConnectorExecutionResponse {
+  executionId: string;
+  status: WorkspaceConnectorExecutionResponseStatus;
+  replayed: boolean;
+  /**
+     * @maxLength 512
+     * @nullable
+     */
+  responseSummary: string | null;
+  /**
+     * @maxLength 64
+     * @nullable
+     */
+  failureCode: string | null;
+}
+
 export type GenericActionProposalResponseDecision = typeof GenericActionProposalResponseDecision[keyof typeof GenericActionProposalResponseDecision];
 
 
@@ -4865,60 +5000,6 @@ export const AiAssessmentApprovalDecisionResponseExecution = {
   not_performed_denied: 'not_performed_denied',
   synthetic_action_simulated_once: 'synthetic_action_simulated_once',
 } as const;
-
-export type ApprovalReceiptPayloadV1ApprovedByRole = typeof ApprovalReceiptPayloadV1ApprovedByRole[keyof typeof ApprovalReceiptPayloadV1ApprovedByRole];
-
-
-export const ApprovalReceiptPayloadV1ApprovedByRole = {
-  owner: 'owner',
-  admin: 'admin',
-} as const;
-
-export interface ApprovalReceiptPayloadV1 {
-  version: 1;
-  /**
-     * @minLength 1
-     * @maxLength 64
-     * @pattern ^[A-Za-z0-9._-]+$
-     */
-  keyId: string;
-  receiptId: string;
-  workspaceId: string;
-  approvalId: string;
-  /** @pattern ^[a-f0-9]{64}$ */
-  proposalBindingSha256: string;
-  /** @pattern ^[a-f0-9]{64}$ */
-  actionSha256: string;
-  /** @minLength 1 */
-  requestedBy: string;
-  /** @minLength 1 */
-  approvedBy: string;
-  approvedByRole: ApprovalReceiptPayloadV1ApprovedByRole;
-  /**
-     * Canonical UTC ISO timestamp preserved byte-for-byte for receipt verification.
-     * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{3}Z$
-     */
-  issuedAt: string;
-  /**
-     * Canonical UTC ISO timestamp preserved byte-for-byte for receipt verification.
-     * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{3}Z$
-     */
-  expiresAt: string;
-  /**
-     * @minLength 32
-     * @maxLength 128
-     * @pattern ^[A-Za-z0-9_-]+$
-     */
-  nonce: string;
-}
-
-export interface SignedApprovalReceiptV1 {
-  payload: ApprovalReceiptPayloadV1;
-  /** @pattern ^[a-f0-9]{64}$ */
-  payloadSha256: string;
-  /** @pattern ^[A-Za-z0-9_-]{86}$ */
-  signature: string;
-}
 
 export interface AiAssessmentApprovalDecisionResponse {
   approval: AiAssessmentApproval;

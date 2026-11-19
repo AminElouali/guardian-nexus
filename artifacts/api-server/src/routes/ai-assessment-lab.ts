@@ -1289,6 +1289,7 @@ routes.get(
       label: definition.label,
       description: definition.description,
       riskClass: definition.riskClass,
+      riskTypes: [...definition.riskTypes],
       defaultDecision: "deny" as const,
       approverLabel: definition.allowedApproverRoles.join(" / "),
       allowedApproverRoles: [...definition.allowedApproverRoles],

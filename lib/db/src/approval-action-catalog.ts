@@ -48,6 +48,19 @@ export type GenericActionGatewayEvidence = {
   evidenceSha256: string;
 };
 
+export const APPROVAL_ACTION_RISK_TYPES = [
+  "read",
+  "internal_write",
+  "external_send",
+  "money_movement",
+  "permission_change",
+  "delete_or_export",
+  "execute_or_deploy",
+  "corporate_commitment",
+] as const;
+export type ApprovalActionRiskType =
+  (typeof APPROVAL_ACTION_RISK_TYPES)[number];
+
 type PropertyRule = {
   type: "string" | "integer" | "boolean";
   required?: boolean;
@@ -88,6 +101,7 @@ export type ApprovalActionDefinition = {
     | "customer_data"
     | "infrastructure"
   )[];
+  riskTypes: readonly ApprovalActionRiskType[];
   defaultDecision: "deny";
   allowedApproverRoles: readonly ("owner" | "admin")[];
   receiptExpirySeconds: number;
@@ -115,6 +129,7 @@ export const APPROVAL_ACTION_CATALOG: readonly ApprovalActionDefinition[] = [
     description: "Fixture existente; solo simula cambios en memoria.",
     riskClass: "medium",
     riskCategories: ["money", "customer_data"],
+    riskTypes: ["money_movement"],
     defaultDecision: "deny",
     allowedApproverRoles: ["owner", "admin"],
     receiptExpirySeconds: 300,
@@ -138,6 +153,7 @@ export const APPROVAL_ACTION_CATALOG: readonly ApprovalActionDefinition[] = [
     description: "Fixture existente; solo simula cambios en memoria.",
     riskClass: "high",
     riskCategories: ["money", "infrastructure"],
+    riskTypes: ["internal_write", "money_movement"],
     defaultDecision: "deny",
     allowedApproverRoles: ["owner", "admin"],
     receiptExpirySeconds: 300,
@@ -161,6 +177,7 @@ export const APPROVAL_ACTION_CATALOG: readonly ApprovalActionDefinition[] = [
     description: "Solo ejemplos sintéticos dirigidos a dominios de prueba.",
     riskClass: "medium",
     riskCategories: ["customer_data", "internal_email", "external_email"],
+    riskTypes: ["internal_write", "external_send"],
     defaultDecision: "deny",
     allowedApproverRoles: ["owner", "admin"],
     receiptExpirySeconds: 300,
@@ -190,6 +207,7 @@ export const APPROVAL_ACTION_CATALOG: readonly ApprovalActionDefinition[] = [
     description: "Entrega solo a un buzón sandbox local; no usa proveedores externos.",
     riskClass: "high",
     riskCategories: ["external_email"],
+    riskTypes: ["external_send"],
     defaultDecision: "deny",
     allowedApproverRoles: ["owner", "admin"],
     receiptExpirySeconds: 300,

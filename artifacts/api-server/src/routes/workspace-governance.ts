@@ -40,6 +40,15 @@ import {
   SimulateWorkspaceActionRuleResponse,
   RotateWorkspaceAgentCredentialParams,
   RotateWorkspaceAgentCredentialResponse,
+  ListWorkspaceConnectorCredentialsParams,
+  ListWorkspaceConnectorCredentialsResponse,
+  ReplaceWorkspaceConnectorCredentialParams,
+  ReplaceWorkspaceConnectorCredentialBody,
+  ReplaceWorkspaceConnectorCredentialResponse,
+  DisconnectWorkspaceConnectorCredentialParams,
+  ExecuteWorkspaceConnectorActionParams,
+  ExecuteWorkspaceConnectorActionBody,
+  ExecuteWorkspaceConnectorActionResponse,
 } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
 import { canRunAiEvaluation } from "../lib/access-control";
@@ -62,6 +71,19 @@ import {
   withWorkspaceUserTransaction,
 } from "../lib/tenant-db";
 import { formatApproval } from "./ai-assessment-lab";
+import {
+  ConnectorVaultError,
+} from "../lib/workspace-connector-vault";
+import {
+  disconnectWorkspaceConnectorCredential,
+  listWorkspaceConnectorCredentialStatuses,
+  replaceWorkspaceConnectorCredential,
+} from "../lib/workspace-connector-credentials";
+import {
+  executeWorkspaceConnectorAction,
+  mapConnectorExecutionError,
+  type ConnectorExecutionAdapter,
+} from "../lib/workspace-connector-executions";
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -81,8 +103,12 @@ function publicAgent(agent: typeof workspaceAgentsTable.$inferSelect) {
 
 export function createWorkspaceGovernanceRouter(
   authMiddleware: RequestHandler = requireAuth,
+  options: {
+    connectorAdapters?: ReadonlyMap<string, ConnectorExecutionAdapter>;
+  } = {},
 ): IRouter {
 const router: IRouter = Router();
+const connectorAdapters = options.connectorAdapters ?? new Map();
 router.use("/workspaces", authMiddleware);
 
 router.get(
@@ -806,6 +832,210 @@ router.post(
           idempotent: outcome.kind === "existing",
         }),
       );
+  },
+);
+
+router.get(
+  "/workspaces/:workspaceId/connector-credentials",
+  async (req, res): Promise<void> => {
+    const params = ListWorkspaceConnectorCredentialsParams.safeParse(req.params);
+    if (!params.success || !UUID_PATTERN.test(params.data.workspaceId)) {
+      res.status(400).json({ error: "Invalid connector request" });
+      return;
+    }
+    try {
+      const access = await withWorkspaceUserTransaction(
+        req.authUserId!,
+        params.data.workspaceId,
+        async (tx, membership) => {
+          if (!canRunAiEvaluation(membership.role)) {
+            return { kind: "forbidden" as const };
+          }
+          return {
+            kind: "listed" as const,
+            credentials: await listWorkspaceConnectorCredentialStatuses(
+              tx,
+              params.data.workspaceId,
+            ),
+          };
+        },
+      );
+      if (!access.authorized) {
+        res.status(403).json({ error: "Workspace membership required" });
+        return;
+      }
+      if (access.value.kind === "forbidden") {
+        res.status(403).json({ error: "Workspace administrator required" });
+        return;
+      }
+      res.json(
+        ListWorkspaceConnectorCredentialsResponse.parse({
+          credentials: access.value.credentials.map((credential) => ({
+            serviceId: credential.serviceId,
+            configured: true,
+            lastFour: credential.lastFour,
+            encryptionKeyId: credential.encryptionKeyId,
+            createdAt: credential.createdAt,
+          })),
+        }),
+      );
+    } catch {
+      res.status(503).json({ error: "Connection status is unavailable" });
+    }
+  },
+);
+
+router.put(
+  "/workspaces/:workspaceId/connector-credentials/:serviceId",
+  async (req, res): Promise<void> => {
+    const params = ReplaceWorkspaceConnectorCredentialParams.safeParse(req.params);
+    const body = ReplaceWorkspaceConnectorCredentialBody.safeParse(req.body);
+    if (
+      !params.success ||
+      !UUID_PATTERN.test(params.data.workspaceId) ||
+      !body.success
+    ) {
+      res.status(400).json({ error: "Invalid connector credential request" });
+      return;
+    }
+    try {
+      const access = await withWorkspaceUserTransaction(
+        req.authUserId!,
+        params.data.workspaceId,
+        async (tx, membership) => {
+          if (!canRunAiEvaluation(membership.role)) {
+            return { kind: "forbidden" as const };
+          }
+          const saved = await replaceWorkspaceConnectorCredential(tx, {
+            workspaceId: params.data.workspaceId,
+            actorUserId: req.authUserId!,
+            serviceId: params.data.serviceId,
+            secret: body.data.secret,
+          });
+          return saved;
+        },
+      );
+      if (!access.authorized) {
+        res.status(403).json({ error: "Workspace membership required" });
+        return;
+      }
+      if (access.value.kind === "forbidden") {
+        res.status(403).json({ error: "Workspace administrator required" });
+        return;
+      }
+      const response = ReplaceWorkspaceConnectorCredentialResponse.parse({
+        serviceId: access.value.credential.serviceId,
+        configured: true,
+        lastFour: access.value.credential.lastFour,
+        encryptionKeyId: access.value.credential.encryptionKeyId,
+        createdAt: access.value.credential.createdAt,
+      });
+      res
+        .status(access.value.kind === "created" ? 201 : 200)
+        .json(response);
+    } catch (error) {
+      if (
+        error instanceof ConnectorVaultError &&
+        error.code === "credential_input_invalid"
+      ) {
+        res.status(400).json({ error: "Credential value is invalid" });
+        return;
+      }
+      res.status(503).json({ error: "Credential vault is unavailable" });
+    }
+  },
+);
+
+router.delete(
+  "/workspaces/:workspaceId/connector-credentials/:serviceId",
+  async (req, res): Promise<void> => {
+    const params = DisconnectWorkspaceConnectorCredentialParams.safeParse(
+      req.params,
+    );
+    if (!params.success || !UUID_PATTERN.test(params.data.workspaceId)) {
+      res.status(400).json({ error: "Invalid connector request" });
+      return;
+    }
+    try {
+      const access = await withWorkspaceUserTransaction(
+        req.authUserId!,
+        params.data.workspaceId,
+        async (tx, membership) => {
+          if (!canRunAiEvaluation(membership.role)) {
+            return { kind: "forbidden" as const };
+          }
+          return {
+            kind: "disconnected" as const,
+            deleted: await disconnectWorkspaceConnectorCredential(tx, {
+              workspaceId: params.data.workspaceId,
+              actorUserId: req.authUserId!,
+              serviceId: params.data.serviceId,
+            }),
+          };
+        },
+      );
+      if (!access.authorized) {
+        res.status(403).json({ error: "Workspace membership required" });
+        return;
+      }
+      if (access.value.kind === "forbidden") {
+        res.status(403).json({ error: "Workspace administrator required" });
+        return;
+      }
+      if (!access.value.deleted) {
+        res.status(404).json({ error: "Configured credential not found" });
+        return;
+      }
+      res.sendStatus(204);
+    } catch {
+      res.status(503).json({ error: "Credential could not be disconnected" });
+    }
+  },
+);
+
+router.post(
+  "/workspaces/:workspaceId/connector-credentials/:serviceId/executions",
+  async (req, res): Promise<void> => {
+    const params = ExecuteWorkspaceConnectorActionParams.safeParse(req.params);
+    const body = ExecuteWorkspaceConnectorActionBody.safeParse(req.body);
+    if (
+      !params.success ||
+      !UUID_PATTERN.test(params.data.workspaceId) ||
+      !body.success
+    ) {
+      res.status(400).json({ error: "Invalid connector execution request" });
+      return;
+    }
+    try {
+      const result = await executeWorkspaceConnectorAction({
+        workspaceId: params.data.workspaceId,
+        userId: req.authUserId!,
+        serviceId: params.data.serviceId,
+        idempotencyKey: body.data.idempotencyKey,
+        actionType: body.data.actionType,
+        arguments: body.data.arguments,
+        receipt: body.data.receipt,
+        adapters: connectorAdapters,
+      });
+      const response = ExecuteWorkspaceConnectorActionResponse.parse(result);
+      res.status(result.status === "pending" ? 202 : 200).json(response);
+    } catch (error) {
+      const code = mapConnectorExecutionError(error);
+      const status =
+        code === "workspace_membership_required" ||
+        code === "workspace_admin_required"
+          ? 403
+          : code === "connector_unavailable" ||
+              code === "vault_keyring_unavailable" ||
+              code === "credential_unavailable" ||
+              code === "execution_unavailable"
+            ? 503
+            : 409;
+      res.status(status).json({
+        error: "Connector execution was not performed",
+        code,
+      });
+    }
   },
 );
 

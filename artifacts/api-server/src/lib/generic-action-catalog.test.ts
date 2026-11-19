@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  APPROVAL_ACTION_RISK_TYPES,
   APPROVAL_ACTION_CATALOG,
   evaluateApprovalAction,
 } from "@workspace/db/approval-action-catalog";
@@ -39,6 +40,38 @@ test("unknown action and out-of-schema arguments fail closed", () => {
     assert.equal(extra.reasonCode, "arguments_invalid");
     assert.ok(extra.issues.includes("unknown_argument:dispatchNow"));
   }
+});
+
+test("the catalog exposes all risk types and classifies only the four known actions", () => {
+  assert.deepEqual(APPROVAL_ACTION_RISK_TYPES, [
+    "read",
+    "internal_write",
+    "external_send",
+    "money_movement",
+    "permission_change",
+    "delete_or_export",
+    "execute_or_deploy",
+    "corporate_commitment",
+  ]);
+  assert.equal(APPROVAL_ACTION_CATALOG.length, 4);
+  for (const action of APPROVAL_ACTION_CATALOG) {
+    assert.ok(action.riskTypes.length > 0, `${action.actionType} is classified`);
+    assert.ok(
+      action.riskTypes.every((risk) =>
+        APPROVAL_ACTION_RISK_TYPES.includes(risk),
+      ),
+    );
+  }
+  const represented = new Set(
+    APPROVAL_ACTION_CATALOG.flatMap((action) => action.riskTypes),
+  );
+  assert.ok(represented.has("money_movement"));
+  assert.ok(represented.has("internal_write"));
+  assert.ok(represented.has("external_send"));
+  assert.equal(
+    evaluateApprovalAction("guardian.unclassified.v1", {}).ok,
+    false,
+  );
 });
 
 test("email proposals are approval-gated and reject recipients outside the sandbox", () => {

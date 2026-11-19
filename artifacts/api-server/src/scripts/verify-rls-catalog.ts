@@ -26,6 +26,7 @@ const specialUpdateTables = [
   "ai_assessment_jobs",
   "host_boundary_attestation_challenges",
   "ai_assessment_approval_requests",
+  "workspace_connector_executions",
 ];
 const privilegeNames = ["SELECT", "INSERT", "UPDATE", "DELETE"] as const;
 

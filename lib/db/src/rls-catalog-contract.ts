@@ -20,6 +20,8 @@ export const expectedRlsPolicyCounts = {
   workspace_action_rule_heads: 3,
   workspace_action_rule_versions: 2,
   workspace_agents: 4,
+  workspace_connector_credentials: 3,
+  workspace_connector_executions: 3,
 } as const;
 
 export const expectedRlsPolicyCount = Object.values(

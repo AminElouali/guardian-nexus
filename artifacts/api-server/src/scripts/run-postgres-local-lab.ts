@@ -128,6 +128,7 @@ type VersionedMigrationAuditReport = {
   migrationsApplied: string[];
   migration0003Idempotent?: boolean;
   migration0004Idempotent?: boolean;
+  migration0005Idempotent?: boolean;
   inventoryMatchesDrizzle?: {
     tables: boolean;
     columns: boolean;
@@ -199,7 +200,11 @@ function redactChildOutput(value: string): {
       "[redacted URL]",
     )
     .replace(
-      /\b(?:DATABASE_URL|APP_RUNTIME_DATABASE_URL|APP_RUNTIME_DB_PASSWORD|APPROVAL_LEDGER_ED25519_PRIVATE_KEY|SESSION_SECRET|CLERK_SECRET_KEY)\b["']?\s*[:=]\s*["']?[^,\s"'{}]+/gi,
+      /\bWORKSPACE_CONNECTOR_KEYRING_JSON\b["']?\s*[:=]\s*["']?\{[^}]*\}/gi,
+      "WORKSPACE_CONNECTOR_KEYRING_JSON=[redacted]",
+    )
+    .replace(
+      /\b(?:DATABASE_URL|APP_RUNTIME_DATABASE_URL|APP_RUNTIME_DB_PASSWORD|APPROVAL_LEDGER_ED25519_PRIVATE_KEY|WORKSPACE_CONNECTOR_KEYRING_JSON|SESSION_SECRET|CLERK_SECRET_KEY)\b["']?\s*[:=]\s*["']?[^,\s"'{}]+/gi,
       "[redacted environment value]",
     )
     .replace(/\bBearer\s+\S+/gi, "Bearer [redacted]")
@@ -808,6 +813,8 @@ const versionedMigrationTableNames = [
   "workspace_action_rule_heads",
   "workspace_action_rule_versions",
   "workspace_agents",
+  "workspace_connector_credentials",
+  "workspace_connector_executions",
 ] as const;
 
 const legacyCatalogCounts: CatalogCounts = {
@@ -820,11 +827,11 @@ const legacyCatalogCounts: CatalogCounts = {
 };
 
 const fullCatalogCounts: CatalogCounts = {
-  tables: 16,
-  columns: 173,
-  indexes: 44,
-  constraints: 72,
-  policies: 45,
+  tables: 18,
+  columns: 198,
+  indexes: 49,
+  constraints: 92,
+  policies: 51,
   roles: 3,
 };
 
@@ -1186,7 +1193,9 @@ async function runVersionedMigrationAudit(input: {
       `SELECT
          (SELECT count(*) FROM public.workspace_action_rule_heads) +
          (SELECT count(*) FROM public.workspace_action_rule_versions) +
-         (SELECT count(*) FROM public.workspace_agents) AS row_count`,
+         (SELECT count(*) FROM public.workspace_agents) +
+         (SELECT count(*) FROM public.workspace_connector_credentials) +
+         (SELECT count(*) FROM public.workspace_connector_executions) AS row_count`,
     );
     if (Number(newTableRows.rows[0]?.row_count) !== 0) {
       throw new Error("versioned_migration_baseline_new_tables_not_empty");
@@ -1196,6 +1205,8 @@ async function runVersionedMigrationAudit(input: {
     try {
       await migrationClient.query(
         `DROP TABLE public.workspace_action_rule_heads;
+         DROP TABLE public.workspace_connector_executions;
+         DROP TABLE public.workspace_connector_credentials;
          DROP TABLE public.workspace_agents;
          DROP TABLE public.workspace_action_rule_versions;`,
       );
@@ -1241,6 +1252,7 @@ async function runVersionedMigrationAudit(input: {
       "0002_workspace_agents.sql",
       "0003_workspace_rule_version_unique_constraint.sql",
       "0004_align_rule_check_constraint_names.sql",
+      "0005_workspace_connector_foundation.sql",
     ];
     for (const filename of migrationFiles) {
       await applyVersionedMigration(migrationClient, filename);
@@ -1252,6 +1264,10 @@ async function runVersionedMigrationAudit(input: {
       if (filename === "0004_align_rule_check_constraint_names.sql") {
         await applyVersionedMigration(migrationClient, filename);
         report.migration0004Idempotent = true;
+      }
+      if (filename === "0005_workspace_connector_foundation.sql") {
+        await applyVersionedMigration(migrationClient, filename);
+        report.migration0005Idempotent = true;
       }
     }
 
@@ -1293,7 +1309,8 @@ async function runVersionedMigrationAudit(input: {
       !grantAudit.passed ||
       !sameValue(report.migratedCatalog, fullCatalogCounts) ||
       !report.migration0003Idempotent ||
-        !report.migration0004Idempotent ||
+      !report.migration0004Idempotent ||
+      !report.migration0005Idempotent ||
       auditViolations.length > 0
     ) {
       report.violationCodes.push(...auditViolations);
@@ -1606,6 +1623,7 @@ async function main(): Promise<void> {
   let violations: string[] = [];
   let databaseName = "";
   let runtimePassword = "";
+  let connectorVaultKeyringJson = "";
 
   try {
     assertCleanParentEnvironment();
@@ -1634,6 +1652,11 @@ async function main(): Promise<void> {
     const suffix = randomBytes(16).toString("hex");
     databaseName = `guardian_approval_lab_${suffix}`;
     runtimePassword = randomBytes(32).toString("hex");
+    const connectorVaultKey = randomBytes(32).toString("base64url");
+    connectorVaultKeyringJson = JSON.stringify({
+      activeKeyId: "lab-ephemeral-v1",
+      keys: { "lab-ephemeral-v1": connectorVaultKey },
+    });
 
     currentStage = "postgres_init";
     await runAndCheck(
@@ -1974,7 +1997,7 @@ async function main(): Promise<void> {
     });
     versionedMigrationAudit.status = "passed";
     console.log(
-      `Versioned migration catalog: baseline=${versionedMigrationAudit.baselineActual?.tables}/${versionedMigrationAudit.baselineActual?.columns}/${versionedMigrationAudit.baselineActual?.indexes}/${versionedMigrationAudit.baselineActual?.constraints}/${versionedMigrationAudit.baselineActual?.policies}/${versionedMigrationAudit.baselineActual?.roles} migrated=${versionedMigrationAudit.migratedCatalog?.tables}/${versionedMigrationAudit.migratedCatalog?.columns}/${versionedMigrationAudit.migratedCatalog?.indexes}/${versionedMigrationAudit.migratedCatalog?.constraints}/${versionedMigrationAudit.migratedCatalog?.policies}/${versionedMigrationAudit.migratedCatalog?.roles} migration_0003_idempotent=${versionedMigrationAudit.migration0003Idempotent === true} migration_0004_idempotent=${versionedMigrationAudit.migration0004Idempotent === true}.`,
+      `Versioned migration catalog: baseline=${versionedMigrationAudit.baselineActual?.tables}/${versionedMigrationAudit.baselineActual?.columns}/${versionedMigrationAudit.baselineActual?.indexes}/${versionedMigrationAudit.baselineActual?.constraints}/${versionedMigrationAudit.baselineActual?.policies}/${versionedMigrationAudit.baselineActual?.roles} migrated=${versionedMigrationAudit.migratedCatalog?.tables}/${versionedMigrationAudit.migratedCatalog?.columns}/${versionedMigrationAudit.migratedCatalog?.indexes}/${versionedMigrationAudit.migratedCatalog?.constraints}/${versionedMigrationAudit.migratedCatalog?.policies}/${versionedMigrationAudit.migratedCatalog?.roles} migration_0003_idempotent=${versionedMigrationAudit.migration0003Idempotent === true} migration_0004_idempotent=${versionedMigrationAudit.migration0004Idempotent === true} migration_0005_idempotent=${versionedMigrationAudit.migration0005Idempotent === true}.`,
     );
 
     currentStage = "api_unit_tests";
@@ -2188,6 +2211,7 @@ async function main(): Promise<void> {
         runtimePassword,
         socketDirectory,
       ),
+      WORKSPACE_CONNECTOR_KEYRING_JSON: connectorVaultKeyringJson,
     };
     const e2eOutput = await runAndCapture(
       pnpm,

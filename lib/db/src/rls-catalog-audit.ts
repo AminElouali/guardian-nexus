@@ -9,6 +9,7 @@ const specialUpdateTables = [
   "ai_assessment_jobs",
   "host_boundary_attestation_challenges",
   "ai_assessment_approval_requests",
+  "workspace_connector_executions",
 ] as const;
 const applicationRoles = new Set([
   "app_runtime",
@@ -840,7 +841,16 @@ export function auditRlsCatalog(
         )
         .map((item) => item.columnName)
         .sort();
-      if (sortedKey(actualColumns) !== sortedKey(expectedColumns.columnNames)) {
+      const updateGrant = grantFor(
+        contract,
+        roleName,
+        tableName,
+        "UPDATE",
+      );
+      const expectedUpdateColumns = updateGrant
+        ? (updateGrant.columns ?? expectedColumns.columnNames)
+        : [];
+      if (sortedKey(actualColumns) !== sortedKey(expectedUpdateColumns)) {
         violations.push(
           `column_update_matrix_incomplete:${roleName}:${tableName}`,
         );

@@ -93,6 +93,22 @@ test("redacts unsafe diagnostics and omits non-primitive values", () => {
   assert.doesNotMatch(serialized, /SENTINEL_|postgresql:\/\//);
 });
 
+test("redacts the disposable connector vault keyring from child diagnostics", () => {
+  const output = sanitizeChildOutputForReport({
+    stage: "approval_e2e",
+    stdout:
+      'WORKSPACE_CONNECTOR_KEYRING_JSON={"activeKeyId":"lab-only-v1","keys":{"lab-only-v1":"SENTINEL_EPHEMERAL_VAULT_KEY"}}',
+    stderr: "",
+    exitCode: 1,
+    signal: null,
+  });
+  assert.doesNotMatch(
+    JSON.stringify(output),
+    /SENTINEL_EPHEMERAL_VAULT_KEY/,
+  );
+  assert.match(output.stdout, /\[redacted/);
+});
+
 test("truncates safe assertion messages to 300 characters", () => {
   const longMessage = "Failure detail ".repeat(30);
   const output = [

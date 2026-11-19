@@ -13131,6 +13131,7 @@ export const GetWorkspaceGenericActionCatalogResponse = zod.object({
   "label": zod.string(),
   "description": zod.string(),
   "riskClass": zod.enum(['low', 'medium', 'high']),
+  "riskTypes": zod.array(zod.enum(['read', 'internal_write', 'external_send', 'money_movement', 'permission_change', 'delete_or_export', 'execute_or_deploy', 'corporate_commitment'])),
   "defaultDecision": zod.literal("deny"),
   "approverLabel": zod.string(),
   "allowedApproverRoles": zod.array(zod.enum(['owner', 'admin'])),
@@ -13865,6 +13866,167 @@ export const RevokeWorkspaceAgentResponse = zod.object({
   "revokedAt": zod.coerce.date().nullable(),
   "lastUsedAt": zod.coerce.date().nullable()
 })
+})
+
+
+/**
+ * @summary List connection status without returning encrypted material
+ */
+export const ListWorkspaceConnectorCredentialsParams = zod.object({
+  "workspaceId": zod.uuid()
+})
+
+export const listWorkspaceConnectorCredentialsResponseCredentialsItemLastFourMin = 4;
+export const listWorkspaceConnectorCredentialsResponseCredentialsItemLastFourMax = 4;
+
+
+
+export const ListWorkspaceConnectorCredentialsResponse = zod.object({
+  "credentials": zod.array(zod.object({
+  "serviceId": zod.string(),
+  "configured": zod.literal(true),
+  "lastFour": zod.string().min(listWorkspaceConnectorCredentialsResponseCredentialsItemLastFourMin).max(listWorkspaceConnectorCredentialsResponseCredentialsItemLastFourMax),
+  "encryptionKeyId": zod.string(),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Create or replace an encrypted workspace connection credential
+ */
+export const replaceWorkspaceConnectorCredentialPathServiceIdMax = 64;
+
+
+export const replaceWorkspaceConnectorCredentialPathServiceIdRegExp = new RegExp('^[a-z0-9][a-z0-9._-]*$');
+
+
+export const ReplaceWorkspaceConnectorCredentialParams = zod.object({
+  "workspaceId": zod.uuid(),
+  "serviceId": zod.coerce.string().min(1).max(replaceWorkspaceConnectorCredentialPathServiceIdMax).regex(replaceWorkspaceConnectorCredentialPathServiceIdRegExp)
+})
+
+export const replaceWorkspaceConnectorCredentialBodySecretMin = 8;
+export const replaceWorkspaceConnectorCredentialBodySecretMax = 4096;
+
+
+
+export const ReplaceWorkspaceConnectorCredentialBody = zod.object({
+  "secret": zod.string().min(replaceWorkspaceConnectorCredentialBodySecretMin).max(replaceWorkspaceConnectorCredentialBodySecretMax)
+})
+
+export const replaceWorkspaceConnectorCredentialResponseLastFourMin = 4;
+export const replaceWorkspaceConnectorCredentialResponseLastFourMax = 4;
+
+
+
+export const ReplaceWorkspaceConnectorCredentialResponse = zod.object({
+  "serviceId": zod.string(),
+  "configured": zod.literal(true),
+  "lastFour": zod.string().min(replaceWorkspaceConnectorCredentialResponseLastFourMin).max(replaceWorkspaceConnectorCredentialResponseLastFourMax),
+  "encryptionKeyId": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Disconnect a service and delete its encrypted credential
+ */
+export const disconnectWorkspaceConnectorCredentialPathServiceIdMax = 64;
+
+
+export const disconnectWorkspaceConnectorCredentialPathServiceIdRegExp = new RegExp('^[a-z0-9][a-z0-9._-]*$');
+
+
+export const DisconnectWorkspaceConnectorCredentialParams = zod.object({
+  "workspaceId": zod.uuid(),
+  "serviceId": zod.coerce.string().min(1).max(disconnectWorkspaceConnectorCredentialPathServiceIdMax).regex(disconnectWorkspaceConnectorCredentialPathServiceIdRegExp)
+})
+
+export const DisconnectWorkspaceConnectorCredentialResponse = zod.void()
+
+
+/**
+ * Execution is unavailable unless an adapter is explicitly registered. The only adapter in tests is a network-free fake. The receipt is consumed before dispatch, and retries with the same idempotency key return the recorded state without dispatching again.
+ * @summary Execute a catalogued action once after verifying and consuming its receipt
+ */
+export const executeWorkspaceConnectorActionPathServiceIdMax = 64;
+
+
+export const executeWorkspaceConnectorActionPathServiceIdRegExp = new RegExp('^[a-z0-9][a-z0-9._-]*$');
+
+
+export const ExecuteWorkspaceConnectorActionParams = zod.object({
+  "workspaceId": zod.uuid(),
+  "serviceId": zod.coerce.string().min(1).max(executeWorkspaceConnectorActionPathServiceIdMax).regex(executeWorkspaceConnectorActionPathServiceIdRegExp)
+})
+
+export const executeWorkspaceConnectorActionBodyIdempotencyKeyMin = 16;
+export const executeWorkspaceConnectorActionBodyIdempotencyKeyMax = 128;
+
+export const executeWorkspaceConnectorActionBodyActionTypeMax = 128;
+
+export const executeWorkspaceConnectorActionBodyArgumentsOneMax = 5000;
+
+export const executeWorkspaceConnectorActionBodyArgumentsTwoMin = 0;
+export const executeWorkspaceConnectorActionBodyArgumentsTwoMax = 1000000;
+
+export const executeWorkspaceConnectorActionBodyReceiptPayloadKeyIdMax = 64;
+
+
+export const executeWorkspaceConnectorActionBodyReceiptPayloadKeyIdRegExp = new RegExp('^[A-Za-z0-9._-]+$');
+export const executeWorkspaceConnectorActionBodyReceiptPayloadProposalBindingSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const executeWorkspaceConnectorActionBodyReceiptPayloadActionSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+
+
+export const executeWorkspaceConnectorActionBodyReceiptPayloadIssuedAtRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{3}Z$');
+export const executeWorkspaceConnectorActionBodyReceiptPayloadExpiresAtRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{3}Z$');
+export const executeWorkspaceConnectorActionBodyReceiptPayloadNonceMin = 32;
+export const executeWorkspaceConnectorActionBodyReceiptPayloadNonceMax = 128;
+
+
+export const executeWorkspaceConnectorActionBodyReceiptPayloadNonceRegExp = new RegExp('^[A-Za-z0-9_-]+$');
+export const executeWorkspaceConnectorActionBodyReceiptPayloadSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const executeWorkspaceConnectorActionBodyReceiptSignatureRegExp = new RegExp('^[A-Za-z0-9_-]{86}$');
+
+
+export const ExecuteWorkspaceConnectorActionBody = zod.object({
+  "idempotencyKey": zod.string().min(executeWorkspaceConnectorActionBodyIdempotencyKeyMin).max(executeWorkspaceConnectorActionBodyIdempotencyKeyMax),
+  "actionType": zod.string().min(1).max(executeWorkspaceConnectorActionBodyActionTypeMax),
+  "arguments": zod.record(zod.string(), zod.union([zod.string().max(executeWorkspaceConnectorActionBodyArgumentsOneMax),zod.int().min(executeWorkspaceConnectorActionBodyArgumentsTwoMin).max(executeWorkspaceConnectorActionBodyArgumentsTwoMax),zod.boolean()])),
+  "receipt": zod.object({
+  "payload": zod.object({
+  "version": zod.literal(1),
+  "keyId": zod.string().min(1).max(executeWorkspaceConnectorActionBodyReceiptPayloadKeyIdMax).regex(executeWorkspaceConnectorActionBodyReceiptPayloadKeyIdRegExp),
+  "receiptId": zod.uuid(),
+  "workspaceId": zod.uuid(),
+  "approvalId": zod.uuid(),
+  "proposalBindingSha256": zod.string().regex(executeWorkspaceConnectorActionBodyReceiptPayloadProposalBindingSha256RegExp),
+  "actionSha256": zod.string().regex(executeWorkspaceConnectorActionBodyReceiptPayloadActionSha256RegExp),
+  "requestedBy": zod.string().min(1),
+  "approvedBy": zod.string().min(1),
+  "approvedByRole": zod.enum(['owner', 'admin']),
+  "issuedAt": zod.string().regex(executeWorkspaceConnectorActionBodyReceiptPayloadIssuedAtRegExp).describe('Canonical UTC ISO timestamp preserved byte-for-byte for receipt verification.'),
+  "expiresAt": zod.string().regex(executeWorkspaceConnectorActionBodyReceiptPayloadExpiresAtRegExp).describe('Canonical UTC ISO timestamp preserved byte-for-byte for receipt verification.'),
+  "nonce": zod.string().min(executeWorkspaceConnectorActionBodyReceiptPayloadNonceMin).max(executeWorkspaceConnectorActionBodyReceiptPayloadNonceMax).regex(executeWorkspaceConnectorActionBodyReceiptPayloadNonceRegExp)
+}),
+  "payloadSha256": zod.string().regex(executeWorkspaceConnectorActionBodyReceiptPayloadSha256RegExp),
+  "signature": zod.string().regex(executeWorkspaceConnectorActionBodyReceiptSignatureRegExp)
+})
+})
+
+export const executeWorkspaceConnectorActionResponseResponseSummaryMax = 512;
+
+export const executeWorkspaceConnectorActionResponseFailureCodeMax = 64;
+
+
+
+export const ExecuteWorkspaceConnectorActionResponse = zod.object({
+  "executionId": zod.uuid(),
+  "status": zod.enum(['pending', 'executed', 'failed']),
+  "replayed": zod.boolean(),
+  "responseSummary": zod.string().max(executeWorkspaceConnectorActionResponseResponseSummaryMax).nullable(),
+  "failureCode": zod.string().max(executeWorkspaceConnectorActionResponseFailureCodeMax).nullable()
 })
 
 

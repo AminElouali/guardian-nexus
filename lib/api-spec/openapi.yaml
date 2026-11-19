@@ -1207,6 +1207,127 @@ paths:
           description: Workspace owner or administrator required
         "404":
           description: Active agent not found
+  /workspaces/{workspaceId}/connector-credentials:
+    get:
+      operationId: listWorkspaceConnectorCredentials
+      tags: [integrations]
+      summary: List connection status without returning encrypted material
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Safe connection status for workspace administrators
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkspaceConnectorCredentialsResponse" }
+        "403":
+          description: Workspace owner or administrator required
+  /workspaces/{workspaceId}/connector-credentials/{serviceId}:
+    put:
+      operationId: replaceWorkspaceConnectorCredential
+      tags: [integrations]
+      summary: Create or replace an encrypted workspace connection credential
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: serviceId
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 64, pattern: "^[a-z0-9][a-z0-9._-]*$" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WorkspaceConnectorCredentialInput" }
+      responses:
+        "200":
+          description: Credential replaced; only safe status is returned
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkspaceConnectorCredentialStatus" }
+        "201":
+          description: Credential created; secret material is never returned
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkspaceConnectorCredentialStatus" }
+        "400":
+          description: Invalid credential request
+        "403":
+          description: Workspace owner or administrator required
+        "503":
+          description: Credential vault is not configured
+    delete:
+      operationId: disconnectWorkspaceConnectorCredential
+      tags: [integrations]
+      summary: Disconnect a service and delete its encrypted credential
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: serviceId
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 64, pattern: "^[a-z0-9][a-z0-9._-]*$" }
+      responses:
+        "204":
+          description: Credential disconnected
+        "403":
+          description: Workspace owner or administrator required
+        "404":
+          description: Configured credential not found
+  /workspaces/{workspaceId}/connector-credentials/{serviceId}/executions:
+    post:
+      operationId: executeWorkspaceConnectorAction
+      tags: [integrations]
+      summary: Execute a catalogued action once after verifying and consuming its receipt
+      description: >-
+        Execution is unavailable unless an adapter is explicitly registered.
+        The only adapter in tests is a network-free fake. The receipt is
+        consumed before dispatch, and retries with the same idempotency key
+        return the recorded state without dispatching again.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: serviceId
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 64, pattern: "^[a-z0-9][a-z0-9._-]*$" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WorkspaceConnectorExecutionInput" }
+      responses:
+        "200":
+          description: Execution completed or returned idempotently
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkspaceConnectorExecutionResponse" }
+        "202":
+          description: A prior attempt is still pending; it will not be dispatched again
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkspaceConnectorExecutionResponse" }
+        "400":
+          description: Invalid action or idempotency request
+        "403":
+          description: Workspace owner or administrator required
+        "409":
+          description: Receipt rejected or idempotency key conflicts
+        "503":
+          description: No connector adapter or vault key is configured
   /agent/workspaces/{workspaceId}/action-proposals:
     post:
       operationId: createWorkspaceAgentActionProposal
@@ -2004,6 +2125,11 @@ components:
         label: { type: string }
         description: { type: string }
         riskClass: { type: string, enum: [low, medium, high] }
+        riskTypes:
+          type: array
+          items:
+            type: string
+            enum: [read, internal_write, external_send, money_movement, permission_change, delete_or_export, execute_or_deploy, corporate_commitment]
         defaultDecision: { type: string, const: deny }
         approverLabel: { type: string }
         allowedApproverRoles:
@@ -2018,7 +2144,7 @@ components:
         rules:
           type: array
           items: { $ref: "#/components/schemas/GenericActionRuleRow" }
-      required: [actionType, version, label, description, riskClass, defaultDecision, approverLabel, allowedApproverRoles, expiryMinutes, requiresIndependentApprover, syntheticTemplateText, argumentFields, rules]
+      required: [actionType, version, label, description, riskClass, riskTypes, defaultDecision, approverLabel, allowedApproverRoles, expiryMinutes, requiresIndependentApprover, syntheticTemplateText, argumentFields, rules]
     GenericActionArgumentField:
       type: object
       additionalProperties: false
@@ -2314,6 +2440,55 @@ components:
       properties:
         agent: { $ref: "#/components/schemas/WorkspaceAgent" }
       required: [agent]
+    WorkspaceConnectorCredentialInput:
+      type: object
+      additionalProperties: false
+      properties:
+        secret: { type: string, minLength: 8, maxLength: 4096 }
+      required: [secret]
+    WorkspaceConnectorCredentialStatus:
+      type: object
+      additionalProperties: false
+      properties:
+        serviceId: { type: string }
+        configured: { type: boolean, const: true }
+        lastFour: { type: string, minLength: 4, maxLength: 4 }
+        encryptionKeyId: { type: string }
+        createdAt: { type: string, format: date-time }
+      required: [serviceId, configured, lastFour, encryptionKeyId, createdAt]
+    WorkspaceConnectorCredentialsResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        credentials:
+          type: array
+          items: { $ref: "#/components/schemas/WorkspaceConnectorCredentialStatus" }
+      required: [credentials]
+    WorkspaceConnectorExecutionInput:
+      type: object
+      additionalProperties: false
+      properties:
+        idempotencyKey: { type: string, minLength: 16, maxLength: 128 }
+        actionType: { type: string, minLength: 1, maxLength: 128 }
+        arguments:
+          type: object
+          additionalProperties:
+            oneOf:
+              - { type: string, maxLength: 5000 }
+              - { type: integer, minimum: 0, maximum: 1000000 }
+              - { type: boolean }
+        receipt: { $ref: "#/components/schemas/SignedApprovalReceiptV1" }
+      required: [idempotencyKey, actionType, arguments, receipt]
+    WorkspaceConnectorExecutionResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        executionId: { type: string, format: uuid }
+        status: { type: string, enum: [pending, executed, failed] }
+        replayed: { type: boolean }
+        responseSummary: { type: ["string", "null"], maxLength: 512 }
+        failureCode: { type: ["string", "null"], maxLength: 64 }
+      required: [executionId, status, replayed, responseSummary, failureCode]
     GenericActionProposalResponse:
       type: object
       additionalProperties: false

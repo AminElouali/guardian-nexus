@@ -81,6 +81,11 @@ import type {
   WorkspaceAgentResponse,
   WorkspaceAgentsResponse,
   WorkspaceApprovalLedgerEventsResponse,
+  WorkspaceConnectorCredentialInput,
+  WorkspaceConnectorCredentialStatus,
+  WorkspaceConnectorCredentialsResponse,
+  WorkspaceConnectorExecutionInput,
+  WorkspaceConnectorExecutionResponse,
   WorkspaceInput,
   WorkspaceIntegration,
   WorkspaceIntegrationsResponse
@@ -4407,6 +4412,366 @@ export const useRevokeWorkspaceAgent = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getRevokeWorkspaceAgentMutationOptions(options), queryClient);
+    }
+
+export const getListWorkspaceConnectorCredentialsUrl = (workspaceId: string,) => {
+
+
+
+
+  return `/api/workspaces/${workspaceId}/connector-credentials`
+}
+
+/**
+ * @summary List connection status without returning encrypted material
+ */
+export const listWorkspaceConnectorCredentials = async (workspaceId: string, options?: Parameters<typeof customFetch>[1]): Promise<WorkspaceConnectorCredentialsResponse> => {
+
+  return customFetch<WorkspaceConnectorCredentialsResponse>(getListWorkspaceConnectorCredentialsUrl(workspaceId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListWorkspaceConnectorCredentialsQueryKey = (workspaceId: string,) => {
+    return [
+    `/api/workspaces/${workspaceId}/connector-credentials`
+    ] as const;
+    }
+
+
+export const getListWorkspaceConnectorCredentialsQueryOptions = <TData = Awaited<ReturnType<typeof listWorkspaceConnectorCredentials>>, TError = ErrorType<void>>(workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listWorkspaceConnectorCredentials>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListWorkspaceConnectorCredentialsQueryKey(workspaceId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listWorkspaceConnectorCredentials>>> = ({ signal }) => listWorkspaceConnectorCredentials(workspaceId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: workspaceId !== null && workspaceId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listWorkspaceConnectorCredentials>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListWorkspaceConnectorCredentialsQueryResult = NonNullable<Awaited<ReturnType<typeof listWorkspaceConnectorCredentials>>>
+export type ListWorkspaceConnectorCredentialsQueryError = ErrorType<void>
+
+
+export function useListWorkspaceConnectorCredentials<TData = Awaited<ReturnType<typeof listWorkspaceConnectorCredentials>>, TError = ErrorType<void>>(
+ workspaceId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listWorkspaceConnectorCredentials>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listWorkspaceConnectorCredentials>>,
+          TError,
+          Awaited<ReturnType<typeof listWorkspaceConnectorCredentials>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListWorkspaceConnectorCredentials<TData = Awaited<ReturnType<typeof listWorkspaceConnectorCredentials>>, TError = ErrorType<void>>(
+ workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listWorkspaceConnectorCredentials>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listWorkspaceConnectorCredentials>>,
+          TError,
+          Awaited<ReturnType<typeof listWorkspaceConnectorCredentials>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListWorkspaceConnectorCredentials<TData = Awaited<ReturnType<typeof listWorkspaceConnectorCredentials>>, TError = ErrorType<void>>(
+ workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listWorkspaceConnectorCredentials>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List connection status without returning encrypted material
+ */
+
+export function useListWorkspaceConnectorCredentials<TData = Awaited<ReturnType<typeof listWorkspaceConnectorCredentials>>, TError = ErrorType<void>>(
+ workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listWorkspaceConnectorCredentials>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListWorkspaceConnectorCredentialsQueryOptions(workspaceId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getReplaceWorkspaceConnectorCredentialUrl = (workspaceId: string,
+    serviceId: string,) => {
+
+
+
+
+  return `/api/workspaces/${workspaceId}/connector-credentials/${serviceId}`
+}
+
+/**
+ * @summary Create or replace an encrypted workspace connection credential
+ */
+export const replaceWorkspaceConnectorCredential = async (workspaceId: string,
+    serviceId: string,
+    workspaceConnectorCredentialInput: WorkspaceConnectorCredentialInput, options?: Parameters<typeof customFetch>[1]): Promise<WorkspaceConnectorCredentialStatus> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<WorkspaceConnectorCredentialStatus>(getReplaceWorkspaceConnectorCredentialUrl(workspaceId,serviceId),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(workspaceConnectorCredentialInput)
+  }
+);}
+
+
+
+
+
+export const getReplaceWorkspaceConnectorCredentialMutationKey = () => ['replaceWorkspaceConnectorCredential'] as const;
+
+export const getReplaceWorkspaceConnectorCredentialMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof replaceWorkspaceConnectorCredential>>, TError,ReplaceWorkspaceConnectorCredentialMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof replaceWorkspaceConnectorCredential>>, TError,ReplaceWorkspaceConnectorCredentialMutationVariables, TContext> => {
+
+const mutationKey = getReplaceWorkspaceConnectorCredentialMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof replaceWorkspaceConnectorCredential>>, ReplaceWorkspaceConnectorCredentialMutationVariables> = (props) => {
+          const {workspaceId,serviceId,data} = props ?? {};
+
+          return  replaceWorkspaceConnectorCredential(workspaceId,serviceId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReplaceWorkspaceConnectorCredentialMutationResult = NonNullable<Awaited<ReturnType<typeof replaceWorkspaceConnectorCredential>>>
+    export type ReplaceWorkspaceConnectorCredentialMutationBody = BodyType<WorkspaceConnectorCredentialInput>
+    export type ReplaceWorkspaceConnectorCredentialMutationError = ErrorType<void>
+    export type ReplaceWorkspaceConnectorCredentialMutationVariables = {workspaceId: string;serviceId: string;data: BodyType<WorkspaceConnectorCredentialInput>}
+
+    /**
+ * @summary Create or replace an encrypted workspace connection credential
+ */
+export const useReplaceWorkspaceConnectorCredential = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof replaceWorkspaceConnectorCredential>>, TError,ReplaceWorkspaceConnectorCredentialMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof replaceWorkspaceConnectorCredential>>,
+        TError,
+        ReplaceWorkspaceConnectorCredentialMutationVariables,
+        TContext
+      > => {
+      return useMutation(getReplaceWorkspaceConnectorCredentialMutationOptions(options), queryClient);
+    }
+
+export const getDisconnectWorkspaceConnectorCredentialUrl = (workspaceId: string,
+    serviceId: string,) => {
+
+
+
+
+  return `/api/workspaces/${workspaceId}/connector-credentials/${serviceId}`
+}
+
+/**
+ * @summary Disconnect a service and delete its encrypted credential
+ */
+export const disconnectWorkspaceConnectorCredential = async (workspaceId: string,
+    serviceId: string, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDisconnectWorkspaceConnectorCredentialUrl(workspaceId,serviceId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDisconnectWorkspaceConnectorCredentialMutationKey = () => ['disconnectWorkspaceConnectorCredential'] as const;
+
+export const getDisconnectWorkspaceConnectorCredentialMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof disconnectWorkspaceConnectorCredential>>, TError,DisconnectWorkspaceConnectorCredentialMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof disconnectWorkspaceConnectorCredential>>, TError,DisconnectWorkspaceConnectorCredentialMutationVariables, TContext> => {
+
+const mutationKey = getDisconnectWorkspaceConnectorCredentialMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof disconnectWorkspaceConnectorCredential>>, DisconnectWorkspaceConnectorCredentialMutationVariables> = (props) => {
+          const {workspaceId,serviceId} = props ?? {};
+
+          return  disconnectWorkspaceConnectorCredential(workspaceId,serviceId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DisconnectWorkspaceConnectorCredentialMutationResult = NonNullable<Awaited<ReturnType<typeof disconnectWorkspaceConnectorCredential>>>
+
+    export type DisconnectWorkspaceConnectorCredentialMutationError = ErrorType<void>
+    export type DisconnectWorkspaceConnectorCredentialMutationVariables = {workspaceId: string;serviceId: string}
+
+    /**
+ * @summary Disconnect a service and delete its encrypted credential
+ */
+export const useDisconnectWorkspaceConnectorCredential = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof disconnectWorkspaceConnectorCredential>>, TError,DisconnectWorkspaceConnectorCredentialMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof disconnectWorkspaceConnectorCredential>>,
+        TError,
+        DisconnectWorkspaceConnectorCredentialMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDisconnectWorkspaceConnectorCredentialMutationOptions(options), queryClient);
+    }
+
+export const getExecuteWorkspaceConnectorActionUrl = (workspaceId: string,
+    serviceId: string,) => {
+
+
+
+
+  return `/api/workspaces/${workspaceId}/connector-credentials/${serviceId}/executions`
+}
+
+/**
+ * Execution is unavailable unless an adapter is explicitly registered. The only adapter in tests is a network-free fake. The receipt is consumed before dispatch, and retries with the same idempotency key return the recorded state without dispatching again.
+ * @summary Execute a catalogued action once after verifying and consuming its receipt
+ */
+export const executeWorkspaceConnectorAction = async (workspaceId: string,
+    serviceId: string,
+    workspaceConnectorExecutionInput: WorkspaceConnectorExecutionInput, options?: Parameters<typeof customFetch>[1]): Promise<WorkspaceConnectorExecutionResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<WorkspaceConnectorExecutionResponse>(getExecuteWorkspaceConnectorActionUrl(workspaceId,serviceId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(workspaceConnectorExecutionInput)
+  }
+);}
+
+
+
+
+
+export const getExecuteWorkspaceConnectorActionMutationKey = () => ['executeWorkspaceConnectorAction'] as const;
+
+export const getExecuteWorkspaceConnectorActionMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof executeWorkspaceConnectorAction>>, TError,ExecuteWorkspaceConnectorActionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof executeWorkspaceConnectorAction>>, TError,ExecuteWorkspaceConnectorActionMutationVariables, TContext> => {
+
+const mutationKey = getExecuteWorkspaceConnectorActionMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof executeWorkspaceConnectorAction>>, ExecuteWorkspaceConnectorActionMutationVariables> = (props) => {
+          const {workspaceId,serviceId,data} = props ?? {};
+
+          return  executeWorkspaceConnectorAction(workspaceId,serviceId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ExecuteWorkspaceConnectorActionMutationResult = NonNullable<Awaited<ReturnType<typeof executeWorkspaceConnectorAction>>>
+    export type ExecuteWorkspaceConnectorActionMutationBody = BodyType<WorkspaceConnectorExecutionInput>
+    export type ExecuteWorkspaceConnectorActionMutationError = ErrorType<void>
+    export type ExecuteWorkspaceConnectorActionMutationVariables = {workspaceId: string;serviceId: string;data: BodyType<WorkspaceConnectorExecutionInput>}
+
+    /**
+ * @summary Execute a catalogued action once after verifying and consuming its receipt
+ */
+export const useExecuteWorkspaceConnectorAction = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof executeWorkspaceConnectorAction>>, TError,ExecuteWorkspaceConnectorActionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof executeWorkspaceConnectorAction>>,
+        TError,
+        ExecuteWorkspaceConnectorActionMutationVariables,
+        TContext
+      > => {
+      return useMutation(getExecuteWorkspaceConnectorActionMutationOptions(options), queryClient);
     }
 
 export const getCreateWorkspaceAgentActionProposalUrl = (workspaceId: string,) => {

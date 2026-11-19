@@ -757,6 +757,11 @@ test(
       await import("./routes/ai-assessment-lab");
     const { createWorkspaceGovernanceRouter } =
       await import("./routes/workspace-governance");
+    const { createFakeLabConnector } =
+      await import("./lib/connector-fake.test-support");
+    const fakeConnector = createFakeLabConnector({
+      failInvocationNumber: 2,
+    });
     const { withWorkspaceUserTransaction } =
       await import("./lib/tenant-db");
     const { updateApprovedRequestAndAppendReceipt } =
@@ -770,7 +775,12 @@ test(
     const app = express();
     app.use(express.json({ limit: "8kb" }));
     app.use("/api", createAiAssessmentLabRouter(authForTest));
-    app.use("/api", createWorkspaceGovernanceRouter(authForTest));
+    app.use(
+      "/api",
+      createWorkspaceGovernanceRouter(authForTest, {
+        connectorAdapters: new Map([["lab.fake.v1", fakeConnector.adapter]]),
+      }),
+    );
 
     let workspaceA = "";
     let workspaceB = "";
@@ -4031,6 +4041,422 @@ test(
       smtpCapture.messages.length,
       1,
       "one-use ledger consumption permits exactly one local SMTP capture",
+    );
+
+    await t.test(
+      "workspace connector vault is private, encrypted, receipt-gated and idempotent",
+      async () => {
+        const credentialPath =
+          `/api/workspaces/${workspaceB}/connector-credentials`;
+        const otherWorkspaceCredentialPath =
+          `/api/workspaces/${workspaceA}/connector-credentials`;
+        const executionPath =
+          `${credentialPath}/lab.fake.v1/executions`;
+        const firstSecret = "lab-only-connector-secret-1234";
+        const replacementSecret = "lab-only-connector-secret-5678";
+
+        const emptyOtherWorkspace = await request(
+          workspaceAOwner,
+          otherWorkspaceCredentialPath,
+        );
+        assert.equal(emptyOtherWorkspace.status, 200);
+        assert.deepEqual(await emptyOtherWorkspace.json(), { credentials: [] });
+        const viewerList = await request(
+          workspaceAViewer,
+          otherWorkspaceCredentialPath,
+        );
+        assert.equal(viewerList.status, 403);
+        const viewerCreate = await request(
+          workspaceAViewer,
+          `${otherWorkspaceCredentialPath}/lab.fake.v1`,
+          "PUT",
+          { secret: firstSecret },
+        );
+        assert.equal(viewerCreate.status, 403);
+
+        const malformedCredential = await request(
+          workspaceBAdmin,
+          `${credentialPath}/lab.fake.v1`,
+          "PUT",
+          { secret: "short" },
+        );
+        assert.equal(malformedCredential.status, 400);
+        assert.equal(
+          JSON.stringify(await malformedCredential.json()).includes("short"),
+          false,
+        );
+
+        const credentialCreate = await request(
+          workspaceBAdmin,
+          `${credentialPath}/lab.fake.v1`,
+          "PUT",
+          { secret: firstSecret },
+        );
+        assert.equal(credentialCreate.status, 201);
+        const credentialCreateJson = JSON.stringify(
+          await credentialCreate.json(),
+        );
+        assert.equal(credentialCreateJson.includes(firstSecret), false);
+        assert.match(credentialCreateJson, /"lastFour":"1234"/);
+        assert.equal(credentialCreateJson.includes("encryptedSecret"), false);
+
+        const credentialList = await request(
+          workspaceBAdmin,
+          credentialPath,
+        );
+        assert.equal(credentialList.status, 200);
+        const credentialListJson = JSON.stringify(
+          await credentialList.json(),
+        );
+        assert.equal(credentialListJson.includes(firstSecret), false);
+        assert.match(credentialListJson, /"lastFour":"1234"/);
+        assert.equal(credentialListJson.includes("encryptedSecret"), false);
+
+        const storedCredential = await fixturePool.query<{
+          encrypted_secret: string;
+          nonce: string;
+          auth_tag: string;
+        }>(
+          `SELECT encrypted_secret, nonce, auth_tag
+             FROM public.workspace_connector_credentials
+            WHERE workspace_id = $1 AND service_id = 'lab.fake.v1'`,
+          [workspaceB],
+        );
+        assert.equal(storedCredential.rowCount, 1);
+        assert.equal(storedCredential.rows[0]?.encrypted_secret.includes(firstSecret), false);
+        assert.equal(storedCredential.rows[0]?.nonce.length, 16);
+        assert.equal(storedCredential.rows[0]?.auth_tag.length, 22);
+        const credentialAudit = await fixturePool.query<{
+          metadata_text: string;
+        }>(
+          `SELECT metadata::text AS metadata_text
+             FROM public.workspace_audit_events
+            WHERE workspace_id = $1
+              AND resource_type = 'workspace_connector_credential'`,
+          [workspaceB],
+        );
+        assert.equal(
+          credentialAudit.rows.some((row) =>
+            row.metadata_text.includes(firstSecret),
+          ),
+          false,
+        );
+
+        const credentialReplace = await request(
+          workspaceBAdmin,
+          `${credentialPath}/lab.fake.v1`,
+          "PUT",
+          { secret: replacementSecret },
+        );
+        assert.equal(credentialReplace.status, 200);
+        const credentialReplaceJson = JSON.stringify(
+          await credentialReplace.json(),
+        );
+        assert.equal(credentialReplaceJson.includes(replacementSecret), false);
+        assert.match(credentialReplaceJson, /"lastFour":"5678"/);
+
+        async function createApprovedConnectorReceipt() {
+          const proposalResponse = await request(
+            workspaceBOwner,
+            genericProposalPath,
+            "POST",
+            { ...sandboxAction, idempotencyKey: randomUUID() },
+          );
+          assert.equal(proposalResponse.status, 201);
+          const proposal = CreateWorkspaceGenericActionProposalResponse.parse(
+            await proposalResponse.json(),
+          );
+          assert.ok(proposal.approval);
+          const approval = proposal.approval;
+          const decisionResponse = await request(
+            workspaceBAdmin,
+            `/api/workspaces/${workspaceB}/ai-security-assessments/approvals/${approval.id}/decision`,
+            "POST",
+            {
+              decision: "approve",
+              proposalBindingSha256: approval.proposalBindingSha256,
+            },
+          );
+          assert.equal(decisionResponse.status, 200);
+          const decision = DecideWorkspaceAiAssessmentApprovalResponse.parse(
+            await decisionResponse.json(),
+          );
+          assert.ok(decision.receipt);
+          return { approval, receipt: decision.receipt };
+        }
+
+        const noReceipt = await request(
+          workspaceBAdmin,
+          executionPath,
+          "POST",
+          {
+            idempotencyKey: randomUUID(),
+            actionType: sandboxAction.actionType,
+            arguments: sandboxAction.arguments,
+          },
+        );
+        assert.equal(noReceipt.status, 400);
+        assert.equal(fakeConnector.invocations.length, 0);
+
+        const primary = await createApprovedConnectorReceipt();
+        const crossWorkspace = await request(
+          workspaceAOwner,
+          `/api/workspaces/${workspaceA}/connector-credentials/lab.fake.v1/executions`,
+          "POST",
+          {
+            idempotencyKey: randomUUID(),
+            actionType: sandboxAction.actionType,
+            arguments: sandboxAction.arguments,
+            receipt: primary.receipt,
+          },
+        );
+        assert.equal(crossWorkspace.status, 409);
+        assert.equal(
+          (await crossWorkspace.json() as { code?: string }).code,
+          "receipt_action_mismatch",
+        );
+
+        const alteredArguments = await request(
+          workspaceBAdmin,
+          executionPath,
+          "POST",
+          {
+            idempotencyKey: randomUUID(),
+            actionType: sandboxAction.actionType,
+            arguments: { ...sandboxAction.arguments, to: "other@example.test" },
+            receipt: primary.receipt,
+          },
+        );
+        assert.equal(alteredArguments.status, 409);
+        assert.equal(
+          (await alteredArguments.json() as { code?: string }).code,
+          "receipt_action_mismatch",
+        );
+        const otherAction = await request(
+          workspaceBAdmin,
+          executionPath,
+          "POST",
+          {
+            idempotencyKey: randomUUID(),
+            actionType: "guardian.synthetic.finance.bank-change.v1",
+            arguments: {
+              account_id: "LAB-ACCOUNT-TEST-1",
+              new_iban: "DE00LAB1234567890ABCD",
+            },
+            receipt: primary.receipt,
+          },
+        );
+        assert.equal(otherAction.status, 409);
+        assert.equal(
+          (await otherAction.json() as { code?: string }).code,
+          "receipt_action_mismatch",
+        );
+        const unknownAction = await request(
+          workspaceBAdmin,
+          executionPath,
+          "POST",
+          {
+            idempotencyKey: randomUUID(),
+            actionType: "guardian.unclassified.v1",
+            arguments: {},
+            receipt: primary.receipt,
+          },
+        );
+        assert.equal(unknownAction.status, 409);
+        assert.equal(
+          (await unknownAction.json() as { code?: string }).code,
+          "unclassified_action",
+        );
+
+        const expiredPayload = {
+          ...primary.receipt.payload,
+          issuedAt: new Date(Date.now() - 10_000).toISOString(),
+          expiresAt: new Date(Date.now() - 1_000).toISOString(),
+        };
+        const expiredReceipt = signApprovalReceiptV1(
+          expiredPayload,
+          createPrivateKey(ephemeralLedgerKey),
+        );
+        const expiredResponse = await request(
+          workspaceBAdmin,
+          executionPath,
+          "POST",
+          {
+            idempotencyKey: randomUUID(),
+            actionType: sandboxAction.actionType,
+            arguments: sandboxAction.arguments,
+            receipt: expiredReceipt,
+          },
+        );
+        assert.equal(expiredResponse.status, 409);
+        assert.equal(fakeConnector.invocations.length, 0);
+
+        const concurrentApproval = await createApprovedConnectorReceipt();
+        const idempotencyKey = `connector-${randomUUID()}`;
+        const connectorRequest = {
+          idempotencyKey,
+          actionType: sandboxAction.actionType,
+          arguments: sandboxAction.arguments,
+          receipt: concurrentApproval.receipt,
+        };
+        const callsBefore = fakeConnector.invocations.length;
+        const concurrentExecutions = await Promise.all([
+          request(workspaceBAdmin, executionPath, "POST", connectorRequest),
+          request(workspaceBAdmin, executionPath, "POST", connectorRequest),
+        ]);
+        assert.ok(
+          concurrentExecutions.every((response) =>
+            response.status === 200 || response.status === 202,
+          ),
+        );
+        assert.equal(
+          fakeConnector.invocations.length - callsBefore,
+          1,
+          "concurrent duplicate requests dispatch the fake connector only once",
+        );
+        const completedRetry = await request(
+          workspaceBAdmin,
+          executionPath,
+          "POST",
+          connectorRequest,
+        );
+        assert.equal(completedRetry.status, 200);
+        const completedRetryJson = JSON.stringify(
+          await completedRetry.json(),
+        );
+        assert.match(completedRetryJson, /"status":"executed"/);
+        assert.match(completedRetryJson, /"replayed":true/);
+        assert.equal(completedRetryJson.includes(replacementSecret), false);
+        const reusedReceipt = await request(
+          workspaceBAdmin,
+          executionPath,
+          "POST",
+          {
+            ...connectorRequest,
+            idempotencyKey: `connector-${randomUUID()}`,
+          },
+        );
+        assert.equal(reusedReceipt.status, 409);
+        assert.equal(
+          (await reusedReceipt.json() as { code?: string }).code,
+          "receipt_already_consumed",
+        );
+        assert.equal(
+          fakeConnector.invocations.length - callsBefore,
+          1,
+        );
+
+        const failedApproval = await createApprovedConnectorReceipt();
+        const failedRequest = {
+          idempotencyKey: `connector-${randomUUID()}`,
+          actionType: sandboxAction.actionType,
+          arguments: sandboxAction.arguments,
+          receipt: failedApproval.receipt,
+        };
+        const failedExecution = await request(
+          workspaceBAdmin,
+          executionPath,
+          "POST",
+          failedRequest,
+        );
+        assert.equal(failedExecution.status, 200);
+        const failedExecutionJson = JSON.stringify(
+          await failedExecution.json(),
+        );
+        assert.match(failedExecutionJson, /"status":"failed"/);
+        assert.match(failedExecutionJson, /"failureCode":"connector_failed"/);
+        const failedCallCount = fakeConnector.invocations.length;
+        const failedRetry = await request(
+          workspaceBAdmin,
+          executionPath,
+          "POST",
+          failedRequest,
+        );
+        assert.equal(failedRetry.status, 200);
+        assert.match(
+          JSON.stringify(await failedRetry.json()),
+          /"replayed":true/,
+        );
+        assert.equal(fakeConnector.invocations.length, failedCallCount);
+
+        const disconnectedApproval = await createApprovedConnectorReceipt();
+        const disconnect = await request(
+          workspaceBAdmin,
+          `${credentialPath}/lab.fake.v1`,
+          "DELETE",
+        );
+        assert.equal(disconnect.status, 204);
+        const afterDisconnect = await request(
+          workspaceBAdmin,
+          executionPath,
+          "POST",
+          {
+            idempotencyKey: `connector-${randomUUID()}`,
+            actionType: sandboxAction.actionType,
+            arguments: sandboxAction.arguments,
+            receipt: disconnectedApproval.receipt,
+          },
+        );
+        assert.equal(afterDisconnect.status, 409);
+        assert.equal(
+          (await afterDisconnect.json() as { code?: string }).code,
+          "credential_not_configured",
+        );
+        assert.equal(fakeConnector.invocations.length, 2);
+
+        const connectorRows = await fixturePool.query<{
+          count: string;
+          secret_match: boolean;
+        }>(
+          `SELECT count(*)::text AS count,
+                  bool_or(encrypted_secret LIKE '%' || $2 || '%') AS secret_match
+             FROM public.workspace_connector_credentials
+            WHERE workspace_id = $1 AND service_id = 'lab.fake.v1'`,
+          [workspaceB, replacementSecret],
+        );
+        assert.equal(connectorRows.rows[0]?.count, "0");
+        assert.equal(connectorRows.rows[0]?.secret_match, null);
+        const executionRows = await fixturePool.query<{
+          payload_text: string;
+        }>(
+          `SELECT concat_ws(
+             ' ', action_sha256, receipt_id, response_summary, failure_code
+           ) AS payload_text
+             FROM public.workspace_connector_executions
+            WHERE workspace_id = $1`,
+          [workspaceB],
+        );
+        assert.equal(
+          executionRows.rows.some((row) =>
+            row.payload_text.includes(firstSecret) ||
+            row.payload_text.includes(replacementSecret),
+          ),
+          false,
+          "execution history stores only safe metadata and result summary",
+        );
+        const executionAudit = await fixturePool.query<{
+          metadata_text: string;
+        }>(
+          `SELECT metadata::text AS metadata_text
+             FROM public.workspace_audit_events
+            WHERE workspace_id = $1
+              AND resource_type = 'workspace_connector_execution'`,
+          [workspaceB],
+        );
+        assert.equal(
+          executionAudit.rows.some((row) =>
+            row.metadata_text.includes(firstSecret) ||
+            row.metadata_text.includes(replacementSecret),
+          ),
+          false,
+        );
+        assert.ok(
+          fakeConnector.invocations.every(
+            (invocation) => invocation.credentialReceived,
+          ),
+        );
+        assert.equal(fakeConnector.networkCalls, 0);
+      },
     );
 
     const concurrentAction = {

@@ -19,6 +19,8 @@ const testFiles = [
   "src/lib/assessment-output-limit.test.ts",
   "src/lib/policy-lab-preview.test.ts",
   "src/lib/workspace-agent-credentials.test.ts",
+  "src/lib/workspace-connector-vault.test.ts",
+  "src/lib/generic-action-catalog.test.ts",
   "src/lib/generic-action-evidence.test.ts",
   "src/lib/workspace-rule-history-impact.test.ts",
   "src/lib/approval-action-refund-boundary.test.ts",

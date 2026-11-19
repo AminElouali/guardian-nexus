@@ -40,6 +40,7 @@ const specialTables = [
   "ai_assessment_jobs",
   "host_boundary_attestation_challenges",
   "ai_assessment_approval_requests",
+  "workspace_connector_executions",
 ];
 const testColumns: Record<string, string[]> = {
   ai_assessment_jobs: [
@@ -71,6 +72,23 @@ const testColumns: Record<string, string[]> = {
     "updated_at",
     "proposal_sha256",
     "workspace_id",
+  ],
+  workspace_connector_executions: [
+    "id",
+    "workspace_id",
+    "service_id",
+    "credential_id",
+    "idempotency_key_sha256",
+    "action_type",
+    "action_sha256",
+    "receipt_id",
+    "requested_by_user_id",
+    "status",
+    "response_summary",
+    "failure_code",
+    "created_at",
+    "updated_at",
+    "completed_at",
   ],
 };
 const privileges = ["SELECT", "INSERT", "UPDATE", "DELETE"] as const;
@@ -191,8 +209,8 @@ function makeSnapshot(): RlsCatalogSnapshot {
 }
 
 test("RLS catalog contract is derived from Drizzle, SQL and role bootstrap sources", () => {
-  assert.equal(tableNames.length, 16);
-  assert.equal(contract.policies.length, 45);
+  assert.equal(tableNames.length, 18);
+  assert.equal(contract.policies.length, 51);
   assert.deepEqual(
     contract.policies
       .filter((policy) => policy.tableName === "workspace_approval_ledger")
@@ -367,6 +385,91 @@ test("RLS catalog contract is derived from Drizzle, SQL and role bootstrap sourc
     false,
   );
   assert.deepEqual(
+    contract.grants.filter(
+      (grant) =>
+        grant.roleName === "app_runtime" &&
+        grant.tableName === "workspace_connector_credentials",
+    ),
+    [
+      {
+        roleName: "app_runtime",
+        tableName: "workspace_connector_credentials",
+        privilege: "SELECT",
+      },
+      {
+        roleName: "app_runtime",
+        tableName: "workspace_connector_credentials",
+        privilege: "DELETE",
+      },
+      {
+        roleName: "app_runtime",
+        tableName: "workspace_connector_credentials",
+        privilege: "INSERT",
+        columns: [
+          "workspace_id",
+          "service_id",
+          "encrypted_secret",
+          "nonce",
+          "auth_tag",
+          "encryption_key_id",
+          "last_four",
+          "created_by_user_id",
+        ],
+      },
+    ],
+  );
+  assert.deepEqual(
+    contract.grants.filter(
+      (grant) =>
+        grant.roleName === "app_runtime" &&
+        grant.tableName === "workspace_connector_executions",
+    ),
+    [
+      {
+        roleName: "app_runtime",
+        tableName: "workspace_connector_executions",
+        privilege: "SELECT",
+      },
+      {
+        roleName: "app_runtime",
+        tableName: "workspace_connector_executions",
+        privilege: "INSERT",
+        columns: [
+          "workspace_id",
+          "service_id",
+          "credential_id",
+          "idempotency_key_sha256",
+          "action_type",
+          "action_sha256",
+          "receipt_id",
+          "requested_by_user_id",
+          "status",
+        ],
+      },
+      {
+        roleName: "app_runtime",
+        tableName: "workspace_connector_executions",
+        privilege: "UPDATE",
+        columns: [
+          "status",
+          "response_summary",
+          "failure_code",
+          "updated_at",
+          "completed_at",
+        ],
+      },
+    ],
+  );
+  assert.equal(
+    contract.grants.some(
+      (grant) =>
+        grant.roleName === "app_runtime" &&
+        grant.tableName === "workspace_connector_executions" &&
+        grant.privilege === "DELETE",
+    ),
+    false,
+  );
+  assert.deepEqual(
     contract.memberships.map(({ grantedRole, memberRole }) => [
       grantedRole,
       memberRole,
@@ -381,11 +484,11 @@ test("RLS catalog contract is derived from Drizzle, SQL and role bootstrap sourc
 test("complete synthetic PostgreSQL catalog snapshot satisfies the contract", () => {
   const report = auditRlsCatalog(contract, makeSnapshot());
   assert.equal(report.passed, true, report.violations.join(", "));
-  assert.equal(report.expectedTableCount, 16);
-  assert.equal(report.expectedPolicyCount, 45);
-  assert.equal(report.policies.length, 45);
-  assert.equal(report.tablePrivileges.length, 3 * 16 * 4);
-  assert.equal(report.updateColumns.length, 3 * (6 + 6 + 12));
+  assert.equal(report.expectedTableCount, 18);
+  assert.equal(report.expectedPolicyCount, 51);
+  assert.equal(report.policies.length, 51);
+  assert.equal(report.tablePrivileges.length, 3 * 18 * 4);
+  assert.equal(report.updateColumns.length, 3 * (6 + 6 + 12 + 15));
 });
 
 test("catalog audit fails closed for missing RLS, policy drift, role grants and column updates", () => {
