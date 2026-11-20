@@ -125,3 +125,12 @@ Esto no equivale a conectores productivos para los servicios enumerados, ni demu
 3. **Correo de demostración:** confirmar Mailtrap y el alcance del sandbox.
 4. **Pagos de demostración:** confirmar Stripe exclusivamente en modo de prueba y sus límites.
 5. **Lectura:** decidir si la plantilla Solo lectura debe permitir acciones de tipo Leer, y bajo qué etiquetas de sensibilidad y volumen.
+
+### Pruebas sintéticas con Promptfoo
+
+**IMPLEMENTADO — Fase 1:** `redteam:mcp` ejecuta ataques deterministas y locales
+contra el proxy usando la base desechable del laboratorio; no usa LLM ni API
+externas. La configuración generativa de Fase 2 permanece **desactivada** y no
+forma parte del comando ni del workflow. Activarla requeriría una clave de API
+del proveedor de modelo elegido (por ejemplo, `OPENAI_API_KEY`); no se ha creado
+ni consultado ninguna clave.

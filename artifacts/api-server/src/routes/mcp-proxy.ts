@@ -230,6 +230,14 @@ export function createMcpProxyRouter(
       const { value: rpc, rawArgumentsJson } = parsedRequest;
       const id = rpc.id as JsonRpcId | undefined;
       if (id === undefined) {
+        if (
+          rpc.method === "notifications/initialized" &&
+          (rpc.params === undefined ||
+            (isRecord(rpc.params) && Object.keys(rpc.params).length === 0))
+        ) {
+          res.status(202).end();
+          return;
+        }
         res.status(400).json({ error: "Invalid MCP request" });
         return;
       }
