@@ -30,6 +30,14 @@ function isAllowedApprovalLabRef(ref: string | undefined): ref is string {
   );
 }
 
+function isAllowedApprovalLabEvent(
+  ref: string,
+  eventName: string | undefined,
+): eventName is "workflow_dispatch" | "schedule" {
+  return eventName === "workflow_dispatch" ||
+    (eventName === "schedule" && ref === CI_MAIN_REF);
+}
+
 function approvalLabWorkflowRef(ref: string): string {
   return `${CI_WORKFLOW_PATH}@${ref}`;
 }
@@ -216,7 +224,12 @@ export async function diagnoseGitHubActionsApprovalLabTarget(
   }
 
   const ciRef = env.GITHUB_REF;
-  if (!ciRef || !isAllowedApprovalLabRef(ciRef)) {
+  const ciEventName = env.GITHUB_EVENT_NAME;
+  if (
+    !ciRef ||
+    !isAllowedApprovalLabRef(ciRef) ||
+    !isAllowedApprovalLabEvent(ciRef, ciEventName)
+  ) {
     return reject("github_context_incompatible");
   }
   const ciWorkflowRef = approvalLabWorkflowRef(ciRef);
@@ -228,7 +241,6 @@ export async function diagnoseGitHubActionsApprovalLabTarget(
     env.GITHUB_ACTIONS !== "true" ||
     env.GITHUB_WORKFLOW !== CI_WORKFLOW_NAME ||
     env.GITHUB_JOB !== CI_JOB_ID ||
-    env.GITHUB_EVENT_NAME !== "workflow_dispatch" ||
     env.GITHUB_REPOSITORY?.toLowerCase() !== CI_REPOSITORY.toLowerCase() ||
     env.GITHUB_REF_TYPE !== "branch" ||
     env.GITHUB_WORKFLOW_REF !== ciWorkflowRef ||
@@ -275,7 +287,7 @@ export async function diagnoseGitHubActionsApprovalLabTarget(
       workflow: CI_WORKFLOW_NAME,
       workflowRef: ciWorkflowRef,
       ref: ciRef,
-      eventName: "workflow_dispatch",
+      eventName: ciEventName,
       sha: commitSha,
       runId,
       runAttempt,
