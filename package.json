@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "license": "MIT",
   "scripts": {
+    "demo:mcp": "pnpm --filter @workspace/api-server run demo:mcp",
     "preinstall": "sh -c 'rm -f package-lock.json yarn.lock; case \"$npm_config_user_agent\" in pnpm/*) ;; *) echo \"Use pnpm instead\" >&2; exit 1 ;; esac'",
     "lab:local": "pnpm --filter @workspace/api-server exec tsx src/scripts/run-postgres-local-lab.ts",
     "test:public-ledger-verifier": "pnpm --filter @workspace/api-server exec tsx --test ../../verifier/test-differential.test.mjs",
