@@ -25,6 +25,9 @@ export * from "./workspace-action-rule-engine";
 
 const { Pool } = pg;
 
+const workspaceMembershipHelperSource =
+  "SELECT EXISTS ( SELECT 1 FROM public.workspace_memberships AS membership WHERE membership.workspace_id = target_workspace_id AND membership.user_id = NULLIF(current_setting('app.user_id', true), '') )";
+
 async function runRlsReadinessStep<T>(
   operation: () => Promise<T>,
   failureCode: RlsReadinessViolationCode,
@@ -127,6 +130,61 @@ export async function assertRlsRuntimeReady(): Promise<void> {
   );
   assertRlsRuntimeCatalogReady(rows);
 
+  const membershipHelperResult = await runRlsReadinessStep(
+    () => db.execute(sql`
+      SELECT
+        count(*)::int AS function_count,
+        COALESCE(bool_and(
+          lang.lanname = 'sql'
+          AND helper.prorettype = 'boolean'::regtype
+          AND pg_get_function_identity_arguments(helper.oid) =
+            'target_workspace_id uuid'
+          AND helper.prosecdef
+          AND helper.provolatile = 's'
+          AND function_owner.rolname = 'postgres'
+          AND helper.proconfig @> ARRAY[
+            'search_path=pg_catalog, public',
+            'row_security=off'
+          ]::text[]
+          AND trim(regexp_replace(
+            helper.prosrc,
+            '[[:space:]]+',
+            ' ',
+            'g'
+          )) = ${workspaceMembershipHelperSource}
+          AND NOT EXISTS (
+            SELECT 1
+            FROM aclexplode(
+              COALESCE(helper.proacl, acldefault('f', helper.proowner))
+            ) AS function_acl
+            WHERE function_acl.grantee = 0
+              AND function_acl.privilege_type = 'EXECUTE'
+          )
+          AND has_function_privilege(
+            'app_runtime',
+            helper.oid,
+            'EXECUTE'
+          )
+        ), false) AS contract_valid
+      FROM pg_proc AS helper
+      JOIN pg_namespace AS namespace ON namespace.oid = helper.pronamespace
+      JOIN pg_language AS lang ON lang.oid = helper.prolang
+      JOIN pg_roles AS function_owner ON function_owner.oid = helper.proowner
+      WHERE namespace.nspname = 'public'
+        AND helper.proname = 'workspace_current_user_is_member'
+    `),
+    "membership_helper_function_mismatch",
+  );
+  const membershipHelper = membershipHelperResult.rows[0];
+  if (
+    Number(membershipHelper?.function_count) !== 1 ||
+    membershipHelper?.contract_valid !== true
+  ) {
+    throw new RlsRuntimeReadinessError([
+      "membership_helper_function_mismatch",
+    ]);
+  }
+
   const loginResult = await runRlsReadinessStep(
     () => db.execute(sql`
     SELECT
@@ -184,6 +242,22 @@ export async function assertRlsRuntimeReady(): Promise<void> {
         SELECT 1
         FROM unnest(ARRAY[${rlsRuntimeTableNamesSql}]) AS protected(table_name)
         WHERE NOT CASE
+          WHEN protected.table_name = 'workspace_audit_events'
+          THEN has_table_privilege(
+            runtime.oid,
+            'public.workspace_audit_events',
+            'SELECT,INSERT'
+          )
+            AND NOT has_table_privilege(
+              runtime.oid,
+              'public.workspace_audit_events',
+              'UPDATE'
+            )
+            AND NOT has_table_privilege(
+              runtime.oid,
+              'public.workspace_audit_events',
+              'DELETE'
+            )
           WHEN protected.table_name = 'host_boundary_attestation_challenges'
           THEN has_table_privilege(
             runtime.oid,

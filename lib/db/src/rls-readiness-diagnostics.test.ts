@@ -17,7 +17,7 @@ test("RLS diagnostics expose only allowlisted static violation codes", () => {
     "policy_count_mismatch",
   ]);
   assert.equal(error.message, "RLS runtime readiness check failed.");
-  assert.deepEqual(Object.keys(rlsReadinessViolationCodes).length, 18);
+  assert.deepEqual(Object.keys(rlsReadinessViolationCodes).length, 19);
 });
 
 test("unrecognized errors never expose their message or attached details", () => {

@@ -19,6 +19,13 @@ const repositoryRoot = path.resolve(
   "../../..",
 );
 const schemaDirectory = path.join(repositoryRoot, "lib/db/src/schema");
+const migration0008Sql = readFileSync(
+  path.join(
+    repositoryRoot,
+    "lib/db/migrations/0008_audit_append_only_membership_scope.sql",
+  ),
+  "utf8",
+);
 const sources = {
   schemaFiles: readdirSync(schemaDirectory)
     .filter((name) => name.endsWith(".ts"))
@@ -38,6 +45,26 @@ const sources = {
   ),
 };
 const contract = parseRlsCatalogContract(sources);
+
+test("membership roster helper is security-definer and narrowly executable", () => {
+  for (const source of [sources.policiesSql, migration0008Sql]) {
+    assert.match(source, /CREATE OR REPLACE FUNCTION public\.workspace_current_user_is_member/);
+    assert.match(source, /SECURITY DEFINER[\s\S]*SET search_path = pg_catalog, public/);
+    assert.match(source, /SET row_security = off/);
+    assert.match(
+      source,
+      /REVOKE ALL ON FUNCTION public\.workspace_current_user_is_member\(uuid\) FROM PUBLIC/,
+    );
+    assert.match(
+      source,
+      /GRANT EXECUTE ON FUNCTION public\.workspace_current_user_is_member\(uuid\) TO app_runtime/,
+    );
+  }
+  assert.match(
+    sources.policiesSql,
+    /workspace_id::text = NULLIF\(current_setting\('app\.workspace_id', true\), ''\)[\s\S]*workspace_current_user_is_member\(workspace_id\)/,
+  );
+});
 
 test("post-schema audit derives expected catalog from Drizzle and accepts policy shells", () => {
   const snapshot = deriveRlsCatalogPhaseSnapshot(contract, "post-schema");
@@ -317,10 +344,19 @@ test("membership policies enforce owner changes and creator-only privileged inse
   const updatePolicy = membershipPolicies.find(
     (policy) => policy.policyName === "workspace_memberships_update_scoped",
   );
+  const selectPolicy = membershipPolicies.find(
+    (policy) => policy.policyName === "workspace_memberships_select_scoped",
+  );
 
   assert.equal(report.passed, true, report.violations.join(", "));
   assert.equal(report.expectedPolicyCount, 53);
   assert.equal(membershipPolicies.length, 3);
+  assert.ok(selectPolicy?.qual);
+  assert.match(selectPolicy.qual, /user_id[\s\S]*current_setting\('app\.user_id'/);
+  assert.match(
+    selectPolicy.qual,
+    /workspace_id[\s\S]*current_setting\('app\.workspace_id'[\s\S]*workspace_current_user_is_member/,
+  );
   assert.ok(insertPolicy?.withCheck);
   assert.match(
     insertPolicy.withCheck,
@@ -407,6 +443,29 @@ test("predicate canonicalization equates explicit and default public schema", ()
     canonicalizeRlsExpression(
       "EXISTS (SELECT 1 FROM public.workspace_memberships AS membership WHERE membership.workspace_id = workspace_id)",
       "workspaces",
+    ),
+  );
+});
+
+test("membership helper canonicalization equates its public qualification only", () => {
+  assert.equal(
+    canonicalizeRlsExpression(
+      "public.workspace_current_user_is_member(workspace_id)",
+      "workspace_memberships",
+    ),
+    canonicalizeRlsExpression(
+      "workspace_current_user_is_member(workspace_id)",
+      "workspace_memberships",
+    ),
+  );
+  assert.notEqual(
+    canonicalizeRlsExpression(
+      "other.workspace_current_user_is_member(workspace_id)",
+      "workspace_memberships",
+    ),
+    canonicalizeRlsExpression(
+      "workspace_current_user_is_member(workspace_id)",
+      "workspace_memberships",
     ),
   );
 });

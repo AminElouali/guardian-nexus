@@ -73,6 +73,7 @@ test("append-only contract contains only runtime inventory tables", () => {
     appendOnlyRlsTableNames.every((name) => expectedRlsTableNames.includes(name)),
   );
   assert.ok(appendOnlyRlsTableNames.includes("workspace_approval_ledger"));
+  assert.ok(appendOnlyRlsTableNames.includes("workspace_audit_events"));
   assert.ok(appendOnlyRlsTableNames.includes("workspace_action_rule_versions"));
   assert.ok(appendOnlyRlsTableNames.includes("workspace_approval_receipts"));
 });
@@ -151,6 +152,21 @@ test("append-only runtime grants reject column-level REFERENCES", () => {
   const rows = validAppendOnlyGrantRows();
   rows[0]!.column_references = true;
   assert.equal(appendOnlyRuntimeGrantsAllowed(rows), false);
+});
+
+test("workspace audit events reject UPDATE and DELETE grants", () => {
+  for (const [privilege, property] of [
+    ["UPDATE", "can_update"],
+    ["DELETE", "can_delete"],
+  ] as const) {
+    const rows = validAppendOnlyGrantRows();
+    const audit = rows.find(
+      (row) => row.table_name === "workspace_audit_events",
+    );
+    assert.ok(audit);
+    audit[property] = true;
+    assert.equal(appendOnlyRuntimeGrantsAllowed(rows), false, privilege);
+  }
 });
 
 test("append-only runtime grants reject a broad grant snapshot", () => {

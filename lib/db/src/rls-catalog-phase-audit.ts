@@ -281,6 +281,25 @@ function normalizeAst(value: unknown, baseTable: string): unknown {
     }
   }
   if (
+    node.type === "call" &&
+    node.function &&
+    typeof node.function === "object"
+  ) {
+    const functionNode = node.function as Record<string, unknown>;
+    if (
+      functionNode.name === "workspace_current_user_is_member" &&
+      functionNode.schema === undefined
+    ) {
+      return normalizeAst(
+        {
+          ...node,
+          function: { ...functionNode, schema: "public" },
+        },
+        baseTable,
+      );
+    }
+  }
+  if (
     node.type === "binary" &&
     node.op === "=" &&
     node.right &&

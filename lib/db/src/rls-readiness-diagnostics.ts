@@ -12,6 +12,7 @@ export const rlsReadinessViolationCodes = [
   "worker_privileges_mismatch",
   "runtime_table_privileges_mismatch",
   "runtime_login_direct_table_access",
+  "membership_helper_function_mismatch",
   "runtime_role_activation_failed",
   "worker_role_activation_failed",
   "worker_result_column_access_probe_failed",

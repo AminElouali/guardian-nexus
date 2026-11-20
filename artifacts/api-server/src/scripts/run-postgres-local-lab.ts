@@ -128,13 +128,13 @@ type VersionedMigrationAuditReport = {
   status: "running" | "passed" | "failed";
   baselineSourceCommit: string;
   baselineStrategy:
-    | "clone_drizzle_catalog_remove_new_tables_and_restore_legacy_action_ref_constraint";
+    | "clone_drizzle_catalog_remove_new_tables_and_restore_legacy_contract";
   baselineExpected: CatalogCounts;
   baselineActual?: CatalogCounts;
   baselineMatchesDrizzleProjection?: boolean;
   baselineMatchesExpectedLegacyProjection?: boolean;
   baselineLegacyActionRefConstraintVerified?: boolean;
-  baselineActionRefLegacyDifferenceOnly?: boolean;
+  baselineExpectedLegacyDifferencesOnly?: boolean;
   drizzleCatalog?: CatalogCounts;
   migratedCatalog?: CatalogCounts;
   migrationsApplied: string[];
@@ -151,6 +151,8 @@ type VersionedMigrationAuditReport = {
   migration0006Idempotent?: boolean;
   migration0006UnexpectedConstraintRejected?: boolean;
   migration0007Idempotent?: boolean;
+  migration0008LegacyStateReplaced?: boolean;
+  migration0008Idempotent?: boolean;
   inventoryMatchesDrizzle?: {
     tables: boolean;
     columns: boolean;
@@ -1009,6 +1011,28 @@ function grantSnapshotForTables(
   };
 }
 
+function legacyAuditGrantProjection(
+  snapshot: RlsCatalogSnapshot,
+): RlsCatalogSnapshot {
+  return {
+    ...snapshot,
+    tablePrivileges: snapshot.tablePrivileges.map((privilege) =>
+      privilege.roleName === "app_runtime" &&
+        privilege.tableName === "workspace_audit_events" &&
+        (privilege.privilege === "UPDATE" ||
+          privilege.privilege === "DELETE")
+        ? { ...privilege, granted: true }
+        : privilege
+    ),
+    updateColumns: snapshot.updateColumns.map((column) =>
+      column.roleName === "app_runtime" &&
+        column.tableName === "workspace_audit_events"
+        ? { ...column, granted: true }
+        : column
+    ),
+  };
+}
+
 function compareCatalogInventories(
   leftPhase: RlsCatalogPhaseSnapshot,
   leftGrants: RlsCatalogSnapshot,
@@ -1249,6 +1273,86 @@ async function reconstructLegacyApprovalActionRefConstraint(
   return after?.isLegacy === true;
 }
 
+async function reconstructLegacyAuditContract(
+  client: InstanceType<typeof Client>,
+): Promise<void> {
+  await client.query("BEGIN");
+  try {
+    await client.query(`
+      ALTER POLICY workspace_memberships_select_scoped
+        ON public.workspace_memberships
+        USING (
+          user_id = NULLIF(current_setting('app.user_id', true), '')
+          OR workspace_id::text =
+            NULLIF(current_setting('app.workspace_id', true), '')
+        );
+      GRANT UPDATE, DELETE
+        ON TABLE public.workspace_audit_events TO app_runtime;
+      DROP FUNCTION public.workspace_current_user_is_member(uuid);
+    `);
+    await client.query("COMMIT");
+  } catch {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw new Error("versioned_migration_legacy_audit_state_restore_failed");
+  }
+}
+
+async function workspaceMembershipHelperContractValid(
+  client: InstanceType<typeof Client>,
+): Promise<boolean> {
+  const expectedSource =
+    "SELECT EXISTS ( SELECT 1 FROM public.workspace_memberships AS membership WHERE membership.workspace_id = target_workspace_id AND membership.user_id = NULLIF(current_setting('app.user_id', true), '') )";
+  const result = await client.query(
+    `
+      SELECT
+        count(*)::int AS function_count,
+        COALESCE(bool_and(
+          lang.lanname = 'sql'
+          AND helper.prorettype = 'boolean'::regtype
+          AND pg_get_function_identity_arguments(helper.oid) =
+            'target_workspace_id uuid'
+          AND helper.prosecdef
+          AND helper.provolatile = 's'
+          AND function_owner.rolname = 'postgres'
+          AND helper.proconfig @> ARRAY[
+            'search_path=pg_catalog, public',
+            'row_security=off'
+          ]::text[]
+          AND trim(regexp_replace(
+            helper.prosrc,
+            '[[:space:]]+',
+            ' ',
+            'g'
+          )) = $1
+          AND NOT EXISTS (
+            SELECT 1
+            FROM aclexplode(
+              COALESCE(helper.proacl, acldefault('f', helper.proowner))
+            ) AS function_acl
+            WHERE function_acl.grantee = 0
+              AND function_acl.privilege_type = 'EXECUTE'
+          )
+          AND has_function_privilege(
+            'app_runtime',
+            helper.oid,
+            'EXECUTE'
+          )
+        ), false) AS contract_valid
+      FROM pg_proc AS helper
+      JOIN pg_namespace AS namespace ON namespace.oid = helper.pronamespace
+      JOIN pg_language AS lang ON lang.oid = helper.prolang
+      JOIN pg_roles AS function_owner ON function_owner.oid = helper.proowner
+      WHERE namespace.nspname = 'public'
+        AND helper.proname = 'workspace_current_user_is_member'
+    `,
+    [expectedSource],
+  );
+  return (
+    Number(result.rows[0]?.function_count) === 1 &&
+    result.rows[0]?.contract_valid === true
+  );
+}
+
 async function restoreCurrentApprovalActionRefConstraint(
   client: InstanceType<typeof Client>,
 ): Promise<void> {
@@ -1324,12 +1428,16 @@ function safeVersionedMigrationFailureCode(error: unknown): string {
     message === "versioned_migration_source_action_ref_constraint_columns" ||
     message === "versioned_migration_source_action_ref_constraint_definition" ||
     message === "versioned_migration_legacy_constraint_setup_failed" ||
+    message === "versioned_migration_legacy_audit_state_restore_failed" ||
     message === "versioned_migration_legacy_action_ref_not_reproduced" ||
     message === "versioned_migration_action_ref_constraint_not_updated" ||
     message === "versioned_migration_0006_not_idempotent" ||
     message === "versioned_migration_0006_unexpected_constraint_accepted" ||
     message === "versioned_migration_unexpected_constraint_setup_failed" ||
     message === "versioned_migration_current_constraint_restore_failed" ||
+    message === "versioned_migration_0008_legacy_state_not_reproduced" ||
+    message === "versioned_migration_0008_legacy_state_not_replaced" ||
+    message === "versioned_migration_0008_not_idempotent" ||
     message === "versioned_migration_catalog_mismatch"
   ) {
     return message;
@@ -1479,6 +1587,7 @@ async function runVersionedMigrationAudit(input: {
 
     report.baselineLegacyActionRefConstraintVerified =
       await reconstructLegacyApprovalActionRefConstraint(migrationClient);
+    await reconstructLegacyAuditContract(migrationClient);
     const baselinePhase = await readRlsCatalogPhaseSnapshot(
       migrationPool,
       [...legacyTableSet],
@@ -1506,7 +1615,36 @@ async function runVersionedMigrationAudit(input: {
           ? { ...constraint, expression: legacyActionRefExpression }
           : constraint
       ),
+      policies: drizzleLegacyPhase.policies.map((policy) =>
+        policy.tableName === "workspace_memberships" &&
+          policy.policyName === "workspace_memberships_select_scoped"
+          ? {
+              ...policy,
+              qual: `user_id = NULLIF(current_setting('app.user_id', true), '')
+                OR workspace_id::text =
+                  NULLIF(current_setting('app.workspace_id', true), '')`,
+            }
+          : policy
+      ),
     };
+    const drizzlePre0008Projection: RlsCatalogPhaseSnapshot = {
+      ...drizzlePhase,
+      policies: drizzlePhase.policies.map((policy) =>
+        policy.tableName === "workspace_memberships" &&
+          policy.policyName === "workspace_memberships_select_scoped"
+          ? drizzleLegacyProjection.policies.find(
+              (legacyPolicy) =>
+                legacyPolicy.tableName === policy.tableName &&
+                legacyPolicy.policyName === policy.policyName,
+            )!
+          : policy
+      ),
+    };
+    const drizzleLegacyGrantProjection = legacyAuditGrantProjection(
+      grantSnapshotForTables(drizzleGrants, legacyTableSet),
+    );
+    const drizzlePre0008GrantProjection =
+      legacyAuditGrantProjection(drizzleGrants);
     const baselineDrizzleComparison = compareCatalogInventories(
       drizzleLegacyPhase,
       grantSnapshotForTables(drizzleGrants, legacyTableSet),
@@ -1515,7 +1653,7 @@ async function runVersionedMigrationAudit(input: {
     );
     const baselineLegacyComparison = compareCatalogInventories(
       drizzleLegacyProjection,
-      grantSnapshotForTables(drizzleGrants, legacyTableSet),
+      drizzleLegacyGrantProjection,
       baselinePhase,
       baselineGrantSnapshot,
     );
@@ -1525,14 +1663,14 @@ async function runVersionedMigrationAudit(input: {
     report.baselineMatchesExpectedLegacyProjection = Object.values(
       baselineLegacyComparison,
     ).every(Boolean);
-    report.baselineActionRefLegacyDifferenceOnly =
+    report.baselineExpectedLegacyDifferencesOnly =
       baselineDrizzleComparison.tables &&
       baselineDrizzleComparison.columns &&
       baselineDrizzleComparison.indexes &&
       !baselineDrizzleComparison.constraints &&
-      baselineDrizzleComparison.policies &&
+      !baselineDrizzleComparison.policies &&
       baselineDrizzleComparison.roles &&
-      baselineDrizzleComparison.privilegeMatrix &&
+      !baselineDrizzleComparison.privilegeMatrix &&
       report.baselineLegacyActionRefConstraintVerified === true;
     const baselineRlsValid = baselinePhase.tables.every(
       (table) => table.rlsEnabled && table.rlsForced,
@@ -1542,7 +1680,7 @@ async function runVersionedMigrationAudit(input: {
       !baselineRlsValid ||
       !report.baselineMatchesExpectedLegacyProjection ||
       !report.baselineLegacyActionRefConstraintVerified ||
-      !report.baselineActionRefLegacyDifferenceOnly
+      !report.baselineExpectedLegacyDifferencesOnly
     ) {
       report.violationCodes.push("versioned_migration_baseline_mismatch");
       throw new Error("versioned_migration_baseline_mismatch");
@@ -1556,12 +1694,37 @@ async function runVersionedMigrationAudit(input: {
       "0005_workspace_connector_foundation.sql",
       "0006_align_approval_action_refs.sql",
       "0007_workspace_approval_receipts.sql",
+      "0008_audit_append_only_membership_scope.sql",
     ];
     for (const filename of migrationFiles) {
+      let legacyAuditStateMatches = false;
       const beforeActionRefMigration =
         filename === "0006_align_approval_action_refs.sql"
           ? await readApprovalActionRefConstraintState(migrationClient)
           : null;
+      if (filename === "0008_audit_append_only_membership_scope.sql") {
+        const beforePhase = await readRlsCatalogPhaseSnapshot(
+          migrationPool,
+          tableNames,
+          roleNames,
+        );
+        const beforeGrants = await readCatalogSnapshot(
+          migrationPool,
+          tableNames,
+          roleNames,
+        );
+        legacyAuditStateMatches = Object.values(
+          compareCatalogInventories(
+            drizzlePre0008Projection,
+            drizzlePre0008GrantProjection,
+            beforePhase,
+            beforeGrants.snapshot,
+          ),
+        ).every(Boolean);
+        if (!legacyAuditStateMatches) {
+          throw new Error("versioned_migration_0008_legacy_state_not_reproduced");
+        }
+      }
       if (
         filename === "0006_align_approval_action_refs.sql" &&
         !beforeActionRefMigration?.isLegacy
@@ -1692,6 +1855,67 @@ async function runVersionedMigrationAudit(input: {
           throw new Error("versioned_migration_0007_not_idempotent");
         }
       }
+      if (filename === "0008_audit_append_only_membership_scope.sql") {
+        const afterPhase = await readRlsCatalogPhaseSnapshot(
+          migrationPool,
+          tableNames,
+          roleNames,
+        );
+        const afterGrants = await readCatalogSnapshot(
+          migrationPool,
+          tableNames,
+          roleNames,
+        );
+        const currentComparison = compareCatalogInventories(
+          drizzlePhase,
+          drizzleGrants,
+          afterPhase,
+          afterGrants.snapshot,
+        );
+        const helperContractValid =
+          await workspaceMembershipHelperContractValid(migrationClient);
+        report.migration0008LegacyStateReplaced =
+          legacyAuditStateMatches &&
+          helperContractValid &&
+          Object.values(currentComparison).every(Boolean);
+        if (!report.migration0008LegacyStateReplaced) {
+          throw new Error("versioned_migration_0008_legacy_state_not_replaced");
+        }
+
+        const beforeIdempotentPhase = afterPhase;
+        const beforeIdempotentGrants = afterGrants.snapshot;
+        const beforeIdempotentHelperValid = helperContractValid;
+        await applyVersionedMigration(migrationClient, filename);
+        const afterIdempotentPhase = await readRlsCatalogPhaseSnapshot(
+          migrationPool,
+          tableNames,
+          roleNames,
+        );
+        const afterIdempotentGrants = await readCatalogSnapshot(
+          migrationPool,
+          tableNames,
+          roleNames,
+        );
+        const afterIdempotentHelperValid =
+          await workspaceMembershipHelperContractValid(migrationClient);
+        const idempotentInventory = compareCatalogInventories(
+          beforeIdempotentPhase,
+          beforeIdempotentGrants,
+          afterIdempotentPhase,
+          afterIdempotentGrants.snapshot,
+        );
+        report.migration0008Idempotent =
+          sameValue(
+            catalogCounts(beforeIdempotentPhase),
+            catalogCounts(afterIdempotentPhase),
+          ) &&
+          Object.values(idempotentInventory).every(Boolean) &&
+          beforeIdempotentHelperValid &&
+          afterIdempotentHelperValid;
+        if (!report.migration0008Idempotent) {
+          throw new Error("versioned_migration_0008_not_idempotent");
+        }
+      }
     }
 
     const migratedPhase = await readRlsCatalogPhaseSnapshot(
@@ -1738,6 +1962,8 @@ async function runVersionedMigrationAudit(input: {
       !report.migration0006Idempotent ||
       !report.migration0006UnexpectedConstraintRejected ||
       !report.migration0007Idempotent ||
+      !report.migration0008LegacyStateReplaced ||
+      !report.migration0008Idempotent ||
       auditViolations.length > 0
     ) {
       report.violationCodes.push(...auditViolations);
@@ -1765,7 +1991,7 @@ export async function runVersionedMigrationAuditForCi(
     status: "running",
     baselineSourceCommit,
     baselineStrategy:
-      "clone_drizzle_catalog_remove_new_tables_and_restore_legacy_action_ref_constraint",
+      "clone_drizzle_catalog_remove_new_tables_and_restore_legacy_contract",
     baselineExpected: legacyCatalogCounts,
     migrationsApplied: [],
     violationCodes: [],
@@ -2451,7 +2677,7 @@ async function main(): Promise<void> {
       status: "running",
       baselineSourceCommit,
       baselineStrategy:
-        "clone_drizzle_catalog_remove_new_tables_and_restore_legacy_action_ref_constraint",
+        "clone_drizzle_catalog_remove_new_tables_and_restore_legacy_contract",
       baselineExpected: legacyCatalogCounts,
       migrationsApplied: [],
       violationCodes: [],
@@ -2472,7 +2698,7 @@ async function main(): Promise<void> {
     });
     versionedMigrationAudit.status = "passed";
     console.log(
-      `Versioned migration catalog: baseline=${versionedMigrationAudit.baselineActual?.tables}/${versionedMigrationAudit.baselineActual?.columns}/${versionedMigrationAudit.baselineActual?.indexes}/${versionedMigrationAudit.baselineActual?.constraints}/${versionedMigrationAudit.baselineActual?.policies}/${versionedMigrationAudit.baselineActual?.roles} migrated=${versionedMigrationAudit.migratedCatalog?.tables}/${versionedMigrationAudit.migratedCatalog?.columns}/${versionedMigrationAudit.migratedCatalog?.indexes}/${versionedMigrationAudit.migratedCatalog?.constraints}/${versionedMigrationAudit.migratedCatalog?.policies}/${versionedMigrationAudit.migratedCatalog?.roles} migration_0003_idempotent=${versionedMigrationAudit.migration0003Idempotent === true} migration_0004_idempotent=${versionedMigrationAudit.migration0004Idempotent === true} migration_0005_idempotent=${versionedMigrationAudit.migration0005Idempotent === true} migration_0006_legacy_replaced=${versionedMigrationAudit.migration0006LegacyConstraintReplaced === true} migration_0006_idempotent=${versionedMigrationAudit.migration0006Idempotent === true} migration_0007_idempotent=${versionedMigrationAudit.migration0007Idempotent === true}.`,
+      `Versioned migration catalog: baseline=${versionedMigrationAudit.baselineActual?.tables}/${versionedMigrationAudit.baselineActual?.columns}/${versionedMigrationAudit.baselineActual?.indexes}/${versionedMigrationAudit.baselineActual?.constraints}/${versionedMigrationAudit.baselineActual?.policies}/${versionedMigrationAudit.baselineActual?.roles} migrated=${versionedMigrationAudit.migratedCatalog?.tables}/${versionedMigrationAudit.migratedCatalog?.columns}/${versionedMigrationAudit.migratedCatalog?.indexes}/${versionedMigrationAudit.migratedCatalog?.constraints}/${versionedMigrationAudit.migratedCatalog?.policies}/${versionedMigrationAudit.migratedCatalog?.roles} migration_0003_idempotent=${versionedMigrationAudit.migration0003Idempotent === true} migration_0004_idempotent=${versionedMigrationAudit.migration0004Idempotent === true} migration_0005_idempotent=${versionedMigrationAudit.migration0005Idempotent === true} migration_0006_legacy_replaced=${versionedMigrationAudit.migration0006LegacyConstraintReplaced === true} migration_0006_idempotent=${versionedMigrationAudit.migration0006Idempotent === true} migration_0007_idempotent=${versionedMigrationAudit.migration0007Idempotent === true} migration_0008_legacy_replaced=${versionedMigrationAudit.migration0008LegacyStateReplaced === true} migration_0008_idempotent=${versionedMigrationAudit.migration0008Idempotent === true}.`,
     );
 
     currentStage = "api_unit_tests";

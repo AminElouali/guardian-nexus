@@ -34,6 +34,7 @@ export const expectedRlsTableNames = Object.keys(
 ) as Array<keyof typeof expectedRlsPolicyCounts>;
 
 export const appendOnlyRlsTableNames = [
+  "workspace_audit_events",
   "workspace_approval_ledger",
   "workspace_action_rule_versions",
   "workspace_approval_receipts",

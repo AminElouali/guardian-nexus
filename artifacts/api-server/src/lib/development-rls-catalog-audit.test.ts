@@ -65,7 +65,6 @@ const fullRuntimeAccessTables = [
   "workspace_memberships",
   "assets",
   "workspace_monthly_usage",
-  "workspace_audit_events",
   "workspace_integrations",
   "provider_connections",
   "connector_oauth_states",
@@ -78,6 +77,8 @@ const fixedTableGrantKeys = new Set([
       (privilege) => `app_runtime:${tableName}:${privilege}`,
     ),
   ),
+  "app_runtime:workspace_audit_events:SELECT",
+  "app_runtime:workspace_audit_events:INSERT",
   ...[
     "host_boundary_attestation_challenges",
     "ai_assessment_approval_requests",
