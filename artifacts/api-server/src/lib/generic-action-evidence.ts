@@ -7,7 +7,7 @@ import {
 import {
   evaluateWorkspaceActionRule,
   type WorkspaceActionRuleDocument,
-} from "@workspace/db";
+} from "@workspace/db/workspace-action-rule-engine";
 import { canonicalApprovalJson } from "./ai-assessment-approval-actions";
 
 type GenericActionInput = {
@@ -158,10 +158,7 @@ export function createWorkspaceRuleActionEvidence(input: {
   const unsigned: Omit<GenericActionGatewayEvidence, "evidenceSha256"> = {
     engine: "guardian_action_gateway",
     engineVersion: "guardian-workspace-rules-v2",
-    profileId:
-      input.actionType === "guardian.support.reply.send.v1"
-        ? "guardian-agent-lab-customer-service-v1"
-        : "guardian-agent-lab-email-v1",
+    profileId: getApprovalActionDefinition(input.actionType)!.profileId,
     executionMode: "deterministic_fixture",
     modelInference: false,
     toolCallOrigin: "controlled_fixture_not_llm",
@@ -224,7 +221,11 @@ export function genericActionDisplay(
       agentId: "agent-fixture-bank-change-demo-v1",
     };
   }
-  return null;
+  return {
+    summary: `${definition.label} (propuesta sintética; sin servicio real).`,
+    messagePreview: definition.syntheticTemplateText,
+    agentId: `agent-fixture-${definition.service}-demo-v1`,
+  };
 }
 
 export function verifyGenericActionEvidence(

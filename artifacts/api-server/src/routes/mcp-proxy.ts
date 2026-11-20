@@ -6,6 +6,7 @@ import {
   aiAssessmentJobsTable,
   workspaceAuditEventsTable,
 } from "@workspace/db";
+import { getApprovalActionDefinition } from "@workspace/db/approval-action-catalog";
 import {
   classifyMcpToolCall,
   getGuardianMcpToolDefinition,
@@ -353,13 +354,9 @@ export function createMcpProxyRouter(
               )
               .limit(1);
             const actionType = approval.syntheticActionRef;
-            const profileId = actionType === "guardian.support.reply.send.v1"
-              ? "guardian-agent-lab-customer-service-v1"
-              : actionType === "guardian.email.send.external.v1"
-                ? "guardian-agent-lab-email-v1"
-                : actionType === "guardian.synthetic.support.refund.v1"
-                  ? "guardian-agent-lab-customer-service-v1"
-                  : null;
+            const profileId = actionType
+              ? getApprovalActionDefinition(actionType)?.profileId ?? null
+              : null;
             const evidence = profileId
               ? verifyGenericActionEvidence(job?.result, {
                   workspaceId,
@@ -469,6 +466,7 @@ export function createMcpProxyRouter(
             arguments: classification.validatedArguments,
             idempotencyKey,
             escalateAllowToApproval: true,
+            allowSyntheticNoEffectDecision: true,
             allowAutomaticRefund:
               classification.actionType ===
                 "guardian.synthetic.support.refund.v1",
@@ -482,18 +480,20 @@ export function createMcpProxyRouter(
       }
       const { outcome } = proposal.value;
       if (outcome.kind === "terminal") {
-        if (
-          outcome.decision === "allow" &&
-          outcome.actionType === "guardian.synthetic.support.refund.v1" &&
-          outcome.reasonCode === "automatic_refund_allowed"
-        ) {
+        if (outcome.decision === "allow") {
+          const isAutomaticRefund =
+            outcome.actionType === "guardian.synthetic.support.refund.v1" &&
+            outcome.reasonCode === "automatic_refund_allowed";
           rpcToolResult(
             res,
             id,
-            "Reembolso sintético permitido por la regla activa. No se ha movido dinero ni se ha ejecutado una operación real.",
+            isAutomaticRefund
+              ? "Reembolso sintético permitido por la regla activa. No se ha movido dinero ni se ha ejecutado una operación real."
+              : "Acción permitida en la simulación por la regla activa. No se llamó a ningún servicio ni se realizó un efecto real.",
             false,
             {
               decision: "allow",
+              status: "simulated",
               ruleId: outcome.ruleId,
               ruleVersionId: outcome.ruleVersionId,
               replayed: outcome.replayed === true,

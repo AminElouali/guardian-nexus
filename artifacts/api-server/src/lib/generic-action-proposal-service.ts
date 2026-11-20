@@ -9,6 +9,7 @@ import {
 import {
   evaluateApprovalAction,
   getApprovalActionDefinition,
+  isCatalogActionRef,
   evaluateWorkspaceActionRule,
 } from "@workspace/db";
 import { computeApprovalProposalBindingV3 } from "./ai-assessment-approval-actions";
@@ -29,12 +30,6 @@ const MAX_PENDING_PER_WORKSPACE = 3;
 const AUTO_REFUND_ACTION = "guardian.synthetic.support.refund.v1";
 const AUTO_REFUND_WINDOW_MS = 15 * 60 * 1_000;
 const MAX_AUTO_REFUND_WINDOW_EVENTS = 500;
-const PROFILE_BY_ACTION: Record<string, string> = {
-  "guardian.synthetic.support.refund.v1": "guardian-agent-lab-customer-service-v1",
-  "guardian.synthetic.finance.bank-change.v1": "guardian-agent-lab-customer-service-v1",
-  "guardian.support.reply.send.v1": "guardian-agent-lab-customer-service-v1",
-  "guardian.email.send.external.v1": "guardian-agent-lab-email-v1",
-};
 
 export type GenericActionProposalOutcome =
   | { kind: "invalid_action"; code: string; issues: string[] }
@@ -70,11 +65,12 @@ export async function createGenericActionProposalInTransaction(
     idempotencyKey: string;
     escalateAllowToApproval?: boolean;
     allowAutomaticRefund?: boolean;
+    allowSyntheticNoEffectDecision?: boolean;
   },
 ): Promise<GenericActionProposalOutcome> {
   const action = evaluateApprovalAction(input.actionType, input.arguments);
   const definition = getApprovalActionDefinition(input.actionType);
-  if (!action.ok || !definition) {
+  if (!action.ok || !definition || !isCatalogActionRef(input.actionType)) {
     return {
       kind: "invalid_action",
       code: action.ok ? "unknown_action" : action.reasonCode,
@@ -220,7 +216,11 @@ export async function createGenericActionProposalInTransaction(
     ruleDecision.decision === "allow" &&
     input.escalateAllowToApproval === true &&
     !definition.requiresIndependentApprover &&
-    !automaticRefundAllowed;
+    !automaticRefundAllowed &&
+    !(
+      input.allowSyntheticNoEffectDecision === true &&
+      definition.syntheticTemplateText !== undefined
+    );
   const decision = automaticRefundAllowed
     ? { ...ruleDecision, reasonCode: "automatic_refund_allowed" }
     : refundApprovalReason
@@ -310,7 +310,7 @@ export async function createGenericActionProposalInTransaction(
         })
       : null;
   if (!evidence) return { kind: "persistence_failed" };
-  const profileId = PROFILE_BY_ACTION[input.actionType];
+  const profileId = definition.profileId;
   if (!profileId) return { kind: "invalid_action", code: "unknown_action", issues: [] };
   const now = new Date();
 
@@ -404,11 +404,7 @@ export async function createGenericActionProposalInTransaction(
     caseId: input.actionType,
     proposalSha256: evidence.proposalSha256,
     actionSha256: evidence.actionSha256,
-    syntheticActionRef: input.actionType as
-      | "guardian.synthetic.support.refund.v1"
-      | "guardian.synthetic.finance.bank-change.v1"
-      | "guardian.support.reply.send.v1"
-      | "guardian.email.send.external.v1",
+    syntheticActionRef: input.actionType,
     requestedByUserId: input.actorUserId,
     requestedByRole: input.actorRole,
     expiresAt,

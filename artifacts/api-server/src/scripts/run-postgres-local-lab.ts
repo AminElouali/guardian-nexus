@@ -154,7 +154,7 @@ type VersionedMigrationAuditReport = {
   migration0006Postcondition?: {
     oidChanged: boolean;
     isLegacy: boolean;
-    isCurrent: boolean;
+    isMigration0006Current: boolean;
     referencesInPgGetExprOrder: string[];
   };
   migration0006Idempotent?: boolean;
@@ -162,6 +162,8 @@ type VersionedMigrationAuditReport = {
   migration0007Idempotent?: boolean;
   migration0008LegacyStateReplaced?: boolean;
   migration0008Idempotent?: boolean;
+  migration0009Idempotent?: boolean;
+  migration0009UnexpectedConstraintRejected?: boolean;
   inventoryMatchesDrizzle?: {
     tables: boolean;
     columns: boolean;
@@ -1152,6 +1154,7 @@ async function applyVersionedMigration(
 type ApprovalActionRefConstraintState = {
   oid: string;
   isLegacy: boolean;
+  isMigration0006Current: boolean;
   isCurrent: boolean;
   referencesInPgGetExprOrder: string[];
   mismatch: "constraint_shape" | "constraint_columns" | "constraint_definition" | null;
@@ -1213,6 +1216,7 @@ async function readApprovalActionRefConstraintState(
     return {
       oid: row.oid,
       isLegacy: false,
+      isMigration0006Current: false,
       isCurrent: false,
       referencesInPgGetExprOrder,
       mismatch: "constraint_shape",
@@ -1228,6 +1232,7 @@ async function readApprovalActionRefConstraintState(
     return {
       oid: row.oid,
       isLegacy: false,
+      isMigration0006Current: false,
       isCurrent: false,
       referencesInPgGetExprOrder,
       mismatch: "constraint_columns",
@@ -1246,9 +1251,10 @@ async function readApprovalActionRefConstraintState(
   return {
     oid: row.oid,
     isLegacy: matches(refs.legacy),
+    isMigration0006Current: matches(refs.previous),
     isCurrent: matches(refs.current),
     referencesInPgGetExprOrder,
-    mismatch: matches(refs.legacy) || matches(refs.current)
+    mismatch: matches(refs.legacy) || matches(refs.previous) || matches(refs.current)
       ? null
       : "constraint_definition",
   };
@@ -1429,6 +1435,38 @@ async function verifyMigration0006RejectsUnexpectedConstraint(
   return rejected;
 }
 
+async function verifyMigration0009RejectsUnexpectedConstraint(
+  client: InstanceType<typeof Client>,
+): Promise<boolean> {
+  const { current } = approvalActionRefMigrationValues();
+  const currentExpression = approvalActionRefConstraintExpression(current);
+  await client.query("BEGIN");
+  try {
+    await client.query(
+      `ALTER TABLE public.ai_assessment_approval_requests
+       DROP CONSTRAINT ai_assessment_approval_action_ref_check,
+       ADD CONSTRAINT ai_assessment_approval_action_ref_check
+       CHECK ((${currentExpression}) AND action_sha256 <> repeat('0', 64))`,
+    );
+    await client.query("COMMIT");
+  } catch {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw new Error("versioned_migration_0009_unexpected_constraint_setup_failed");
+  }
+  let rejected = false;
+  try {
+    await applyVersionedMigration(
+      client,
+      "0009_expand_approval_action_catalog.sql",
+    );
+  } catch (error) {
+    rejected = error instanceof Error &&
+      error.message === "versioned_migration_sql_failed:23514";
+  }
+  await restoreCurrentApprovalActionRefConstraint(client);
+  return rejected;
+}
+
 function safeVersionedMigrationFailureCode(error: unknown): string {
   if (!(error instanceof Error)) return "versioned_migration_audit_failed";
   const message = error.message;
@@ -1458,6 +1496,9 @@ function safeVersionedMigrationFailureCode(error: unknown): string {
     message === "versioned_migration_0008_legacy_state_not_reproduced" ||
     message === "versioned_migration_0008_legacy_state_not_replaced" ||
     message === "versioned_migration_0008_not_idempotent" ||
+    message === "versioned_migration_0009_not_idempotent" ||
+    message === "versioned_migration_0009_unexpected_constraint_setup_failed" ||
+    message === "versioned_migration_0009_unexpected_constraint_accepted" ||
     message === "versioned_migration_catalog_mismatch"
   ) {
     return message;
@@ -1623,7 +1664,7 @@ async function runVersionedMigrationAudit(input: {
       drizzlePhase,
       legacyTableSet,
     );
-    const { legacy } = approvalActionRefMigrationValues();
+    const { legacy, previous } = approvalActionRefMigrationValues();
     const legacyActionRefExpression =
       approvalActionRefConstraintExpression(legacy);
     const drizzleLegacyProjection: RlsCatalogPhaseSnapshot = {
@@ -1647,9 +1688,36 @@ async function runVersionedMigrationAudit(input: {
           : policy
       ),
     };
-    const drizzlePre0008Projection: RlsCatalogPhaseSnapshot = {
+    const previousActionRefExpression =
+      approvalActionRefConstraintExpression(previous);
+    const previousActionTypeExpression =
+      `action_type IN (${previous.map((ref) => `'${ref}'`).join(", ")})`;
+    const drizzlePre0009Projection: RlsCatalogPhaseSnapshot = {
       ...drizzlePhase,
-      policies: drizzlePhase.policies.map((policy) =>
+      constraints: drizzlePhase.constraints.map((constraint) => {
+        if (
+          constraint.tableName === "ai_assessment_approval_requests" &&
+          constraint.constraintName ===
+            "ai_assessment_approval_action_ref_check"
+        ) {
+          return { ...constraint, expression: previousActionRefExpression };
+        }
+        if (
+          constraint.constraintName ===
+            "workspace_action_rule_heads_action_type_check" ||
+          constraint.constraintName ===
+            "workspace_action_rule_versions_action_type_check" ||
+          constraint.constraintName ===
+            "workspace_connector_executions_action_type_check"
+        ) {
+          return { ...constraint, expression: previousActionTypeExpression };
+        }
+        return constraint;
+      }),
+    };
+    const drizzlePre0008Projection: RlsCatalogPhaseSnapshot = {
+      ...drizzlePre0009Projection,
+      policies: drizzlePre0009Projection.policies.map((policy) =>
         policy.tableName === "workspace_memberships" &&
           policy.policyName === "workspace_memberships_select_scoped"
           ? drizzleLegacyProjection.policies.find(
@@ -1660,6 +1728,7 @@ async function runVersionedMigrationAudit(input: {
           : policy
       ),
     };
+    const drizzlePost0008Projection = drizzlePre0009Projection;
     const drizzleLegacyGrantProjection = legacyAuditGrantProjection(
       grantSnapshotForTables(drizzleGrants, legacyTableSet),
     );
@@ -1715,6 +1784,7 @@ async function runVersionedMigrationAudit(input: {
       "0006_align_approval_action_refs.sql",
       "0007_workspace_approval_receipts.sql",
       "0008_audit_append_only_membership_scope.sql",
+      "0009_expand_approval_action_catalog.sql",
     ];
     for (const filename of migrationFiles) {
       let legacyAuditStateMatches = false;
@@ -1777,13 +1847,13 @@ async function runVersionedMigrationAudit(input: {
             afterMigration !== null &&
             afterMigration.oid !== beforeActionRefMigration.oid,
           isLegacy: afterMigration?.isLegacy ?? false,
-          isCurrent: afterMigration?.isCurrent ?? false,
+          isMigration0006Current: afterMigration?.isMigration0006Current ?? false,
           referencesInPgGetExprOrder:
             afterMigration?.referencesInPgGetExprOrder ?? [],
         };
         report.migration0006LegacyConstraintReplaced =
           afterMigration !== null &&
-          afterMigration.isCurrent &&
+          afterMigration.isMigration0006Current &&
           afterMigration.oid !== beforeActionRefMigration.oid;
         if (!report.migration0006LegacyConstraintReplaced) {
           throw new Error("versioned_migration_action_ref_constraint_not_updated");
@@ -1821,7 +1891,7 @@ async function runVersionedMigrationAudit(input: {
         report.migration0006Idempotent =
           afterMigration !== null &&
           afterIdempotentConstraint !== null &&
-          afterIdempotentConstraint.isCurrent &&
+          afterIdempotentConstraint.isMigration0006Current &&
           afterIdempotentConstraint.oid === afterMigration.oid &&
           sameValue(
             catalogCounts(beforeIdempotentPhase),
@@ -1887,7 +1957,7 @@ async function runVersionedMigrationAudit(input: {
           roleNames,
         );
         const currentComparison = compareCatalogInventories(
-          drizzlePhase,
+          drizzlePost0008Projection,
           drizzleGrants,
           afterPhase,
           afterGrants.snapshot,
@@ -1934,6 +2004,49 @@ async function runVersionedMigrationAudit(input: {
           afterIdempotentHelperValid;
         if (!report.migration0008Idempotent) {
           throw new Error("versioned_migration_0008_not_idempotent");
+        }
+      }
+      if (filename === "0009_expand_approval_action_catalog.sql") {
+        const beforeIdempotentPhase = await readRlsCatalogPhaseSnapshot(
+          migrationPool,
+          tableNames,
+          roleNames,
+        );
+        const beforeIdempotentGrants = await readCatalogSnapshot(
+          migrationPool,
+          tableNames,
+          roleNames,
+        );
+        await applyVersionedMigration(migrationClient, filename);
+        const afterIdempotentPhase = await readRlsCatalogPhaseSnapshot(
+          migrationPool,
+          tableNames,
+          roleNames,
+        );
+        const afterIdempotentGrants = await readCatalogSnapshot(
+          migrationPool,
+          tableNames,
+          roleNames,
+        );
+        const idempotentInventory = compareCatalogInventories(
+          beforeIdempotentPhase,
+          beforeIdempotentGrants.snapshot,
+          afterIdempotentPhase,
+          afterIdempotentGrants.snapshot,
+        );
+        report.migration0009Idempotent =
+          sameValue(
+            catalogCounts(beforeIdempotentPhase),
+            catalogCounts(afterIdempotentPhase),
+          ) &&
+          Object.values(idempotentInventory).every(Boolean);
+        if (!report.migration0009Idempotent) {
+          throw new Error("versioned_migration_0009_not_idempotent");
+        }
+        report.migration0009UnexpectedConstraintRejected =
+          await verifyMigration0009RejectsUnexpectedConstraint(migrationClient);
+        if (!report.migration0009UnexpectedConstraintRejected) {
+          throw new Error("versioned_migration_0009_unexpected_constraint_accepted");
         }
       }
     }
@@ -1984,6 +2097,8 @@ async function runVersionedMigrationAudit(input: {
       !report.migration0007Idempotent ||
       !report.migration0008LegacyStateReplaced ||
       !report.migration0008Idempotent ||
+      !report.migration0009Idempotent ||
+      !report.migration0009UnexpectedConstraintRejected ||
       auditViolations.length > 0
     ) {
       report.violationCodes.push(...auditViolations);
@@ -2728,7 +2843,7 @@ async function main(): Promise<void> {
     });
     versionedMigrationAudit.status = "passed";
     console.log(
-      `Versioned migration catalog: baseline=${versionedMigrationAudit.baselineActual?.tables}/${versionedMigrationAudit.baselineActual?.columns}/${versionedMigrationAudit.baselineActual?.indexes}/${versionedMigrationAudit.baselineActual?.constraints}/${versionedMigrationAudit.baselineActual?.policies}/${versionedMigrationAudit.baselineActual?.roles} migrated=${versionedMigrationAudit.migratedCatalog?.tables}/${versionedMigrationAudit.migratedCatalog?.columns}/${versionedMigrationAudit.migratedCatalog?.indexes}/${versionedMigrationAudit.migratedCatalog?.constraints}/${versionedMigrationAudit.migratedCatalog?.policies}/${versionedMigrationAudit.migratedCatalog?.roles} migration_0003_idempotent=${versionedMigrationAudit.migration0003Idempotent === true} migration_0004_idempotent=${versionedMigrationAudit.migration0004Idempotent === true} migration_0005_idempotent=${versionedMigrationAudit.migration0005Idempotent === true} migration_0006_legacy_replaced=${versionedMigrationAudit.migration0006LegacyConstraintReplaced === true} migration_0006_idempotent=${versionedMigrationAudit.migration0006Idempotent === true} migration_0007_idempotent=${versionedMigrationAudit.migration0007Idempotent === true} migration_0008_legacy_replaced=${versionedMigrationAudit.migration0008LegacyStateReplaced === true} migration_0008_idempotent=${versionedMigrationAudit.migration0008Idempotent === true}.`,
+      `Versioned migration catalog: baseline=${versionedMigrationAudit.baselineActual?.tables}/${versionedMigrationAudit.baselineActual?.columns}/${versionedMigrationAudit.baselineActual?.indexes}/${versionedMigrationAudit.baselineActual?.constraints}/${versionedMigrationAudit.baselineActual?.policies}/${versionedMigrationAudit.baselineActual?.roles} migrated=${versionedMigrationAudit.migratedCatalog?.tables}/${versionedMigrationAudit.migratedCatalog?.columns}/${versionedMigrationAudit.migratedCatalog?.indexes}/${versionedMigrationAudit.migratedCatalog?.constraints}/${versionedMigrationAudit.migratedCatalog?.policies}/${versionedMigrationAudit.migratedCatalog?.roles} migration_0003_idempotent=${versionedMigrationAudit.migration0003Idempotent === true} migration_0004_idempotent=${versionedMigrationAudit.migration0004Idempotent === true} migration_0005_idempotent=${versionedMigrationAudit.migration0005Idempotent === true} migration_0006_legacy_replaced=${versionedMigrationAudit.migration0006LegacyConstraintReplaced === true} migration_0006_idempotent=${versionedMigrationAudit.migration0006Idempotent === true} migration_0007_idempotent=${versionedMigrationAudit.migration0007Idempotent === true} migration_0008_legacy_replaced=${versionedMigrationAudit.migration0008LegacyStateReplaced === true} migration_0008_idempotent=${versionedMigrationAudit.migration0008Idempotent === true} migration_0009_idempotent=${versionedMigrationAudit.migration0009Idempotent === true} migration_0009_unexpected_rejected=${versionedMigrationAudit.migration0009UnexpectedConstraintRejected === true}.`,
     );
 
     currentStage = "api_unit_tests";

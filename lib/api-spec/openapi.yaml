@@ -2029,7 +2029,38 @@ components:
         bindingVersion: { type: integer, enum: [1, 2, 3] }
         syntheticActionRef:
           type: ["string", "null"]
-          enum: [guardian.synthetic.finance.bank-change.v1, guardian.synthetic.support.refund.v1, guardian.support.reply.send.v1, guardian.email.send.external.v1, null]
+          enum:
+            - guardian.synthetic.support.refund.v1
+            - guardian.synthetic.finance.bank-change.v1
+            - guardian.support.reply.send.v1
+            - guardian.email.send.external.v1
+            - guardian.email.reply.internal.v1
+            - guardian.email.send.external_sensitive.v1
+            - guardian.email.forwarding_rule.create.v1
+            - guardian.support.customer_account.close.v1
+            - guardian.finance.balance_invoice.read.v1
+            - guardian.finance.vendor_payment.known.v1
+            - guardian.finance.vendor_payment.new.v1
+            - guardian.data.query.read.v1
+            - guardian.data.customer.export.v1
+            - guardian.data.bulk.modify.v1
+            - guardian.data.bulk.delete.v1
+            - guardian.code.pull_request.open.v1
+            - guardian.code.pull_request.merge_main.v1
+            - guardian.code.deploy.production.v1
+            - guardian.code.secret.access.v1
+            - guardian.web.navigate.read.v1
+            - guardian.web.personal_data.submit.v1
+            - guardian.web.purchase.v1
+            - guardian.web.unapproved_credentials.submit.v1
+            - guardian.cloud.resource.read.v1
+            - guardian.cloud.resource.create.v1
+            - guardian.cloud.iam.permission.change.v1
+            - guardian.cloud.production_destructive.v1
+            - guardian.multiagent.delegate_equal_or_lower.v1
+            - guardian.multiagent.delegate_higher_scope.v1
+            - guardian.multiagent.privilege_escalation.v1
+            - null
         modelInference: { type: ["boolean", "null"] }
         executionMode:
           type: ["string", "null"]

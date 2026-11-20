@@ -355,6 +355,49 @@ test("approval confirmation states synthetic impact before any decision", () => 
   assert.match(message, /no ejecuta herramientas ni afecta sistemas externos/);
 });
 
+test("approval confirmation describes new catalog actions from safe server details", () => {
+  const message = buildSyntheticApprovalConfirmationMessage({
+    id: "11111111-1111-4111-8111-111111111111",
+    jobId: "22222222-2222-4222-8222-222222222222",
+    caseId: "guardian.finance.vendor_payment.known.v1",
+    proposalSha256: "a".repeat(64),
+    actionSha256: "b".repeat(64),
+    proposalBindingSha256: "c".repeat(64),
+    requestedByUserId: "synthetic-requester",
+    requestedByRole: "member",
+    bindingVersion: 3,
+    syntheticActionRef: "guardian.finance.vendor_payment.known.v1",
+    modelInference: false,
+    executionMode: "deterministic_fixture",
+    toolCallOrigin: "controlled_fixture_not_llm",
+    status: "pending",
+    canCurrentUserDecide: true,
+    expiresAt: "2026-11-04T12:00:00.000Z",
+    decidedByUserId: null,
+    decidedByRole: null,
+    decidedAt: null,
+    execution: "not_performed",
+    simulatedAt: null,
+    simulationResultCode: null,
+    simulationResultSha256: null,
+    replayBindingSha256: null,
+    proposalDetails: {
+      agentId: "agent-synthetic",
+      actionType: "guardian.finance.vendor_payment.known.v1",
+      summary: "Pago sintético a proveedor conocido.",
+      messagePreview: "[SYNTHETIC] No se realizó ningún pago.",
+      appliedRule: "Pagar a proveedor conocido requiere aprobación.",
+      ruleVersionId: "33333333-3333-4333-8333-333333333333",
+      synthetic: true,
+    },
+    createdAt: "2026-11-03T12:00:00.000Z",
+  });
+  assert.match(message, /Pago sintético a proveedor conocido/);
+  assert.match(message, /No se realizó ningún pago/);
+  assert.match(message, /Pagar a proveedor conocido requiere aprobación/);
+  assert.match(message, /no ejecuta herramientas ni afecta sistemas externos/);
+});
+
 test("synthetic approval ledger view offers receipt actions and safe history export", () => {
   const receipt: SignedApprovalReceiptV1 = {
     payload: {

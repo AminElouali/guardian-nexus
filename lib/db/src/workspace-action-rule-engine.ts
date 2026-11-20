@@ -58,7 +58,7 @@ const workspaceActionRuleProfiles: readonly WorkspaceActionRuleProfile[] = [
   {
     id: "read-only-v1",
     label: "Solo lectura",
-    description: "Todas las acciones se bloquean; el agente solo puede proponer.",
+    description: "Las lecturas pueden permitirse; todas las acciones que cambian algo se bloquean.",
     defaultRefundLimitCents: 5_000,
   },
 ];
@@ -97,108 +97,105 @@ export function buildWorkspaceActionRuleProfileDocuments(
   const routineSupportDecision: ApprovalActionDecision =
     profile.id === "balanced-v1" ? "allow" : restrictiveDecision;
   const refundAtOrBelowDecision: ApprovalActionDecision =
-    profile.id === "balanced-v1"
-      ? "allow"
-      : restrictiveDecision;
-
-  const documents = [
-    {
-      actionType: "guardian.synthetic.support.refund.v1",
-      document: {
-        version: 1 as const,
-        rules: [
-          {
-            id: "refund-within-threshold",
-            decision: refundAtOrBelowDecision,
-            when: {
-              all: [{
-                field: "amount_cents",
-                op: "lte" as const,
-                value: refundLimitCents,
-              }],
-            },
-          },
-          {
-            id: "refund-above-threshold",
-            decision: restrictiveDecision,
-            when: {
-              all: [{
-                field: "amount_cents",
-                op: "gt" as const,
-                value: refundLimitCents,
-              }],
-            },
-          },
-        ],
-      },
-    },
-    {
-      actionType: "guardian.synthetic.finance.bank-change.v1",
-      document: {
-        version: 1 as const,
-        rules: [{
-          id: "bank-account-change",
-          decision: restrictiveDecision,
-          when: {},
-        }],
-      },
-    },
-    {
-      actionType: "guardian.email.send.external.v1",
-      document: {
-        version: 1 as const,
-        rules: [{
-          id: "external-email",
-          decision: restrictiveDecision,
-          when: {},
-        }],
-      },
-    },
-    {
-      actionType: "guardian.support.reply.send.v1",
-      document: {
-        version: 1 as const,
-        rules: [
-          {
-            id: "support-sensitive-external-or-high-compensation",
-            decision: restrictiveDecision,
-            when: {
-              any: [
-                {
-                  field: "recipient_type",
-                  op: "eq" as const,
-                  value: "external",
-                },
-                {
-                  field: "compensation_cents",
-                  op: "gt" as const,
-                  value: refundLimitCents,
-                },
-              ],
-            },
-          },
-          {
-            id: "support-routine-internal",
-            decision: routineSupportDecision,
-            when: {
-              all: [
-                {
-                  field: "recipient_type",
-                  op: "eq" as const,
-                  value: "internal",
-                },
-                {
-                  field: "compensation_cents",
+    profile.id === "balanced-v1" ? "allow" : restrictiveDecision;
+  const documents = APPROVAL_ACTION_CATALOG.map((definition) => {
+    if (definition.actionType === "guardian.synthetic.support.refund.v1") {
+      return {
+        actionType: definition.actionType,
+        document: {
+          version: 1 as const,
+          rules: [
+            {
+              id: "refund-within-threshold",
+              decision: refundAtOrBelowDecision,
+              when: {
+                all: [{
+                  field: "amount_cents",
                   op: "lte" as const,
                   value: refundLimitCents,
-                },
-              ],
+                }],
+              },
             },
-          },
-        ],
+            {
+              id: "refund-above-threshold",
+              decision: restrictiveDecision,
+              when: {
+                all: [{
+                  field: "amount_cents",
+                  op: "gt" as const,
+                  value: refundLimitCents,
+                }],
+              },
+            },
+          ],
+        },
+      };
+    }
+    if (definition.actionType === "guardian.support.reply.send.v1") {
+      return {
+        actionType: definition.actionType,
+        document: {
+          version: 1 as const,
+          rules: [
+            {
+              id: "support-sensitive-external-or-high-compensation",
+              decision: restrictiveDecision,
+              when: {
+                any: [
+                  {
+                    field: "recipient_type",
+                    op: "eq" as const,
+                    value: "external",
+                  },
+                  {
+                    field: "compensation_cents",
+                    op: "gt" as const,
+                    value: refundLimitCents,
+                  },
+                ],
+              },
+            },
+            {
+              id: "support-routine-internal",
+              decision: routineSupportDecision,
+              when: {
+                all: [
+                  {
+                    field: "recipient_type",
+                    op: "eq" as const,
+                    value: "internal",
+                  },
+                  {
+                    field: "compensation_cents",
+                    op: "lte" as const,
+                    value: refundLimitCents,
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      };
+    }
+    const rules = definition.rules.map((rule) => ({
+      id: rule.id,
+      decision: profile.id === "read-only-v1"
+        ? definition.readOnly
+          ? "allow" as const
+          : "deny" as const
+        : profile.id === "prudent-v1" && rule.decision === "allow"
+          ? "require_approval" as const
+          : rule.decision,
+      when: {
+        ...(rule.when.all ? { all: rule.when.all.map((condition) => ({ ...condition })) } : {}),
+        ...(rule.when.any ? { any: rule.when.any.map((condition) => ({ ...condition })) } : {}),
       },
-    },
-  ];
+    }));
+    return {
+      actionType: definition.actionType,
+      document: { version: 1 as const, rules },
+    };
+  });
 
   const invalidDocuments = documents.filter(
     ({ actionType, document }) =>

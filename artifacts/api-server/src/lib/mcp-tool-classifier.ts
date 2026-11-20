@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import {
   evaluateApprovalAction,
   getApprovalActionDefinition,
+  type ApprovalActionProfileId,
   type ApprovalActionRiskType,
   type CatalogActionRef,
 } from "@workspace/db/approval-action-catalog";
@@ -15,8 +16,8 @@ const SAFE_IDENTIFIER = /^[a-z0-9][a-z0-9._-]{0,63}$/;
 const UNSAFE_JSON_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 
 type VolumeBinding =
-  | { kind: "argument"; field: string; unit: "cents" }
-  | { kind: "fixed_message" };
+  | { kind: "argument"; field: string; unit: "cents" | "records" }
+  | { kind: "fixed"; unit: "messages" | "operations" };
 
 type McpToolBinding = {
   actionType: CatalogActionRef;
@@ -45,7 +46,7 @@ const REGISTERED_MCP_TOOLS: Readonly<
       actionType: "guardian.email.send.external.v1",
       dataSensitivity: "sensible",
       guardianDescription: "Propón un correo externo de prueba. La regla vigente puede exigir aprobación humana.",
-      volume: Object.freeze({ kind: "fixed_message" }),
+      volume: Object.freeze({ kind: "fixed", unit: "messages" }),
     }),
     issue_synthetic_refund: Object.freeze({
       actionType: "guardian.synthetic.support.refund.v1",
@@ -56,6 +57,190 @@ const REGISTERED_MCP_TOOLS: Readonly<
         field: "amount_cents",
         unit: "cents",
       }),
+    }),
+    reply_internal_email: Object.freeze({
+      actionType: "guardian.email.reply.internal.v1",
+      dataSensitivity: "normal",
+      guardianDescription: "Propón una respuesta a un buzón interno ficticio; no se envía fuera.",
+      volume: Object.freeze({ kind: "fixed", unit: "messages" }),
+    }),
+    send_sensitive_external_email: Object.freeze({
+      actionType: "guardian.email.send.external_sensitive.v1",
+      dataSensitivity: "sensible",
+      guardianDescription: "Propón un correo de prueba con adjuntos o datos de clientes.",
+      volume: Object.freeze({ kind: "fixed", unit: "messages" }),
+    }),
+    create_forwarding_rule: Object.freeze({
+      actionType: "guardian.email.forwarding_rule.create.v1",
+      dataSensitivity: "sensible",
+      guardianDescription: "Evalúa una regla de reenvío sintética, bloqueada por política.",
+      volume: Object.freeze({ kind: "fixed", unit: "operations" }),
+    }),
+    close_customer_account: Object.freeze({
+      actionType: "guardian.support.customer_account.close.v1",
+      dataSensitivity: "sensible",
+      guardianDescription: "Propón cerrar o borrar una cuenta sintética de cliente.",
+      volume: Object.freeze({ kind: "fixed", unit: "operations" }),
+    }),
+    read_finance_record: Object.freeze({
+      actionType: "guardian.finance.balance_invoice.read.v1",
+      dataSensitivity: "sensible",
+      guardianDescription: "Consulta un saldo o factura ficticios.",
+      volume: Object.freeze({ kind: "fixed", unit: "operations" }),
+    }),
+    pay_known_vendor: Object.freeze({
+      actionType: "guardian.finance.vendor_payment.known.v1",
+      dataSensitivity: "sensible",
+      guardianDescription: "Propón un pago sintético a un proveedor conocido.",
+      volume: Object.freeze({
+        kind: "argument",
+        field: "amount_cents",
+        unit: "cents",
+      }),
+    }),
+    pay_new_vendor: Object.freeze({
+      actionType: "guardian.finance.vendor_payment.new.v1",
+      dataSensitivity: "sensible",
+      guardianDescription: "Propón un pago sintético a un proveedor nuevo; bloqueado por defecto.",
+      volume: Object.freeze({
+        kind: "argument",
+        field: "amount_cents",
+        unit: "cents",
+      }),
+    }),
+    query_synthetic_data: Object.freeze({
+      actionType: "guardian.data.query.read.v1",
+      dataSensitivity: "normal",
+      guardianDescription: "Consulta un conjunto de datos sintético predefinido, nunca SQL libre.",
+      volume: Object.freeze({ kind: "fixed", unit: "operations" }),
+    }),
+    export_customer_data: Object.freeze({
+      actionType: "guardian.data.customer.export.v1",
+      dataSensitivity: "sensible",
+      guardianDescription: "Propón una exportación sintética de datos de clientes.",
+      volume: Object.freeze({
+        kind: "argument",
+        field: "record_limit",
+        unit: "records",
+      }),
+    }),
+    modify_data_batch: Object.freeze({
+      actionType: "guardian.data.bulk.modify.v1",
+      dataSensitivity: "sensible",
+      guardianDescription: "Propón una modificación sintética en lote.",
+      volume: Object.freeze({
+        kind: "argument",
+        field: "record_limit",
+        unit: "records",
+      }),
+    }),
+    delete_data_batch: Object.freeze({
+      actionType: "guardian.data.bulk.delete.v1",
+      dataSensitivity: "sensible",
+      guardianDescription: "Evalúa un borrado masivo sintético, bloqueado por política.",
+      volume: Object.freeze({
+        kind: "argument",
+        field: "record_limit",
+        unit: "records",
+      }),
+    }),
+    open_pull_request: Object.freeze({
+      actionType: "guardian.code.pull_request.open.v1",
+      dataSensitivity: "normal",
+      guardianDescription: "Prepara un pull request ficticio sin contactar repositorios.",
+      volume: Object.freeze({ kind: "fixed", unit: "operations" }),
+    }),
+    merge_pull_request_main: Object.freeze({
+      actionType: "guardian.code.pull_request.merge_main.v1",
+      dataSensitivity: "normal",
+      guardianDescription: "Propón fusionar un pull request ficticio en main.",
+      volume: Object.freeze({ kind: "fixed", unit: "operations" }),
+    }),
+    deploy_to_production: Object.freeze({
+      actionType: "guardian.code.deploy.production.v1",
+      dataSensitivity: "normal",
+      guardianDescription: "Propón un despliegue ficticio; no accede a producción.",
+      volume: Object.freeze({ kind: "fixed", unit: "operations" }),
+    }),
+    access_repository_secret: Object.freeze({
+      actionType: "guardian.code.secret.access.v1",
+      dataSensitivity: "sensible",
+      guardianDescription: "Evalúa un acceso a secretos, bloqueado por política.",
+      volume: Object.freeze({ kind: "fixed", unit: "operations" }),
+    }),
+    read_synthetic_web_page: Object.freeze({
+      actionType: "guardian.web.navigate.read.v1",
+      dataSensitivity: "normal",
+      guardianDescription: "Lee una página local de demostración; no navega por internet.",
+      volume: Object.freeze({ kind: "fixed", unit: "operations" }),
+    }),
+    submit_personal_data_form: Object.freeze({
+      actionType: "guardian.web.personal_data.submit.v1",
+      dataSensitivity: "sensible",
+      guardianDescription: "Propón un formulario ficticio con datos personales.",
+      volume: Object.freeze({ kind: "fixed", unit: "operations" }),
+    }),
+    purchase_synthetic_item: Object.freeze({
+      actionType: "guardian.web.purchase.v1",
+      dataSensitivity: "normal",
+      guardianDescription: "Propón una compra ficticia; no se realiza ningún pago.",
+      volume: Object.freeze({
+        kind: "argument",
+        field: "amount_cents",
+        unit: "cents",
+      }),
+    }),
+    submit_credentials_unapproved_site: Object.freeze({
+      actionType: "guardian.web.unapproved_credentials.submit.v1",
+      dataSensitivity: "sensible",
+      guardianDescription: "Evalúa introducir credenciales en un sitio no aprobado.",
+      volume: Object.freeze({ kind: "fixed", unit: "operations" }),
+    }),
+    read_cloud_resource: Object.freeze({
+      actionType: "guardian.cloud.resource.read.v1",
+      dataSensitivity: "normal",
+      guardianDescription: "Consulta recursos o costes ficticios, sin conexión cloud.",
+      volume: Object.freeze({ kind: "fixed", unit: "operations" }),
+    }),
+    create_cloud_resource: Object.freeze({
+      actionType: "guardian.cloud.resource.create.v1",
+      dataSensitivity: "normal",
+      guardianDescription: "Propón crear un recurso ficticio con coste estimado.",
+      volume: Object.freeze({
+        kind: "argument",
+        field: "estimated_cost_cents",
+        unit: "cents",
+      }),
+    }),
+    change_cloud_iam_permissions: Object.freeze({
+      actionType: "guardian.cloud.iam.permission.change.v1",
+      dataSensitivity: "sensible",
+      guardianDescription: "Propón cambiar permisos IAM en un escenario ficticio.",
+      volume: Object.freeze({ kind: "fixed", unit: "operations" }),
+    }),
+    delete_or_public_cloud_resource: Object.freeze({
+      actionType: "guardian.cloud.production_destructive.v1",
+      dataSensitivity: "sensible",
+      guardianDescription: "Evalúa una acción cloud destructiva, bloqueada por política.",
+      volume: Object.freeze({ kind: "fixed", unit: "operations" }),
+    }),
+    delegate_equal_or_lower: Object.freeze({
+      actionType: "guardian.multiagent.delegate_equal_or_lower.v1",
+      dataSensitivity: "normal",
+      guardianDescription: "Evalúa delegar permisos iguales o menores en modo sintético.",
+      volume: Object.freeze({ kind: "fixed", unit: "operations" }),
+    }),
+    delegate_higher_permissions: Object.freeze({
+      actionType: "guardian.multiagent.delegate_higher_scope.v1",
+      dataSensitivity: "sensible",
+      guardianDescription: "Propón delegar un alcance superior a otro agente ficticio.",
+      volume: Object.freeze({ kind: "fixed", unit: "operations" }),
+    }),
+    self_assign_or_bypass_approval: Object.freeze({
+      actionType: "guardian.multiagent.privilege_escalation.v1",
+      dataSensitivity: "sensible",
+      guardianDescription: "Evalúa un intento de autoasignar permisos o eludir aprobación.",
+      volume: Object.freeze({ kind: "fixed", unit: "operations" }),
     }),
   }),
 });
@@ -79,18 +264,19 @@ export type McpVolumeLabel =
     field: string;
     value: number;
     maximum: number;
-    unit: "cents";
+    unit: "cents" | "records";
   }
   | {
     kind: "fixed";
     quantity: 1;
     maximum: 1;
-    unit: "messages";
+    unit: "messages" | "operations";
   };
 
 export type McpToolClassification = {
   status: "classified" | "rejected" | "unknown";
   actionType: string;
+  profileId: ApprovalActionProfileId | null;
   riskTypes: readonly ApprovalActionRiskType[];
   dataSensitivity: "normal" | "sensible" | null;
   volume: McpVolumeLabel | null;
@@ -322,6 +508,7 @@ function emptyUnknown(
   return {
     status: "unknown",
     actionType: "unknown",
+    profileId: null,
     riskTypes: [],
     dataSensitivity: null,
     volume: null,
@@ -334,6 +521,7 @@ function emptyUnknown(
 
 function rejected(
   actionType: string,
+  profileId: ApprovalActionProfileId,
   reasonCode: McpToolClassification["reasonCode"],
   riskTypes: readonly ApprovalActionRiskType[],
   dataSensitivity: "normal" | "sensible",
@@ -342,6 +530,7 @@ function rejected(
   return {
     status: "rejected",
     actionType,
+    profileId,
     riskTypes,
     dataSensitivity,
     volume: null,
@@ -370,8 +559,8 @@ function volumeLabel(
   args: Record<string, string | number | boolean>,
   maximum?: number,
 ): McpVolumeLabel | null {
-  if (binding.kind === "fixed_message") {
-    return { kind: "fixed", quantity: 1, maximum: 1, unit: "messages" };
+  if (binding.kind === "fixed") {
+    return { kind: "fixed", quantity: 1, maximum: 1, unit: binding.unit };
   }
   const value = args[binding.field];
   if (typeof value !== "number" || typeof maximum !== "number") return null;
@@ -433,6 +622,7 @@ export function classifyMcpToolCall(
   if (typeof argumentsJson !== "string") {
     return rejected(
       binding.actionType,
+      catalogDefinition.profileId,
       "arguments_not_json_text",
       [...catalogDefinition.riskTypes],
       binding.dataSensitivity,
@@ -442,6 +632,7 @@ export function classifyMcpToolCall(
   if (!parsed.ok) {
     return rejected(
       binding.actionType,
+      catalogDefinition.profileId,
       parsed.reasonCode,
       [...catalogDefinition.riskTypes],
       binding.dataSensitivity,
@@ -453,6 +644,7 @@ export function classifyMcpToolCall(
   if (!evaluated.ok) {
     return rejected(
       binding.actionType,
+      catalogDefinition.profileId,
       "arguments_invalid",
       [...catalogDefinition.riskTypes],
       binding.dataSensitivity,
@@ -470,6 +662,7 @@ export function classifyMcpToolCall(
   if (!volume) {
     return rejected(
       binding.actionType,
+      catalogDefinition.profileId,
       "catalog_volume_binding_invalid",
       [...evaluated.definition.riskTypes],
       binding.dataSensitivity,
@@ -480,6 +673,7 @@ export function classifyMcpToolCall(
   return {
     status: "classified",
     actionType: binding.actionType,
+    profileId: evaluated.definition.profileId,
     riskTypes: [...evaluated.definition.riskTypes],
     dataSensitivity: binding.dataSensitivity,
     volume,

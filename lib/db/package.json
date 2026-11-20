@@ -10,7 +10,8 @@
     "./rls-catalog-contract": "./src/rls-catalog-contract.ts",
     "./rls-catalog-phase-audit": "./src/rls-catalog-phase-audit.ts",
     "./rls-runtime-readiness": "./src/rls-runtime-readiness.ts",
-    "./approval-action-catalog": "./src/approval-action-catalog.ts"
+    "./approval-action-catalog": "./src/approval-action-catalog.ts",
+    "./workspace-action-rule-engine": "./src/workspace-action-rule-engine.ts"
   },
   "scripts": {
     "push": "drizzle-kit push --config ./drizzle.config.ts",

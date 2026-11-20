@@ -154,7 +154,7 @@ async function main(): Promise<void> {
     if (
       !lowRiskInternalEvaluation.ok ||
       lowRiskInternalEvaluation.decision !== "allow" ||
-      supportAction?.requiresIndependentApprover !== true
+      supportAction?.requiresIndependentApprover !== false
     ) {
       fail("demo_action_preflight", "low_risk_allow_contract_changed");
     }
@@ -412,6 +412,13 @@ async function main(): Promise<void> {
     if (
       !toolNames.includes("reply_to_support") ||
       !toolNames.includes("issue_synthetic_refund") ||
+      !toolNames.includes("reply_internal_email") ||
+      !toolNames.includes("read_finance_record") ||
+      !toolNames.includes("query_synthetic_data") ||
+      !toolNames.includes("open_pull_request") ||
+      !toolNames.includes("read_synthetic_web_page") ||
+      !toolNames.includes("read_cloud_resource") ||
+      !toolNames.includes("delegate_equal_or_lower") ||
       !toolNames.includes("guardian_approval_status")
     ) {
       fail("mcp_tools_list", "guardian_tools_missing");
