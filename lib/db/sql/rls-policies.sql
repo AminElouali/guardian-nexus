@@ -1423,12 +1423,12 @@ CREATE TABLE IF NOT EXISTS public.workspace_approval_receipts (
   CONSTRAINT workspace_approval_receipts_signed_binding_check
     CHECK (
       jsonb_typeof(signed_receipt) = 'object'
-      AND jsonb_typeof(signed_receipt->'payload') = 'object'
-      AND signed_receipt->>'payloadSha256' = receipt_sha256
-      AND signed_receipt->'payload'->>'receiptId' = receipt_id
-      AND signed_receipt->'payload'->>'workspaceId' = workspace_id::text
-      AND signed_receipt->'payload'->>'approvalId' = approval_id::text
-      AND signed_receipt->'payload'->>'approvedBy' = approved_by_user_id
+      AND jsonb_typeof(signed_receipt->'payload'::text) = 'object'
+      AND signed_receipt->>'payloadSha256'::text = receipt_sha256
+      AND signed_receipt->'payload'::text->>'receiptId'::text = receipt_id
+      AND signed_receipt->'payload'::text->>'workspaceId'::text = workspace_id::text
+      AND signed_receipt->'payload'::text->>'approvalId'::text = approval_id::text
+      AND signed_receipt->'payload'::text->>'approvedBy'::text = approved_by_user_id
     )
 );
 CREATE UNIQUE INDEX IF NOT EXISTS workspace_approval_receipts_receipt_id_uidx
@@ -1468,7 +1468,7 @@ CREATE POLICY workspace_approval_receipts_select_agent_execution
         AND approval.workspace_id = workspace_approval_receipts.workspace_id
         AND approval.status = 'approved'
         AND approval.requested_by_user_id = NULLIF(current_setting('app.user_id', true), '')
-        AND job.result->>'agentId' = NULLIF(current_setting('app.agent_id', true), '')
+        AND job.result->>'agentId'::text = NULLIF(current_setting('app.agent_id', true), '')
     )
   );
 DROP POLICY IF EXISTS workspace_approval_receipts_insert_approver
@@ -1495,15 +1495,15 @@ CREATE POLICY workspace_approval_receipts_insert_approver
         AND approval.decided_by_user_id = NULLIF(current_setting('app.user_id', true), '')
         AND COALESCE(approval.action_sha256, '') = COALESCE(
           NULLIF(
-            workspace_approval_receipts.signed_receipt->'payload'->>'actionSha256',
+            workspace_approval_receipts.signed_receipt->'payload'::text->>'actionSha256'::text,
             ''
           ),
           ''
         )
         AND approval.proposal_binding_sha256 =
-          signed_receipt->'payload'->>'proposalBindingSha256'
+          signed_receipt->'payload'::text->>'proposalBindingSha256'::text
         AND approval.requested_by_user_id =
-          signed_receipt->'payload'->>'requestedBy'
+          signed_receipt->'payload'::text->>'requestedBy'::text
     )
   );
 

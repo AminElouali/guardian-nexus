@@ -33,6 +33,10 @@ const repositoryRoot = path.resolve(
   "../../../../",
 );
 const schemaDirectory = path.join(repositoryRoot, "lib/db/src/schema");
+const developmentAuditScriptSource = readFileSync(
+  path.join(repositoryRoot, "artifacts/api-server/src/scripts/audit-development-rls-catalog.ts"),
+  "utf8",
+);
 const contract = parseRlsCatalogContract({
   schemaFiles: readdirSync(schemaDirectory)
     .filter((name) => name.endsWith(".ts"))
@@ -575,6 +579,17 @@ test("missing ledger is listed while catalog and privilege reads complete", asyn
   assert.ok(progress.completedSteps.includes("privileges"));
   assert.ok(progress.completedSteps.includes("append_only_privileges"));
   assert.equal(pendingResults.length, 0);
+});
+
+test("development audit reads column-level INSERT grants for append-only tables", () => {
+  assert.match(
+    developmentAuditScriptSource,
+    /array_agg\(attribute\.attname::text ORDER BY attribute\.attnum\)/,
+  );
+  assert.match(
+    developmentAuditScriptSource,
+    /has_column_privilege\([\s\S]*'INSERT'\s*\)\s*\)\s*,\s*ARRAY\[\]::text\[\]\)\s+AS column_insert/,
+  );
 });
 
 test("development RLS audit fails if runtime receives table-level UPDATE", () => {

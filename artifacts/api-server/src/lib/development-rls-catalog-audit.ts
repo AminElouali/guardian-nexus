@@ -294,7 +294,10 @@ function developmentPrivilegeDifferences(
         role: "app_runtime",
         table,
         privilege,
-        expectedGranted,
+        expectedGranted: field === "can_insert" &&
+            table === "workspace_approval_receipts"
+          ? false
+          : expectedGranted,
         actualGranted: typeof value === "boolean" ? value : null,
         scope,
       });

@@ -64,12 +64,12 @@ export const workspaceApprovalReceiptsTable = pgTable(
       "workspace_approval_receipts_signed_binding_check",
       sql`
         jsonb_typeof(${table.signedReceipt}) = 'object'
-        AND jsonb_typeof(${table.signedReceipt}->'payload') = 'object'
-        AND ${table.signedReceipt}->>'payloadSha256' = ${table.receiptSha256}
-        AND ${table.signedReceipt}->'payload'->>'receiptId' = ${table.receiptId}
-        AND ${table.signedReceipt}->'payload'->>'workspaceId' = ${table.workspaceId}::text
-        AND ${table.signedReceipt}->'payload'->>'approvalId' = ${table.approvalId}::text
-        AND ${table.signedReceipt}->'payload'->>'approvedBy' = ${table.approvedByUserId}
+        AND jsonb_typeof(${table.signedReceipt}->'payload'::text) = 'object'
+        AND ${table.signedReceipt}->>'payloadSha256'::text = ${table.receiptSha256}
+        AND ${table.signedReceipt}->'payload'::text->>'receiptId'::text = ${table.receiptId}
+        AND ${table.signedReceipt}->'payload'::text->>'workspaceId'::text = ${table.workspaceId}::text
+        AND ${table.signedReceipt}->'payload'::text->>'approvalId'::text = ${table.approvalId}::text
+        AND ${table.signedReceipt}->'payload'::text->>'approvedBy'::text = ${table.approvedByUserId}
       `,
     ),
     pgPolicy("workspace_approval_receipts_select_agent_execution", {
@@ -96,7 +96,7 @@ export const workspaceApprovalReceiptsTable = pgTable(
             AND approval.workspaceId = ${table.workspaceId}
             AND approval.status = 'approved'
             AND approval.requestedByUserId = ${currentUserId}
-            AND job.result->>'agentId' = ${currentAgentId}
+            AND job.result->>'agentId'::text = ${currentAgentId}
         )
       `,
     }),
@@ -123,15 +123,15 @@ export const workspaceApprovalReceiptsTable = pgTable(
             AND approval.decidedByUserId = ${currentUserId}
             AND COALESCE(approval.actionSha256, '') = COALESCE(
               NULLIF(
-                ${table.signedReceipt}->'payload'->>'actionSha256',
+                ${table.signedReceipt}->'payload'::text->>'actionSha256'::text,
                 ''
               ),
               ''
             )
             AND approval.proposalBindingSha256 =
-              ${table.signedReceipt}->'payload'->>'proposalBindingSha256'
+              ${table.signedReceipt}->'payload'::text->>'proposalBindingSha256'::text
             AND approval.requestedByUserId =
-              ${table.signedReceipt}->'payload'->>'requestedBy'
+              ${table.signedReceipt}->'payload'::text->>'requestedBy'::text
         )
       `,
     }),

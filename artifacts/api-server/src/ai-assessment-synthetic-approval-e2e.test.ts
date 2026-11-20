@@ -871,7 +871,6 @@ test(
       express.text({ type: "application/json", limit: "16kb" }),
     );
     app.use(express.json({ limit: "8kb" }));
-    app.use("/api", createAiAssessmentLabRouter(authForTest));
     app.use(
       "/api",
       createMcpProxyRouter({
@@ -882,6 +881,7 @@ test(
         }),
       }),
     );
+    app.use("/api", createAiAssessmentLabRouter(authForTest));
     app.use(
       "/api",
       createWorkspaceGovernanceRouter(authForTest, {
@@ -4852,23 +4852,30 @@ test(
         );
         assert.equal(fakeMcpDestinationState.calls, 0);
         const unknownAudit = await fixturePool.query<{
-          metadata_text: string;
+          metadata: Record<string, unknown>;
         }>(
-          `SELECT metadata::text AS metadata_text
+          `SELECT metadata
              FROM public.workspace_audit_events
             WHERE workspace_id = $1 AND action = 'mcp.tool_call_decision'`,
           [workspaceMcp],
         );
         assert.equal(unknownAudit.rowCount, 1);
-        assert.ok(
-          unknownAudit.rows[0]!.metadata_text.includes('"reasonCode":"tool_not_allowlisted"'),
+        assert.equal(
+          unknownAudit.rows[0]!.metadata.reasonCode,
+          "tool_not_allowlisted",
         );
         assert.equal(
-          unknownAudit.rows[0]!.metadata_text.includes("send_money_now"),
+          unknownAudit.rows[0]!.metadata.toolNameSha256 !== undefined,
+          true,
+        );
+        assert.equal(
+          JSON.stringify(unknownAudit.rows[0]!.metadata).includes(
+            "send_money_now",
+          ),
           false,
         );
         assert.equal(
-          unknownAudit.rows[0]!.metadata_text.includes("arguments"),
+          JSON.stringify(unknownAudit.rows[0]!.metadata).includes("arguments"),
           false,
         );
         const ledgerBeforeApproval = await fixturePool.query<{ total: string }>(
@@ -4896,18 +4903,17 @@ test(
         assert.equal(pendingBody.result.structuredContent.status, "pending");
         assert.equal(fakeMcpDestinationState.calls, 0);
         const escalationAudit = await fixturePool.query<{
-          metadata_text: string;
+          metadata: Record<string, unknown>;
         }>(
-          `SELECT metadata::text AS metadata_text
+          `SELECT metadata
              FROM public.workspace_audit_events
             WHERE workspace_id = $1 AND resource_id = $2`,
           [workspaceMcp, approvalId],
         );
         assert.ok(
           escalationAudit.rows.some((row) =>
-            row.metadata_text.includes(
-              '"decisionReasonCode":"rule_allow_escalated_to_approval"',
-            )
+            row.metadata.decisionReasonCode ===
+              "rule_allow_escalated_to_approval"
           ),
         );
 
@@ -5033,20 +5039,20 @@ test(
           ledgerBeforeDeny.rows[0]?.total,
         );
         const deniedAudit = await fixturePool.query<{
-          metadata_text: string;
+          metadata: Record<string, unknown>;
         }>(
-          `SELECT metadata::text AS metadata_text
+          `SELECT metadata
              FROM public.workspace_audit_events
             WHERE workspace_id = $1
               AND action = 'ai_assessment.generic_action_decision'
             ORDER BY created_at DESC LIMIT 1`,
           [workspaceMcp],
         );
-        assert.ok(
-          deniedAudit.rows[0]?.metadata_text.includes('"decision":"deny"'),
-        );
+        assert.equal(deniedAudit.rows[0]?.metadata.decision, "deny");
         assert.equal(
-          deniedAudit.rows[0]?.metadata_text.includes("blocked@example.test"),
+          JSON.stringify(deniedAudit.rows[0]?.metadata ?? {}).includes(
+            "blocked@example.test",
+          ),
           false,
         );
 

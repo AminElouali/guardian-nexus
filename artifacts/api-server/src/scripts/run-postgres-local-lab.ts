@@ -694,16 +694,25 @@ export function parseSafeNodeTestFailures(
   testFileName: string,
   testSource: string,
 ): SafeNodeTestFailure[] {
-  const failures = [...output.matchAll(/^not ok \d+ - (.{1,240})$/gm)]
-    .slice(0, 8);
+  const failures = [...output.matchAll(/^([ \t]*)not ok \d+ - (.{1,240})$/gm)]
+    .slice(0, 16);
   return failures.map((match, index) => {
     const start = match.index ?? 0;
-    const nextFailure = failures[index + 1]?.index;
-    const summaryOffset = output.slice(start).search(/^# tests \d+$/m);
+    const indentation = match[1] ?? "";
+    const nextFailure = failures.slice(index + 1).find((candidate) =>
+      (candidate[1] ?? "").length <= indentation.length
+    )?.index;
+    const summaryOffset = output.slice(start).search(/^[ \t]*# tests \d+$/m);
     const end = nextFailure ??
       (summaryOffset >= 0 ? start + summaryOffset : output.length);
-    const block = output.slice(start, end);
-    const label = (match[1] ?? "").trim();
+    const block = output
+      .slice(start, end)
+      .split(/\r?\n/)
+      .map((line) => line.startsWith(indentation)
+        ? line.slice(indentation.length)
+        : line)
+      .join("\n");
+    const label = (match[2] ?? "").trim();
     const subtest = /^[A-Za-z0-9][A-Za-z0-9 .:_/-]{0,159}$/.test(label)
       ? label
       : "non_allowlisted_subtest";

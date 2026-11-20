@@ -73,7 +73,7 @@ test("the E2E entrypoint fails before database setup when CI and focused mode co
   const output = `${child.stdout ?? ""}\n${child.stderr ?? ""}`;
   assert.equal(child.error, undefined, "E2E guard subprocess should start");
   assert.notEqual(child.status, 0, "E2E must fail closed in required CI mode");
-  assert.match(output, /MODO FOCALIZADO: se omiten 4 subpruebas/);
+  assert.match(output, /MODO FOCALIZADO: se omiten 5 subpruebas/);
   assert.ok(output.includes(FOCUSED_APPROVAL_E2E_FORBIDDEN_MESSAGE));
   assert.doesNotMatch(output, /database connection|connected to database/i);
 });
