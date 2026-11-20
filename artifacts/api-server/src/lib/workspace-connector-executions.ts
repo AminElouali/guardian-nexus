@@ -79,6 +79,7 @@ export type ConnectorExecutionStage =
   | "insert_pending"
   | "audit_pending"
   | "replay_return"
+  | "audit_replay"
   | "complete_transaction"
   | "complete_lock"
   | "execution_lookup"
@@ -290,6 +291,32 @@ function auditExecution(
   });
 }
 
+function auditExecutionReplay(
+  tx: TenantTransaction,
+  input: {
+    workspaceId: string;
+    actorUserId: string;
+    executionId: string;
+    serviceId: string;
+    actionType: string;
+    actionSha256: string;
+  },
+) {
+  return tx.insert(workspaceAuditEventsTable).values({
+    workspaceId: input.workspaceId,
+    actorUserId: input.actorUserId,
+    action: "workspace.connector.execution.replayed",
+    resourceType: "workspace_connector_execution",
+    resourceId: input.executionId,
+    metadata: {
+      serviceId: input.serviceId,
+      actionType: input.actionType,
+      actionSha256: input.actionSha256,
+      resultCode: "idempotent_replay",
+    },
+  });
+}
+
 export async function executeWorkspaceConnectorAction(
   input: ConnectorExecutionRequest,
 ): Promise<ConnectorExecutionResult> {
@@ -464,7 +491,38 @@ export async function executeWorkspaceConnectorAction(
   if (!claim.authorized) {
     throw new ConnectorExecutionError("workspace_membership_required");
   }
-  if (claim.value.kind === "replay") return claim.value.result;
+  if (
+    claim.value.kind === "replay" &&
+    "result" in claim.value &&
+    claim.value.result
+  ) {
+    const replayedExecution = claim.value.result;
+    input.onStage?.("audit_replay");
+    const replayAudit = await withWorkspaceUserTransaction(
+      input.userId,
+      input.workspaceId,
+      async (tx, membership) => {
+        if (!isAdministrator(membership)) {
+          throw new ConnectorExecutionError("workspace_admin_required");
+        }
+        await auditExecutionReplay(tx, {
+          workspaceId: input.workspaceId,
+          actorUserId: input.userId,
+          executionId: replayedExecution.executionId,
+          serviceId: input.serviceId,
+          actionType: input.actionType,
+          actionSha256: actionHash,
+        });
+      },
+    );
+    if (!replayAudit.authorized) {
+      throw new ConnectorExecutionError("workspace_membership_required");
+    }
+    return replayedExecution;
+  }
+  if (claim.value.kind !== "claimed") {
+    throw new ConnectorExecutionError("execution_unavailable");
+  }
   const claimedExecutionId = claim.value.executionId;
   const claimedCredentialId = claim.value.credentialId;
 

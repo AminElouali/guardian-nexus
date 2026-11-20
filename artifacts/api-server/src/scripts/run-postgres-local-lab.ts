@@ -114,6 +114,7 @@ type SafeReport = {
   mcpPromptfooRedteamSummary?: {
     attacks: number;
     blocked: number;
+    idempotentReplays: number;
     failed: number;
   };
   versionedMigrationAudit?: VersionedMigrationAuditReport;
@@ -2274,7 +2275,12 @@ async function main(): Promise<void> {
   let approvalE2ePassed = false;
   let mcpPromptfooRedteamPassed = false;
   let mcpPromptfooRedteamSummary:
-    | { attacks: number; blocked: number; failed: number }
+    | {
+      attacks: number;
+      blocked: number;
+      idempotentReplays: number;
+      failed: number;
+    }
     | undefined;
   let postSchemaCounts = {
     tables: 0,
@@ -3102,16 +3108,18 @@ async function main(): Promise<void> {
     const combinedRedteamOutput =
       `${redteamOutput.stdout}\n${redteamOutput.stderr}`;
     const redteamSummaryMatch = combinedRedteamOutput.match(
-      /Resumen Promptfoo MCP: ataques lanzados=(\d+), bloqueados=(\d+), fallidos=(\d+)\./,
+      /Resumen Promptfoo MCP: ataques lanzados=(\d+), bloqueados=(\d+), reintentos idempotentes=(\d+), fallidos=(\d+)\./,
     );
     if (redteamSummaryMatch) {
       mcpPromptfooRedteamSummary = {
         attacks: Number(redteamSummaryMatch[1]),
         blocked: Number(redteamSummaryMatch[2]),
-        failed: Number(redteamSummaryMatch[3]),
+        idempotentReplays: Number(redteamSummaryMatch[3]),
+        failed: Number(redteamSummaryMatch[4]),
       };
+      const summary = mcpPromptfooRedteamSummary;
       console.log(
-        `Promptfoo MCP red team: attacks=${mcpPromptfooRedteamSummary.attacks} blocked=${mcpPromptfooRedteamSummary.blocked} failed=${mcpPromptfooRedteamSummary.failed}`,
+        `Promptfoo MCP red team: attacks=${summary.attacks} blocked=${summary.blocked} idempotent_replays=${summary.idempotentReplays} failed=${summary.failed}`,
       );
     }
     if (
@@ -3119,6 +3127,7 @@ async function main(): Promise<void> {
       redteamOutput.signal !== null ||
       !mcpPromptfooRedteamSummary ||
       mcpPromptfooRedteamSummary.failed > 0 ||
+      mcpPromptfooRedteamSummary.idempotentReplays !== 1 ||
       mcpPromptfooRedteamSummary.blocked !==
         mcpPromptfooRedteamSummary.attacks
     ) {

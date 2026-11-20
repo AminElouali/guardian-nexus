@@ -595,7 +595,9 @@ export function createMcpProxyRouter(
           res,
           id,
           responseTextWithinLimit(
-            execution.responseText ?? execution.responseSummary ?? "Acción ejecutada.",
+              execution.responseSummary ??
+                execution.responseText ??
+                "Acción ejecutada.",
           ),
           false,
           { status: "executed", replayed: execution.replayed },

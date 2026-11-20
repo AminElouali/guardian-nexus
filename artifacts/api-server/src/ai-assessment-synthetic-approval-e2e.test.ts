@@ -161,10 +161,19 @@ async function runApprovalE2eSubtest(
 type PromptfooMcpCase = {
   id: string;
   prompt: { tool: string; args: Record<string, unknown> };
-  provider: "valid" | "fake" | "revoked" | "other-workspace";
+  provider:
+    | "valid"
+    | "fake"
+    | "revoked"
+    | "other-workspace"
+    | "other-agent";
   expectedText: string;
   attack: boolean;
-  disposition: "blocked" | "allowed" | "idempotent_replay";
+  disposition:
+    | "blocked"
+    | "allowed"
+    | "requires_approval"
+    | "idempotent_replay";
   expectedProviderError?: boolean;
   acceptAnyOutput?: boolean;
 };
@@ -203,6 +212,8 @@ async function runPromptfooMcpRedteam(input: {
             Authorization: `Bearer ${input.credentials[providerName]}`,
           },
         },
+        transformResponse:
+          "(result, content) => JSON.stringify({ content: result?.content ?? content, structuredContent: result?.structuredContent })",
       },
     }));
     const config = {
@@ -217,9 +228,11 @@ async function runPromptfooMcpRedteam(input: {
         },
         assert: [{
           type: "javascript",
-          value: testCase.acceptAnyOutput
-            ? `String(output ?? "").length > 0`
-            : `String(output ?? "").includes(${JSON.stringify(testCase.expectedText)}) || String(context.providerResponse?.error ?? "").includes(${JSON.stringify(testCase.expectedText)})`,
+          value: testCase.disposition === "idempotent_replay"
+            ? `(() => { try { const reply = JSON.parse(String(output ?? "")); return reply.structuredContent?.status === "executed" && reply.structuredContent?.replayed === true && JSON.stringify(reply.content) === JSON.stringify([{ type: "text", text: ${JSON.stringify(testCase.expectedText)} }]); } catch { return false; } })()`
+            : testCase.acceptAnyOutput
+              ? `String(output ?? "").length > 0`
+              : `String(output ?? "").includes(${JSON.stringify(testCase.expectedText)}) || String(context.providerResponse?.error ?? "").includes(${JSON.stringify(testCase.expectedText)})`,
         }],
       })),
       evaluateOptions: {
@@ -355,6 +368,10 @@ async function runPromptfooMcpRedteam(input: {
           input.credentials["other-workspace"],
           "[credential redacted]",
         )
+        .replaceAll(
+          input.credentials["other-agent"],
+          "[credential redacted]",
+        )
         .replaceAll(input.endpoints.valid, "[loopback MCP endpoint]")
         .replaceAll(input.endpoints.fake, "[loopback MCP endpoint]")
         .replaceAll(input.endpoints.revoked, "[loopback MCP endpoint]")
@@ -399,24 +416,20 @@ async function runPromptfooMcpRedteam(input: {
         typeof row.error === "string" &&
         row.error.includes(testCase.expectedText);
       const passed = promptfooAssertionPassed || expectedProviderErrorMatched;
-      const idempotentReplay =
-        testCase.disposition === "idempotent_replay" && passed;
-      const attackWasNotBlocked =
-        testCase.attack && testCase.disposition === "idempotent_replay";
       console.log(
         `Promptfoo MCP: ${testCase.id} ${
-          attackWasNotBlocked
-            ? "FALLO: fue idempotente, no DENY"
-            : !passed
+          !passed
             ? "FALLO"
             : testCase.disposition === "blocked"
               ? "BLOQUEADO"
               : testCase.disposition === "idempotent_replay"
-                ? "REINTENTO IDEMPOTENTE (NO CONTADO COMO BLOQUEO)"
-                : "RESULTADO ACEPTADO"
+                ? "REINTENTO IDEMPOTENTE"
+                : testCase.disposition === "requires_approval"
+                  ? "REQUIERE APROBACIÓN (NO SE EJECUTÓ)"
+                  : "RESULTADO ACEPTADO"
         };`,
       );
-      if (!passed || attackWasNotBlocked) {
+      if (!passed) {
         const rawPreview =
           typeof row.output === "string"
             ? row.output
@@ -431,6 +444,10 @@ async function runPromptfooMcpRedteam(input: {
             input.credentials["other-workspace"],
             "[credential redacted]",
           )
+            .replaceAll(
+              input.credentials["other-agent"],
+              "[credential redacted]",
+            )
           .replace(
             /gnx_agent_v1_[A-Za-z0-9_-]{40,}/g,
             "[credential redacted]",
@@ -439,7 +456,7 @@ async function runPromptfooMcpRedteam(input: {
           .slice(0, 180);
         console.error(`Promptfoo response: ${testCase.id} ${safePreview}`);
       }
-      return passed && !attackWasNotBlocked ? [] : [testCase.id];
+      return passed ? [] : [testCase.id];
     });
     const attacks = input.cases.filter((testCase) => testCase.attack).length;
     const blocked = input.cases.filter((testCase) => testCase.attack)
@@ -461,8 +478,31 @@ async function runPromptfooMcpRedteam(input: {
     console.log(
       `Resumen Promptfoo MCP: ataques lanzados=${attacks}, bloqueados=${blocked}, reintentos idempotentes=${idempotentReplays}, fallidos=${failed.length}.`,
     );
-    if (result.status !== 0 && failed.length === 0) {
-      throw new Error("promptfoo_mcp_eval_exit_nonzero");
+    console.log(
+      "Nota: la consulta de estado de solo lectura es el único ALLOW esperado; las cuatro acciones del catálogo requieren aprobación independiente.",
+    );
+    const expectedProviderErrorCases = input.cases.filter(
+      (testCase) => testCase.expectedProviderError === true,
+    );
+    const expectedProviderErrorsMatched = expectedProviderErrorCases.every(
+      (testCase) => {
+        const index = input.cases.indexOf(testCase);
+        return typeof rows[index]?.error === "string" &&
+          rows[index]!.error!.includes(testCase.expectedText);
+      },
+    );
+    if (
+      result.status !== 0 &&
+      (expectedProviderErrorCases.length === 0 ||
+        !expectedProviderErrorsMatched ||
+        failed.length > 0)
+    ) {
+      throw new Error("promptfoo_mcp_eval_unexpected_exit");
+    }
+    if (result.status !== 0) {
+      console.log(
+        `Promptfoo MCP: exit=${result.status} se debe únicamente a los ${expectedProviderErrorCases.length} errores de protocolo esperados y verificados.`,
+      );
     }
     return { attacks, blocked, failed };
   } finally {
@@ -4855,6 +4895,10 @@ test(
           },
         );
         assert.equal(expiredResponse.status, 409);
+        assert.equal(
+          (await expiredResponse.json() as { code?: string }).code,
+          "receipt_expired",
+        );
         assert.equal(fakeConnector.invocations.length, 0);
 
         const concurrentApproval = await createApprovedConnectorReceipt();
@@ -5338,16 +5382,25 @@ test(
         );
         const executedBody = await executedResponse.json() as {
           result: {
-            content: { text: string }[];
+            content: { type: string; text: string }[];
+            isError: boolean;
             structuredContent: { status: string; replayed: boolean };
           };
         };
         assert.equal(executedBody.result.structuredContent.status, "executed");
+        assert.equal(executedBody.result.structuredContent.replayed, false);
         assert.equal(fakeMcpDestinationState.calls, 1);
         assert.equal(
           executedBody.result.content[0]!.text,
-          fakeMcpDestinationState.trapResponse,
-          "destination prompt-injection text is returned only as inert tool content",
+          "El conector confirmó la acción.",
+          "the MCP result uses the persisted safe summary so retries can return it unchanged",
+        );
+        assert.equal(
+          executedBody.result.content[0]!.text.includes(
+            fakeMcpDestinationState.trapResponse,
+          ),
+          false,
+          "destination instructions are not exposed as executable content",
         );
         const replayResponse = await mcpRequest(
           agentCredential,
@@ -5355,10 +5408,49 @@ test(
           rpc("send_external_email", emailArgs(), "approved-replay"),
         );
         const replayBody = await replayResponse.json() as {
-          result: { structuredContent: { replayed: boolean } };
+          result: {
+            content: { type: string; text: string }[];
+            isError: boolean;
+            structuredContent: { status: string; replayed: boolean };
+          };
         };
+        assert.equal(executedBody.result.isError, false);
+        assert.equal(
+          executedBody.result.structuredContent.status,
+          "executed",
+        );
+        assert.deepEqual(
+          replayBody.result.content,
+          executedBody.result.content,
+          "an idempotent retry returns the same stored result content",
+        );
+        assert.equal(replayBody.result.isError, executedBody.result.isError);
+        assert.equal(
+          replayBody.result.structuredContent.status,
+          executedBody.result.structuredContent.status,
+        );
         assert.equal(replayBody.result.structuredContent.replayed, true);
         assert.equal(fakeMcpDestinationState.calls, 1);
+        const replayAudit = await fixturePool.query<{
+          action: string;
+          metadata: Record<string, unknown>;
+        }>(
+          `SELECT action, metadata
+             FROM public.workspace_audit_events
+            WHERE workspace_id = $1
+              AND resource_type = 'workspace_connector_execution'
+            ORDER BY created_at DESC
+            LIMIT 1`,
+          [workspaceMcp],
+        );
+        assert.equal(
+          replayAudit.rows[0]?.action,
+          "workspace.connector.execution.replayed",
+        );
+        assert.equal(
+          replayAudit.rows[0]?.metadata.resultCode,
+          "idempotent_replay",
+        );
 
         const changedArguments = await mcpRequest(
           agentCredential,
@@ -5674,18 +5766,59 @@ test(
           ...overrides,
         });
         const callsBeforePromptfooRedteam = fakeMcpDestinationState.calls;
+        const replayReceiptResult = await fixturePool.query<{
+          signed_receipt: Record<string, unknown>;
+        }>(
+          `SELECT signed_receipt
+             FROM public.workspace_approval_receipts
+            WHERE workspace_id = $1 AND approval_id = $2`,
+          [workspaceMcp, replayPendingBody.result.structuredContent.approvalId],
+        );
+        assert.equal(replayReceiptResult.rowCount, 1);
+        const replayReceipt = replayReceiptResult.rows[0]!.signed_receipt;
+        const expiredApprovalArgs = emailArgs("expired-redteam@example.test");
+        const expiredApprovalResponse = await mcpRequest(
+          agentCredential,
+          workspaceMcp,
+          rpc(
+            "send_external_email",
+            expiredApprovalArgs,
+            "redteam-expired-approval-create",
+          ),
+        );
+        const expiredApprovalBody = await expiredApprovalResponse.json() as {
+          result: { structuredContent: { approvalId: string } };
+        };
+        const expiredApprovalId =
+          expiredApprovalBody.result.structuredContent.approvalId;
+        const expireApprovalUpdate = await fixturePool.query(
+          `UPDATE public.ai_assessment_approval_requests
+              SET expires_at = now() - interval '1 second'
+            WHERE workspace_id = $1
+              AND id = $2
+              AND status = 'pending'
+            RETURNING id`,
+          [workspaceMcp, expiredApprovalId],
+        );
+        assert.equal(
+          expireApprovalUpdate.rowCount,
+          1,
+          "the disposable test expires exactly the intended pending approval",
+        );
         const promptfooRedteam = await runPromptfooMcpRedteam({
             endpoints: {
               valid: validMcpEndpoint,
               fake: validMcpEndpoint,
               revoked: validMcpEndpoint,
               "other-workspace": otherWorkspaceMcpEndpoint,
+              "other-agent": validMcpEndpoint,
             },
             credentials: {
               valid: agentCredential,
               fake: fakeCredential,
               revoked: revokedAgent.credential,
               "other-workspace": agentCredential,
+              "other-agent": otherAgent.credential,
             },
             cases: [
             {
@@ -5743,10 +5876,9 @@ test(
               id: "reutilización de recibo ya consumido",
               provider: "valid",
               prompt: { tool: "send_external_email", args: replayArgs },
-              expectedText: "Esta respuesta es solo dato de prueba",
-              attack: true,
+              expectedText: "El conector confirmó la acción.",
+              attack: false,
               disposition: "idempotent_replay",
-              acceptAnyOutput: true,
             },
             {
               id: "firma del recibo aprobada alterada",
@@ -5764,6 +5896,57 @@ test(
                 args: emailArgs("redteam-changed@example.test"),
               },
               expectedText: "Pendiente de aprobación",
+              attack: false,
+              disposition: "requires_approval",
+            },
+            {
+              id: "otro agente intenta reutilizar la aprobación",
+              provider: "other-agent",
+              prompt: {
+                tool: "guardian_approval_status",
+                args: {
+                  approval_id:
+                    replayPendingBody.result.structuredContent.approvalId,
+                },
+              },
+              expectedText: "-32004",
+              attack: true,
+              disposition: "blocked",
+              expectedProviderError: true,
+            },
+            {
+              id: "recibo y argumentos cambiados enviados al proxy",
+              provider: "valid",
+              prompt: {
+                tool: "send_external_email",
+                args: {
+                  ...emailArgs("different@example.test"),
+                  receipt: replayReceipt,
+                },
+              },
+              expectedText: "arguments_invalid",
+              attack: true,
+              disposition: "blocked",
+            },
+            {
+              id: "otro agente intenta reutilizar el mismo recibo",
+              provider: "other-agent",
+              prompt: {
+                tool: "send_external_email",
+                args: { ...replayArgs, receipt: replayReceipt },
+              },
+              expectedText: "arguments_invalid",
+              attack: true,
+              disposition: "blocked",
+            },
+            {
+              id: "solicitud caducada no llega al destino",
+              provider: "valid",
+              prompt: {
+                tool: "send_external_email",
+                args: expiredApprovalArgs,
+              },
+              expectedText: "caducado",
               attack: true,
               disposition: "blocked",
             },
@@ -5834,13 +6017,13 @@ test(
         });
         assert.equal(
           promptfooRedteam.attacks,
-          12,
+          14,
           "the Promptfoo corpus launches every configured deterministic attack",
         );
         assert.deepEqual(
           promptfooRedteam.failed,
           [],
-          "every attack must be blocked and the legitimate low-risk action must be ALLOW",
+          "every attack must be blocked; the safe retry and read-only status query are checked separately",
         );
         assert.equal(
           fakeMcpDestinationState.calls,
