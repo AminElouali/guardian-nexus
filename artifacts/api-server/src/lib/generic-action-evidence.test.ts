@@ -52,6 +52,55 @@ test("generic action evidence binds the exact action, arguments, workspace and r
   );
 });
 
+test("an unconfigured synthetic refund can use catalog REQUIRE_APPROVAL evidence with the real agent identity", () => {
+  const refundActionType = "guardian.synthetic.support.refund.v1";
+  const refundArgs = {
+    ticket_id: "TICKET-SYNTH-42",
+    amount_cents: 2_500,
+  };
+  const refundDisplay = genericActionDisplay(refundActionType, refundArgs);
+  assert.ok(refundDisplay);
+  const value = createGenericActionEvidence({
+    workspaceId,
+    requestedByUserId,
+    actionType: refundActionType,
+    args: refundArgs,
+    ruleId: "refund.fixture.requires-independent-approval.v1",
+    agentId: "11111111-1111-4111-8111-111111111111",
+    summary: refundDisplay.summary,
+    messagePreview: refundDisplay.messagePreview,
+  });
+  assert.ok(value);
+  assert.equal(value.evidenceVersion, 1);
+  assert.equal(value.engineVersion, "guardian-action-catalog-v1");
+  assert.equal(value.agentId, "11111111-1111-4111-8111-111111111111");
+  assert.equal(
+    verifyGenericActionEvidence(value, {
+      workspaceId,
+      requestedByUserId,
+      actionType: refundActionType,
+      actionSha256: value.actionSha256,
+      proposalSha256: value.proposalSha256,
+      profileId: "guardian-agent-lab-customer-service-v1",
+      agentId: "11111111-1111-4111-8111-111111111111",
+    })?.evidenceSha256,
+    value.evidenceSha256,
+  );
+  assert.equal(
+    verifyGenericActionEvidence(value, {
+      workspaceId,
+      requestedByUserId,
+      actionType: refundActionType,
+      actionSha256: value.actionSha256,
+      proposalSha256: value.proposalSha256,
+      profileId: "guardian-agent-lab-customer-service-v1",
+      agentId: "22222222-2222-4222-8222-222222222222",
+    }),
+    null,
+    "refund evidence cannot be replayed as a different agent",
+  );
+});
+
 test("generic evidence rejects changed arguments and mismatched action or workspace", () => {
   const value = evidence();
   assert.ok(value);

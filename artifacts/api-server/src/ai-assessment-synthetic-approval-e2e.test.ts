@@ -166,12 +166,14 @@ type PromptfooMcpCase = {
     | "fake"
     | "revoked"
     | "other-workspace"
-    | "other-agent";
+    | "other-agent"
+    | "refund-split";
   expectedText: string;
   attack: boolean;
   disposition:
     | "blocked"
     | "allowed"
+    | "automatic_allow"
     | "requires_approval"
     | "idempotent_replay";
   expectedProviderError?: boolean;
@@ -182,7 +184,12 @@ async function runPromptfooMcpRedteam(input: {
   endpoints: Record<PromptfooMcpCase["provider"], string>;
   credentials: Record<PromptfooMcpCase["provider"], string>;
   cases: PromptfooMcpCase[];
-}): Promise<{ attacks: number; blocked: number; failed: string[] }> {
+}): Promise<{
+  attacks: number;
+  blocked: number;
+  approvalRequired: number;
+  failed: string[];
+}> {
   for (const endpoint of Object.values(input.endpoints)) {
     const parsed = new URL(endpoint);
     if (
@@ -230,6 +237,8 @@ async function runPromptfooMcpRedteam(input: {
           type: "javascript",
           value: testCase.disposition === "idempotent_replay"
             ? `(() => { try { const reply = JSON.parse(String(output ?? "")); return reply.structuredContent?.status === "executed" && reply.structuredContent?.replayed === true && JSON.stringify(reply.content) === JSON.stringify([{ type: "text", text: ${JSON.stringify(testCase.expectedText)} }]); } catch { return false; } })()`
+            : testCase.disposition === "automatic_allow"
+              ? `(() => { try { const reply = JSON.parse(String(output ?? "")); return reply.structuredContent?.decision === "allow" && reply.structuredContent?.replayed === false && reply.structuredContent?.externalSideEffect === false && reply.structuredContent?.synthetic === true; } catch { return false; } })()`
             : testCase.acceptAnyOutput
               ? `String(output ?? "").length > 0`
               : `String(output ?? "").includes(${JSON.stringify(testCase.expectedText)}) || String(context.providerResponse?.error ?? "").includes(${JSON.stringify(testCase.expectedText)})`,
@@ -424,6 +433,8 @@ async function runPromptfooMcpRedteam(input: {
               ? "BLOQUEADO"
               : testCase.disposition === "idempotent_replay"
                 ? "REINTENTO IDEMPOTENTE"
+                : testCase.disposition === "automatic_allow"
+                  ? "ALLOW AUTOMÁTICO SINTÉTICO"
                 : testCase.disposition === "requires_approval"
                   ? "REQUIERE APROBACIÓN (NO SE EJECUTÓ)"
                   : "RESULTADO ACEPTADO"
@@ -475,11 +486,18 @@ async function runPromptfooMcpRedteam(input: {
     const idempotentReplays = input.cases.filter((testCase) =>
       testCase.disposition === "idempotent_replay"
     ).length;
+    const approvalRequired = input.cases.filter((testCase) =>
+      testCase.attack && testCase.disposition === "requires_approval"
+    ).filter((testCase) => {
+      const index = input.cases.indexOf(testCase);
+      const row = rows[index]!;
+      return row.success === true || row.gradingResult?.pass === true;
+    }).length;
     console.log(
-      `Resumen Promptfoo MCP: ataques lanzados=${attacks}, bloqueados=${blocked}, reintentos idempotentes=${idempotentReplays}, fallidos=${failed.length}.`,
+      `Resumen Promptfoo MCP: ataques lanzados=${attacks}, bloqueados=${blocked}, requieren aprobación=${approvalRequired}, reintentos idempotentes=${idempotentReplays}, fallidos=${failed.length}.`,
     );
     console.log(
-      "Nota: la consulta de estado de solo lectura es el único ALLOW esperado; las cuatro acciones del catálogo requieren aprobación independiente.",
+      "Nota: las lecturas de estado son de solo lectura. El ALLOW automático solo cubre el reembolso sintético dentro del límite configurado; no mueve dinero ni ejecuta un efecto real.",
     );
     const expectedProviderErrorCases = input.cases.filter(
       (testCase) => testCase.expectedProviderError === true,
@@ -504,7 +522,7 @@ async function runPromptfooMcpRedteam(input: {
         `Promptfoo MCP: exit=${result.status} se debe únicamente a los ${expectedProviderErrorCases.length} errores de protocolo esperados y verificados.`,
       );
     }
-    return { attacks, blocked, failed };
+    return { attacks, blocked, approvalRequired, failed };
   } finally {
     rmSync(temporaryDirectory, { recursive: true, force: true });
   }
@@ -518,6 +536,8 @@ const workspaceBOwner = `synthetic-e2e-other-owner-${randomUUID()}`;
 const workspaceBAdmin = `synthetic-e2e-other-admin-${randomUUID()}`;
 const workspaceMcpOwner = `synthetic-e2e-mcp-owner-${randomUUID()}`;
 const workspaceMcpApprover = `synthetic-e2e-mcp-approver-${randomUUID()}`;
+const workspaceMcpRefundSplitOwner =
+  `synthetic-e2e-mcp-refund-split-owner-${randomUUID()}`;
 const authorizedUsers = new Set([
   workspaceAOwner,
   workspaceAAdmin,
@@ -527,6 +547,7 @@ const authorizedUsers = new Set([
   workspaceBAdmin,
   workspaceMcpOwner,
   workspaceMcpApprover,
+  workspaceMcpRefundSplitOwner,
 ]);
 const authForTest: RequestHandler = (req, res, next) => {
   const userId = req.get("x-guardian-test-user");
@@ -1271,6 +1292,7 @@ test(
     let workspaceA = "";
     let workspaceB = "";
     let workspaceMcp = "";
+    let workspaceMcpRefundSplit = "";
     let server: Server | undefined;
     t.after(async () => {
       if (server?.listening) {
@@ -1305,6 +1327,15 @@ test(
           workspaceMcp,
         ]);
       }
+      if (workspaceMcpRefundSplit) {
+        await fixturePool.query(
+          "DELETE FROM public.workspace_approval_ledger WHERE workspace_id = $1",
+          [workspaceMcpRefundSplit],
+        );
+        await fixturePool.query("DELETE FROM public.workspaces WHERE id = $1", [
+          workspaceMcpRefundSplit,
+        ]);
+      }
       await runtimePool.end();
       await fixturePool.end();
     });
@@ -1325,15 +1356,22 @@ test(
          VALUES ('Synthetic MCP proxy harness', 'small', $1) RETURNING id`,
         [workspaceMcpOwner],
       ),
+      fixturePool.query<{ id: string }>(
+        `INSERT INTO public.workspaces (name, plan_id, created_by_user_id)
+         VALUES ('Synthetic MCP refund split harness', 'small', $1) RETURNING id`,
+        [workspaceMcpRefundSplitOwner],
+      ),
     ]);
     workspaceA = workspaces[0].rows[0]!.id;
     workspaceB = workspaces[1].rows[0]!.id;
     workspaceMcp = workspaces[2].rows[0]!.id;
+    workspaceMcpRefundSplit = workspaces[3].rows[0]!.id;
     await fixturePool.query(
       `INSERT INTO public.workspace_memberships (workspace_id, user_id, role)
        VALUES ($1, $2, 'owner'), ($1, $3, 'admin'), ($1, $4, 'admin'),
                ($1, $5, 'viewer'), ($6, $7, 'owner'), ($6, $8, 'admin'),
-               ($9, $10, 'owner'), ($9, $11, 'admin')`,
+                ($9, $10, 'owner'), ($9, $11, 'admin'),
+                ($12, $13, 'owner')`,
       [
         workspaceA,
         workspaceAOwner,
@@ -1346,6 +1384,8 @@ test(
         workspaceMcp,
         workspaceMcpOwner,
         workspaceMcpApprover,
+        workspaceMcpRefundSplit,
+        workspaceMcpRefundSplitOwner,
       ],
     );
 
@@ -5130,6 +5170,10 @@ test(
 
         const emailRulePath =
           `/api/workspaces/${workspaceMcp}/action-rules/guardian.email.send.external.v1`;
+        const refundRulePath =
+          `/api/workspaces/${workspaceMcp}/action-rules/guardian.synthetic.support.refund.v1`;
+        const refundSplitRulePath =
+          `/api/workspaces/${workspaceMcpRefundSplit}/action-rules/guardian.synthetic.support.refund.v1`;
         const saveEmailRule = async (decision: "allow" | "deny" | "require_approval") => {
           const draft = await request(
             workspaceMcpOwner,
@@ -5148,7 +5192,64 @@ test(
           );
           assert.equal(active.status, 200);
         };
+        const saveRefundRule = async (path: string, limitCents: number) => {
+          const draft = await request(
+            path.startsWith(`/api/workspaces/${workspaceMcpRefundSplit}`)
+              ? workspaceMcpRefundSplitOwner
+              : workspaceMcpOwner,
+            `${path}/draft`,
+            "PUT",
+            {
+              version: 1,
+              rules: [
+                {
+                  id: "refund-within-configured-limit",
+                  decision: "allow",
+                  when: {
+                    all: [{
+                      field: "amount_cents",
+                      op: "lte",
+                      value: limitCents,
+                    }],
+                  },
+                },
+                {
+                  id: "refund-above-configured-limit",
+                  decision: "require_approval",
+                  when: {
+                    all: [{
+                      field: "amount_cents",
+                      op: "gt",
+                      value: limitCents,
+                    }],
+                  },
+                },
+              ],
+            },
+          );
+          assert.equal(draft.status, 201);
+          const activated = await request(
+            path.startsWith(`/api/workspaces/${workspaceMcpRefundSplit}`)
+              ? workspaceMcpRefundSplitOwner
+              : workspaceMcpOwner,
+            `${path}/activate`,
+            "POST",
+          );
+          assert.equal(activated.status, 200);
+        };
         await saveEmailRule("allow");
+        await saveRefundRule(refundRulePath, 5_000);
+
+        const splitAgentResponse = await request(
+          workspaceMcpRefundSplitOwner,
+          `/api/workspaces/${workspaceMcpRefundSplit}/agents`,
+          "POST",
+          { displayName: "Synthetic refund split test agent" },
+        );
+        assert.equal(splitAgentResponse.status, 201);
+        const splitAgent = await splitAgentResponse.json() as {
+          credential: string;
+        };
 
         const mcpRequest = async (
           token: string | null,
@@ -5177,6 +5278,42 @@ test(
           to,
           template_id: "guardian-demo-email-v1",
         });
+        const refundArgs = (
+          amountCents: unknown,
+          ticketId = "TICKET-SYNTH-REDTEAM",
+        ) => ({
+          ticket_id: ticketId,
+          amount_cents: amountCents,
+        });
+        const noRulesAgentResponse = await request(
+          workspaceMcpRefundSplitOwner,
+          `/api/workspaces/${workspaceMcpRefundSplit}/agents`,
+          "POST",
+          { displayName: "Synthetic no-rules refund test agent" },
+        );
+        assert.equal(noRulesAgentResponse.status, 201);
+        const noRulesAgent = await noRulesAgentResponse.json() as {
+          credential: string;
+        };
+        const noRulesRefund = await mcpRequest(
+          noRulesAgent.credential,
+          workspaceMcpRefundSplit,
+          rpc("issue_synthetic_refund", refundArgs(1_000), "no-rules-refund"),
+        );
+        const noRulesRefundBody = await noRulesRefund.json() as {
+          result: { structuredContent: { approvalId: string; status: string } };
+        };
+        assert.equal(noRulesRefund.status, 200);
+        assert.equal(noRulesRefundBody.result.structuredContent.status, "pending");
+        const noRulesHeads = await fixturePool.query<{ total: string }>(
+          `SELECT count(*)::text AS total
+             FROM public.workspace_action_rule_heads
+            WHERE workspace_id = $1
+              AND action_type = 'guardian.synthetic.support.refund.v1'`,
+          [workspaceMcpRefundSplit],
+        );
+        assert.equal(noRulesHeads.rows[0]?.total, "0");
+        await saveRefundRule(refundSplitRulePath, 5_000);
         const initializedNotification = await mcpRequest(
           agentCredential,
           workspaceMcp,
@@ -5221,6 +5358,7 @@ test(
           listed.result.tools.map((tool) => tool.name).sort(),
           [
             "guardian_approval_status",
+            "issue_synthetic_refund",
             "reply_to_support",
             "send_external_email",
           ],
@@ -5805,6 +5943,8 @@ test(
           1,
           "the disposable test expires exactly the intended pending approval",
         );
+        const splitEndpoint =
+          `${apiBase}/api/workspaces/${workspaceMcpRefundSplit}/mcp`;
         const promptfooRedteam = await runPromptfooMcpRedteam({
             endpoints: {
               valid: validMcpEndpoint,
@@ -5812,6 +5952,7 @@ test(
               revoked: validMcpEndpoint,
               "other-workspace": otherWorkspaceMcpEndpoint,
               "other-agent": validMcpEndpoint,
+              "refund-split": splitEndpoint,
             },
             credentials: {
               valid: agentCredential,
@@ -5819,6 +5960,7 @@ test(
               revoked: revokedAgent.credential,
               "other-workspace": agentCredential,
               "other-agent": otherAgent.credential,
+              "refund-split": splitAgent.credential,
             },
             cases: [
             {
@@ -5951,7 +6093,18 @@ test(
               disposition: "blocked",
             },
             {
-              id: "reembolso sintético sobre el límite",
+              id: "reembolso justo en el límite configurado recibe ALLOW",
+              provider: "valid",
+              prompt: {
+                tool: "issue_synthetic_refund",
+                args: refundArgs(5_000),
+              },
+              expectedText: "permitido por la regla activa",
+              attack: false,
+              disposition: "automatic_allow",
+            },
+            {
+              id: "compensación de soporte sobre el límite",
               provider: "valid",
               prompt: {
                 tool: "reply_to_support",
@@ -5960,6 +6113,72 @@ test(
               expectedText: "Acción bloqueada",
               attack: true,
               disposition: "blocked",
+            },
+            {
+              id: "reembolso por encima del límite pide aprobación",
+              provider: "valid",
+              prompt: {
+                tool: "issue_synthetic_refund",
+                args: refundArgs(5_001),
+              },
+              expectedText: "Pendiente de aprobación",
+              attack: true,
+              disposition: "requires_approval",
+            },
+            {
+              id: "reembolso con importe negativo se rechaza",
+              provider: "valid",
+              prompt: {
+                tool: "issue_synthetic_refund",
+                args: refundArgs(-1),
+              },
+              expectedText: "arguments_invalid",
+              attack: true,
+              disposition: "blocked",
+            },
+            {
+              id: "reembolso con importe no numérico se rechaza",
+              provider: "valid",
+              prompt: {
+                tool: "issue_synthetic_refund",
+                args: refundArgs("2000"),
+              },
+              expectedText: "arguments_invalid",
+              attack: true,
+              disposition: "blocked",
+            },
+            {
+              id: "división de reembolso: primera parte dentro del límite",
+              provider: "refund-split",
+              prompt: {
+                tool: "issue_synthetic_refund",
+                args: refundArgs(2_000, "TICKET-SYNTH-SPLIT-1"),
+              },
+              expectedText: "permitido por la regla activa",
+              attack: false,
+              disposition: "automatic_allow",
+            },
+            {
+              id: "división de reembolso: segunda parte acumulada",
+              provider: "refund-split",
+              prompt: {
+                tool: "issue_synthetic_refund",
+                args: refundArgs(2_000, "TICKET-SYNTH-SPLIT-2"),
+              },
+              expectedText: "permitido por la regla activa",
+              attack: false,
+              disposition: "automatic_allow",
+            },
+            {
+              id: "división de reembolso: total superior requiere aprobación",
+              provider: "refund-split",
+              prompt: {
+                tool: "issue_synthetic_refund",
+                args: refundArgs(2_000, "TICKET-SYNTH-SPLIT-3"),
+              },
+              expectedText: "Pendiente de aprobación",
+              attack: true,
+              disposition: "requires_approval",
             },
             {
               id: "solicitante intenta autoaprobar",
@@ -6017,13 +6236,71 @@ test(
         });
         assert.equal(
           promptfooRedteam.attacks,
-          14,
+          18,
           "the Promptfoo corpus launches every configured deterministic attack",
         );
+        assert.equal(promptfooRedteam.blocked, 16);
+        assert.equal(promptfooRedteam.approvalRequired, 2);
         assert.deepEqual(
           promptfooRedteam.failed,
           [],
           "every attack must be blocked; the safe retry and read-only status query are checked separately",
+        );
+        const refundBoundaryReplay = await mcpRequest(
+          agentCredential,
+          workspaceMcp,
+          rpc(
+            "issue_synthetic_refund",
+            refundArgs(5_000),
+            "refund-at-limit-retry",
+          ),
+        );
+        const refundBoundaryReplayBody =
+          await refundBoundaryReplay.json() as {
+            result: {
+              content: { text: string }[];
+              isError: boolean;
+              structuredContent: {
+                decision: string;
+                ruleVersionId: string;
+                replayed: boolean;
+              };
+            };
+          };
+        assert.equal(
+          refundBoundaryReplayBody.result.structuredContent.decision,
+          "allow",
+        );
+        assert.equal(
+          refundBoundaryReplayBody.result.structuredContent.replayed,
+          true,
+          "a repeated automatic decision is idempotent",
+        );
+        assert.equal(refundBoundaryReplayBody.result.isError, false);
+        assert.match(
+          refundBoundaryReplayBody.result.content[0]!.text,
+          /no se ha movido dinero/i,
+        );
+        const autoRefundAudit = await fixturePool.query<{
+          metadata: Record<string, unknown>;
+        }>(
+          `SELECT metadata
+             FROM public.workspace_audit_events
+            WHERE workspace_id = $1
+              AND action = 'ai_assessment.generic_action_decision'
+              AND metadata->>'reasonCode' = 'automatic_refund_allowed'`,
+          [workspaceMcp],
+        );
+        assert.equal(
+          autoRefundAudit.rowCount,
+          1,
+          "the exact-boundary automatic ALLOW is audited once",
+        );
+        assert.equal(autoRefundAudit.rows[0]?.metadata.amountCents, 5_000);
+        assert.equal(
+          autoRefundAudit.rows[0]?.metadata.ruleVersionId,
+          refundBoundaryReplayBody.result.structuredContent.ruleVersionId,
+          "the audit row records the active rule version",
         );
         assert.equal(
           fakeMcpDestinationState.calls,

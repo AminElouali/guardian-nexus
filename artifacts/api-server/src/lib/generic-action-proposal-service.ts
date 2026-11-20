@@ -1,4 +1,4 @@
-import { and, count, eq, gt } from "drizzle-orm";
+import { and, count, desc, eq, gte, gt, sql } from "drizzle-orm";
 import {
   aiAssessmentApprovalRequestsTable,
   aiAssessmentJobsTable,
@@ -13,6 +13,7 @@ import {
 } from "@workspace/db";
 import { computeApprovalProposalBindingV3 } from "./ai-assessment-approval-actions";
 import {
+  createGenericActionEvidence,
   createWorkspaceRuleActionEvidence,
   genericActionDisplay,
   hashGenericActionArguments,
@@ -20,10 +21,14 @@ import {
 } from "./generic-action-evidence";
 import {
   getActiveWorkspaceActionRule,
+  lockWorkspaceActionRule,
 } from "./workspace-action-rules";
 import type { TenantTransaction } from "./tenant-db";
 
 const MAX_PENDING_PER_WORKSPACE = 3;
+const AUTO_REFUND_ACTION = "guardian.synthetic.support.refund.v1";
+const AUTO_REFUND_WINDOW_MS = 15 * 60 * 1_000;
+const MAX_AUTO_REFUND_WINDOW_EVENTS = 500;
 const PROFILE_BY_ACTION: Record<string, string> = {
   "guardian.synthetic.support.refund.v1": "guardian-agent-lab-customer-service-v1",
   "guardian.synthetic.finance.bank-change.v1": "guardian-agent-lab-customer-service-v1",
@@ -41,6 +46,7 @@ export type GenericActionProposalOutcome =
       actionSha256: string;
       ruleId: string | null;
       ruleVersionId: string | null;
+      replayed?: boolean;
     }
   | { kind: "forbidden" }
   | { kind: "idempotency_conflict" }
@@ -63,6 +69,7 @@ export async function createGenericActionProposalInTransaction(
     arguments: unknown;
     idempotencyKey: string;
     escalateAllowToApproval?: boolean;
+    allowAutomaticRefund?: boolean;
   },
 ): Promise<GenericActionProposalOutcome> {
   const action = evaluateApprovalAction(input.actionType, input.arguments);
@@ -78,26 +85,151 @@ export async function createGenericActionProposalInTransaction(
     return { kind: "forbidden" };
   }
   const hashes = hashGenericActionArguments(input.actionType, action.args);
+  if (input.actionType === AUTO_REFUND_ACTION) {
+    await lockWorkspaceActionRule(tx, input.workspaceId, input.actionType);
+  }
   const rule = await getActiveWorkspaceActionRule(
     tx,
     input.workspaceId,
     input.actionType,
   );
-  const ruleDecision = evaluateWorkspaceActionRule({
-    actionType: input.actionType,
-    arguments: action.args,
-    document: rule?.document ?? null,
-    ruleVersionId: rule?.activeVersionId ?? null,
-  });
+  const catalogDefaultRefundApproval =
+    input.actionType === AUTO_REFUND_ACTION && !rule &&
+    action.decision === "require_approval" && action.ruleId !== null;
+  const ruleDecision = catalogDefaultRefundApproval
+    ? {
+        ...action,
+        reasonCode: "catalog_default_requires_approval",
+        ruleVersionId: null,
+      }
+    : evaluateWorkspaceActionRule({
+        actionType: input.actionType,
+        arguments: action.args,
+        document: rule?.document ?? null,
+        ruleVersionId: rule?.activeVersionId ?? null,
+      });
+  let automaticRefundAllowed = false;
+  let refundApprovalReason: string | null = null;
+  if (
+    input.actionType === AUTO_REFUND_ACTION &&
+    input.allowAutomaticRefund === true &&
+    rule &&
+    ruleDecision.decision === "allow"
+  ) {
+    const matchedRule = rule.document?.rules.find(
+      (candidate) => candidate.id === ruleDecision.ruleId,
+    );
+    const amountLimits = matchedRule?.when.all?.filter(
+      (condition) =>
+        condition.field === "amount_cents" &&
+        condition.op === "lte" &&
+        typeof condition.value === "number",
+    ) ?? [];
+    const limitValue = amountLimits.length === 1
+      ? amountLimits[0]!.value
+      : null;
+    const configuredLimit = matchedRule?.when.any?.length === undefined &&
+        amountLimits.length === 1 &&
+        typeof limitValue === "number" &&
+        Number.isSafeInteger(limitValue) &&
+        limitValue > 0
+      ? limitValue
+      : null;
+    if (configuredLimit === null) {
+      refundApprovalReason = "refund_auto_allow_limit_missing";
+    } else {
+      const recentRefunds = await tx
+        .select({ metadata: workspaceAuditEventsTable.metadata })
+        .from(workspaceAuditEventsTable)
+        .where(
+          and(
+            eq(workspaceAuditEventsTable.workspaceId, input.workspaceId),
+            eq(
+              workspaceAuditEventsTable.action,
+              "ai_assessment.generic_action_decision",
+            ),
+            gte(
+              workspaceAuditEventsTable.createdAt,
+              sql`now() - (${AUTO_REFUND_WINDOW_MS} * interval '1 millisecond')`,
+            ),
+            sql`${workspaceAuditEventsTable.metadata}->>'actionType' = ${AUTO_REFUND_ACTION}`,
+            sql`${workspaceAuditEventsTable.metadata}->>'reasonCode' = 'automatic_refund_allowed'`,
+          ),
+        )
+        .orderBy(desc(workspaceAuditEventsTable.createdAt))
+        .limit(MAX_AUTO_REFUND_WINDOW_EVENTS + 1);
+      const replayedDecision = recentRefunds.find(
+        (row) => row.metadata.idempotencyKey === input.idempotencyKey,
+      );
+      if (replayedDecision) {
+        if (
+          replayedDecision.metadata.actionSha256 !== hashes.actionSha256 ||
+          replayedDecision.metadata.ruleId !== ruleDecision.ruleId ||
+          replayedDecision.metadata.ruleVersionId !== rule.activeVersionId ||
+          replayedDecision.metadata.amountCents !== action.args.amount_cents
+        ) {
+          return { kind: "idempotency_conflict" };
+        }
+        return {
+          kind: "terminal",
+          decision: "allow",
+          reasonCode: "automatic_refund_allowed",
+          actionType: input.actionType,
+          actionSha256: hashes.actionSha256,
+          ruleId: ruleDecision.ruleId,
+          ruleVersionId: rule.activeVersionId,
+          replayed: true,
+        };
+      }
+      let priorTotalCents = 0;
+      let historyIsValid = recentRefunds.length <= MAX_AUTO_REFUND_WINDOW_EVENTS;
+      for (const row of recentRefunds) {
+        const amountCents = row.metadata.amountCents;
+        if (
+          typeof amountCents !== "number" ||
+          !Number.isSafeInteger(amountCents) ||
+          amountCents <= 0 ||
+          !Number.isSafeInteger(priorTotalCents + amountCents)
+        ) {
+          historyIsValid = false;
+          break;
+        }
+        priorTotalCents += amountCents;
+      }
+      if (!historyIsValid) {
+        refundApprovalReason = "refund_window_history_requires_review";
+      } else {
+        const amountCents = action.args.amount_cents;
+        if (
+          typeof amountCents !== "number" ||
+          priorTotalCents + amountCents > configuredLimit
+        ) {
+          refundApprovalReason = "refund_window_limit_requires_approval";
+        } else {
+          automaticRefundAllowed = true;
+        }
+      }
+    }
+  }
   const escalatedAllow =
     ruleDecision.decision === "allow" &&
-    input.escalateAllowToApproval === true &&
-    definition.requiresIndependentApprover;
+    definition.requiresIndependentApprover &&
+    (refundApprovalReason !== null ||
+      (input.escalateAllowToApproval === true && !automaticRefundAllowed));
   const unsupportedAllow =
     ruleDecision.decision === "allow" &&
     input.escalateAllowToApproval === true &&
-    !definition.requiresIndependentApprover;
-  const decision = escalatedAllow
+    !definition.requiresIndependentApprover &&
+    !automaticRefundAllowed;
+  const decision = automaticRefundAllowed
+    ? { ...ruleDecision, reasonCode: "automatic_refund_allowed" }
+    : refundApprovalReason
+      ? {
+          ...ruleDecision,
+          decision: "require_approval" as const,
+          reasonCode: refundApprovalReason,
+        }
+      : escalatedAllow
     ? {
         ...ruleDecision,
         decision: "require_approval" as const,
@@ -127,6 +259,13 @@ export async function createGenericActionProposalInTransaction(
         agentId: input.agentId,
         synthetic: true,
         externalSideEffect: false,
+        ...(automaticRefundAllowed
+          ? {
+              idempotencyKey: input.idempotencyKey,
+              amountCents: action.args.amount_cents,
+              windowSeconds: AUTO_REFUND_WINDOW_MS / 1_000,
+            }
+          : {}),
       },
     });
     return {
@@ -141,22 +280,35 @@ export async function createGenericActionProposalInTransaction(
   }
 
   const display = genericActionDisplay(input.actionType, action.args);
-  if (!display || !decision.ruleId || !rule?.document || !rule.activeVersionId) {
+  if (!display || !decision.ruleId) {
     return { kind: "persistence_failed" };
   }
-  const evidence = createWorkspaceRuleActionEvidence({
-    workspaceId: input.workspaceId,
-    requestedByUserId: input.actorUserId,
-    actionType: input.actionType,
-    args: action.args,
-    ruleId: decision.ruleId,
-    ruleVersionId: rule.activeVersionId,
-    ruleDocument: rule.document,
-    allowEscalation: escalatedAllow,
-    summary: display.summary,
-    messagePreview: display.messagePreview,
-    agentId: input.agentId,
-  });
+  const evidence = catalogDefaultRefundApproval
+    ? createGenericActionEvidence({
+        workspaceId: input.workspaceId,
+        requestedByUserId: input.actorUserId,
+        actionType: input.actionType,
+        args: action.args,
+        ruleId: decision.ruleId,
+        agentId: input.agentId,
+        summary: display.summary,
+        messagePreview: display.messagePreview,
+      })
+    : rule?.document && rule.activeVersionId
+      ? createWorkspaceRuleActionEvidence({
+          workspaceId: input.workspaceId,
+          requestedByUserId: input.actorUserId,
+          actionType: input.actionType,
+          args: action.args,
+          ruleId: decision.ruleId,
+          ruleVersionId: rule.activeVersionId,
+          ruleDocument: rule.document,
+          allowEscalation: escalatedAllow,
+          summary: display.summary,
+          messagePreview: display.messagePreview,
+          agentId: input.agentId,
+        })
+      : null;
   if (!evidence) return { kind: "persistence_failed" };
   const profileId = PROFILE_BY_ACTION[input.actionType];
   if (!profileId) return { kind: "invalid_action", code: "unknown_action", issues: [] };
@@ -181,6 +333,7 @@ export async function createGenericActionProposalInTransaction(
       actionSha256: evidence.actionSha256,
       proposalSha256: evidence.proposalSha256,
       profileId,
+      agentId: input.agentId,
     });
     if (
       existingJob.requestedByUserId !== input.actorUserId ||
@@ -231,7 +384,7 @@ export async function createGenericActionProposalInTransaction(
       profileId,
       status: "succeeded",
       workerVersion: "guardian-action-gateway-v2",
-      engineVersion: "guardian-workspace-rules-v2",
+      engineVersion: evidence.engineVersion,
       result: evidence as unknown as AiAssessmentJobEvidence,
       startedAt: now,
       completedAt: now,
@@ -299,9 +452,7 @@ export async function createGenericActionProposalInTransaction(
       ruleVersionId: evidence.ruleVersionId ?? null,
       agentId: input.agentId,
       decision: "require_approval",
-      ...(escalatedAllow
-        ? { decisionReasonCode: "rule_allow_escalated_to_approval" }
-        : {}),
+      decisionReasonCode: decision.reasonCode,
       synthetic: true,
       externalSideEffect: false,
     },

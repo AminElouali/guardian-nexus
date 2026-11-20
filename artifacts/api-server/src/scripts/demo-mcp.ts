@@ -7,6 +7,7 @@ import pg from "pg";
 
 const DEMO_SERVER_ID = "guardian-demo-mcp";
 const ACTION_TYPE = "guardian.support.reply.send.v1";
+const REFUND_ACTION_TYPE = "guardian.synthetic.support.refund.v1";
 
 type DemoEnvironment = NodeJS.ProcessEnv;
 
@@ -177,7 +178,7 @@ async function main(): Promise<void> {
       fail("development_target_check", "database_identity_mismatch");
     }
     await assertRlsRuntimeReady();
-    step("1/10 — destino verificado como base del entorno de desarrollo; preflight RLS correcto.");
+    step("1/12 — destino verificado como base del entorno de desarrollo; preflight RLS correcto.");
 
     const runId = randomUUID();
     const requesterId = `demo-mcp-requester-${runId}`;
@@ -214,7 +215,7 @@ async function main(): Promise<void> {
     } finally {
       workspaceSeed.release();
     }
-    step(`2/10 — espacio de demostración creado con solicitante sintético y aprobador admin distinto (${workspaceId.slice(0, 8)}…).`);
+    step(`2/12 — espacio de demostración creado con solicitante sintético y aprobador admin distinto (${workspaceId.slice(0, 8)}…).`);
 
     const allowedIdentities = new Set([requesterId, approverId]);
     const demoAuth: RequestHandler = (request, response, next) => {
@@ -289,6 +290,8 @@ async function main(): Promise<void> {
         body: rawBody,
       });
     const rulePath = `/api/workspaces/${workspaceId}/action-rules/${ACTION_TYPE}`;
+    const refundRulePath =
+      `/api/workspaces/${workspaceId}/action-rules/${REFUND_ACTION_TYPE}`;
     const jsonRpc = (name: string, args: Record<string, unknown>, id: string) =>
       JSON.stringify({
         jsonrpc: "2.0",
@@ -321,7 +324,7 @@ async function main(): Promise<void> {
     const agentResult = apiZod.CreateWorkspaceAgentResponse.parse(agentBody);
     const agentCredential = agentResult.credential;
     const agentId = agentResult.agent.id;
-    step("3/10 — agente registrado; la credencial se mantiene solo en memoria y no se imprime.");
+    step("3/12 — agente registrado; la credencial se mantiene solo en memoria y no se imprime.");
 
     const ruleDocument = {
       version: 1,
@@ -351,7 +354,40 @@ async function main(): Promise<void> {
       200,
       "activate_rule",
     );
-    step("4/10 — regla sintética activada: la compensación superior a 50 € requiere aprobación.");
+    await requireStatus(
+      await humanRequest(
+        requesterId,
+        `${refundRulePath}/draft`,
+        "PUT",
+        {
+          version: 1,
+          rules: [
+            {
+              id: `demo-refund-within-limit-${runId.slice(0, 8)}`,
+              decision: "allow",
+              when: {
+                all: [{ field: "amount_cents", op: "lte", value: 5_000 }],
+              },
+            },
+            {
+              id: `demo-refund-over-limit-${runId.slice(0, 8)}`,
+              decision: "require_approval",
+              when: {
+                all: [{ field: "amount_cents", op: "gt", value: 5_000 }],
+              },
+            },
+          ],
+        },
+      ),
+      201,
+      "save_refund_rule_draft",
+    );
+    await requireStatus(
+      await humanRequest(requesterId, `${refundRulePath}/activate`, "POST"),
+      200,
+      "activate_refund_rule",
+    );
+    step("4/12 — reglas sintéticas activadas: compensación superior a 50 € y reembolso superior a 50 € requieren aprobación; el reembolso dentro del límite puede recibir ALLOW.");
 
     const toolListResponse = await agentRequest(
       agentCredential,
@@ -375,11 +411,12 @@ async function main(): Promise<void> {
       : [];
     if (
       !toolNames.includes("reply_to_support") ||
+      !toolNames.includes("issue_synthetic_refund") ||
       !toolNames.includes("guardian_approval_status")
     ) {
       fail("mcp_tools_list", "guardian_tools_missing");
     }
-    step("5/10 — initialize/tools/list expone solo las herramientas de Guardian y el destino de laboratorio.");
+    step("5/12 — initialize/tools/list expone solo las herramientas de Guardian y el destino de laboratorio.");
 
     const invalidCredential = `gnx_agent_v1_${randomBytes(32).toString("base64url")}`;
     const invalidCredentialResponse = await agentRequest(
@@ -402,6 +439,57 @@ async function main(): Promise<void> {
     if (!unknownResult?.isError || destinationCallCount() !== 0) {
       fail("unknown_tool", "destination_was_called_or_tool_not_blocked");
     }
+    const smallRefundResponse = await agentRequest(
+      agentCredential,
+      jsonRpc(
+        "issue_synthetic_refund",
+        { ticket_id: "TICKET-SYNTH-DEMO", amount_cents: 2_500 },
+        "small-synthetic-refund",
+      ),
+    );
+    const smallRefundBody = record(await requireStatus(
+      smallRefundResponse,
+      200,
+      "small_synthetic_refund",
+    ));
+    const smallRefundResult = record(smallRefundBody?.result);
+    const smallRefundDecision = record(smallRefundResult?.structuredContent);
+    if (
+      smallRefundDecision?.decision !== "allow" ||
+      smallRefundDecision?.replayed !== false ||
+      smallRefundDecision?.externalSideEffect !== false ||
+      destinationCallCount() !== 0
+    ) {
+      fail("small_synthetic_refund", "automatic_allow_contract_failed");
+    }
+    step("6/12 — reembolso sintético de 25 €: ALLOW por la versión activa; no se mueve dinero ni se ejecuta una operación real.");
+
+    const largeRefundResponse = await agentRequest(
+      agentCredential,
+      jsonRpc(
+        "issue_synthetic_refund",
+        { ticket_id: "TICKET-SYNTH-DEMO", amount_cents: 7_500 },
+        "large-synthetic-refund",
+      ),
+    );
+    const largeRefundBody = record(await requireStatus(
+      largeRefundResponse,
+      200,
+      "large_synthetic_refund",
+    ));
+    const largeRefundResult = record(largeRefundBody?.result);
+    if (
+      record(largeRefundResult?.structuredContent)?.status !== "pending" ||
+      !String(record(
+        Array.isArray(largeRefundResult?.content)
+          ? (largeRefundResult.content as unknown[])[0]
+          : null,
+      )?.text ?? "").includes("Pendiente de aprobación") ||
+      destinationCallCount() !== 0
+    ) {
+      fail("large_synthetic_refund", "approval_not_pending_or_destination_called");
+    }
+    step("7/12 — reembolso sintético de 75 €: REQUIRE_APPROVAL; el destino recibió 0 llamadas.");
     const pendingResponse = await agentRequest(
       agentCredential,
       jsonRpc("reply_to_support", args, "high-risk-proposal"),
@@ -425,7 +513,7 @@ async function main(): Promise<void> {
     ) {
       fail("high_risk_proposal", "approval_not_pending_or_destination_called");
     }
-    step("6/10 — respuesta sintética a cliente externo con 50 € de compensación: REQUIRE_APPROVAL; el destino recibió 0 llamadas.");
+    step("8/12 — respuesta sintética a cliente externo con 50 € de compensación: REQUIRE_APPROVAL; el destino recibió 0 llamadas.");
 
     const requesterApprovals = apiZod.ListWorkspaceAiAssessmentApprovalsResponse.parse(
       await requireStatus(
@@ -483,7 +571,7 @@ async function main(): Promise<void> {
       ),
     );
     if (!decisionBody.receipt) fail("independent_approval", "signed_receipt_missing");
-    step("7/10 — el solicitante no pudo aprobar; el aprobador admin distinto aprobó y se emitió un recibo firmado.");
+    step("9/12 — el solicitante no pudo aprobar; el aprobador admin distinto aprobó y se emitió un recibo firmado.");
 
     const executeResponse = await agentRequest(
       agentCredential,
@@ -527,7 +615,7 @@ async function main(): Promise<void> {
     if (secondConsume.status !== 409) {
       fail("receipt_replay", `http_${secondConsume.status}`);
     }
-    step("8/10 — el reintento ejecutó una vez; el texto trampa volvió como dato; la repetición fue idempotente y un segundo consumo del recibo se rechazó.");
+    step("10/12 — el reintento ejecutó una vez; el texto trampa volvió como dato; la repetición fue idempotente y un segundo consumo del recibo se rechazó.");
 
     const exportBody = apiZod.ExportWorkspaceApprovalLedgerBundleResponse.parse(
       await requireStatus(
@@ -567,7 +655,7 @@ async function main(): Promise<void> {
     ) {
       fail("persisted_evidence", "expected_receipt_ledger_or_audit_rows_missing");
     }
-    step(`9/10 — recibo y cadena verificados (${exportBody.events.length} eventos); tabla de recibos: ${stored.rows[0]!.receipts}, ledger: ${stored.rows[0]!.events}, auditoría: ${stored.rows[0]!.audit_events}.`);
+    step(`11/12 — recibo y cadena verificados (${exportBody.events.length} eventos); tabla de recibos: ${stored.rows[0]!.receipts}, ledger: ${stored.rows[0]!.events}, auditoría: ${stored.rows[0]!.audit_events}.`);
 
     const revokedAgentBody = apiZod.CreateWorkspaceAgentResponse.parse(
       await requireStatus(
@@ -595,16 +683,7 @@ async function main(): Promise<void> {
       fail("revoked_agent", `http_${revokedCall.status}`);
     }
 
-    const directAllowAction = APPROVAL_ACTION_CATALOG.find(
-      (action) => !action.requiresIndependentApprover,
-    );
-    if (!directAllowAction) {
-      step("Caso de bajo riesgo: el catálogo evalúa ALLOW para una respuesta interna sin compensación, pero el proxy exige aprobación independiente para las cuatro acciones actuales; no se ejecuta automáticamente.");
-    } else {
-      step(`Aviso: existe una acción sin aprobador independiente (${directAllowAction.actionType}); no se ejecutó porque no está incluida en la allow-list MCP.`);
-    }
-
-    step("10/10 — credencial falsa y credencial revocada rechazadas; no hubo conexiones externas ni acciones financieras reales.");
+    step("12/12 — credencial falsa y credencial revocada rechazadas; no hubo conexiones externas ni acciones financieras reales.");
     step(`Workspace DEMO: ${workspaceId}. Las identidades son registros sintéticos del harness loopback, no cuentas Clerk ni inicios de sesión del preview; no se modificó el flujo normal de autenticación.`);
   } finally {
     if (server?.listening) {

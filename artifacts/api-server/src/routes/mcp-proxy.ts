@@ -23,6 +23,7 @@ import {
 } from "../lib/generic-action-proposal-service";
 import {
   getActiveWorkspaceActionRule,
+  lockWorkspaceActionRule,
 } from "../lib/workspace-action-rules";
 import {
   withAgentWorkspaceTransaction,
@@ -356,7 +357,9 @@ export function createMcpProxyRouter(
               ? "guardian-agent-lab-customer-service-v1"
               : actionType === "guardian.email.send.external.v1"
                 ? "guardian-agent-lab-email-v1"
-                : null;
+                : actionType === "guardian.synthetic.support.refund.v1"
+                  ? "guardian-agent-lab-customer-service-v1"
+                  : null;
             const evidence = profileId
               ? verifyGenericActionEvidence(job?.result, {
                   workspaceId,
@@ -365,6 +368,7 @@ export function createMcpProxyRouter(
                   actionSha256: approval.actionSha256 ?? "",
                   proposalSha256: approval.proposalSha256,
                   profileId,
+                  agentId: agent.id,
                 })
               : null;
             if (!evidence || evidence.agentId !== agent.id) return null;
@@ -440,6 +444,11 @@ export function createMcpProxyRouter(
         workspaceId,
         credentialSha256,
         async (tx, agent, membership) => {
+          await lockWorkspaceActionRule(
+            tx,
+            workspaceId,
+            classification.actionType,
+          );
           const activeRule = await getActiveWorkspaceActionRule(
             tx,
             workspaceId,
@@ -460,6 +469,9 @@ export function createMcpProxyRouter(
             arguments: classification.validatedArguments,
             idempotencyKey,
             escalateAllowToApproval: true,
+            allowAutomaticRefund:
+              classification.actionType ===
+                "guardian.synthetic.support.refund.v1",
           });
           return { outcome, agentId: agent.id, principalUserId: agent.principalUserId, idempotencyKey };
         },
@@ -470,6 +482,27 @@ export function createMcpProxyRouter(
       }
       const { outcome } = proposal.value;
       if (outcome.kind === "terminal") {
+        if (
+          outcome.decision === "allow" &&
+          outcome.actionType === "guardian.synthetic.support.refund.v1" &&
+          outcome.reasonCode === "automatic_refund_allowed"
+        ) {
+          rpcToolResult(
+            res,
+            id,
+            "Reembolso sintético permitido por la regla activa. No se ha movido dinero ni se ha ejecutado una operación real.",
+            false,
+            {
+              decision: "allow",
+              ruleId: outcome.ruleId,
+              ruleVersionId: outcome.ruleVersionId,
+              replayed: outcome.replayed === true,
+              synthetic: true,
+              externalSideEffect: false,
+            },
+          );
+          return;
+        }
         rpcToolResult(
           res,
           id,
