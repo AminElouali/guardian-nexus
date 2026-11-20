@@ -22,6 +22,7 @@ type McpToolBinding = {
   actionType: CatalogActionRef;
   dataSensitivity: "normal" | "sensible";
   volume: VolumeBinding;
+  guardianDescription: string;
 };
 
 // Example-only registration. These names and mappings are declared by Guardian;
@@ -33,6 +34,7 @@ const REGISTERED_MCP_TOOLS: Readonly<
     reply_to_support: Object.freeze({
       actionType: "guardian.support.reply.send.v1",
       dataSensitivity: "sensible",
+      guardianDescription: "Propón una respuesta sintética a un caso de soporte. La regla vigente puede exigir aprobación humana.",
       volume: Object.freeze({
         kind: "argument",
         field: "compensation_cents",
@@ -42,6 +44,7 @@ const REGISTERED_MCP_TOOLS: Readonly<
     send_external_email: Object.freeze({
       actionType: "guardian.email.send.external.v1",
       dataSensitivity: "sensible",
+      guardianDescription: "Propón un correo externo de prueba. La regla vigente puede exigir aprobación humana.",
       volume: Object.freeze({ kind: "fixed_message" }),
     }),
   }),
@@ -99,6 +102,19 @@ export type McpToolClassification = {
     | "arguments_invalid"
     | "catalog_action_unavailable"
     | "catalog_volume_binding_invalid";
+};
+
+export type GuardianMcpToolDefinition = {
+  serverId: string;
+  name: string;
+  actionType: CatalogActionRef;
+  description: string;
+  inputSchema: {
+    type: "object";
+    additionalProperties: false;
+    properties: Record<string, Record<string, unknown>>;
+    required: string[];
+  };
 };
 
 type StrictJsonResult =
@@ -462,4 +478,53 @@ export function classifyMcpToolCall(
     blockRequired: false,
     reasonCode: "classified",
   };
+}
+
+export function getGuardianMcpToolDefinition(
+  serverId: string,
+  toolName: string,
+): GuardianMcpToolDefinition | null {
+  const binding = REGISTERED_MCP_TOOLS[serverId]?.[toolName];
+  const action = binding
+    ? getApprovalActionDefinition(binding.actionType)
+    : undefined;
+  if (!binding || !action) return null;
+  const properties: Record<string, Record<string, unknown>> = {};
+  const required: string[] = [];
+  for (const [name, rule] of Object.entries(action.argumentSchema.properties)) {
+    properties[name] = {
+      type: rule.type,
+      ...(rule.min !== undefined ? { minimum: rule.min } : {}),
+      ...(rule.max !== undefined ? { maximum: rule.max } : {}),
+      ...(rule.maxLength !== undefined ? { maxLength: rule.maxLength } : {}),
+      ...(rule.pattern ? { pattern: rule.pattern.source } : {}),
+      ...(rule.enum ? { enum: [...rule.enum] } : {}),
+    };
+    if (rule.required) required.push(name);
+  }
+  return {
+    serverId,
+    name: toolName,
+    actionType: binding.actionType,
+    description: binding.guardianDescription,
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties,
+      required,
+    },
+  };
+}
+
+export function listGuardianMcpToolDefinitions(
+  serverId: string,
+): GuardianMcpToolDefinition[] {
+  const registered = REGISTERED_MCP_TOOLS[serverId];
+  if (!registered) return [];
+  return Object.keys(registered)
+    .sort()
+    .flatMap((toolName) => {
+      const definition = getGuardianMcpToolDefinition(serverId, toolName);
+      return definition ? [definition] : [];
+    });
 }

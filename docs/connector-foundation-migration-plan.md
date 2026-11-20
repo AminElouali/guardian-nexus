@@ -1,4 +1,4 @@
-# Migraciones 0005–0006: base común de conectores y acciones
+# Migraciones 0005–0007: base común de conectores, acciones y recibos
 
 **Estado:** las migraciones 0005 y 0006 están **IMPLEMENTADAS en el repositorio**
 y aplicadas en la base de **Development** (verificado el 2026-11-19).
@@ -18,6 +18,13 @@ El contrato anterior a esta migración espera 16 tablas, 173 columnas, 44
 +2 tablas, +25 columnas, +5 índices, +20 constraints y +6 policies; los roles
 no cambian. El contrato posterior es **18/198/49/92/51/3**.
 
+`0007_workspace_approval_receipts.sql` añade la tabla append-only
+`workspace_approval_receipts` con 7 columnas, 2 índices (incluida la PK), 7
+constraints y 2 policies. Conserva el objeto firmado receipt v1 para que el
+agente pueda reintentar tras una aprobación; no modifica receipt v1 ni ledger
+event v1. El inventario del laboratorio pasa a **19/205/51/99/53/3**: +1 tabla,
++7 columnas, +2 índices, +7 constraints y +2 policies; siguen siendo 3 roles.
+
 La auditoría también compara nombres y definiciones de constraints y policies,
 flags RLS, roles y privilegios efectivos. No se ajustan los conteos para ocultar
 diferencias.
@@ -34,11 +41,14 @@ diferencias.
 - Los grants de `app_runtime` están limitados por tabla y columna. El ledger
   existente mantiene intactos su formato v1, sus políticas y sus privilegios
   append-only.
+- La tabla de recibos concede `SELECT` y `INSERT` solo en seis columnas; no
+  concede `UPDATE`, `DELETE` ni `INSERT` sobre `created_at`. La policy de lectura
+  exige que el recibo pertenezca a una aprobación del agente autenticado.
 
 ## Secuencia comprobada en el laboratorio
 
 El laboratorio crea una base temporal y aplica, cada una en su propia
-transacción, las migraciones SQL versionadas 0001–0006. Repite 0003–0006 para
+transacción, las migraciones SQL versionadas 0001–0007. Repite 0003–0007 para
 comprobar idempotencia. Compara el catálogo resultante con el esquema
 Drizzle: tablas, columnas, índices, constraints, policies, roles y matriz de
 privilegios. También ejecuta la auditoría RLS/runtime y el E2E con un adaptador
@@ -71,6 +81,18 @@ Amin para esa operación. No autoriza cambios en Production ni futuras
 migraciones compartidas. Cada aplicación posterior requiere una tarea aprobada
 con checkpoint verificable cuando corresponda, auditoría previa, revisión del
 SQL, auditoría posterior y plan de restauración.
+
+## Estado de 0007
+
+**IMPLEMENTADO en el repositorio y comprobado por el laboratorio local:** la
+migración crea el almacenamiento de recibos firmados con RLS habilitada y
+forzada, dos policies de workspace y privilegios mínimos por columna. La fase de
+migraciones versionadas parte del esquema antiguo, aplica 0001–0007, compara el
+inventario completo con Drizzle y repite 0007 para comprobar idempotencia.
+
+**PROYECTADO para Development y Production:** la migración 0007 no se ha
+aplicado a ninguna base compartida como parte del proxy MCP. Production no se ha
+conectado ni modificado.
 
 ## Estado en Development — verificado el 2026-11-19
 

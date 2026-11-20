@@ -304,7 +304,17 @@ function makeSnapshots(): {
   ].map((table_name) => ({
     table_name,
     can_select: true,
-    can_insert: true,
+    can_insert: table_name !== "workspace_approval_receipts",
+    column_insert: table_name === "workspace_approval_receipts"
+      ? [
+          "approval_id",
+          "workspace_id",
+          "receipt_id",
+          "receipt_sha256",
+          "signed_receipt",
+          "approved_by_user_id",
+        ]
+      : [],
     can_update: false,
     can_delete: false,
     can_truncate: false,

@@ -24,6 +24,15 @@ export const appendOnlyRlsTableNamesSql = sql.join(
 
 export type AppendOnlyRuntimeGrantRow = Record<string, unknown>;
 
+const receiptInsertColumns = [
+  "approval_id",
+  "workspace_id",
+  "receipt_id",
+  "receipt_sha256",
+  "signed_receipt",
+  "approved_by_user_id",
+] as const;
+
 export function appendOnlyRuntimeGrantsAllowed(
   rows: readonly AppendOnlyRuntimeGrantRow[],
 ): boolean {
@@ -40,9 +49,20 @@ export function appendOnlyRuntimeGrantsAllowed(
       return false;
     }
     seenNames.add(row.table_name);
+    const columnInsert = Array.isArray(row.column_insert)
+      ? row.column_insert.filter(
+          (column): column is string => typeof column === "string",
+        ).sort()
+      : [];
+    const receiptInsertIsMinimal =
+      row.table_name === "workspace_approval_receipts"
+        ? row.can_insert === false &&
+          JSON.stringify(columnInsert) ===
+            JSON.stringify([...receiptInsertColumns].sort())
+        : row.can_insert === true;
     if (
       row.can_select !== true ||
-      row.can_insert !== true ||
+      !receiptInsertIsMinimal ||
       row.can_update !== false ||
       row.can_delete !== false ||
       row.can_truncate !== false ||
