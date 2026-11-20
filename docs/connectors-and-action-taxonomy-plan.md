@@ -92,6 +92,8 @@ Hay una función pura y determinista que clasifica llamadas contra una lista exp
 
 Esta fase **no** implementa un proxy de red, registro de servidores MCP, conexión a servicios, persistencia en base de datos ni autorización para ejecutar herramientas. La clasificación tampoco equivale a aprobar o permitir una acción; las llamadas desconocidas deben bloquearse.
 
+**Limitación conocida — PROYECTADA:** el clasificador actual solo acepta identificadores en minúsculas ASCII; algunos servidores MCP reales usan nombres `camelCase`. En la fase 3 de registro de servidores, Guardian guardará el nombre exacto declarado para cada herramienta y lo comparará literalmente. Cualquier variante, incluidas diferencias de mayúsculas, homoglifos o caracteres invisibles, se rechazará.
+
 ## 7. Estado actual
 
 **IMPLEMENTADO hoy:** cuatro acciones sintéticas o de demostración: reembolso sintético, cambio de banco sintético, respuesta de soporte y correo externo; existe una entrada por API autenticada con credencial por agente. En la base común, las credenciales de conectores se cifran y solo se informa su estado y últimos cuatro caracteres; la ejecución requiere un recibo aprobado y un adaptador registrado, consume el recibo una sola vez y usa una clave de idempotencia. El único adaptador implementado es falso y exclusivo de pruebas, sin acceso de red.
