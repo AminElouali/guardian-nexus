@@ -14,11 +14,10 @@ const DISPOSABLE_DATABASE_NAME = /^guardian_approval_lab_[a-z0-9_]+$/;
 const CI_DATABASE_NAME = "guardian_approval_lab_ci";
 const APP_RUNTIME_LOGIN = "app_runtime_login";
 const CI_REPOSITORY = "AminElouali/guardian-nexus";
-const CI_MAIN_REF = "refs/heads/main";
 const CI_WORKFLOW_NAME = "Guardian Nexus PostgreSQL Approval Lab";
 const CI_JOB_ID = "postgres-approval-lab";
-const CI_WORKFLOW_REF =
-  `${CI_REPOSITORY}/.github/workflows/postgres-approval-lab.yml@${CI_MAIN_REF}`;
+const CI_WORKFLOW_PATH =
+  `${CI_REPOSITORY}/.github/workflows/postgres-approval-lab.yml@`;
 const LOCAL_LAB_SOCKET_DIRECTORY =
   /^guardian-nexus-pg-lab-[A-Za-z0-9]+\/socket$/;
 
@@ -42,6 +41,10 @@ function isApprovalLabCiStage(value: unknown): value is ApprovalLabCiStage {
   return ["bootstrap", "provision", "approval-e2e"].includes(
     value as string,
   );
+}
+
+function isAllowedApprovalLabRef(value: string): boolean {
+  return value === "refs/heads/main" || value.startsWith("refs/heads/fase");
 }
 
 function hasGitHubActionsContext(
@@ -201,19 +204,23 @@ export async function diagnoseGitHubActionsApprovalLabTarget(
     return reject("github_context_missing");
   }
 
+  const ciRef = env.GITHUB_REF;
+  if (!ciRef || !isAllowedApprovalLabRef(ciRef)) {
+    return reject("github_context_incompatible");
+  }
+  const ciWorkflowRef = `${CI_WORKFLOW_PATH}${ciRef}`;
+
   if (
     env.NODE_ENV !== "development" ||
     env.REPLIT_DEPLOYMENT ||
     env.CI !== "true" ||
     env.GITHUB_ACTIONS !== "true" ||
     env.GITHUB_WORKFLOW !== CI_WORKFLOW_NAME ||
-    env.GITHUB_WORKFLOW_REF?.toLowerCase() !==
-      CI_WORKFLOW_REF.toLowerCase() ||
     env.GITHUB_JOB !== CI_JOB_ID ||
     env.GITHUB_EVENT_NAME !== "workflow_dispatch" ||
     env.GITHUB_REPOSITORY?.toLowerCase() !== CI_REPOSITORY.toLowerCase() ||
     env.GITHUB_REF_TYPE !== "branch" ||
-    env.GITHUB_REF !== CI_MAIN_REF ||
+    env.GITHUB_WORKFLOW_REF !== ciWorkflowRef ||
     !runId ||
     !/^\d+$/.test(runId) ||
     !runAttempt ||
@@ -254,8 +261,8 @@ export async function diagnoseGitHubActionsApprovalLabTarget(
       repository: CI_REPOSITORY,
       repositoryOwner: "AminElouali",
       workflow: CI_WORKFLOW_NAME,
-      workflowRef: CI_WORKFLOW_REF,
-      ref: CI_MAIN_REF,
+      workflowRef: ciWorkflowRef,
+      ref: ciRef,
       eventName: "workflow_dispatch",
       sha: commitSha,
       runId,
