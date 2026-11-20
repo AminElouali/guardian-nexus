@@ -77,7 +77,10 @@ function signedApprovalLabToken(
   return `${signingInput}.${signature}`;
 }
 
-function approvalLabEnvironment(ref: string): Record<string, string> {
+function approvalLabEnvironment(
+  ref: string,
+  eventName = "workflow_dispatch",
+): Record<string, string> {
   const sha = "a".repeat(40);
   const runId = "123456789";
   const runAttempt = "2";
@@ -89,7 +92,7 @@ function approvalLabEnvironment(ref: string): Record<string, string> {
     GITHUB_WORKFLOW: testWorkflow,
     GITHUB_WORKFLOW_REF: approvalLabWorkflowRef(ref),
     GITHUB_JOB: "postgres-approval-lab",
-    GITHUB_EVENT_NAME: "workflow_dispatch",
+    GITHUB_EVENT_NAME: eventName,
     GITHUB_REPOSITORY: testRepository,
     GITHUB_REF: ref,
     GITHUB_REF_TYPE: "branch",
@@ -208,6 +211,53 @@ test("CI target guard accepts main and fase refs with matching signed claims", a
   });
 });
 
+test("CI target guard accepts schedule only on main with matching signed claims", async () => {
+  await withTestJwks(async () => {
+    const decision = await diagnoseGitHubActionsApprovalLabTarget(
+      approvalLabEnvironment("refs/heads/main", "schedule"),
+      "approval-e2e",
+      async () => signedApprovalLabToken("refs/heads/main", {
+        event_name: "schedule",
+      }),
+    );
+    assert.deepEqual(decision, { accepted: true, stage: "approval-e2e" });
+  });
+});
+
+test("CI target guard rejects schedule on fase branches before requesting OIDC", async () => {
+  let tokenRequested = false;
+  const decision = await diagnoseGitHubActionsApprovalLabTarget(
+    approvalLabEnvironment("refs/heads/fase5-mcp-proxy", "schedule"),
+    "approval-e2e",
+    async () => {
+      tokenRequested = true;
+      return "";
+    },
+  );
+  assert.deepEqual(decision, {
+    accepted: false,
+    category: "github_context_incompatible",
+    stage: "approval-e2e",
+  });
+  assert.equal(tokenRequested, false);
+});
+
+test("CI target guard rejects a signed event claim that differs from the environment", async () => {
+  const decision = await withTestJwks(() =>
+    diagnoseGitHubActionsApprovalLabTarget(
+      approvalLabEnvironment("refs/heads/main", "schedule"),
+      "approval-e2e",
+      async () => signedApprovalLabToken("refs/heads/main"),
+    )
+  );
+  assert.deepEqual(decision, {
+    accepted: false,
+    category: "claims_mismatch",
+    subcategory: "claims_event_name_mismatch",
+    stage: "approval-e2e",
+  });
+});
+
 test("CI target guard rejects other branches before requesting an OIDC token", async () => {
   let tokenRequested = false;
   const decision = await diagnoseGitHubActionsApprovalLabTarget(
@@ -260,7 +310,7 @@ test("GitHub Actions lab workflow guards its isolated service before DB writes",
   assert.match(workflow, /image: postgres:16/);
   assert.match(workflow, /5432:5432/);
   assert.match(workflow, /permissions:\s+contents:\s+read\s+id-token:\s+write/);
-  assert.match(workflow, /on:\s+workflow_dispatch:/);
+  assert.match(workflow, /on:\s+workflow_dispatch:[\s\S]*?schedule:\s+- cron: "17 3 \* \* \*"/);
   assert.doesNotMatch(
     workflow,
     /^\s*(?:push|pull_request):/m,
@@ -268,8 +318,8 @@ test("GitHub Actions lab workflow guards its isolated service before DB writes",
   );
   assert.match(
     workflow,
-    /github\.event_name == 'workflow_dispatch'[\s\S]*?github\.repository == 'AminElouali\/guardian-nexus'[\s\S]*?github\.ref_type == 'branch'[\s\S]*?\(github\.ref == 'refs\/heads\/main' \|\| startsWith\(github\.ref, 'refs\/heads\/fase'\)\)/,
-    "the job-level condition limits service creation to manual dispatch on trusted main or fase branches",
+    /github\.repository == 'AminElouali\/guardian-nexus'[\s\S]*?github\.ref_type == 'branch'[\s\S]*?github\.event_name == 'workflow_dispatch'[\s\S]*?github\.ref == 'refs\/heads\/main'[\s\S]*?startsWith\(github\.ref, 'refs\/heads\/fase'\)[\s\S]*?github\.event_name == 'schedule'[\s\S]*?github\.ref == 'refs\/heads\/main'/,
+    "manual runs stay limited to main/fase and scheduled runs stay limited to main",
   );
   assert.match(
     workflow,
