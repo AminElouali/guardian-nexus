@@ -17,6 +17,7 @@
     "create:approval-ledger-checkpoint": "tsx src/scripts/create-approval-ledger-checkpoint.ts",
     "demo:verify-ledger-bundle": "tsx src/scripts/demo-verify-ledger-bundle.ts",
     "demo:mcp": "NODE_ENV=development tsx src/scripts/demo-mcp.ts",
+    "redteam:mcp": "NODE_ENV=development GUARDIAN_PROMPTFOO_MCP_ONLY=1 tsx --test --test-reporter=tap src/ai-assessment-synthetic-approval-e2e.test.ts",
     "test:assessment-container-integration": "NODE_ENV=development tsx --test src/lib/assessment-container-hardening.integration.test.ts",
     "test:ai-assessment-synthetic-e2e": "NODE_ENV=development tsx --test src/ai-assessment-synthetic-approval-e2e.test.ts",
     "test:ai-assessment-e2e": "node ./scripts/run-ai-assessment-e2e.mjs"
@@ -49,6 +50,7 @@
     "esbuild-plugin-pino": "^2.3.3",
     "fast-check": "4.10.2",
     "pino-pretty": "^13.2.0",
+    "promptfoo": "0.126.0",
     "thread-stream": "3.1.0",
     "tsx": "catalog:"
   }
