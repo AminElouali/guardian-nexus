@@ -64,3 +64,6 @@ export function createWorkspaceAgentAttemptLimiter(input?: {
     },
   };
 }
+
+export const workspaceAgentAttemptLimiter =
+  createWorkspaceAgentAttemptLimiter();

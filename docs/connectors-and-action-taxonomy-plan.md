@@ -78,7 +78,7 @@ Las plantillas son puntos de partida versionados; al seleccionarlas se deberían
 Estado por etapa:
 
 1. **Base común de conectores — IMPLEMENTADA parcialmente en código:** bóveda AES-256-GCM por workspace, identificador de clave, permisos por workspace, clasificación de las cuatro acciones del catálogo, verificación y consumo atómico del recibo v1, registro idempotente, estados pendiente/ejecutado/fallido y desconexión. Solo se registra un adaptador falso en el E2E desechable; la aplicación no registra adaptadores de proveedores y falla cerrada si no hay uno.
-2. **Proxy MCP — Fase 1 IMPLEMENTADA (solo clasificador); proxy de red PROYECTADO:** situar un proxy delante de servicios que ya ofrecen MCP. Las descripciones y nombres de herramientas recibidos se tratarán como datos no fiables; Guardian clasifica únicamente las herramientas incluidas en su lista explícita.
+2. **Proxy MCP — Fases 1 y 2 IMPLEMENTADAS en el laboratorio:** hay un endpoint JSON-RPC con herramientas y esquemas escritos por Guardian, credencial de agente, decisión de reglas, aprobación humana, recibo v1 guardado para reintentos y un destino falso en proceso. No se ha conectado ningún servicio MCP real.
 3. **Conector genérico configurable por el cliente — PROYECTADO:** aún no se permite que clientes definan nuevos adaptadores o acciones.
 4. **Conectores nativos para la demo — PROYECTADOS:** correo en un sandbox como Mailtrap y Stripe en modo de prueba. Ambos están pendientes de confirmar; no se presupone que estén configurados ni conectados.
 5. **Verificador “sin recibo no se abre” — PROYECTADO para producción:** `lib/guardian-guard` demuestra el patrón con SMTP local, pero todavía no es un límite de seguridad desplegado que el agente no pueda evitar.
@@ -86,11 +86,29 @@ Estado por etapa:
 
 **Reglas de evolución y operación — PROYECTADAS:** cada cambio de esquema debe incluir una migración versionada y una prueba que parta de la forma anterior del esquema. Además, realizar periódicamente una auditoría de solo lectura de la base de desarrollo para detectar desajustes pronto.
 
-### Proxy MCP — fase 1 IMPLEMENTADA (solo clasificador)
+### Proxy MCP — fase 1 IMPLEMENTADA (clasificador)
 
 Hay una función pura y determinista que clasifica llamadas contra una lista explícita de dos herramientas de un servidor MCP ficticio de demostración. Recibe el texto JSON original de los argumentos para detectar claves duplicadas antes de que un parser ordinario las descarte. La acción y los riesgos proceden del catálogo de Guardian; los argumentos se validan de forma estricta y se calcula una huella canónica usando la canonicalización compartida del proyecto. Nombres o argumentos desconocidos o malformados se rechazan de forma cerrada. Las descripciones, títulos, anotaciones, esquemas y respuestas que aporte MCP no influyen en el resultado.
 
-Esta fase **no** implementa un proxy de red, registro de servidores MCP, conexión a servicios, persistencia en base de datos ni autorización para ejecutar herramientas. La clasificación tampoco equivale a aprobar o permitir una acción; las llamadas desconocidas deben bloquearse.
+Esta fase por sí sola no implementaba un proxy, conexión a servicios ni autorización para ejecutar herramientas. La clasificación tampoco equivale a aprobar o permitir una acción; las llamadas desconocidas deben bloquearse.
+
+### Proxy MCP — fase 2 IMPLEMENTADA (solo laboratorio)
+
+El API acepta solicitudes MCP JSON-RPC por HTTP en modo de respuesta simple. La ruta autentica la credencial del agente dentro del workspace indicado, pero solo usa ese identificador para buscarla; la identidad y los permisos se obtienen de la credencial validada. `tools/list` entrega definiciones redactadas por Guardian y nunca consulta ni reenvía metadatos de un destino MCP.
+
+Las llamadas usan el texto JSON original de los argumentos y el clasificador estricto. Las acciones desconocidas se bloquean antes del destino. Las cuatro acciones actuales requieren aprobación independiente; si una regla dice **Permitir**, el proxy la eleva a aprobación y deja constancia de `rule_allow_escalated_to_approval`. Si una acción futura no requiere aprobador independiente, una decisión Permitir falla cerrada en esta fase.
+
+Una solicitud pendiente responde inmediatamente con su identificador. La misma llamada y los mismos argumentos consultan esa solicitud; si otra persona la aprueba, el siguiente reintento recupera el recibo v1 firmado, lo verifica y ejecuta mediante el mecanismo de un solo uso e idempotencia existente. El recibo se conserva en una tabla append-only con RLS forzada; no se alteraron los formatos v1 de recibo ni de ledger. También se ofrece `guardian_approval_status`, limitado a las solicitudes del agente.
+
+El único destino registrado es falso y solo se inyecta en el E2E del laboratorio; puede devolver texto adversarial, que se devuelve al agente como contenido de datos sin interpretarlo. Hay límites de tamaño de solicitud/respuesta y tiempo del destino. La aplicación normal no registra destinos y bloquea la ejecución si no hay uno. **No hay conexión de red a servidores MCP reales, registro persistente de servidores, notificación automática al agente ni prueba de aislamiento de producción.**
+
+**PROYECTADO:** registrar y autenticar servidores MCP reales, conectar el proxy con sus herramientas, definir cómo notificar al agente cuando se apruebe una solicitud y proporcionar un justificante específico para futuras acciones con permiso automático.
+
+**PROYECTADO:** añadir, mediante una ampliación versionada del ledger, un evento
+firmado para registrar también las denegaciones. Hoy `DENY`, llamadas
+desconocidas o rechazadas, solicitudes pendientes y la escalada de `ALLOW` a
+aprobación quedan en `workspace_audit_events` con hashes y motivos seguros; no
+se añaden eventos ni se cambia el formato del ledger v1.
 
 **Limitación conocida — PROYECTADA:** el clasificador actual solo acepta identificadores en minúsculas ASCII; algunos servidores MCP reales usan nombres `camelCase`. En la fase 3 de registro de servidores, Guardian guardará el nombre exacto declarado para cada herramienta y lo comparará literalmente. Cualquier variante, incluidas diferencias de mayúsculas, homoglifos o caracteres invisibles, se rechazará.
 

@@ -22,6 +22,7 @@ export const expectedRlsPolicyCounts = {
   workspace_agents: 4,
   workspace_connector_credentials: 3,
   workspace_connector_executions: 3,
+  workspace_approval_receipts: 2,
 } as const;
 
 export const expectedRlsPolicyCount = Object.values(
@@ -35,6 +36,7 @@ export const expectedRlsTableNames = Object.keys(
 export const appendOnlyRlsTableNames = [
   "workspace_approval_ledger",
   "workspace_action_rule_versions",
+  "workspace_approval_receipts",
 ] as const satisfies readonly (keyof typeof expectedRlsPolicyCounts)[];
 
 export const expectedDisposableRlsTableOwner = "postgres";

@@ -78,6 +78,7 @@ const fixedTableGrantKeys = new Set([
   "app_runtime:workspace_connector_credentials:SELECT",
   "app_runtime:workspace_connector_credentials:DELETE",
   "app_runtime:workspace_connector_executions:SELECT",
+  "app_runtime:workspace_approval_receipts:SELECT",
 ]);
 const specialTables = [
   "ai_assessment_jobs",
@@ -85,10 +86,12 @@ const specialTables = [
   "ai_assessment_approval_requests",
   "workspace_connector_credentials",
   "workspace_connector_executions",
+  "workspace_approval_receipts",
 ];
 const insertTables = [
   "workspace_connector_credentials",
   "workspace_connector_executions",
+  "workspace_approval_receipts",
 ];
 const testColumns: Record<string, string[]> = {
   ai_assessment_jobs: [
@@ -150,6 +153,15 @@ const testColumns: Record<string, string[]> = {
     "updated_at",
     "completed_at",
   ],
+  workspace_approval_receipts: [
+    "approval_id",
+    "workspace_id",
+    "receipt_id",
+    "receipt_sha256",
+    "signed_receipt",
+    "approved_by_user_id",
+    "created_at",
+  ],
 };
 const fixedInsertColumnGrantKeys = new Set([
   ...[
@@ -176,6 +188,16 @@ const fixedInsertColumnGrantKeys = new Set([
     "status",
   ].map((columnName) =>
     `app_runtime:workspace_connector_executions:${columnName}`,
+  ),
+  ...[
+    "approval_id",
+    "workspace_id",
+    "receipt_id",
+    "receipt_sha256",
+    "signed_receipt",
+    "approved_by_user_id",
+  ].map((columnName) =>
+    `app_runtime:workspace_approval_receipts:${columnName}`,
   ),
 ]);
 const fixedUpdateColumnGrantKeys = new Set([
@@ -340,8 +362,8 @@ function makeSnapshot(): RlsCatalogSnapshot {
 }
 
 test("RLS catalog contract is derived from Drizzle, SQL and role bootstrap sources", () => {
-  assert.equal(tableNames.length, 18);
-  assert.equal(contract.policies.length, 51);
+  assert.equal(tableNames.length, 19);
+  assert.equal(contract.policies.length, 53);
   assert.deepEqual(
     contract.policies
       .filter((policy) => policy.tableName === "workspace_approval_ledger")
@@ -615,12 +637,12 @@ test("RLS catalog contract is derived from Drizzle, SQL and role bootstrap sourc
 test("complete synthetic PostgreSQL catalog snapshot satisfies the contract", () => {
   const report = auditRlsCatalog(contract, makeSnapshot());
   assert.equal(report.passed, true, report.violations.join(", "));
-  assert.equal(report.expectedTableCount, 18);
-  assert.equal(report.expectedPolicyCount, 51);
-  assert.equal(report.policies.length, 51);
-  assert.equal(report.tablePrivileges.length, 3 * 18 * 4);
-  assert.equal(report.updateColumns.length, 3 * (6 + 6 + 12 + 10 + 15));
-  assert.equal(report.insertColumns.length, 3 * (10 + 15));
+  assert.equal(report.expectedTableCount, 19);
+  assert.equal(report.expectedPolicyCount, 53);
+  assert.equal(report.policies.length, 53);
+  assert.equal(report.tablePrivileges.length, 3 * 19 * 4);
+  assert.equal(report.updateColumns.length, 3 * (6 + 6 + 12 + 10 + 15 + 7));
+  assert.equal(report.insertColumns.length, 3 * (10 + 15 + 7));
 });
 
 test("catalog audit checks exact execution UPDATE grants and complete column coverage", () => {

@@ -62,6 +62,7 @@ export async function createGenericActionProposalInTransaction(
     actionType: string;
     arguments: unknown;
     idempotencyKey: string;
+    escalateAllowToApproval?: boolean;
   },
 ): Promise<GenericActionProposalOutcome> {
   const action = evaluateApprovalAction(input.actionType, input.arguments);
@@ -82,12 +83,33 @@ export async function createGenericActionProposalInTransaction(
     input.workspaceId,
     input.actionType,
   );
-  const decision = evaluateWorkspaceActionRule({
+  const ruleDecision = evaluateWorkspaceActionRule({
     actionType: input.actionType,
     arguments: action.args,
     document: rule?.document ?? null,
     ruleVersionId: rule?.activeVersionId ?? null,
   });
+  const escalatedAllow =
+    ruleDecision.decision === "allow" &&
+    input.escalateAllowToApproval === true &&
+    definition.requiresIndependentApprover;
+  const unsupportedAllow =
+    ruleDecision.decision === "allow" &&
+    input.escalateAllowToApproval === true &&
+    !definition.requiresIndependentApprover;
+  const decision = escalatedAllow
+    ? {
+        ...ruleDecision,
+        decision: "require_approval" as const,
+        reasonCode: "rule_allow_escalated_to_approval",
+      }
+    : unsupportedAllow
+      ? {
+          ...ruleDecision,
+          decision: "deny" as const,
+          reasonCode: "automatic_allow_not_supported",
+        }
+      : ruleDecision;
 
   if (decision.decision !== "require_approval") {
     await tx.insert(workspaceAuditEventsTable).values({
@@ -130,6 +152,7 @@ export async function createGenericActionProposalInTransaction(
     ruleId: decision.ruleId,
     ruleVersionId: rule.activeVersionId,
     ruleDocument: rule.document,
+    allowEscalation: escalatedAllow,
     summary: display.summary,
     messagePreview: display.messagePreview,
     agentId: input.agentId,
@@ -276,6 +299,9 @@ export async function createGenericActionProposalInTransaction(
       ruleVersionId: evidence.ruleVersionId ?? null,
       agentId: input.agentId,
       decision: "require_approval",
+      ...(escalatedAllow
+        ? { decisionReasonCode: "rule_allow_escalated_to_approval" }
+        : {}),
       synthetic: true,
       externalSideEffect: false,
     },

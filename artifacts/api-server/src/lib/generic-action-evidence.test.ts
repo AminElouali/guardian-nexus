@@ -143,6 +143,63 @@ test("generic evidence rejects engine versions crossed in either evidence versio
   );
 });
 
+test("workspace evidence permits an allow decision only when escalated to human approval", () => {
+  const allowRule = {
+    version: 1 as const,
+    rules: [{
+      id: "explicit-allow-rule",
+      decision: "allow" as const,
+      when: {},
+    }],
+  };
+  const display = genericActionDisplay(actionType, args);
+  assert.ok(display);
+  const escalated = createWorkspaceRuleActionEvidence({
+    workspaceId,
+    requestedByUserId,
+    actionType,
+    args,
+    ruleId: "explicit-allow-rule",
+    ruleVersionId: "11111111-1111-4111-8111-111111111111",
+    ruleDocument: allowRule,
+    allowEscalation: true,
+    ...display,
+    agentId: "agent-synthetic-escalation",
+  });
+  assert.ok(escalated);
+  assert.equal(escalated.decision, "require_approval");
+  assert.equal(
+    escalated.decisionEscalation,
+    "rule_allow_escalated_to_approval",
+  );
+  assert.equal(
+    verifyGenericActionEvidence(escalated, {
+      workspaceId,
+      requestedByUserId,
+      actionType,
+      actionSha256: escalated.actionSha256,
+      proposalSha256: escalated.proposalSha256,
+      profileId: escalated.profileId,
+    })?.evidenceSha256,
+    escalated.evidenceSha256,
+  );
+  assert.equal(
+    createWorkspaceRuleActionEvidence({
+      workspaceId,
+      requestedByUserId,
+      actionType,
+      args,
+      ruleId: "explicit-allow-rule",
+      ruleVersionId: "11111111-1111-4111-8111-111111111111",
+      ruleDocument: allowRule,
+      ...display,
+      agentId: "agent-synthetic-escalation",
+    }),
+    null,
+    "an allow rule is not presented as a pending approval without escalation",
+  );
+});
+
 test("generic action and argument hashes use stable canonical input", () => {
   const first = hashGenericActionArguments(actionType, args);
   const reordered = hashGenericActionArguments(actionType, {

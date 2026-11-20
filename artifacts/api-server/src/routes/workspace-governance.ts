@@ -63,7 +63,7 @@ import {
 } from "../lib/workspace-action-rules";
 import { getWorkspaceRuleHistoryImpact } from "../lib/workspace-rule-history-impact";
 import { hashWorkspaceAgentCredential, issueWorkspaceAgentCredential } from "../lib/workspace-agent-credentials";
-import { createWorkspaceAgentAttemptLimiter } from "../lib/workspace-agent-attempt-limiter";
+import { workspaceAgentAttemptLimiter } from "../lib/workspace-agent-attempt-limiter";
 import {
   createGenericActionProposalInTransaction,
 } from "../lib/generic-action-proposal-service";
@@ -88,7 +88,6 @@ import {
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const agentAttemptLimiter = createWorkspaceAgentAttemptLimiter();
 
 function safeConnectorCredentialErrorChain(
   error: unknown,
@@ -780,7 +779,7 @@ router.post(
       res.status(400).json({ error: "Invalid agent action proposal request" });
       return;
     }
-    const attempt = agentAttemptLimiter.consume(
+    const attempt = workspaceAgentAttemptLimiter.consume(
       `${params.data.workspaceId}:${req.ip || "unknown"}`,
     );
     if (!attempt.allowed) {

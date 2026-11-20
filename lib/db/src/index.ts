@@ -393,6 +393,22 @@ export async function assertRlsRuntimeReady(): Promise<void> {
         has_table_privilege(
           runtime.oid, format('public.%I', append_only.table_name), 'TRIGGER'
         ) AS can_trigger,
+        ARRAY(
+          SELECT attribute.attname::text
+          FROM pg_class AS protected_table
+          JOIN pg_namespace AS protected_schema
+            ON protected_schema.oid = protected_table.relnamespace
+          JOIN pg_attribute AS attribute
+            ON attribute.attrelid = protected_table.oid
+          WHERE protected_schema.nspname = 'public'
+            AND protected_table.relname = append_only.table_name
+            AND attribute.attnum > 0
+            AND NOT attribute.attisdropped
+            AND has_column_privilege(
+              runtime.oid, protected_table.oid, attribute.attnum, 'INSERT'
+            )
+          ORDER BY attribute.attnum
+        ) AS column_insert,
         CASE
           WHEN current_setting('server_version_num')::integer >= 170000
           THEN has_table_privilege(

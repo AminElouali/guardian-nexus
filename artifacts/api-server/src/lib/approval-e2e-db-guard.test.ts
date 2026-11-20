@@ -1,10 +1,123 @@
 import assert from "node:assert/strict";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { generateKeyPairSync, sign as signJwt } from "node:crypto";
 import { createServer } from "node:net";
 import { test } from "node:test";
 import os from "node:os";
 import path from "node:path";
-import { isExplicitDisposableApprovalDatabase } from "./approval-e2e-db-guard";
+import {
+  diagnoseGitHubActionsApprovalLabTarget,
+  isExplicitDisposableApprovalDatabase,
+} from "./approval-e2e-db-guard";
+import {
+  GITHUB_ACTIONS_OIDC_ISSUER,
+  GITHUB_ACTIONS_RLS_AUDIENCE,
+  GITHUB_ACTIONS_TRUSTED_REPOSITORY_ID,
+  GITHUB_ACTIONS_TRUSTED_REPOSITORY_OWNER_ID,
+} from "./github-actions-oidc";
+
+const testRepository = "AminElouali/guardian-nexus";
+const testWorkflow = "Guardian Nexus PostgreSQL Approval Lab";
+const ciSigningKey = generateKeyPairSync("rsa", { modulusLength: 2048 });
+const ciSigningJwk = {
+  ...(ciSigningKey.publicKey.export({ format: "jwk" }) as {
+    kty: string;
+    n: string;
+    e: string;
+  }),
+  kid: "test-approval-lab-key",
+  use: "sig",
+  alg: "RS256",
+  key_ops: ["verify"],
+};
+
+function approvalLabWorkflowRef(ref: string): string {
+  return `${testRepository}/.github/workflows/postgres-approval-lab.yml@${ref}`;
+}
+
+function signedApprovalLabToken(
+  ref: string,
+  overrides: Record<string, unknown> = {},
+): string {
+  const now = Math.floor(Date.now() / 1000);
+  const header = Buffer.from(JSON.stringify({
+    alg: "RS256",
+    kid: "test-approval-lab-key",
+    typ: "JWT",
+  })).toString("base64url");
+  const payload = Buffer.from(JSON.stringify({
+    iss: GITHUB_ACTIONS_OIDC_ISSUER,
+    aud: GITHUB_ACTIONS_RLS_AUDIENCE,
+    sub: `repo:${testRepository}:ref:${ref}`,
+    repository: testRepository,
+    repository_id: GITHUB_ACTIONS_TRUSTED_REPOSITORY_ID,
+    repository_owner: "AminElouali",
+    repository_owner_id: GITHUB_ACTIONS_TRUSTED_REPOSITORY_OWNER_ID,
+    event_name: "workflow_dispatch",
+    ref,
+    ref_type: "branch",
+    workflow: testWorkflow,
+    workflow_ref: approvalLabWorkflowRef(ref),
+    workflow_sha: "c".repeat(40),
+    sha: "a".repeat(40),
+    run_id: "123456789",
+    run_attempt: "2",
+    jti: `test-jti-${ref}`,
+    iat: now - 10,
+    nbf: now - 10,
+    exp: now + 240,
+    ...overrides,
+  })).toString("base64url");
+  const signingInput = `${header}.${payload}`;
+  const signature = signJwt(
+    "RSA-SHA256",
+    Buffer.from(signingInput),
+    ciSigningKey.privateKey,
+  ).toString("base64url");
+  return `${signingInput}.${signature}`;
+}
+
+function approvalLabEnvironment(ref: string): Record<string, string> {
+  const sha = "a".repeat(40);
+  const runId = "123456789";
+  const runAttempt = "2";
+  const passwordSuffix = `${runId}-${runAttempt}-${sha}`;
+  return {
+    NODE_ENV: "development",
+    CI: "true",
+    GITHUB_ACTIONS: "true",
+    GITHUB_WORKFLOW: testWorkflow,
+    GITHUB_WORKFLOW_REF: approvalLabWorkflowRef(ref),
+    GITHUB_JOB: "postgres-approval-lab",
+    GITHUB_EVENT_NAME: "workflow_dispatch",
+    GITHUB_REPOSITORY: testRepository,
+    GITHUB_REF: ref,
+    GITHUB_REF_TYPE: "branch",
+    GITHUB_RUN_ID: runId,
+    GITHUB_RUN_ATTEMPT: runAttempt,
+    GITHUB_SHA: sha,
+    ACTIONS_ID_TOKEN_REQUEST_URL: "https://token.invalid/request",
+    ACTIONS_ID_TOKEN_REQUEST_TOKEN: "test-only-token-request",
+    GUARDIAN_APPROVAL_E2E_CI_SERVICE: "postgres",
+    GUARDIAN_APPROVAL_E2E_DISPOSABLE: "1",
+    GUARDIAN_APPROVAL_E2E_CI_STAGE: "approval-e2e",
+    DATABASE_URL:
+      `postgresql://postgres:guardian-ci-${passwordSuffix}@127.0.0.1:5432/guardian_approval_lab_ci`,
+    APP_RUNTIME_DATABASE_URL:
+      `postgresql://app_runtime_login:guardian-runtime-${passwordSuffix}@127.0.0.1:5432/guardian_approval_lab_ci`,
+  };
+}
+
+async function withTestJwks<T>(run: () => Promise<T>): Promise<T> {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () =>
+    Response.json({ keys: [ciSigningJwk] })) as typeof fetch;
+  try {
+    return await run();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
 
 test("local approval lab requires an explicit private Unix-socket target", async () => {
   const labRoot = mkdtempSync(path.join(os.tmpdir(), "guardian-nexus-pg-lab-"));
@@ -82,6 +195,57 @@ test("local approval lab requires an explicit private Unix-socket target", async
   }
 });
 
+test("CI target guard accepts main and fase refs with matching signed claims", async () => {
+  await withTestJwks(async () => {
+    for (const ref of ["refs/heads/main", "refs/heads/fase5-mcp-proxy"]) {
+      const decision = await diagnoseGitHubActionsApprovalLabTarget(
+        approvalLabEnvironment(ref),
+        "approval-e2e",
+        async () => signedApprovalLabToken(ref),
+      );
+      assert.deepEqual(decision, { accepted: true, stage: "approval-e2e" });
+    }
+  });
+});
+
+test("CI target guard rejects other branches before requesting an OIDC token", async () => {
+  let tokenRequested = false;
+  const decision = await diagnoseGitHubActionsApprovalLabTarget(
+    approvalLabEnvironment("refs/heads/feature/proxy"),
+    "approval-e2e",
+    async () => {
+      tokenRequested = true;
+      return "";
+    },
+  );
+  assert.deepEqual(decision, {
+    accepted: false,
+    category: "github_context_incompatible",
+    stage: "approval-e2e",
+  });
+  assert.equal(tokenRequested, false);
+});
+
+test("CI target guard rejects signed branch claims that differ from GITHUB_REF", async () => {
+  const env = approvalLabEnvironment("refs/heads/fase5-mcp-proxy");
+  const decision = await withTestJwks(() =>
+    diagnoseGitHubActionsApprovalLabTarget(
+      env,
+      "approval-e2e",
+      async () =>
+        signedApprovalLabToken("refs/heads/fase5-mcp-proxy", {
+          ref: "refs/heads/main",
+        }),
+    )
+  );
+  assert.deepEqual(decision, {
+    accepted: false,
+    category: "claims_mismatch",
+    subcategory: "claims_ref_mismatch",
+    stage: "approval-e2e",
+  });
+});
+
 test("GitHub Actions lab workflow guards its isolated service before DB writes", () => {
   const workflow = readFileSync(
     new URL(
@@ -104,8 +268,8 @@ test("GitHub Actions lab workflow guards its isolated service before DB writes",
   );
   assert.match(
     workflow,
-    /github\.event_name == 'workflow_dispatch'[\s\S]*?github\.repository == 'AminElouali\/guardian-nexus'[\s\S]*?github\.ref_type == 'branch'[\s\S]*?github\.ref == 'refs\/heads\/main'/,
-    "the job-level condition limits service creation to manual dispatch on trusted main",
+    /github\.event_name == 'workflow_dispatch'[\s\S]*?github\.repository == 'AminElouali\/guardian-nexus'[\s\S]*?github\.ref_type == 'branch'[\s\S]*?\(github\.ref == 'refs\/heads\/main' \|\| startsWith\(github\.ref, 'refs\/heads\/fase'\)\)/,
+    "the job-level condition limits service creation to manual dispatch on trusted main or fase branches",
   );
   assert.match(
     workflow,

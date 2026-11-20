@@ -25,6 +25,7 @@ export const apiTestFiles = [
   "src/lib/generic-action-evidence.test.ts",
   "src/lib/mcp-tool-classifier.test.ts",
   "src/lib/mcp-tool-classifier.property.test.ts",
+  "src/lib/mcp-json-rpc.test.ts",
   "src/lib/approval-action-ref-migration.test.ts",
   "src/lib/workspace-rule-history-impact.test.ts",
   "src/lib/approval-action-refund-boundary.test.ts",

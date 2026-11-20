@@ -30,20 +30,33 @@ function validCatalogRows(): RlsRuntimeCatalogRow[] {
 }
 
 function validAppendOnlyGrantRows(): Record<string, unknown>[] {
-  return appendOnlyRlsTableNames.map((table_name) => ({
-    table_name,
-    can_select: true,
-    can_insert: true,
-    can_update: false,
-    can_delete: false,
-    can_truncate: false,
-    can_references: false,
-    can_trigger: false,
-    can_maintain: false,
-    maintain_supported: false,
-    column_update: false,
-    column_references: false,
-  }));
+  return appendOnlyRlsTableNames.map((table_name) => {
+    const receiptTable = table_name === "workspace_approval_receipts";
+    return {
+      table_name,
+      can_select: true,
+      can_insert: !receiptTable,
+      column_insert: receiptTable
+        ? [
+            "approval_id",
+            "workspace_id",
+            "receipt_id",
+            "receipt_sha256",
+            "signed_receipt",
+            "approved_by_user_id",
+          ]
+        : [],
+      can_update: false,
+      can_delete: false,
+      can_truncate: false,
+      can_references: false,
+      can_trigger: false,
+      can_maintain: false,
+      maintain_supported: false,
+      column_update: false,
+      column_references: false,
+    };
+  });
 }
 
 function violationCodes(rows: readonly RlsRuntimeCatalogRow[]) {
@@ -61,6 +74,7 @@ test("append-only contract contains only runtime inventory tables", () => {
   );
   assert.ok(appendOnlyRlsTableNames.includes("workspace_approval_ledger"));
   assert.ok(appendOnlyRlsTableNames.includes("workspace_action_rule_versions"));
+  assert.ok(appendOnlyRlsTableNames.includes("workspace_approval_receipts"));
 });
 
 test("append-only privilege query inventory comes from its contract", () => {
@@ -72,7 +86,7 @@ test("append-only privilege query inventory comes from its contract", () => {
   assert.deepEqual(query.params, [...appendOnlyRlsTableNames]);
 });
 
-test("append-only runtime grants allow only table SELECT and INSERT", () => {
+test("append-only runtime grants allow SELECT and only the receipt INSERT columns", () => {
   assert.equal(appendOnlyRuntimeGrantsAllowed(validAppendOnlyGrantRows()), true);
 });
 
@@ -85,6 +99,29 @@ test("append-only runtime grants fail closed when SELECT is missing", () => {
 test("append-only runtime grants fail closed when INSERT is missing", () => {
   const rows = validAppendOnlyGrantRows();
   rows[0]!.can_insert = false;
+  assert.equal(appendOnlyRuntimeGrantsAllowed(rows), false);
+});
+
+test("receipt table allows only its six required column-level INSERT grants", () => {
+  const rows = validAppendOnlyGrantRows();
+  const receipt = rows.find(
+    (row) => row.table_name === "workspace_approval_receipts",
+  )!;
+  assert.equal(receipt.can_insert, false);
+  assert.equal(appendOnlyRuntimeGrantsAllowed(rows), true);
+  receipt.column_insert = [
+    ...(receipt.column_insert as string[]),
+    "created_at",
+  ];
+  assert.equal(appendOnlyRuntimeGrantsAllowed(rows), false);
+});
+
+test("receipt table rejects table-level INSERT even with the narrow column list", () => {
+  const rows = validAppendOnlyGrantRows();
+  const receipt = rows.find(
+    (row) => row.table_name === "workspace_approval_receipts",
+  )!;
+  receipt.can_insert = true;
   assert.equal(appendOnlyRuntimeGrantsAllowed(rows), false);
 });
 

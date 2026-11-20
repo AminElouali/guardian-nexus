@@ -107,6 +107,21 @@ async function readAppendOnlyRuntimePrivileges(
             AND ledger.relname = append_only.table_name
       ), false) AS can_insert,
       COALESCE((
+        SELECT array_agg(attribute.attname::text ORDER BY attribute.attnum)
+          FROM pg_roles AS runtime
+          CROSS JOIN pg_class AS ledger
+          JOIN pg_namespace AS namespace ON namespace.oid = ledger.relnamespace
+          JOIN pg_attribute AS attribute ON attribute.attrelid = ledger.oid
+         WHERE runtime.rolname = 'app_runtime'
+           AND namespace.nspname = 'public'
+           AND ledger.relname = append_only.table_name
+           AND attribute.attnum > 0
+           AND NOT attribute.attisdropped
+           AND has_column_privilege(
+             runtime.oid, ledger.oid, attribute.attnum, 'INSERT'
+           )
+      ), ARRAY[]::text[]) AS column_insert,
+      COALESCE((
         SELECT has_table_privilege(runtime.oid, ledger.oid, 'UPDATE')
           FROM pg_roles AS runtime
           CROSS JOIN pg_class AS ledger

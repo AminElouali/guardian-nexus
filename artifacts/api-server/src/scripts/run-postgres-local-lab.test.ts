@@ -59,6 +59,41 @@ test("parses a node:test assertion and selects its real source frame", () => {
   );
 });
 
+test("parses sanitized diagnostics from nested TAP subtests", () => {
+  const output = [
+    "TAP version 13",
+    "    not ok 1 - MCP proxy approval retry",
+    "      ---",
+    "      failureType: 'testCodeFailure'",
+    "      error: |-",
+    "        AssertionError: Expected values to be strictly equal:",
+    "        200 !== 503",
+    "      code: 'ERR_ASSERTION'",
+    "      name: 'AssertionError'",
+    "      expected: 200",
+    "      actual: 503",
+    "      stack: |-",
+    `        at TestContext.<anonymous> (file:///tmp/project/src/${testFileName}:6:3)`,
+    "      ...",
+    "not ok 1 - deterministic approval E2E exports signed history",
+    "  ---",
+    "  failureType: 'subtestsFailed'",
+    "  error: '1 subtest failed'",
+    "  code: 'ERR_TEST_FAILURE'",
+    "  name: 'SubtestFailed'",
+    "  ...",
+    "# tests 2",
+    "# pass 0",
+    "# fail 2",
+  ].join("\n");
+
+  const failures = parseSafeNodeTestFailures(output, testFileName, testSource);
+  assert.equal(failures[0]?.subtest, "MCP proxy approval retry");
+  assert.equal(failures[0]?.expected, 200);
+  assert.equal(failures[0]?.received, 503);
+  assert.equal(failures[0]?.location, `${testFileName}:6`);
+});
+
 test("redacts unsafe diagnostics and omits non-primitive values", () => {
   const output = [
     "TAP version 13",
