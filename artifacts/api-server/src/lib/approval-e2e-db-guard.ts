@@ -14,10 +14,25 @@ const DISPOSABLE_DATABASE_NAME = /^guardian_approval_lab_[a-z0-9_]+$/;
 const CI_DATABASE_NAME = "guardian_approval_lab_ci";
 const APP_RUNTIME_LOGIN = "app_runtime_login";
 const CI_REPOSITORY = "AminElouali/guardian-nexus";
+const CI_MAIN_REF = "refs/heads/main";
+// Work branches ("fase...") may run the disposable lab too. The ref is still
+// bound to the signed OIDC `ref`, `sub` and `workflow_ref` claims below.
+const CI_WORK_BRANCH_REF = /^refs\/heads\/fase[A-Za-z0-9._\/-]*$/;
 const CI_WORKFLOW_NAME = "Guardian Nexus PostgreSQL Approval Lab";
 const CI_JOB_ID = "postgres-approval-lab";
 const CI_WORKFLOW_PATH =
-  `${CI_REPOSITORY}/.github/workflows/postgres-approval-lab.yml@`;
+  `${CI_REPOSITORY}/.github/workflows/postgres-approval-lab.yml`;
+
+function isAllowedApprovalLabRef(ref: string | undefined): ref is string {
+  return (
+    ref === CI_MAIN_REF ||
+    (typeof ref === "string" && CI_WORK_BRANCH_REF.test(ref))
+  );
+}
+
+function approvalLabWorkflowRef(ref: string): string {
+  return `${CI_WORKFLOW_PATH}@${ref}`;
+}
 const LOCAL_LAB_SOCKET_DIRECTORY =
   /^guardian-nexus-pg-lab-[A-Za-z0-9]+\/socket$/;
 
@@ -41,10 +56,6 @@ function isApprovalLabCiStage(value: unknown): value is ApprovalLabCiStage {
   return ["bootstrap", "provision", "approval-e2e"].includes(
     value as string,
   );
-}
-
-function isAllowedApprovalLabRef(value: string): boolean {
-  return value === "refs/heads/main" || value.startsWith("refs/heads/fase");
 }
 
 function hasGitHubActionsContext(
@@ -208,7 +219,7 @@ export async function diagnoseGitHubActionsApprovalLabTarget(
   if (!ciRef || !isAllowedApprovalLabRef(ciRef)) {
     return reject("github_context_incompatible");
   }
-  const ciWorkflowRef = `${CI_WORKFLOW_PATH}${ciRef}`;
+  const ciWorkflowRef = approvalLabWorkflowRef(ciRef);
 
   if (
     env.NODE_ENV !== "development" ||
@@ -221,6 +232,7 @@ export async function diagnoseGitHubActionsApprovalLabTarget(
     env.GITHUB_REPOSITORY?.toLowerCase() !== CI_REPOSITORY.toLowerCase() ||
     env.GITHUB_REF_TYPE !== "branch" ||
     env.GITHUB_WORKFLOW_REF !== ciWorkflowRef ||
+    env.GITHUB_REF !== ciRef ||
     !runId ||
     !/^\d+$/.test(runId) ||
     !runAttempt ||
