@@ -8,3 +8,4 @@
 - [Approval replay boundary](approval-replay-boundary.md) — Keep approvals decision-only unless an exact, hash-bound synthetic action can be safely reconstructed and replayed.
 - [Offline seccomp for Qwen threads](offline-seccomp-qwen-threads.md) — Filter classic clone to pthread flags, return ENOSYS for clone3, and keep process-local seccomp distinct from container isolation.
 - [Sanitized lab output tests](sanitized-lab-output-tests.md) — Test output truncation with ordinary spaced text so long-token redaction does not mask the size-limit behavior.
+- [Retrying read-only query mistakes](read-only-query-retries.md) — Correct and rerun read-only SQL or verification checks up to three times when the failure is the agent's own syntax or naming mistake.
