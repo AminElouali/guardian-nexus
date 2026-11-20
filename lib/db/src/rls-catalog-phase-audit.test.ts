@@ -59,6 +59,10 @@ test("membership roster helper is security-definer and narrowly executable", () 
       source,
       /GRANT EXECUTE ON FUNCTION public\.workspace_current_user_is_member\(uuid\) TO app_runtime/,
     );
+    assert.doesNotMatch(
+      source,
+      /ALTER FUNCTION public\.workspace_current_user_is_member\(uuid\) OWNER TO/,
+    );
   }
   assert.match(
     sources.policiesSql,

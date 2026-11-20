@@ -19,7 +19,6 @@ AS $function$
       AND membership.user_id = NULLIF(current_setting('app.user_id', true), '')
   )
 $function$;
-ALTER FUNCTION public.workspace_current_user_is_member(uuid) OWNER TO postgres;
 REVOKE ALL ON FUNCTION public.workspace_current_user_is_member(uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.workspace_current_user_is_member(uuid) FROM app_runtime;
 GRANT EXECUTE ON FUNCTION public.workspace_current_user_is_member(uuid) TO app_runtime;
