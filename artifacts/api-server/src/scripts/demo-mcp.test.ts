@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import {
+  APPROVAL_ACTION_CATALOG,
+  evaluateApprovalAction,
+} from "@workspace/db/approval-action-catalog";
 import { isMcpDemoEnvironmentAllowed } from "./demo-mcp";
 
 const validDevelopmentEnvironment = {
@@ -46,4 +50,32 @@ test("MCP demo permits only an explicitly configured development process", () =>
     }),
     false,
   );
+});
+
+test("MCP demo action is approval-gated by the existing catalog", () => {
+  const result = evaluateApprovalAction("guardian.support.reply.send.v1", {
+    ticket_id: "TICKET-SYNTH-DEMO",
+    recipient_email: "demo@example.test",
+    recipient_type: "external",
+    compensation_cents: 5_000,
+    template_id: "synthetic-support-reply-v1",
+  });
+  assert.equal(result.ok, true);
+  if (result.ok) assert.equal(result.decision, "require_approval");
+});
+
+test("low-risk catalog ALLOW is still escalated for independent approval", () => {
+  const result = evaluateApprovalAction("guardian.support.reply.send.v1", {
+    ticket_id: "TICKET-SYNTH-DEMO",
+    recipient_email: "demo@example.test",
+    recipient_type: "internal",
+    compensation_cents: 0,
+    template_id: "synthetic-support-reply-v1",
+  });
+  const action = APPROVAL_ACTION_CATALOG.find(
+    (entry) => entry.actionType === "guardian.support.reply.send.v1",
+  );
+  assert.equal(result.ok, true);
+  if (result.ok) assert.equal(result.decision, "allow");
+  assert.equal(action?.requiresIndependentApprover, true);
 });

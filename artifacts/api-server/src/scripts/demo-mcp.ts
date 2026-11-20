@@ -118,7 +118,7 @@ async function main(): Promise<void> {
       { createWorkspaceAgentAttemptLimiter },
       { APPROVAL_LEDGER_KEY_ID },
       { verifyApprovalLedgerBundleV1 },
-      { APPROVAL_ACTION_CATALOG },
+      { APPROVAL_ACTION_CATALOG, evaluateApprovalAction },
     ] = await Promise.all([
       import("../routes/mcp-proxy"),
       import("../routes/ai-assessment-lab"),
@@ -128,6 +128,35 @@ async function main(): Promise<void> {
       import("../lib/approval-ledger-crypto"),
       import("@workspace/db/approval-action-catalog"),
     ]);
+    const args = {
+      ticket_id: "TICKET-SYNTH-DEMO",
+      recipient_email: "demo@example.test",
+      recipient_type: "external",
+      compensation_cents: 5_000,
+      template_id: "synthetic-support-reply-v1",
+    };
+    const demoActionEvaluation = evaluateApprovalAction(ACTION_TYPE, args);
+    if (
+      !demoActionEvaluation.ok ||
+      demoActionEvaluation.decision !== "require_approval"
+    ) {
+      fail("demo_action_preflight", "catalog_does_not_require_approval");
+    }
+    const lowRiskInternalEvaluation = evaluateApprovalAction(ACTION_TYPE, {
+      ...args,
+      recipient_type: "internal",
+      compensation_cents: 0,
+    });
+    const supportAction = APPROVAL_ACTION_CATALOG.find(
+      (action) => action.actionType === ACTION_TYPE,
+    );
+    if (
+      !lowRiskInternalEvaluation.ok ||
+      lowRiskInternalEvaluation.decision !== "allow" ||
+      supportAction?.requiresIndependentApprover !== true
+    ) {
+      fail("demo_action_preflight", "low_risk_allow_contract_changed");
+    }
 
     const [ownerIdentity, runtimeIdentity] = await Promise.all([
       fixturePool.query<{ database_name: string }>(
@@ -361,13 +390,6 @@ async function main(): Promise<void> {
       fail("fake_credential", `http_${invalidCredentialResponse.status}`);
     }
 
-    const args = {
-      ticket_id: "TICKET-SYNTH-DEMO",
-      recipient_email: "demo@example.test",
-      recipient_type: "external",
-      compensation_cents: 6_000,
-      template_id: "synthetic-support-reply-v1",
-    };
     const unknownToolResponse = await agentRequest(
       agentCredential,
       jsonRpc("send_money_now", {}, "unknown-tool"),
@@ -403,7 +425,7 @@ async function main(): Promise<void> {
     ) {
       fail("high_risk_proposal", "approval_not_pending_or_destination_called");
     }
-    step("6/10 — acción sintética de 60 €: REQUIRE_APPROVAL; el destino recibió 0 llamadas.");
+    step("6/10 — respuesta sintética a cliente externo con 50 € de compensación: REQUIRE_APPROVAL; el destino recibió 0 llamadas.");
 
     const requesterApprovals = apiZod.ListWorkspaceAiAssessmentApprovalsResponse.parse(
       await requireStatus(
@@ -577,7 +599,7 @@ async function main(): Promise<void> {
       (action) => !action.requiresIndependentApprover,
     );
     if (!directAllowAction) {
-      step("Aviso de política: ALLOW automático no está disponible para las acciones MCP actuales; las cuatro requieren aprobador independiente y el proxy no puede rebajar esa condición.");
+      step("Caso de bajo riesgo: el catálogo evalúa ALLOW para una respuesta interna sin compensación, pero el proxy exige aprobación independiente para las cuatro acciones actuales; no se ejecuta automáticamente.");
     } else {
       step(`Aviso: existe una acción sin aprobador independiente (${directAllowAction.actionType}); no se ejecutó porque no está incluida en la allow-list MCP.`);
     }
