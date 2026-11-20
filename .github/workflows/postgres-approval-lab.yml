@@ -61,6 +61,9 @@ jobs:
       - name: Install locked workspace dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Typecheck the workspace
+        run: pnpm run typecheck
+
       - name: Test the disposable-target guard offline
         run: pnpm --filter @workspace/api-server exec tsx --test src/lib/approval-e2e-db-guard.test.ts
 
