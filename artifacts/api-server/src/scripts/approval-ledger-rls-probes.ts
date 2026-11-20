@@ -28,6 +28,15 @@ const SAFE_PROBE_FAILURE_CODES = new Set([
   "approval_ledger_probe_update_denied_failed",
   "approval_ledger_probe_delete_denied_failed",
   "approval_ledger_probe_truncate_denied_failed",
+  "approval_ledger_probe_membership_active_workspace_list_failed",
+  "approval_ledger_probe_membership_nonmember_workspace_list_failed",
+  "approval_ledger_probe_membership_self_read_failed",
+  "approval_ledger_probe_audit_insert_failed",
+  "approval_ledger_probe_audit_select_failed",
+  "approval_ledger_probe_audit_cross_tenant_read_failed",
+  "approval_ledger_probe_audit_update_denied_failed",
+  "approval_ledger_probe_audit_delete_denied_failed",
+  "approval_ledger_probe_audit_truncate_denied_failed",
   "approval_ledger_probe_viewer_insert_failed",
   "approval_ledger_probe_workspace_delete_protected_failed",
   "approval_ledger_probe_count_failed",
@@ -255,6 +264,95 @@ export async function runApprovalLedgerRlsProbes(
       await client.query("BEGIN");
       await client.query("SET LOCAL ROLE app_runtime");
       await setRuntimeContext(client, ownerUserId, workspaceId);
+      currentProbe = "membership_active_workspace_list";
+      const workspaceMemberships = await client.query(
+        `SELECT user_id
+           FROM public.workspace_memberships
+          WHERE workspace_id = $1`,
+        [workspaceId],
+      );
+      assert.equal(workspaceMemberships.rowCount, 3);
+      probeCount += 1;
+
+      currentProbe = "membership_nonmember_workspace_list";
+      await setRuntimeContext(client, otherOwnerUserId, workspaceId);
+      const hiddenMemberships = await client.query(
+        `SELECT user_id
+           FROM public.workspace_memberships
+          WHERE workspace_id = $1`,
+        [workspaceId],
+      );
+      assert.equal(hiddenMemberships.rowCount, 0);
+      probeCount += 1;
+
+      currentProbe = "membership_self_read";
+      const ownMembership = await client.query(
+        `SELECT workspace_id
+           FROM public.workspace_memberships
+          WHERE user_id = $1`,
+        [otherOwnerUserId],
+      );
+      assert.equal(ownMembership.rowCount, 1);
+      assert.equal(ownMembership.rows[0]?.workspace_id, otherWorkspaceId);
+      probeCount += 1;
+
+      await setRuntimeContext(client, ownerUserId, workspaceId);
+      currentProbe = "audit_insert";
+      await client.query(
+        `INSERT INTO public.workspace_audit_events (
+           workspace_id, actor_user_id, action, resource_type, resource_id,
+           metadata
+         ) VALUES ($1, $2, 'probe', 'rls_probe', $3, '{}'::jsonb)`,
+        [workspaceId, ownerUserId, randomUUID()],
+      );
+      probeCount += 1;
+
+      currentProbe = "audit_select";
+      const auditRows = await client.query(
+        `SELECT id
+           FROM public.workspace_audit_events
+          WHERE workspace_id = $1`,
+        [workspaceId],
+      );
+      assert.equal(auditRows.rowCount, 1);
+      probeCount += 1;
+
+      currentProbe = "audit_cross_tenant_read";
+      const hiddenAuditRows = await client.query(
+        `SELECT id
+           FROM public.workspace_audit_events
+          WHERE workspace_id = $1`,
+        [otherWorkspaceId],
+      );
+      assert.equal(hiddenAuditRows.rowCount, 0);
+      probeCount += 1;
+
+      currentProbe = "audit_update_denied";
+      await expectSqlState(client, "42501", () =>
+        client.query(
+          `UPDATE public.workspace_audit_events
+              SET action = 'tampered'
+            WHERE workspace_id = $1`,
+          [workspaceId],
+        ),
+      );
+      probeCount += 1;
+
+      currentProbe = "audit_delete_denied";
+      await expectSqlState(client, "42501", () =>
+        client.query(
+          "DELETE FROM public.workspace_audit_events WHERE workspace_id = $1",
+          [workspaceId],
+        ),
+      );
+      probeCount += 1;
+
+      currentProbe = "audit_truncate_denied";
+      await expectSqlState(client, "42501", () =>
+        client.query("TRUNCATE TABLE public.workspace_audit_events"),
+      );
+      probeCount += 1;
+
       currentProbe = "owner_approval_insert";
       const firstApproved = makeLedgerRow({
         workspaceId,
@@ -430,7 +528,7 @@ export async function runApprovalLedgerRlsProbes(
     }
 
     currentProbe = "probe_count";
-    assert.equal(probeCount, 13);
+    assert.equal(probeCount, 22);
     return { passed: true, probeCount };
   } catch {
     const code = `approval_ledger_probe_${currentProbe}_failed`;

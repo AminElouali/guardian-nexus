@@ -77,7 +77,10 @@ export const membershipsTable = pgTable(
       to: appRuntimeRole,
       using: sql`
         ${table.userId} = ${currentUserId}
-        OR ${table.workspaceId}::text = ${currentWorkspaceId}
+        OR (
+          ${table.workspaceId}::text = ${currentWorkspaceId}
+          AND public.workspace_current_user_is_member(${table.workspaceId})
+        )
       `,
     }),
     pgPolicy("workspace_memberships_insert_self", {

@@ -8,7 +8,7 @@ type VersionedMigrationReport = {
   baselineMatchesDrizzleProjection?: boolean;
   baselineMatchesExpectedLegacyProjection?: boolean;
   baselineLegacyActionRefConstraintVerified?: boolean;
-  baselineActionRefLegacyDifferenceOnly?: boolean;
+  baselineExpectedLegacyDifferencesOnly?: boolean;
   drizzleCatalog?: Record<string, number>;
   migratedCatalog?: Record<string, number>;
   migrationsApplied: string[];
@@ -25,6 +25,8 @@ type VersionedMigrationReport = {
   migration0006Idempotent?: boolean;
   migration0006UnexpectedConstraintRejected?: boolean;
   migration0007Idempotent?: boolean;
+  migration0008LegacyStateReplaced?: boolean;
+  migration0008Idempotent?: boolean;
   inventoryMatchesDrizzle?: Record<string, boolean>;
   violationCodes: string[];
 };
@@ -83,20 +85,23 @@ const artifact = {
     migration0005: report.migration0005Idempotent ?? null,
     migration0006: report.migration0006Idempotent ?? null,
     migration0007: report.migration0007Idempotent ?? null,
+    migration0008: report.migration0008Idempotent ?? null,
   },
   migration0006LegacyConstraintReplaced:
     report.migration0006LegacyConstraintReplaced ?? null,
   migration0006Postcondition: report.migration0006Postcondition ?? null,
   migration0006UnexpectedConstraintRejected:
     report.migration0006UnexpectedConstraintRejected ?? null,
+  migration0008LegacyStateReplaced:
+    report.migration0008LegacyStateReplaced ?? null,
   baselineMatchesDrizzleProjection:
     report.baselineMatchesDrizzleProjection ?? null,
   baselineMatchesExpectedLegacyProjection:
     report.baselineMatchesExpectedLegacyProjection ?? null,
   baselineLegacyActionRefConstraintVerified:
     report.baselineLegacyActionRefConstraintVerified ?? null,
-  baselineActionRefLegacyDifferenceOnly:
-    report.baselineActionRefLegacyDifferenceOnly ?? null,
+  baselineExpectedLegacyDifferencesOnly:
+    report.baselineExpectedLegacyDifferencesOnly ?? null,
   inventoryMatchesDrizzle: report.inventoryMatchesDrizzle ?? null,
   migrationsApplied: report.migrationsApplied,
   versionedMigrationAudit: report,
@@ -119,7 +124,7 @@ if (
     mode: 0o600,
   });
   console.log(
-    `Versioned SQL migration audit: status=${report.status} differences=${differenceCodes.length} migration0003Idempotent=${artifact.idempotency.migration0003} migration0004Idempotent=${artifact.idempotency.migration0004} migration0005Idempotent=${artifact.idempotency.migration0005} migration0006Idempotent=${artifact.idempotency.migration0006} migration0007Idempotent=${artifact.idempotency.migration0007}`,
+    `Versioned SQL migration audit: status=${report.status} differences=${differenceCodes.length} migration0003Idempotent=${artifact.idempotency.migration0003} migration0004Idempotent=${artifact.idempotency.migration0004} migration0005Idempotent=${artifact.idempotency.migration0005} migration0006Idempotent=${artifact.idempotency.migration0006} migration0007Idempotent=${artifact.idempotency.migration0007} migration0008Idempotent=${artifact.idempotency.migration0008}`,
   );
   if (report.status !== "passed" || differenceCodes.length > 0) {
     process.exitCode = 1;

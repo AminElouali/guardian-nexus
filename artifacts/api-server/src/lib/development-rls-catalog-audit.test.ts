@@ -65,7 +65,6 @@ const fullRuntimeAccessTables = [
   "workspace_memberships",
   "assets",
   "workspace_monthly_usage",
-  "workspace_audit_events",
   "workspace_integrations",
   "provider_connections",
   "connector_oauth_states",
@@ -78,6 +77,8 @@ const fixedTableGrantKeys = new Set([
       (privilege) => `app_runtime:${tableName}:${privilege}`,
     ),
   ),
+  "app_runtime:workspace_audit_events:SELECT",
+  "app_runtime:workspace_audit_events:INSERT",
   ...[
     "host_boundary_attestation_challenges",
     "ai_assessment_approval_requests",
@@ -220,6 +221,7 @@ function makeSnapshots(): {
     "ai_assessment_jobs",
     "host_boundary_attestation_challenges",
     "ai_assessment_approval_requests",
+    "workspace_audit_events",
     "workspace_connector_credentials",
     "workspace_connector_executions",
     "workspace_approval_receipts",
@@ -302,6 +304,7 @@ function makeSnapshots(): {
     })),
   };
   const appendOnlyGrantRows = [
+    "workspace_audit_events",
     "workspace_approval_ledger",
     "workspace_action_rule_versions",
     "workspace_approval_receipts",
@@ -601,7 +604,9 @@ test("development RLS audit fails if runtime receives table-level UPDATE", () =>
   );
   assert.ok(update);
   update.granted = true;
-  snapshots.appendOnlyGrantRows[0]!.can_update = true;
+  snapshots.appendOnlyGrantRows.find(
+    (row) => row.table_name === "workspace_approval_ledger",
+  )!.can_update = true;
   const audit = auditDevelopmentRlsCatalog({ contract, ...snapshots });
   assert.equal(audit.passed, false);
   assert.ok(
