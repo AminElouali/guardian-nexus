@@ -78,7 +78,8 @@ type Stage =
   | "development_read_only_catalog_audit"
   | "approval_ledger_rls_probes"
   | "demo_member_seed_tests"
-  | "approval_e2e";
+  | "approval_e2e"
+  | "mcp_promptfoo_redteam";
 
 type SafeReport = {
   version: 1;
@@ -109,6 +110,13 @@ type SafeReport = {
   approvalE2eFailureType?: string;
   approvalE2ePassed?: boolean;
   targetedConnectorCredentialE2e?: boolean;
+  mcpPromptfooRedteamPassed?: boolean;
+  mcpPromptfooRedteamSummary?: {
+    attacks: number;
+    blocked: number;
+    idempotentReplays: number;
+    failed: number;
+  };
   versionedMigrationAudit?: VersionedMigrationAuditReport;
   failureOutput?: SafeChildOutput;
   failureStage?: Stage;
@@ -2265,6 +2273,15 @@ async function main(): Promise<void> {
   let approvalE2eFailureErrorCode: string | undefined;
   let approvalE2eFailureType: string | undefined;
   let approvalE2ePassed = false;
+  let mcpPromptfooRedteamPassed = false;
+  let mcpPromptfooRedteamSummary:
+    | {
+      attacks: number;
+      blocked: number;
+      idempotentReplays: number;
+      failed: number;
+    }
+    | undefined;
   let postSchemaCounts = {
     tables: 0,
     columns: 0,
@@ -3077,6 +3094,47 @@ async function main(): Promise<void> {
       return;
     }
 
+    currentStage = "mcp_promptfoo_redteam";
+    const redteamOutput = await runAndCapture(
+      pnpm,
+      ["--filter", "@workspace/api-server", "run", "redteam:mcp"],
+      repoRoot,
+      {
+        ...e2eEnv,
+        GUARDIAN_PROMPTFOO_MCP_ONLY: "1",
+      },
+      currentStage,
+    );
+    const combinedRedteamOutput =
+      `${redteamOutput.stdout}\n${redteamOutput.stderr}`;
+    const redteamSummaryMatch = combinedRedteamOutput.match(
+      /Resumen Promptfoo MCP: ataques lanzados=(\d+), bloqueados=(\d+), reintentos idempotentes=(\d+), fallidos=(\d+)\./,
+    );
+    if (redteamSummaryMatch) {
+      mcpPromptfooRedteamSummary = {
+        attacks: Number(redteamSummaryMatch[1]),
+        blocked: Number(redteamSummaryMatch[2]),
+        idempotentReplays: Number(redteamSummaryMatch[3]),
+        failed: Number(redteamSummaryMatch[4]),
+      };
+      const summary = mcpPromptfooRedteamSummary;
+      console.log(
+        `Promptfoo MCP red team: attacks=${summary.attacks} blocked=${summary.blocked} idempotent_replays=${summary.idempotentReplays} failed=${summary.failed}`,
+      );
+    }
+    if (
+      redteamOutput.exitCode !== 0 ||
+      redteamOutput.signal !== null ||
+      !mcpPromptfooRedteamSummary ||
+      mcpPromptfooRedteamSummary.failed > 0 ||
+      mcpPromptfooRedteamSummary.idempotentReplays !== 1 ||
+      mcpPromptfooRedteamSummary.blocked !==
+        mcpPromptfooRedteamSummary.attacks
+    ) {
+      throw new Error("mcp_promptfoo_redteam_rejected");
+    }
+    mcpPromptfooRedteamPassed = true;
+
     await writeSafeReport(reportDirectory, {
       version: 1,
       stage: "final",
@@ -3092,6 +3150,8 @@ async function main(): Promise<void> {
       approvalLedgerRlsProbeCount,
       approvalE2eSummary,
       approvalE2ePassed,
+      mcpPromptfooRedteamPassed,
+      mcpPromptfooRedteamSummary,
       versionedMigrationAudit,
     });
     console.log("Disposable PostgreSQL lab passed; sanitized reports were written.");
@@ -3135,6 +3195,8 @@ async function main(): Promise<void> {
         approvalE2eFailureErrorCode,
         approvalE2eFailureType,
         approvalE2ePassed,
+        mcpPromptfooRedteamPassed,
+        mcpPromptfooRedteamSummary,
         apiUnitTestFailures,
         versionedMigrationAudit,
         failureOutput: latestFailureOutput,
