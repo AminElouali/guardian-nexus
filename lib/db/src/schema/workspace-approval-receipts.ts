@@ -121,8 +121,11 @@ export const workspaceApprovalReceiptsTable = pgTable(
             AND approval.workspaceId = ${table.workspaceId}
             AND approval.status = 'approved'
             AND approval.decidedByUserId = ${currentUserId}
-            AND approval.actionSha256 IS NOT DISTINCT FROM NULLIF(
-              ${table.signedReceipt}->'payload'->>'actionSha256',
+            AND COALESCE(approval.actionSha256, '') = COALESCE(
+              NULLIF(
+                ${table.signedReceipt}->'payload'->>'actionSha256',
+                ''
+              ),
               ''
             )
             AND approval.proposalBindingSha256 =

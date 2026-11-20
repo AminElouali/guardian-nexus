@@ -104,6 +104,12 @@ El único destino registrado es falso y solo se inyecta en el E2E del laboratori
 
 **PROYECTADO:** registrar y autenticar servidores MCP reales, conectar el proxy con sus herramientas, definir cómo notificar al agente cuando se apruebe una solicitud y proporcionar un justificante específico para futuras acciones con permiso automático.
 
+**PROYECTADO:** añadir, mediante una ampliación versionada del ledger, un evento
+firmado para registrar también las denegaciones. Hoy `DENY`, llamadas
+desconocidas o rechazadas, solicitudes pendientes y la escalada de `ALLOW` a
+aprobación quedan en `workspace_audit_events` con hashes y motivos seguros; no
+se añaden eventos ni se cambia el formato del ledger v1.
+
 **Limitación conocida — PROYECTADA:** el clasificador actual solo acepta identificadores en minúsculas ASCII; algunos servidores MCP reales usan nombres `camelCase`. En la fase 3 de registro de servidores, Guardian guardará el nombre exacto declarado para cada herramienta y lo comparará literalmente. Cualquier variante, incluidas diferencias de mayúsculas, homoglifos o caracteres invisibles, se rechazará.
 
 ## 7. Estado actual

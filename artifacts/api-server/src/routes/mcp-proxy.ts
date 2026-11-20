@@ -4,6 +4,7 @@ import { Router, type IRouter, type RequestHandler } from "express";
 import {
   aiAssessmentApprovalRequestsTable,
   aiAssessmentJobsTable,
+  workspaceAuditEventsTable,
 } from "@workspace/db";
 import {
   classifyMcpToolCall,
@@ -145,6 +146,45 @@ function responseTextWithinLimit(value: string): string {
   return result;
 }
 
+function sha256(value: string): string {
+  return createHash("sha256").update(value, "utf8").digest("hex");
+}
+
+async function recordMcpDecisionAudit(
+  workspaceId: string,
+  credentialSha256: string,
+  input: {
+    reasonCode: string;
+    toolName?: string;
+    requestText: string;
+    decision: "deny" | "rejected";
+  },
+): Promise<void> {
+  await withAgentWorkspaceTransaction(
+    workspaceId,
+    credentialSha256,
+    async (tx, agent) => {
+      await tx.insert(workspaceAuditEventsTable).values({
+        workspaceId,
+        actorUserId: agent.principalUserId,
+        action: "mcp.tool_call_decision",
+        resourceType: "mcp_tool_call",
+        metadata: {
+          decision: input.decision,
+          reasonCode: input.reasonCode,
+          serverId: MCP_SERVER_ID,
+          ...(input.toolName
+            ? { toolNameSha256: sha256(input.toolName) }
+            : {}),
+          requestSha256: sha256(input.requestText),
+          synthetic: true,
+          externalSideEffect: false,
+        },
+      });
+    },
+  );
+}
+
 function toolCallArguments(
   params: Record<string, unknown>,
   rawArgumentsJson: string | null,
@@ -258,6 +298,11 @@ export function createMcpProxyRouter(
       }
       const args = toolCallArguments(rpc.params, rawArgumentsJson);
       if (!args.ok) {
+        await recordMcpDecisionAudit(workspaceId, credentialSha256, {
+          decision: "rejected",
+          reasonCode: "invalid_tool_call_arguments",
+          requestText: typeof req.body === "string" ? req.body : "",
+        });
         rpcError(res, id, -32602, "Argumentos no válidos.");
         return;
       }
@@ -350,6 +395,12 @@ export function createMcpProxyRouter(
         !classification.validatedArguments ||
         !classification.canonicalInputSha256
       ) {
+        await recordMcpDecisionAudit(workspaceId, credentialSha256, {
+          decision: "deny",
+          reasonCode: classification.reasonCode,
+          toolName: args.name,
+          requestText: rawArgumentsJson ?? "",
+        });
         rpcToolResult(
           res,
           id,
@@ -365,6 +416,12 @@ export function createMcpProxyRouter(
       );
       const destination = destinations.get(MCP_SERVER_ID);
       if (!toolDefinition || !destination) {
+        await recordMcpDecisionAudit(workspaceId, credentialSha256, {
+          decision: "rejected",
+          reasonCode: "destination_unavailable",
+          toolName: args.name,
+          requestText: rawArgumentsJson ?? "",
+        });
         rpcToolResult(res, id, "Destino no disponible en este entorno.", true, {
           reasonCode: "destination_unavailable",
         });

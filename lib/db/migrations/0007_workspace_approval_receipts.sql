@@ -96,8 +96,10 @@ CREATE POLICY workspace_approval_receipts_insert_approver
         AND approval.workspace_id = workspace_approval_receipts.workspace_id
         AND approval.status = 'approved'
         AND approval.decided_by_user_id = NULLIF(current_setting('app.user_id', true), '')
-        AND approval.action_sha256 IS NOT DISTINCT FROM
-          NULLIF(signed_receipt->'payload'->>'actionSha256', '')
+        AND COALESCE(approval.action_sha256, '') = COALESCE(
+          NULLIF(signed_receipt->'payload'->>'actionSha256', ''),
+          ''
+        )
         AND approval.proposal_binding_sha256 =
           signed_receipt->'payload'->>'proposalBindingSha256'
         AND approval.requested_by_user_id =

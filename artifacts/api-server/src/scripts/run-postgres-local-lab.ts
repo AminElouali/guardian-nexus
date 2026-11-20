@@ -2295,6 +2295,28 @@ async function main(): Promise<void> {
         identityVerified,
       });
       if (!phaseAudit.passed) {
+        const expressionMismatchIds = new Set(
+          phaseAudit.diagnostics
+            .filter((entry) => entry.startsWith("constraint_expression_"))
+            .map((entry) => {
+              const firstColon = entry.indexOf(":");
+              const secondColon = entry.indexOf(":", firstColon + 1);
+              return secondColon < 0
+                ? entry.slice(firstColon + 1)
+                : entry.slice(firstColon + 1, secondColon);
+            }),
+        );
+        for (const constraint of phaseSnapshot.constraints) {
+          const id = `${constraint.tableName}.${constraint.constraintName}`;
+          if (
+            expressionMismatchIds.has(id) &&
+            constraint.expression !== null
+          ) {
+            console.error(
+              `Catalog constraint definition (schema only): ${id} = ${constraint.expression}`,
+            );
+          }
+        }
         throw new Error("post_schema_audit_failed");
       }
     }
