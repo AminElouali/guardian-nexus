@@ -1313,7 +1313,12 @@ async function workspaceMembershipHelperContractValid(
             'target_workspace_id uuid'
           AND helper.prosecdef
           AND helper.provolatile = 's'
-          AND function_owner.rolname = 'postgres'
+          AND (
+            function_owner.oid = memberships_table.relowner
+            OR function_owner.rolsuper
+            OR function_owner.rolbypassrls
+          )
+          AND (function_owner.rolsuper OR function_owner.rolbypassrls)
           AND helper.proconfig @> ARRAY[
             'search_path=pg_catalog, public',
             'row_security=off'
@@ -1342,6 +1347,12 @@ async function workspaceMembershipHelperContractValid(
       JOIN pg_namespace AS namespace ON namespace.oid = helper.pronamespace
       JOIN pg_language AS lang ON lang.oid = helper.prolang
       JOIN pg_roles AS function_owner ON function_owner.oid = helper.proowner
+      JOIN pg_class AS memberships_table
+        ON memberships_table.relname = 'workspace_memberships'
+        AND memberships_table.relkind IN ('r', 'p')
+      JOIN pg_namespace AS memberships_namespace
+        ON memberships_namespace.oid = memberships_table.relnamespace
+        AND memberships_namespace.nspname = 'public'
       WHERE namespace.nspname = 'public'
         AND helper.proname = 'workspace_current_user_is_member'
     `,
