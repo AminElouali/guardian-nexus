@@ -9,6 +9,7 @@ const specialUpdateTables = [
   "ai_assessment_jobs",
   "host_boundary_attestation_challenges",
   "ai_assessment_approval_requests",
+  "workspace_audit_events",
   "workspace_connector_executions",
 ] as const;
 const specialInsertTables = [

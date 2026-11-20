@@ -85,6 +85,7 @@ const specialTables = [
   "ai_assessment_jobs",
   "host_boundary_attestation_challenges",
   "ai_assessment_approval_requests",
+  "workspace_audit_events",
   "workspace_connector_credentials",
   "workspace_connector_executions",
   "workspace_approval_receipts",
@@ -124,6 +125,16 @@ const testColumns: Record<string, string[]> = {
     "updated_at",
     "proposal_sha256",
     "workspace_id",
+  ],
+  workspace_audit_events: [
+    "id",
+    "workspace_id",
+    "actor_user_id",
+    "action",
+    "resource_type",
+    "resource_id",
+    "metadata",
+    "created_at",
   ],
   workspace_connector_credentials: [
     "id",
@@ -642,7 +653,10 @@ test("complete synthetic PostgreSQL catalog snapshot satisfies the contract", ()
   assert.equal(report.expectedPolicyCount, 53);
   assert.equal(report.policies.length, 53);
   assert.equal(report.tablePrivileges.length, 3 * 19 * 4);
-  assert.equal(report.updateColumns.length, 3 * (6 + 6 + 12 + 10 + 15 + 7));
+  assert.equal(
+    report.updateColumns.length,
+    3 * (6 + 6 + 12 + 10 + 15 + 7 + 8),
+  );
   assert.equal(report.insertColumns.length, 3 * (10 + 15 + 7));
 });
 
