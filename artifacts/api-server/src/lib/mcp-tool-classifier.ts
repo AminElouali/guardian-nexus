@@ -47,6 +47,16 @@ const REGISTERED_MCP_TOOLS: Readonly<
       guardianDescription: "Propón un correo externo de prueba. La regla vigente puede exigir aprobación humana.",
       volume: Object.freeze({ kind: "fixed_message" }),
     }),
+    issue_synthetic_refund: Object.freeze({
+      actionType: "guardian.synthetic.support.refund.v1",
+      dataSensitivity: "sensible",
+      guardianDescription: "Propón un reembolso sintético de atención al cliente. La regla y el límite vigentes deciden si se permite automáticamente o requiere aprobación.",
+      volume: Object.freeze({
+        kind: "argument",
+        field: "amount_cents",
+        unit: "cents",
+      }),
+    }),
   }),
 });
 

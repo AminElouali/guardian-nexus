@@ -114,6 +114,7 @@ type SafeReport = {
   mcpPromptfooRedteamSummary?: {
     attacks: number;
     blocked: number;
+    approvalRequired: number;
     idempotentReplays: number;
     failed: number;
   };
@@ -2278,6 +2279,7 @@ async function main(): Promise<void> {
     | {
       attacks: number;
       blocked: number;
+      approvalRequired: number;
       idempotentReplays: number;
       failed: number;
     }
@@ -3108,18 +3110,19 @@ async function main(): Promise<void> {
     const combinedRedteamOutput =
       `${redteamOutput.stdout}\n${redteamOutput.stderr}`;
     const redteamSummaryMatch = combinedRedteamOutput.match(
-      /Resumen Promptfoo MCP: ataques lanzados=(\d+), bloqueados=(\d+), reintentos idempotentes=(\d+), fallidos=(\d+)\./,
+      /Resumen Promptfoo MCP: ataques lanzados=(\d+), bloqueados=(\d+), requieren aprobación=(\d+), reintentos idempotentes=(\d+), fallidos=(\d+)\./,
     );
     if (redteamSummaryMatch) {
       mcpPromptfooRedteamSummary = {
         attacks: Number(redteamSummaryMatch[1]),
         blocked: Number(redteamSummaryMatch[2]),
-        idempotentReplays: Number(redteamSummaryMatch[3]),
-        failed: Number(redteamSummaryMatch[4]),
+        approvalRequired: Number(redteamSummaryMatch[3]),
+        idempotentReplays: Number(redteamSummaryMatch[4]),
+        failed: Number(redteamSummaryMatch[5]),
       };
       const summary = mcpPromptfooRedteamSummary;
       console.log(
-        `Promptfoo MCP red team: attacks=${summary.attacks} blocked=${summary.blocked} idempotent_replays=${summary.idempotentReplays} failed=${summary.failed}`,
+        `Promptfoo MCP red team: attacks=${summary.attacks} blocked=${summary.blocked} approval_required=${summary.approvalRequired} idempotent_replays=${summary.idempotentReplays} failed=${summary.failed}`,
       );
     }
     if (
@@ -3128,7 +3131,8 @@ async function main(): Promise<void> {
       !mcpPromptfooRedteamSummary ||
       mcpPromptfooRedteamSummary.failed > 0 ||
       mcpPromptfooRedteamSummary.idempotentReplays !== 1 ||
-      mcpPromptfooRedteamSummary.blocked !==
+      mcpPromptfooRedteamSummary.blocked +
+          mcpPromptfooRedteamSummary.approvalRequired !==
         mcpPromptfooRedteamSummary.attacks
     ) {
       throw new Error("mcp_promptfoo_redteam_rejected");

@@ -2056,6 +2056,8 @@ routes.post(
           actionType: body.data.actionType,
           arguments: body.data.arguments,
           idempotencyKey: body.data.idempotencyKey,
+          allowAutomaticRefund:
+            body.data.actionType === "guardian.synthetic.support.refund.v1",
         }),
     ).then(
       (value) => ({ ok: true as const, value }),

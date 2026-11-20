@@ -9,7 +9,11 @@ import {
 } from "./mcp-tool-classifier";
 
 const SERVER_ID = "guardian-demo-mcp";
-const REGISTERED_TOOL_NAMES = ["reply_to_support", "send_external_email"];
+const REGISTERED_TOOL_NAMES = [
+  "reply_to_support",
+  "send_external_email",
+  "issue_synthetic_refund",
+];
 const PROPERTY_SEED = 0x5eed2026;
 const RUNS_PER_PROPERTY = 500;
 

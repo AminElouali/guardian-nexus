@@ -16,6 +16,7 @@ type GenericActionInput = {
   actionType: string;
   args: Record<string, string | number | boolean>;
   ruleId: string;
+  agentId?: string;
   summary: string;
   messagePreview: string;
 };
@@ -53,7 +54,8 @@ export function createGenericActionEvidence(
 ): GenericActionGatewayEvidence | null {
   if (
     input.actionType !== "guardian.support.reply.send.v1" &&
-    input.actionType !== "guardian.email.send.external.v1"
+    input.actionType !== "guardian.email.send.external.v1" &&
+    input.actionType !== "guardian.synthetic.support.refund.v1"
   ) {
     return null;
   }
@@ -70,6 +72,8 @@ export function createGenericActionEvidence(
     input.actionType,
     evaluated.args,
   );
+  const display = genericActionDisplay(input.actionType, evaluated.args);
+  if (!display) return null;
   const proposalSha256 = genericActionProposalSha256({
     workspaceId: input.workspaceId,
     requestedByUserId: input.requestedByUserId,
@@ -81,9 +85,9 @@ export function createGenericActionEvidence(
     engine: "guardian_action_gateway",
     engineVersion: "guardian-action-catalog-v1",
     profileId:
-      input.actionType === "guardian.support.reply.send.v1"
-        ? "guardian-agent-lab-customer-service-v1"
-        : "guardian-agent-lab-email-v1",
+      input.actionType === "guardian.email.send.external.v1"
+        ? "guardian-agent-lab-email-v1"
+        : "guardian-agent-lab-customer-service-v1",
     executionMode: "deterministic_fixture",
     modelInference: false,
     toolCallOrigin: "controlled_fixture_not_llm",
@@ -95,10 +99,7 @@ export function createGenericActionEvidence(
     proposalSha256,
     ruleId: evaluated.ruleId,
     decision: "require_approval",
-    agentId:
-      input.actionType === "guardian.support.reply.send.v1"
-        ? "agent-fixture-support-demo-v1"
-        : "agent-fixture-email-demo-v1",
+    agentId: input.agentId ?? display.agentId,
     synthetic: true,
     summary: input.summary.slice(0, 500),
     messagePreview: input.messagePreview.slice(0, 500),
@@ -235,6 +236,7 @@ export function verifyGenericActionEvidence(
     actionSha256: string;
     proposalSha256: string;
     profileId: string;
+    agentId?: string;
   },
 ): GenericActionGatewayEvidence | null {
   if (
@@ -329,7 +331,8 @@ export function verifyGenericActionEvidence(
     !evaluated.ok ||
     (evidence.evidenceVersion === 1 &&
       ((evidence.actionType !== "guardian.support.reply.send.v1" &&
-        evidence.actionType !== "guardian.email.send.external.v1") ||
+        evidence.actionType !== "guardian.email.send.external.v1" &&
+        evidence.actionType !== "guardian.synthetic.support.refund.v1") ||
         evaluated.decision !== "require_approval" ||
         evaluated.ruleId !== evidence.ruleId))
   ) {
@@ -375,9 +378,18 @@ export function verifyGenericActionEvidence(
   }
   const hashes = hashGenericActionArguments(evidence.actionType, evaluated.args);
   const display = genericActionDisplay(evidence.actionType, evaluated.args);
+  const v1AgentIdentityMatches = evidence.evidenceVersion !== 1
+    ? true
+    : evidence.actionType === "guardian.synthetic.support.refund.v1"
+      ? expected.agentId !== undefined
+        ? evidence.agentId === expected.agentId
+        : evidence.agentId === display?.agentId ||
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+            .test(evidence.agentId)
+      : evidence.agentId === display?.agentId;
   if (
     !display ||
-    (evidence.evidenceVersion === 1 && display.agentId !== evidence.agentId) ||
+    !v1AgentIdentityMatches ||
     display.summary !== evidence.summary ||
     display.messagePreview !== evidence.messagePreview ||
     hashes.argumentsSha256 !== evidence.argumentsSha256 ||

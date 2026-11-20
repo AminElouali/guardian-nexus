@@ -54,6 +54,22 @@ test("known external email tool uses its explicit mapping and fixed volume tag",
   });
 });
 
+test("synthetic refund tool is bound to the catalog and amount volume", () => {
+  const result = classify(
+    "issue_synthetic_refund",
+    '{"ticket_id":"TICKET-SYNTH-42","amount_cents":2500}',
+  );
+  assert.equal(result.status, "classified");
+  assert.equal(result.actionType, "guardian.synthetic.support.refund.v1");
+  assert.deepEqual(result.volume, {
+    kind: "argument",
+    field: "amount_cents",
+    value: 2500,
+    maximum: 1_000_000,
+    unit: "cents",
+  });
+});
+
 test("unknown tools and unregistered MCP servers are unknown and blocked", () => {
   const unknownTool = classify("read_everything", "{}");
   assert.equal(unknownTool.status, "unknown");
