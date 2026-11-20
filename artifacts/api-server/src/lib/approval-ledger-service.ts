@@ -3,6 +3,7 @@ import { and, asc, desc, eq, gt, isNull, sql } from "drizzle-orm";
 import {
   aiAssessmentApprovalRequestsTable,
   workspaceApprovalLedgerTable,
+  workspaceApprovalReceiptsTable,
 } from "@workspace/db";
 import type { TenantTransaction } from "./tenant-db";
 import {
@@ -174,6 +175,19 @@ export async function updateApprovedRequestAndAppendReceipt(
   await insertRow(tx, ledgerRowFromSignedEvent(
     signApprovalLedgerEventV1(event, privateKey),
   ));
+  await tx.execute(
+    sql`SELECT set_config('app.approval_receipt_writer', '1', true)`,
+  );
+  await tx.execute(sql`
+    INSERT INTO public.workspace_approval_receipts (
+      approval_id, workspace_id, receipt_id, receipt_sha256,
+      signed_receipt, approved_by_user_id
+    ) VALUES (
+      ${input.approvalId}, ${input.workspaceId}, ${receipt.payload.receiptId},
+      ${receipt.payloadSha256}, ${JSON.stringify(receipt)}::jsonb,
+      ${input.actorUserId}
+    )
+  `);
   return { approval: updated, receipt };
 }
 
@@ -235,6 +249,24 @@ export async function readWorkspaceApprovalLedgerEvents(
     throw new ApprovalLedgerError("approval_event_invalid");
   }
   return events as SignedApprovalLedgerEventV1[];
+}
+
+export async function readWorkspaceApprovalReceiptForAgent(
+  tx: TenantTransaction,
+  workspaceId: string,
+  approvalId: string,
+): Promise<unknown | null> {
+  const [row] = await tx
+    .select({ signedReceipt: workspaceApprovalReceiptsTable.signedReceipt })
+    .from(workspaceApprovalReceiptsTable)
+    .where(
+      and(
+        eq(workspaceApprovalReceiptsTable.workspaceId, workspaceId),
+        eq(workspaceApprovalReceiptsTable.approvalId, approvalId),
+      ),
+    )
+    .limit(1);
+  return row?.signedReceipt ?? null;
 }
 
 export async function consumeApprovalReceipt(

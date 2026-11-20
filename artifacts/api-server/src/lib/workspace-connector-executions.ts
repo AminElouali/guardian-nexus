@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { Buffer } from "node:buffer";
 import { and, eq, sql } from "drizzle-orm";
 import {
   aiAssessmentApprovalRequestsTable,
@@ -33,6 +34,7 @@ import {
 export type ConnectorExecutionAdapterResult = {
   resultCode: string;
   summary: string;
+  responseText?: string;
 };
 
 export type ConnectorExecutionAdapter = {
@@ -63,6 +65,7 @@ export type ConnectorExecutionResult = {
   replayed: boolean;
   responseSummary: string | null;
   failureCode: string | null;
+  responseText?: string | null;
 };
 
 export type ConnectorExecutionStage =
@@ -219,12 +222,27 @@ function replayResult(
     replayed: true,
     responseSummary: row.responseSummary,
     failureCode: row.failureCode,
+    responseText: null,
   };
+}
+
+function boundedResponseText(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const limit = 4_096;
+  let output = "";
+  let bytes = 0;
+  for (const character of value) {
+    const characterBytes = Buffer.byteLength(character, "utf8");
+    if (bytes + characterBytes > limit) break;
+    output += character;
+    bytes += characterBytes;
+  }
+  return output;
 }
 
 function sanitizeAdapterSummary(
   result: ConnectorExecutionAdapterResult,
-): { resultCode: string; summary: string } {
+): { resultCode: string; summary: string; responseText: string | null } {
   const resultCode =
     result.resultCode === "captured_locally" ||
     result.resultCode === "completed" ||
@@ -237,7 +255,11 @@ function sanitizeAdapterSummary(
       : resultCode === "rejected"
         ? "El conector rechazó la acción."
         : "El conector confirmó la acción.";
-  return { resultCode, summary };
+  return {
+    resultCode,
+    summary,
+    responseText: boundedResponseText(result.responseText),
+  };
 }
 
 function auditExecution(
@@ -493,6 +515,7 @@ export async function executeWorkspaceConnectorAction(
       let responseSummary: string | null = null;
       let failureCode: string | null = "credential_unavailable";
       let resultCode = "credential_unavailable";
+      let responseText: string | null = null;
       if (credential) {
         try {
           const keyring = loadConnectorVaultKeyring();
@@ -512,11 +535,13 @@ export async function executeWorkspaceConnectorAction(
             const safeResult = sanitizeAdapterSummary(adapterResult);
             status = "executed";
             responseSummary = safeResult.summary;
+            responseText = safeResult.responseText;
             failureCode = null;
             resultCode = safeResult.resultCode;
           } catch {
             status = "failed";
             responseSummary = null;
+            responseText = null;
             failureCode = "connector_failed";
             resultCode = "connector_failed";
           }
@@ -574,6 +599,7 @@ export async function executeWorkspaceConnectorAction(
         replayed: false,
         responseSummary: updated.responseSummary,
         failureCode: updated.failureCode,
+        responseText,
       };
     },
   );

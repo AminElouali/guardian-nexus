@@ -116,6 +116,7 @@ export function createWorkspaceRuleActionEvidence(input: {
   ruleId: string;
   ruleVersionId: string;
   ruleDocument: WorkspaceActionRuleDocument;
+  allowEscalation?: boolean;
   summary: string;
   messagePreview: string;
   agentId: string;
@@ -128,8 +129,13 @@ export function createWorkspaceRuleActionEvidence(input: {
     document: input.ruleDocument,
     ruleVersionId: input.ruleVersionId,
   });
+  const escalatedAllow =
+    decision.decision === "allow" &&
+    input.allowEscalation === true &&
+    getApprovalActionDefinition(input.actionType)?.requiresIndependentApprover ===
+      true;
   if (
-    decision.decision !== "require_approval" ||
+    (decision.decision !== "require_approval" && !escalatedAllow) ||
     !decision.ruleId ||
     decision.ruleId !== input.ruleId
   ) {
@@ -175,6 +181,9 @@ export function createWorkspaceRuleActionEvidence(input: {
     ruleVersionId: input.ruleVersionId,
     ruleDocumentSha256,
     ruleDocument: input.ruleDocument,
+    ...(escalatedAllow
+      ? { decisionEscalation: "rule_allow_escalated_to_approval" as const }
+      : {}),
   };
   return { ...unsigned, evidenceSha256: sha256(unsigned) };
 }
@@ -263,8 +272,16 @@ export function verifyGenericActionEvidence(
     typeof (value as { evidenceVersion?: unknown }).evidenceVersion === "number"
       ? (value as { evidenceVersion: number }).evidenceVersion
       : 0;
+  const hasDecisionEscalation =
+    evidenceVersion === 2 && Object.hasOwn(value, "decisionEscalation");
   const expectedKeys = evidenceVersion === 2
-    ? [...v1Keys, "ruleVersionId", "ruleDocumentSha256", "ruleDocument"]
+    ? [
+      ...v1Keys,
+      "ruleVersionId",
+      "ruleDocumentSha256",
+      "ruleDocument",
+      ...(hasDecisionEscalation ? ["decisionEscalation"] : []),
+    ]
     : v1Keys;
   if (
     Reflect.ownKeys(value).length !== expectedKeys.length ||
@@ -338,9 +355,21 @@ export function verifyGenericActionEvidence(
     : null;
   if (
     effectiveDecision &&
-    (effectiveDecision.decision !== "require_approval" ||
+    ((effectiveDecision.decision !== "require_approval" &&
+      !(
+        effectiveDecision.decision === "allow" &&
+        evidence.decisionEscalation === "rule_allow_escalated_to_approval" &&
+        getApprovalActionDefinition(evidence.actionType)
+          ?.requiresIndependentApprover === true
+      )) ||
       effectiveDecision.ruleId !== evidence.ruleId ||
       effectiveDecision.ruleVersionId !== evidence.ruleVersionId)
+  ) {
+    return null;
+  }
+  if (
+    evidence.decisionEscalation !== undefined &&
+    evidence.decisionEscalation !== "rule_allow_escalated_to_approval"
   ) {
     return null;
   }

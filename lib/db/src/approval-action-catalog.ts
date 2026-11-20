@@ -45,6 +45,7 @@ export type GenericActionGatewayEvidence = {
       };
     }>;
   } | null;
+  decisionEscalation?: "rule_allow_escalated_to_approval";
   evidenceSha256: string;
 };
 

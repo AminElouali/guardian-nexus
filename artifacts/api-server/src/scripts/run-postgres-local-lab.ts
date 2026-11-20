@@ -150,6 +150,7 @@ type VersionedMigrationAuditReport = {
   };
   migration0006Idempotent?: boolean;
   migration0006UnexpectedConstraintRejected?: boolean;
+  migration0007Idempotent?: boolean;
   inventoryMatchesDrizzle?: {
     tables: boolean;
     columns: boolean;
@@ -858,6 +859,7 @@ const versionedMigrationTableNames = [
   "workspace_agents",
   "workspace_connector_credentials",
   "workspace_connector_executions",
+  "workspace_approval_receipts",
 ] as const;
 
 const legacyCatalogCounts: CatalogCounts = {
@@ -870,11 +872,11 @@ const legacyCatalogCounts: CatalogCounts = {
 };
 
 const fullCatalogCounts: CatalogCounts = {
-  tables: 18,
-  columns: 198,
-  indexes: 49,
-  constraints: 92,
-  policies: 51,
+  tables: 19,
+  columns: 205,
+  indexes: 51,
+  constraints: 99,
+  policies: 53,
   roles: 3,
 };
 
@@ -1432,7 +1434,7 @@ async function runVersionedMigrationAudit(input: {
           ),
       )
       .sort();
-    if (!sameValue(currentTableSet.length, 18) ||
+    if (!sameValue(currentTableSet.length, 19) ||
       !sameValue(actualLegacyTableSet, legacyTableSet)) {
       throw new Error("versioned_migration_baseline_source_mismatch");
     }
@@ -1443,7 +1445,8 @@ async function runVersionedMigrationAudit(input: {
          (SELECT count(*) FROM public.workspace_action_rule_versions) +
          (SELECT count(*) FROM public.workspace_agents) +
          (SELECT count(*) FROM public.workspace_connector_credentials) +
-         (SELECT count(*) FROM public.workspace_connector_executions) AS row_count`,
+         (SELECT count(*) FROM public.workspace_connector_executions) +
+         (SELECT count(*) FROM public.workspace_approval_receipts) AS row_count`,
     );
     if (Number(newTableRows.rows[0]?.row_count) !== 0) {
       throw new Error("versioned_migration_baseline_new_tables_not_empty");
@@ -1452,7 +1455,8 @@ async function runVersionedMigrationAudit(input: {
     await migrationClient.query("BEGIN");
     try {
       await migrationClient.query(
-        `DROP TABLE public.workspace_action_rule_heads;
+        `DROP TABLE public.workspace_approval_receipts;
+         DROP TABLE public.workspace_action_rule_heads;
          DROP TABLE public.workspace_connector_executions;
          DROP TABLE public.workspace_connector_credentials;
          DROP TABLE public.workspace_agents;
@@ -1542,6 +1546,7 @@ async function runVersionedMigrationAudit(input: {
       "0004_align_rule_check_constraint_names.sql",
       "0005_workspace_connector_foundation.sql",
       "0006_align_approval_action_refs.sql",
+      "0007_workspace_approval_receipts.sql",
     ];
     for (const filename of migrationFiles) {
       const beforeActionRefMigration =
@@ -1640,6 +1645,44 @@ async function runVersionedMigrationAudit(input: {
           throw new Error("versioned_migration_0006_unexpected_constraint_accepted");
         }
       }
+      if (filename === "0007_workspace_approval_receipts.sql") {
+        const beforeIdempotentPhase = await readRlsCatalogPhaseSnapshot(
+          migrationPool,
+          tableNames,
+          roleNames,
+        );
+        const beforeIdempotentGrants = await readCatalogSnapshot(
+          migrationPool,
+          tableNames,
+          roleNames,
+        );
+        await applyVersionedMigration(migrationClient, filename);
+        const afterIdempotentPhase = await readRlsCatalogPhaseSnapshot(
+          migrationPool,
+          tableNames,
+          roleNames,
+        );
+        const afterIdempotentGrants = await readCatalogSnapshot(
+          migrationPool,
+          tableNames,
+          roleNames,
+        );
+        const idempotentInventory = compareCatalogInventories(
+          beforeIdempotentPhase,
+          beforeIdempotentGrants.snapshot,
+          afterIdempotentPhase,
+          afterIdempotentGrants.snapshot,
+        );
+        report.migration0007Idempotent =
+          sameValue(
+            catalogCounts(beforeIdempotentPhase),
+            catalogCounts(afterIdempotentPhase),
+          ) &&
+          Object.values(idempotentInventory).every(Boolean);
+        if (!report.migration0007Idempotent) {
+          throw new Error("versioned_migration_0007_not_idempotent");
+        }
+      }
     }
 
     const migratedPhase = await readRlsCatalogPhaseSnapshot(
@@ -1685,6 +1728,7 @@ async function runVersionedMigrationAudit(input: {
       !report.migration0006LegacyConstraintReplaced ||
       !report.migration0006Idempotent ||
       !report.migration0006UnexpectedConstraintRejected ||
+      !report.migration0007Idempotent ||
       auditViolations.length > 0
     ) {
       report.violationCodes.push(...auditViolations);
@@ -2397,7 +2441,7 @@ async function main(): Promise<void> {
     });
     versionedMigrationAudit.status = "passed";
     console.log(
-      `Versioned migration catalog: baseline=${versionedMigrationAudit.baselineActual?.tables}/${versionedMigrationAudit.baselineActual?.columns}/${versionedMigrationAudit.baselineActual?.indexes}/${versionedMigrationAudit.baselineActual?.constraints}/${versionedMigrationAudit.baselineActual?.policies}/${versionedMigrationAudit.baselineActual?.roles} migrated=${versionedMigrationAudit.migratedCatalog?.tables}/${versionedMigrationAudit.migratedCatalog?.columns}/${versionedMigrationAudit.migratedCatalog?.indexes}/${versionedMigrationAudit.migratedCatalog?.constraints}/${versionedMigrationAudit.migratedCatalog?.policies}/${versionedMigrationAudit.migratedCatalog?.roles} migration_0003_idempotent=${versionedMigrationAudit.migration0003Idempotent === true} migration_0004_idempotent=${versionedMigrationAudit.migration0004Idempotent === true} migration_0005_idempotent=${versionedMigrationAudit.migration0005Idempotent === true} migration_0006_legacy_replaced=${versionedMigrationAudit.migration0006LegacyConstraintReplaced === true} migration_0006_idempotent=${versionedMigrationAudit.migration0006Idempotent === true}.`,
+      `Versioned migration catalog: baseline=${versionedMigrationAudit.baselineActual?.tables}/${versionedMigrationAudit.baselineActual?.columns}/${versionedMigrationAudit.baselineActual?.indexes}/${versionedMigrationAudit.baselineActual?.constraints}/${versionedMigrationAudit.baselineActual?.policies}/${versionedMigrationAudit.baselineActual?.roles} migrated=${versionedMigrationAudit.migratedCatalog?.tables}/${versionedMigrationAudit.migratedCatalog?.columns}/${versionedMigrationAudit.migratedCatalog?.indexes}/${versionedMigrationAudit.migratedCatalog?.constraints}/${versionedMigrationAudit.migratedCatalog?.policies}/${versionedMigrationAudit.migratedCatalog?.roles} migration_0003_idempotent=${versionedMigrationAudit.migration0003Idempotent === true} migration_0004_idempotent=${versionedMigrationAudit.migration0004Idempotent === true} migration_0005_idempotent=${versionedMigrationAudit.migration0005Idempotent === true} migration_0006_legacy_replaced=${versionedMigrationAudit.migration0006LegacyConstraintReplaced === true} migration_0006_idempotent=${versionedMigrationAudit.migration0006Idempotent === true} migration_0007_idempotent=${versionedMigrationAudit.migration0007Idempotent === true}.`,
     );
 
     currentStage = "api_unit_tests";
@@ -2513,17 +2557,17 @@ async function main(): Promise<void> {
       developmentAuditReport.databaseNameMatched !== true ||
       developmentAuditReport.transactionReadOnly !== true ||
       developmentAuditReport.runtimeLoginAuthenticated !== true ||
-      developmentAuditReport.expected?.tables !== 18 ||
-      developmentAuditReport.expected?.columns !== 198 ||
-      developmentAuditReport.expected?.indexes !== 49 ||
-      developmentAuditReport.expected?.constraints !== 92 ||
-      developmentAuditReport.expected?.policies !== 51 ||
+      developmentAuditReport.expected?.tables !== 19 ||
+      developmentAuditReport.expected?.columns !== 205 ||
+      developmentAuditReport.expected?.indexes !== 51 ||
+      developmentAuditReport.expected?.constraints !== 99 ||
+      developmentAuditReport.expected?.policies !== 53 ||
       developmentAuditReport.expected?.roles !== 3 ||
-      developmentAuditReport.actual?.tables !== 18 ||
-      developmentAuditReport.actual?.columns !== 198 ||
-      developmentAuditReport.actual?.indexes !== 49 ||
-      developmentAuditReport.actual?.constraints !== 92 ||
-      developmentAuditReport.actual?.policies !== 51 ||
+      developmentAuditReport.actual?.tables !== 19 ||
+      developmentAuditReport.actual?.columns !== 205 ||
+      developmentAuditReport.actual?.indexes !== 51 ||
+      developmentAuditReport.actual?.constraints !== 99 ||
+      developmentAuditReport.actual?.policies !== 53 ||
       developmentAuditReport.actual?.roles !== 3 ||
       !Array.isArray(developmentAuditReport.violationCodes) ||
       developmentAuditReport.violationCodes.length !== 0
@@ -2535,7 +2579,7 @@ async function main(): Promise<void> {
     }
     developmentReadOnlyCatalogAuditPassed = true;
     console.log(
-      "Development read-only catalog audit passed on the disposable runtime connection: tables=18 columns=198 indexes=49 constraints=92 policies=51 roles=3.",
+      "Development read-only catalog audit passed on the disposable runtime connection: tables=19 columns=205 indexes=51 constraints=99 policies=53 roles=3.",
     );
 
     currentStage = "approval_ledger_rls_probes";

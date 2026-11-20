@@ -44,13 +44,13 @@ test("post-schema audit derives expected catalog from Drizzle and accepts policy
   const report = auditRlsPostPushCatalog(contract, snapshot, "post-schema");
 
   assert.equal(report.passed, true, report.violations.join(", "));
-  assert.equal(report.expectedTableCount, 18);
-  assert.equal(report.expectedPolicyCount, 51);
-  assert.equal(snapshot.tables.length, 18);
-  assert.equal(snapshot.columns.length, 198);
-  assert.equal(snapshot.indexes.length, 49);
-  assert.equal(snapshot.constraints.length, 92);
-  assert.equal(snapshot.policies.length, 51);
+  assert.equal(report.expectedTableCount, 19);
+  assert.equal(report.expectedPolicyCount, 53);
+  assert.equal(snapshot.tables.length, 19);
+  assert.equal(snapshot.columns.length, 205);
+  assert.equal(snapshot.indexes.length, 51);
+  assert.equal(snapshot.constraints.length, 99);
+  assert.equal(snapshot.policies.length, 53);
   assert.equal(snapshot.roles.length, 2);
   const ruleVersionKey = snapshot.constraints.find(
     (constraint) =>
@@ -319,7 +319,7 @@ test("membership policies enforce owner changes and creator-only privileged inse
   );
 
   assert.equal(report.passed, true, report.violations.join(", "));
-  assert.equal(report.expectedPolicyCount, 51);
+  assert.equal(report.expectedPolicyCount, 53);
   assert.equal(membershipPolicies.length, 3);
   assert.ok(insertPolicy?.withCheck);
   assert.match(

@@ -29,3 +29,4 @@ export * from "./approval-ledger";
 export * from "./workspace-action-rules";
 export * from "./workspace-agents";
 export * from "./workspace-connectors";
+export * from "./workspace-approval-receipts";

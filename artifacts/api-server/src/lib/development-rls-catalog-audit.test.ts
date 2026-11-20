@@ -93,6 +93,7 @@ const fixedTableGrantKeys = new Set([
   "app_runtime:workspace_connector_credentials:SELECT",
   "app_runtime:workspace_connector_credentials:DELETE",
   "app_runtime:workspace_connector_executions:SELECT",
+  "app_runtime:workspace_approval_receipts:SELECT",
 ]);
 const fixedInsertColumnGrantKeys = new Set([
   ...[
@@ -119,6 +120,16 @@ const fixedInsertColumnGrantKeys = new Set([
     "status",
   ].map((columnName) =>
     `app_runtime:workspace_connector_executions:${columnName}`,
+  ),
+  ...[
+    "approval_id",
+    "workspace_id",
+    "receipt_id",
+    "receipt_sha256",
+    "signed_receipt",
+    "approved_by_user_id",
+  ].map((columnName) =>
+    `app_runtime:workspace_approval_receipts:${columnName}`,
   ),
 ]);
 const fixedUpdateColumnGrantKeys = new Set([
@@ -207,10 +218,12 @@ function makeSnapshots(): {
     "ai_assessment_approval_requests",
     "workspace_connector_credentials",
     "workspace_connector_executions",
+    "workspace_approval_receipts",
   ];
   const insertTables = [
     "workspace_connector_credentials",
     "workspace_connector_executions",
+    "workspace_approval_receipts",
   ];
   const privileges = ["SELECT", "INSERT", "UPDATE", "DELETE"] as const;
   const catalogSnapshot: RlsCatalogSnapshot = {
@@ -287,6 +300,7 @@ function makeSnapshots(): {
   const appendOnlyGrantRows = [
     "workspace_approval_ledger",
     "workspace_action_rule_versions",
+    "workspace_approval_receipts",
   ].map((table_name) => ({
     table_name,
     can_select: true,
@@ -334,11 +348,11 @@ test("development RLS audit accepts the complete canonical catalog snapshot", ()
       privilegeDifferences: audit.privilegeDifferences,
     }),
   );
-  assert.equal(audit.expectedTableCount, 18);
-  assert.equal(audit.expectedColumnCount, 198);
-  assert.equal(audit.expectedIndexCount, 49);
-  assert.equal(audit.expectedConstraintCount, 92);
-  assert.equal(audit.expectedPolicyCount, 51);
+  assert.equal(audit.expectedTableCount, 19);
+  assert.equal(audit.expectedColumnCount, 205);
+  assert.equal(audit.expectedIndexCount, 51);
+  assert.equal(audit.expectedConstraintCount, 99);
+  assert.equal(audit.expectedPolicyCount, 53);
   assert.equal(audit.expectedRoleCount, 3);
 });
 
@@ -805,19 +819,19 @@ test("read-only audit report exposes only safe status, counts, and fixed codes",
   assert.equal(report.credentialsIncluded, false);
   assert.equal(report.connectionCoordinatesIncluded, false);
   assert.deepEqual(report.expected, {
-    tables: 18,
-    columns: 198,
-    indexes: 49,
-    constraints: 92,
-    policies: 51,
+    tables: 19,
+    columns: 205,
+    indexes: 51,
+    constraints: 99,
+    policies: 53,
     roles: 3,
   });
   assert.deepEqual(report.actual, {
-    tables: 18,
-    columns: 198,
-    indexes: 49,
-    constraints: 92,
-    policies: 51,
+    tables: 19,
+    columns: 205,
+    indexes: 51,
+    constraints: 99,
+    policies: 53,
     roles: 3,
   });
   assert.deepEqual(report.violationCodes, []);
@@ -839,10 +853,10 @@ test("catalog failure reports its fixed step and sanitized SQLSTATE with prior c
         );
       }
       if (sql.includes("relrowsecurity")) {
-        return { rows: [], rowCount: 18 };
+        return { rows: [], rowCount: 19 };
       }
       if (sql.includes("format_type(")) {
-        return { rows: [], rowCount: 198 };
+        return { rows: [], rowCount: 205 };
       }
       return { rows: [], rowCount: 0 };
     },
@@ -882,8 +896,8 @@ test("catalog failure reports its fixed step and sanitized SQLSTATE with prior c
   assert.equal(issuedQueries.length, 3);
   assert.deepEqual(progress.completedSteps, ["rls_flags", "columns"]);
   assert.deepEqual(progress.actual, {
-    tables: 18,
-    columns: 198,
+    tables: 19,
+    columns: 205,
     indexes: null,
     constraints: null,
     policies: null,
@@ -892,11 +906,11 @@ test("catalog failure reports its fixed step and sanitized SQLSTATE with prior c
   assert.ok(failure);
   const report = createDevelopmentRlsCatalogReport({
     expectedCounts: {
-      tables: 18,
-      columns: 198,
-      indexes: 49,
-      constraints: 92,
-      policies: 51,
+      tables: 19,
+      columns: 205,
+      indexes: 51,
+      constraints: 99,
+      policies: 53,
       roles: 3,
     },
     progress,
