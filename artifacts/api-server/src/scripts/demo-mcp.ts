@@ -605,7 +605,7 @@ async function main(): Promise<void> {
     }
 
     step("10/10 — credencial falsa y credencial revocada rechazadas; no hubo conexiones externas ni acciones financieras reales.");
-    step(`Workspace DEMO: ${workspaceId}. Las dos identidades son sintéticas y el aprobador está ligado a la cuenta admin de demo; la API web de producción no se modificó.`);
+    step(`Workspace DEMO: ${workspaceId}. Las identidades son registros sintéticos del harness loopback, no cuentas Clerk ni inicios de sesión del preview; no se modificó el flujo normal de autenticación.`);
   } finally {
     if (server?.listening) {
       await new Promise<void>((resolve, reject) => {
