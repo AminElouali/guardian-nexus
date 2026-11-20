@@ -77,7 +77,7 @@ import {
   AgentPolicyLabCatalog,
   AgentPolicyLabResult,
 } from './GuardianAgentPolicyLab';
-import recordedPolicyLabJobs from '../../../../generated-artifacts/guardian-agent-policy-labs-e2e.json';
+import recordedPolicyLabJobs from '../lib/recorded-policy-lab-jobs.json';
 import {
   QwenPolicyLabCatalog,
   QwenPolicyLabResult,
