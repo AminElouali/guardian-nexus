@@ -1471,6 +1471,7 @@ body { color: #203746; background: #f4f5f1; }
 .integration-card { min-width: 0; padding: 22px; border: 1px solid #dfddd4; border-radius: 10px; background: #fbfaf6; box-shadow: 0 4px 15px #253b3510; }
 .integration-card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 19px; }
 .integration-logo { display: grid; width: 43px; height: 43px; place-items: center; border: 1px solid #e1dfd5; border-radius: 10px; background: #f5f3eb; }
+.gmail-integration-logo { color: #a44d43; }
 .microsoft-logo { grid-template-columns: repeat(2, 9px); grid-template-rows: repeat(2, 9px); gap: 2px; border: 0; background: transparent; }
 .microsoft-logo span:nth-child(1) { background: #e35b4f; }.microsoft-logo span:nth-child(2) { background: #76a85b; }.microsoft-logo span:nth-child(3) { background: #478dba; }.microsoft-logo span:nth-child(4) { background: #d4a63f; }
 .aws-logo { color: #9b7437; background: #f4eee0; }

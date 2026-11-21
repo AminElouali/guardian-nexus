@@ -24,6 +24,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { WorkspaceQueryError } from '@/components/WorkspaceQueryError';
 import { PublicLandingMotion } from '@/components/PublicLandingMotion';
 import { SupportIdentifiers } from '@/components/SupportIdentifiers';
+import GmailConnectionCard from '@/components/GmailConnectionCard';
 import NotFound from '@/pages/not-found';
 import { RISK_INTELLIGENCE_CATALOG } from '@/risk-intelligence/catalog.v1';
 import { getDashboardLabStatusPresentation } from '@/lib/dashboard-lab-status';
@@ -434,10 +435,10 @@ function IntegrationsPage({ workspace }: { workspace: Workspace }) {
   </span>;
 
   return <div className="integrations-page">
-    <PageHeading eyebrow="Conexiones del espacio" title="Integraciones" detail={`Conecta fuentes de identidad y nube para documentar la postura de ${workspace.name}. El acceso es explícito, de solo lectura y limitado a este espacio.`} />
+    <PageHeading eyebrow="Conexiones del espacio" title="Integraciones" detail={`Conecta servicios al espacio ${workspace.name}. Microsoft 365 y AWS preparan acceso de solo lectura; Gmail solo permite envíos de prueba a destinatarios autorizados.`} />
     <div className="integration-scan-note" role="note" data-testid="notice-no-scan">
       <span className="scan-note-mark"><ShieldCheck size={19} /></span>
-      <div><b>Conectar no inicia un análisis</b><p>Estas conexiones preparan el acceso de solo lectura. Guardian Nexus todavía no ejecuta análisis ni genera hallazgos automáticos.</p></div>
+      <div><b>Conectar no inicia un análisis</b><p>Microsoft 365 y AWS preparan acceso de lectura; Gmail solo permite envíos de prueba con controles. Guardian Nexus todavía no ejecuta análisis ni genera hallazgos automáticos.</p></div>
       <span className="note-index">ESTADO ACTUAL / 01</span>
     </div>
     {!canManage && <div className="integration-permission" role="status" data-testid="status-read-only-role">
@@ -498,8 +499,9 @@ function IntegrationsPage({ workspace }: { workspace: Workspace }) {
           {canManage && integrationFor('aws')?.status === 'active' && <div className="integration-card-actions"><Button variant="danger" onClick={() => void revoke('aws')} disabled={!!busy} data-testid="button-revoke-aws">{busy === 'revoke-aws' ? 'Revocando…' : 'Revocar acceso AWS'}</Button></div>}
           {!integrationFor('aws') && <span className="integration-empty-caption" data-testid="state-aws-empty">Aún no hay un rol AWS conectado.</span>}
         </article>
+        <GmailConnectionCard workspace={workspace} />
       </div>}
-    <div className="integration-footnote" data-testid="text-integration-scope"><LockKeyhole size={14} /><span>Cada conexión pertenece únicamente a <b>{workspace.name}</b>. Se requiere consentimiento explícito y no se realizan cambios en tus sistemas.</span></div>
+    <div className="integration-footnote" data-testid="text-integration-scope"><LockKeyhole size={14} /><span>Cada conexión pertenece únicamente a <b>{workspace.name}</b>. Microsoft 365 y AWS solo preparan acceso de lectura; Gmail puede enviar el mensaje de prueba únicamente después de los controles configurados.</span></div>
   </div>;
 }
 

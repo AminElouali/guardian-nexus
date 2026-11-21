@@ -12,7 +12,7 @@ import {
 } from '@workspace/api-client-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import GmailConnectionCard from '@/components/GmailConnectionCard';
+import { Link } from 'wouter';
 
 const statusCopy: Record<WorkspaceIntegration['status'], string> = {
   awaiting_app_registration: 'Pendiente de registrar la aplicación',
@@ -112,14 +112,14 @@ export default function IntegrationsPage({ workspace }: { workspace: Workspace }
       <div>
         <div className="eyebrow">CONECTORES · PREPARACIÓN CONTROLADA</div>
         <h1>Integraciones</h1>
-        <p>Administra conexiones del espacio. Gmail está disponible únicamente en modo prueba, con una lista de destinatarios y aprobación antes del envío.</p>
+        <p>Prepara conexiones para este espacio. Gmail se gestiona en la sección Conexiones, en modo de prueba y con destinatarios autorizados.</p>
       </div>
       <span className="roadmap-status"><i /> CONEXIONES DEL ESPACIO</span>
     </div>
 
     <div className="connector-disclaimer" role="note">
       <ShieldCheck size={18} />
-       <div><b>Acceso bajo control de tu organización</b><p>No introduzcas contraseñas, tokens ni claves permanentes. Los conectores se administran por espacio; Gmail usa OAuth y una lista permitida de destinatarios en modo prueba.</p></div>
+       <div><b>Gmail se gestiona en Conexiones</b><p>Para conectar una cuenta de prueba o revisar los destinatarios permitidos, abre la sección Conexiones del espacio.</p><Link href="/integrations" className="button button-primary" data-testid="link-gmail-connections">Abrir Conexiones <ArrowUpRight size={15} /></Link></div>
     </div>
 
     {(feedback || error) && <div className={`connector-feedback ${error ? 'connector-feedback-error' : ''}`} role={error ? 'alert' : 'status'}>
@@ -157,7 +157,6 @@ export default function IntegrationsPage({ workspace }: { workspace: Workspace }
         {!isOwner && <p className="connector-role-note">Solo el propietario del espacio puede preparar conexiones.</p>}
       </section>
 
-      <GmailConnectionCard workspace={workspace} />
     </div>
 
     <section className="connector-records">
