@@ -36,12 +36,15 @@ export function GmailConnectionCardView({
   onAllowlistChange?: (value: string) => void;
 }) {
   return (
-    <section className="connector-card gmail-connector-card" data-testid="gmail-connection-card">
-      <div className="connector-card-head">
-        <div className="connector-symbol"><Mail size={19} /></div>
+    <section className="integration-card connector-card gmail-connector-card" data-testid="gmail-connection-card">
+      <div className="integration-card-top">
+        <div className="integration-logo gmail-integration-logo"><Mail size={20} /></div>
+        <span className="integration-index">03 / CORREO</span>
+      </div>
+      <div className="integration-title-row">
         <div>
-          <span className="panel-kicker">CORREO · MODO PRUEBA</span>
           <h2>Gmail (modo prueba)</h2>
+          <p>Gmail API · envío de prueba</p>
         </div>
         {status?.connected && <span className="connector-status connector-status-active">Conectado</span>}
       </div>

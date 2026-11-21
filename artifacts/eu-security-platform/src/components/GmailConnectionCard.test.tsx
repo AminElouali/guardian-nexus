@@ -39,6 +39,7 @@ test("Gmail card clearly reports an unconfigured connector without exposing cont
     scopes: connected.scopes,
   });
   assert.match(html, /Gmail \(modo prueba\)/);
+  assert.match(html, /03 \/ CORREO/);
   assert.match(html, /No configurado/);
   assert.doesNotMatch(html, /button-gmail-connect/);
   assert.doesNotMatch(html, /access_token|refresh_token|client_secret/i);
