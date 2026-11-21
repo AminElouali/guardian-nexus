@@ -94,7 +94,11 @@ export type GuardianActionGatewayPanelProps = {
   rulesLoading?: boolean;
   rulesError?: string | null;
   onRetryRules?: () => void;
-  onSaveRuleDraft?: (actionType: string, rules: WorkspaceActionRule[]) => Promise<unknown>;
+  onSaveRuleDraft?: (
+    actionType: string,
+    rules: WorkspaceActionRule[],
+    approvalPolicy?: { amountThresholdCents: number },
+  ) => Promise<unknown>;
   onApplyRuleProfile?: (
     profileId: WorkspaceActionRuleProfile["id"],
     refundLimitCents: number,
@@ -523,7 +527,16 @@ export function GuardianActionGatewayPanel({
     setRuleBusy(true);
     setRuleActionMessage("");
     try {
-      await onSaveRuleDraft(selectedRule.actionType, rules);
+      await onSaveRuleDraft(
+        selectedRule.actionType,
+        rules,
+        selectedRule.draftApprovalPolicy ??
+          selectedRule.activeApprovalPolicy ??
+          (selectedRule.approvalAmountField
+            ? { amountThresholdCents: 5000 }
+            : undefined) ??
+          undefined,
+      );
       setRuleActionMessage("Borrador guardado. La versión activa no cambia hasta que la actives explícitamente.");
     } catch {
       setRuleActionMessage("No se pudo guardar el borrador. La versión activa no ha cambiado.");

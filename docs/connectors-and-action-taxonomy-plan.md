@@ -83,6 +83,7 @@ Estado por etapa:
 3. **Conector genérico configurable por el cliente — PROYECTADO:** aún no se permite que clientes definan nuevos adaptadores o acciones.
 4. **Conectores nativos para la demo — PROYECTADOS:** correo en un sandbox como Mailtrap y Stripe en modo de prueba. Ambos están pendientes de confirmar; no se presupone que estén configurados ni conectados.
 5. **Verificador “sin recibo no se abre” — PROYECTADO para producción:** `lib/guardian-guard` demuestra el patrón con SMTP local, pero todavía no es un límite de seguridad desplegado que el agente no pueda evitar.
+6. **Aprobaciones por tramo y varias personas — IMPLEMENTADO en código, pendiente de validación de esta rama:** cada versión de reglas puede guardar un umbral monetario; por debajo solo puede aprobar una persona administradora y por encima la propietaria. El cambio bancario sintético requiere dos aprobaciones de personas distintas. El recibo v1 se emite solo al completar las aprobaciones requeridas; los votos quedan en la auditoría append-only.
 7. **Aislamiento de producción y objetivos de servicio — PROYECTADO:** medir p50 y p95 por separado para decisiones automáticas y aprobaciones humanas. Usar esos resultados para fijar un tiempo de respuesta verificable antes de prometerlo a clientes. Si las mediciones lo requieren, evaluar servidores en la UE y caché de reglas en memoria.
 
 **Reglas de evolución y operación — PROYECTADAS:** cada cambio de esquema debe incluir una migración versionada y una prueba que parta de la forma anterior del esquema. Además, realizar periódicamente una auditoría de solo lectura de la base de desarrollo para detectar desajustes pronto.
@@ -108,6 +109,12 @@ Una solicitud pendiente responde inmediatamente con su identificador. La misma l
 El único destino registrado es falso y solo se inyecta en el E2E del laboratorio; puede devolver texto adversarial, que se devuelve al agente como contenido de datos sin interpretarlo. Hay límites de tamaño de solicitud/respuesta y tiempo del destino. La aplicación normal no registra destinos y bloquea la ejecución si no hay uno. **No hay conexión de red a servidores MCP reales, registro persistente de servidores, notificación automática al agente ni prueba de aislamiento de producción.**
 
 **PROYECTADO:** registrar y autenticar servidores MCP reales, conectar el proxy con sus herramientas, definir cómo notificar al agente cuando se apruebe una solicitud y proporcionar un justificante específico para futuras acciones con permiso automático.
+
+### Aprobaciones por importe y por varias personas — fase 3
+
+**IMPLEMENTADO en esta rama; pendiente de validación y revisión:** el documento inmutable de cada versión de reglas puede guardar un umbral de aprobación monetario, limitado por el servidor. En acciones del catálogo que declaran un campo de importe, los importes hasta el umbral requieren una persona administradora; por encima requieren la persona propietaria. El umbral, la regla y su versión quedan vinculados a la evidencia de la propuesta.
+
+El cambio bancario sintético requiere dos aprobaciones de usuarios distintos. Cada voto se registra en `workspace_audit_events`; el registro es append-only, se serializa por solicitud y repetir el voto de la misma persona no cuenta de nuevo. La solicitud permanece pendiente y no emite recibo hasta reunir las aprobaciones necesarias. El recibo v1 y el evento v1 del ledger no cambian. Los grupos configurables de aprobadores y reglas de importe personalizadas por grupo siguen **PROYECTADOS**.
 
 ### Catálogo de los ocho servicios — fase 1 IMPLEMENTADA
 

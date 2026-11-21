@@ -44,6 +44,9 @@ export type GenericActionGatewayEvidence = {
   ruleDocumentSha256?: string | null;
   ruleDocument?: {
     version: 1;
+    approvalPolicy?: {
+      amountThresholdCents: number;
+    };
     rules: Array<{
       id: string;
       decision: ApprovalActionDecision;
@@ -137,6 +140,8 @@ export type ApprovalActionDefinition = {
   allowedApproverRoles: readonly ("owner" | "admin")[];
   receiptExpirySeconds: number;
   requiresIndependentApprover: boolean;
+  minimumApproverCount?: 1 | 2;
+  approvalAmountField?: string;
   syntheticTemplateText?: string;
   argumentSchema: {
     type: "object";
@@ -303,6 +308,7 @@ const additionalApprovalActions: readonly ApprovalActionDefinition[] = [
     riskCategories: ["money"],
     riskTypes: ["money_movement"],
     requiresIndependentApprover: true,
+    approvalAmountField: "amount_cents",
     syntheticTemplateText: "[SYNTHETIC] El pago se mantiene como propuesta; no se mueve dinero.",
     argumentSchema: {
       type: "object",
@@ -328,6 +334,7 @@ const additionalApprovalActions: readonly ApprovalActionDefinition[] = [
     riskCategories: ["money"],
     riskTypes: ["money_movement"],
     requiresIndependentApprover: true,
+    approvalAmountField: "amount_cents",
     syntheticTemplateText: "[SYNTHETIC] El proveedor nuevo queda bloqueado hasta una política explícita.",
     argumentSchema: {
       type: "object",
@@ -599,6 +606,7 @@ const additionalApprovalActions: readonly ApprovalActionDefinition[] = [
     riskCategories: ["web", "money"],
     riskTypes: ["money_movement", "corporate_commitment"],
     requiresIndependentApprover: true,
+    approvalAmountField: "amount_cents",
     syntheticTemplateText: "[SYNTHETIC] La compra se registra solo como una propuesta.",
     argumentSchema: {
       type: "object",
@@ -672,6 +680,7 @@ const additionalApprovalActions: readonly ApprovalActionDefinition[] = [
     riskCategories: ["infrastructure", "money"],
     riskTypes: ["money_movement", "internal_write"],
     requiresIndependentApprover: true,
+    approvalAmountField: "estimated_cost_cents",
     syntheticTemplateText: "[SYNTHETIC] El recurso queda como propuesta; no se crea en cloud.",
     argumentSchema: {
       type: "object",
@@ -826,6 +835,7 @@ export const APPROVAL_ACTION_CATALOG: readonly ApprovalActionDefinition[] = [
     allowedApproverRoles: ["owner", "admin"],
     receiptExpirySeconds: 300,
     requiresIndependentApprover: true,
+    approvalAmountField: "amount_cents",
     syntheticTemplateText: "[SYNTHETIC] El reembolso solo se evalúa en un clon de memoria.",
     argumentSchema: {
       type: "object",
@@ -853,6 +863,7 @@ export const APPROVAL_ACTION_CATALOG: readonly ApprovalActionDefinition[] = [
     allowedApproverRoles: ["owner", "admin"],
     receiptExpirySeconds: 300,
     requiresIndependentApprover: true,
+    minimumApproverCount: 2,
     syntheticTemplateText: "[SYNTHETIC] El cambio bancario solo se evalúa en un clon de memoria.",
     argumentSchema: {
       type: "object",
@@ -880,6 +891,7 @@ export const APPROVAL_ACTION_CATALOG: readonly ApprovalActionDefinition[] = [
     allowedApproverRoles: ["owner", "admin"],
     receiptExpirySeconds: 300,
     requiresIndependentApprover: true,
+    approvalAmountField: "compensation_cents",
     argumentSchema: {
       type: "object",
       additionalProperties: false,

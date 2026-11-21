@@ -150,6 +150,7 @@ test("approval inbox shows tenant-safe decisions without claiming tool execution
     simulationResultSha256: null,
     replayBindingSha256: null,
     proposalDetails: null,
+    approvalProgress: null,
     createdAt: "2026-11-03T12:00:00.000Z",
   };
   const approved: AiAssessmentApproval = {
@@ -184,9 +185,20 @@ test("approval inbox shows tenant-safe decisions without claiming tool execution
     executionMode: "real_local_qwen_inference",
     toolCallOrigin: "runtime_message_tool_calls",
   };
+  const needsSecondVote: AiAssessmentApproval = {
+    ...pending,
+    id: "66666666-6666-4666-8666-666666666666",
+    canCurrentUserDecide: false,
+    approvalProgress: {
+      approvedCount: 1,
+      requiredCount: 2,
+      currentUserVoted: true,
+      eligibleRoles: ["owner", "admin"],
+    },
+  };
   const markup = renderToStaticMarkup(
     createElement(GuardianApprovalInbox, {
-      approvals: [pending, approved, simulated, qwenAdapted, qwenNative],
+      approvals: [pending, approved, simulated, qwenAdapted, qwenNative, needsSecondVote],
       canDecide: true,
       loading: false,
       error: false,
@@ -203,6 +215,8 @@ test("approval inbox shows tenant-safe decisions without claiming tool execution
   assert.match(markup, /id="guardian-approval-inbox"/);
   assert.match(markup, /Aprobada · solo decisión/);
   assert.match(markup, /Aprobada · simulación sintética realizada una vez/);
+  assert.match(markup, /Aprobaciones requeridas: 1 de 2/);
+  assert.match(markup, /Tu aprobación ya está registrada/);
   assert.match(markup, /Fixture determinista · no es inferencia de modelo/);
   assert.match(markup, /marcador adaptado; no es tool call nativa/);
   assert.match(markup, /message\.tool_calls nativa/);
@@ -300,6 +314,7 @@ test("only controlled synthetic refund fixture approvals surface a receipt", () 
     simulationResultSha256: null,
     replayBindingSha256: null,
     proposalDetails: null,
+    approvalProgress: null,
     createdAt: "2026-11-16T12:00:00.000Z",
   };
   assert.equal(isFixtureOnlySyntheticRefundApproval(base), true);
@@ -348,6 +363,7 @@ test("approval confirmation states synthetic impact before any decision", () => 
     simulationResultSha256: null,
     replayBindingSha256: null,
     proposalDetails: null,
+    approvalProgress: null,
     createdAt: "2026-11-03T12:00:00.000Z",
   });
   assert.match(message, /cambio de cuenta bancaria ficticio/);
@@ -390,6 +406,7 @@ test("approval confirmation describes new catalog actions from safe server detai
       ruleVersionId: "33333333-3333-4333-8333-333333333333",
       synthetic: true,
     },
+    approvalProgress: null,
     createdAt: "2026-11-03T12:00:00.000Z",
   });
   assert.match(message, /Pago sintético a proveedor conocido/);

@@ -230,7 +230,10 @@ export type SafeChildOutput = {
 };
 
 const allowedChildEnvironmentKeys = ["PATH", "HOME", "LANG", "LC_ALL"] as const;
-const MAX_CAPTURED_TEST_OUTPUT_BYTES = 256 * 1024;
+// API TAP output can exceed 256 KiB once the registered E2E coverage grows.
+// Keep a hard cap, but leave enough room to retain the failure assertion and
+// stack for diagnosis instead of terminating the disposable suite mid-report.
+const MAX_CAPTURED_TEST_OUTPUT_BYTES = 2 * 1024 * 1024;
 const MAX_SAFE_CHILD_OUTPUT_CHARACTERS = 12_000;
 
 let latestFailureOutput: SafeChildOutput | undefined;
@@ -3283,17 +3286,28 @@ async function main(): Promise<void> {
     );
     const combinedRedteamOutput =
       `${redteamOutput.stdout}\n${redteamOutput.stderr}`;
-    const redteamSummaryMatch = combinedRedteamOutput.match(
-      /Resumen Promptfoo MCP: ataques lanzados=(\d+), bloqueados=(\d+), requieren aprobación=(\d+), reintentos idempotentes=(\d+), fallidos=(\d+)\./,
-    );
-    if (redteamSummaryMatch) {
-      mcpPromptfooRedteamSummary = {
-        attacks: Number(redteamSummaryMatch[1]),
-        blocked: Number(redteamSummaryMatch[2]),
-        approvalRequired: Number(redteamSummaryMatch[3]),
-        idempotentReplays: Number(redteamSummaryMatch[4]),
-        failed: Number(redteamSummaryMatch[5]),
-      };
+    const redteamSummaryMatches = [
+      ...combinedRedteamOutput.matchAll(
+        /Resumen Promptfoo MCP: ataques lanzados=(\d+), bloqueados=(\d+), requieren aprobación=(\d+), reintentos idempotentes=(\d+), fallidos=(\d+)\./g,
+      ),
+    ];
+    if (redteamSummaryMatches.length > 0) {
+      mcpPromptfooRedteamSummary = redteamSummaryMatches.reduce(
+        (summary, match) => ({
+          attacks: summary.attacks + Number(match[1]),
+          blocked: summary.blocked + Number(match[2]),
+          approvalRequired: summary.approvalRequired + Number(match[3]),
+          idempotentReplays: summary.idempotentReplays + Number(match[4]),
+          failed: summary.failed + Number(match[5]),
+        }),
+        {
+          attacks: 0,
+          blocked: 0,
+          approvalRequired: 0,
+          idempotentReplays: 0,
+          failed: 0,
+        },
+      );
       const summary = mcpPromptfooRedteamSummary;
       console.log(
         `Promptfoo MCP red team: attacks=${summary.attacks} blocked=${summary.blocked} approval_required=${summary.approvalRequired} idempotent_replays=${summary.idempotentReplays} failed=${summary.failed}`,

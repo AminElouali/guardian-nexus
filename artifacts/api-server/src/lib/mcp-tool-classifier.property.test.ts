@@ -19,6 +19,7 @@ const REGISTERED_TOOL_NAMES = [
   "create_forwarding_rule",
   "close_customer_account",
   "read_finance_record",
+  "change_synthetic_bank_account",
   "pay_known_vendor",
   "pay_new_vendor",
   "query_synthetic_data",

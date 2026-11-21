@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AiAssessmentApprovalApprovalProgress } from './aiAssessmentApprovalApprovalProgress';
 import type { AiAssessmentApprovalBindingVersion } from './aiAssessmentApprovalBindingVersion';
 import type { AiAssessmentApprovalDecidedByRole } from './aiAssessmentApprovalDecidedByRole';
 import type { AiAssessmentApprovalExecution } from './aiAssessmentApprovalExecution';
@@ -66,5 +67,6 @@ export interface AiAssessmentApproval {
      */
   replayBindingSha256: string | null;
   proposalDetails: GenericActionProposalDetails | null;
+  approvalProgress: AiAssessmentApprovalApprovalProgress;
   createdAt: Date;
 }

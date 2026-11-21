@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import type {
   WorkspaceActionRule,
   WorkspaceActionRuleState,
@@ -141,21 +141,47 @@ export function WorkspaceActionConditionsEditor({
   actions: WorkspaceActionRuleState[];
   canManage: boolean;
   busy: boolean;
-  onSave: (actionType: string, rules: WorkspaceActionRule[]) => Promise<void>;
+  onSave: (
+    actionType: string,
+    rules: WorkspaceActionRule[],
+    approvalPolicy?: { amountThresholdCents: number },
+  ) => Promise<void>;
 }) {
   const [actionType, setActionType] = useState(actions[0]?.actionType ?? "");
   const selected = actions.find((action) => action.actionType === actionType) ?? actions[0];
   const [decision, setDecision] = useState<RuleDecision>("require_approval");
   const [fallbackDecision, setFallbackDecision] = useState<RuleDecision>("deny");
+  const [thresholdEuros, setThresholdEuros] = useState(() => {
+    const threshold = selected?.draftApprovalPolicy?.amountThresholdCents ??
+      selected?.activeApprovalPolicy?.amountThresholdCents ??
+      5000;
+    return (threshold / 100).toString();
+  });
   const [conditions, setConditions] = useState<ConditionDraft[]>([
     defaultCondition("context.data_sensitivity"),
   ]);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
 
+  useEffect(() => {
+    const threshold = selected?.draftApprovalPolicy?.amountThresholdCents ??
+      selected?.activeApprovalPolicy?.amountThresholdCents ??
+      5000;
+    setThresholdEuros((threshold / 100).toString());
+  }, [
+    selected?.actionType,
+    selected?.draftApprovalPolicy?.amountThresholdCents,
+    selected?.activeApprovalPolicy?.amountThresholdCents,
+  ]);
+
   const changeAction = (nextActionType: string) => {
     setActionType(nextActionType);
     setConditions([defaultCondition("context.data_sensitivity")]);
+    const nextAction = actions.find((action) => action.actionType === nextActionType);
+    const threshold = nextAction?.draftApprovalPolicy?.amountThresholdCents ??
+      nextAction?.activeApprovalPolicy?.amountThresholdCents ??
+      5000;
+    setThresholdEuros((threshold / 100).toString());
     setStatus("");
     setError("");
   };
@@ -174,10 +200,27 @@ export function WorkspaceActionConditionsEditor({
       setStatus("");
       return;
     }
+    const threshold = Number(thresholdEuros);
+    if (
+      selected.approvalAmountField &&
+      (!Number.isSafeInteger(threshold * 100) ||
+        threshold <= 0 ||
+        threshold > 10000)
+    ) {
+      setError("El tramo de aprobación debe estar entre 0,01 € y 10.000 €.");
+      setStatus("");
+      return;
+    }
     setError("");
     setStatus("");
     try {
-      await onSave(selected.actionType, rules);
+      await onSave(
+        selected.actionType,
+        rules,
+        selected.approvalAmountField
+          ? { amountThresholdCents: Math.round(threshold * 100) }
+          : undefined,
+      );
       setStatus("Borrador guardado como una nueva versión. La versión activa no cambia; las versiones anteriores siguen en el historial.");
     } catch {
       setError("No se pudo guardar el borrador. La regla activa no ha cambiado.");
@@ -228,6 +271,24 @@ export function WorkspaceActionConditionsEditor({
           <option value="allow">Permitir</option>
         </select>
       </label>
+      {selected.approvalAmountField && <label htmlFor="approval-tier-threshold">
+        Tramo de aprobación (€)
+        <input
+          id="approval-tier-threshold"
+          type="number"
+          min="0.01"
+          max="10000"
+          step="0.01"
+          value={thresholdEuros}
+          disabled={!canManage}
+          onChange={(event) => setThresholdEuros(event.target.value)}
+          data-testid="approval-tier-threshold"
+        />
+        <span>Hasta este importe puede aprobar una persona administradora; por encima debe aprobar la persona propietaria.</span>
+      </label>}
+      {selected.minimumApproverCount === 2 && <p className="wre-approval-tier-note" role="note">
+        Esta acción crítica requiere dos aprobaciones de personas distintas. El recibo solo se emite al completar ambas.
+      </p>}
       <div className="wre-condition-list">
         {conditions.map((condition, index) => {
           const fields = [

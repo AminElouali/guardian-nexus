@@ -237,6 +237,23 @@ export function GuardianApprovalInbox({
                   <div><dt>Motivo</dt><dd>No hay un motivo de texto en el registro de la API.</dd></div>
                   <div><dt>Caducidad</dt><dd>{new Date(approval.expiresAt).toLocaleString("es-ES")}</dd></div>
                 </dl>
+                {approval.approvalProgress && (
+                  <p
+                    className="approval-progress"
+                    role="status"
+                    data-testid={`approval-progress-${approval.id}`}
+                  >
+                    Aprobaciones requeridas: {approval.approvalProgress.approvedCount} de {approval.approvalProgress.requiredCount}
+                    {approval.approvalProgress.eligibleRoles.length > 0 &&
+                      ` · Roles válidos: ${approval.approvalProgress.eligibleRoles.join(" o ")}`}
+                  </p>
+                )}
+                {approval.status === "pending" &&
+                  approval.approvalProgress?.currentUserVoted && (
+                    <p role="status" className="approval-progress">
+                      Tu aprobación ya está registrada. Espera a otra persona autorizada.
+                    </p>
+                  )}
                 {canDecide && <details className="approval-technical-details">
                   <summary>Procedencia técnica y vínculo de evidencia</summary>
                   <p>Job: {approval.jobId}</p>
@@ -252,6 +269,7 @@ export function GuardianApprovalInbox({
                     </small>
                   )}
                 {approval.canCurrentUserDecide &&
+                  !approval.approvalProgress?.currentUserVoted &&
                   approval.status === "pending" && (
                     <div className="ai-evaluation-actions">
                       <Button

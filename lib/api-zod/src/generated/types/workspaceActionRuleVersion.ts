@@ -6,12 +6,14 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { WorkspaceActionRule } from './workspaceActionRule';
+import type { WorkspaceApprovalPolicy } from './workspaceApprovalPolicy';
 
 export interface WorkspaceActionRuleVersion {
   id: string;
   /** @minimum 1 */
   version: number;
   rules: WorkspaceActionRule[];
+  approvalPolicy: WorkspaceApprovalPolicy | null;
   createdByUserId: string;
   createdAt: Date;
   isActive: boolean;

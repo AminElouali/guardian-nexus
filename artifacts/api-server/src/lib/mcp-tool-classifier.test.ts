@@ -84,6 +84,7 @@ test("the demo allow-list covers synthetic actions in all eight services", () =>
     { tool: "create_forwarding_rule", args: { mailbox_id: "MAILBOX-SYNTH-42", forward_to: "qa@example.test" }, actionType: "guardian.email.forwarding_rule.create.v1" },
     { tool: "close_customer_account", args: { account_id: "LAB-ACCOUNT-42", operation: "close", case_id: "TICKET-SYNTH-42" }, actionType: "guardian.support.customer_account.close.v1" },
     { tool: "read_finance_record", args: { resource_type: "invoice", resource_id: "FIN-SYNTH-42" }, actionType: "guardian.finance.balance_invoice.read.v1" },
+    { tool: "change_synthetic_bank_account", args: { account_id: "LAB-ACCOUNT-SYNTH-42", new_iban: "DE00LAB1234567890ABCDEF" }, actionType: "guardian.synthetic.finance.bank-change.v1" },
     { tool: "pay_known_vendor", args: { vendor_id: "VENDOR-SYNTH-42", amount_cents: 2500, invoice_id: "INVOICE-SYNTH-42" }, actionType: "guardian.finance.vendor_payment.known.v1" },
     { tool: "pay_new_vendor", args: { vendor_id: "VENDOR-SYNTH-43", amount_cents: 2500, invoice_id: "INVOICE-SYNTH-42" }, actionType: "guardian.finance.vendor_payment.new.v1" },
     { tool: "query_synthetic_data", args: { query_id: "demo.aggregate-counts.v1", scope_id: "DATA-SYNTH-42" }, actionType: "guardian.data.query.read.v1" },

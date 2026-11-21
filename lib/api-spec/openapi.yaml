@@ -2085,8 +2085,21 @@ components:
           oneOf:
             - { $ref: "#/components/schemas/GenericActionProposalDetails" }
             - { type: "null" }
+        approvalProgress:
+          oneOf:
+            - type: object
+              additionalProperties: false
+              properties:
+                approvedCount: { type: integer, minimum: 0, maximum: 2 }
+                requiredCount: { type: integer, enum: [1, 2] }
+                currentUserVoted: { type: boolean }
+                eligibleRoles:
+                  type: array
+                  items: { type: string, enum: [owner, admin] }
+              required: [approvedCount, requiredCount, currentUserVoted, eligibleRoles]
+            - { type: "null" }
         createdAt: { type: string, format: date-time }
-      required: [id, jobId, caseId, proposalSha256, actionSha256, proposalBindingSha256, requestedByUserId, requestedByRole, bindingVersion, syntheticActionRef, modelInference, executionMode, toolCallOrigin, status, canCurrentUserDecide, expiresAt, decidedByUserId, decidedByRole, decidedAt, execution, simulatedAt, simulationResultCode, simulationResultSha256, replayBindingSha256, proposalDetails, createdAt]
+      required: [id, jobId, caseId, proposalSha256, actionSha256, proposalBindingSha256, requestedByUserId, requestedByRole, bindingVersion, syntheticActionRef, modelInference, executionMode, toolCallOrigin, status, canCurrentUserDecide, expiresAt, decidedByUserId, decidedByRole, decidedAt, execution, simulatedAt, simulationResultCode, simulationResultSha256, replayBindingSha256, proposalDetails, approvalProgress, createdAt]
     GenericActionProposalDetails:
       type: object
       additionalProperties: false
@@ -2168,6 +2181,8 @@ components:
           items: { type: string, enum: [owner, admin] }
         expiryMinutes: { type: integer, minimum: 1 }
         requiresIndependentApprover: { type: boolean }
+        minimumApproverCount: { type: integer, enum: [1, 2] }
+        approvalAmountField: { type: ["string", "null"], maxLength: 80 }
         syntheticTemplateText: { type: ["string", "null"] }
         argumentFields:
           type: array
@@ -2175,7 +2190,7 @@ components:
         rules:
           type: array
           items: { $ref: "#/components/schemas/GenericActionRuleRow" }
-      required: [actionType, version, label, description, riskClass, riskTypes, defaultDecision, approverLabel, allowedApproverRoles, expiryMinutes, requiresIndependentApprover, syntheticTemplateText, argumentFields, rules]
+      required: [actionType, version, label, description, riskClass, riskTypes, defaultDecision, approverLabel, allowedApproverRoles, expiryMinutes, requiresIndependentApprover, minimumApproverCount, approvalAmountField, syntheticTemplateText, argumentFields, rules]
     GenericActionArgumentField:
       type: object
       additionalProperties: false
@@ -2236,11 +2251,19 @@ components:
       additionalProperties: false
       properties:
         version: { type: integer, const: 1 }
+        approvalPolicy:
+          $ref: "#/components/schemas/WorkspaceApprovalPolicy"
         rules:
           type: array
           maxItems: 50
           items: { $ref: "#/components/schemas/WorkspaceActionRule" }
       required: [version, rules]
+    WorkspaceApprovalPolicy:
+      type: object
+      additionalProperties: false
+      properties:
+        amountThresholdCents: { type: integer, minimum: 1, maximum: 1000000 }
+      required: [amountThresholdCents]
     WorkspaceActionRuleVersion:
       type: object
       additionalProperties: false
@@ -2250,11 +2273,15 @@ components:
         rules:
           type: array
           items: { $ref: "#/components/schemas/WorkspaceActionRule" }
+        approvalPolicy:
+          oneOf:
+            - { $ref: "#/components/schemas/WorkspaceApprovalPolicy" }
+            - { type: "null" }
         createdByUserId: { type: string }
         createdAt: { type: string, format: date-time }
         isActive: { type: boolean }
         isDraft: { type: boolean }
-      required: [id, version, rules, createdByUserId, createdAt, isActive, isDraft]
+      required: [id, version, rules, approvalPolicy, createdByUserId, createdAt, isActive, isDraft]
     WorkspaceActionRuleState:
       type: object
       additionalProperties: false
@@ -2281,6 +2308,16 @@ components:
                 multiagent,
               ]
         requiresIndependentApprover: { type: boolean }
+        minimumApproverCount: { type: integer, enum: [1, 2] }
+        approvalAmountField: { type: ["string", "null"], maxLength: 80 }
+        activeApprovalPolicy:
+          oneOf:
+            - { $ref: "#/components/schemas/WorkspaceApprovalPolicy" }
+            - { type: "null" }
+        draftApprovalPolicy:
+          oneOf:
+            - { $ref: "#/components/schemas/WorkspaceApprovalPolicy" }
+            - { type: "null" }
         argumentFields:
           type: array
           items:
@@ -2308,7 +2345,7 @@ components:
         openRuleIds:
           type: array
           items: { type: string }
-      required: [actionType, service, label, description, riskClass, riskCategories, requiresIndependentApprover, argumentFields, activeVersionId, draftVersionId, activeRules, draftRules, history, warnings, openRuleIds]
+      required: [actionType, service, label, description, riskClass, riskCategories, requiresIndependentApprover, minimumApproverCount, approvalAmountField, activeApprovalPolicy, draftApprovalPolicy, argumentFields, activeVersionId, draftVersionId, activeRules, draftRules, history, warnings, openRuleIds]
     WorkspaceActionRuleStarterTemplate:
       type: object
       additionalProperties: false

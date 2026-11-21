@@ -1,5 +1,8 @@
 import { createHash } from "node:crypto";
-import type { CatalogActionRef } from "@workspace/db/approval-action-catalog";
+import {
+  evaluateApprovalAction,
+  type CatalogActionRef,
+} from "@workspace/db/approval-action-catalog";
 
 export type SyntheticApprovalActionRef = CatalogActionRef;
 
@@ -241,6 +244,7 @@ export function getAllowlistedSyntheticApprovalAction(
   tool: string | null,
 ): {
   actionRef: SyntheticApprovalActionRef;
+  arguments: Record<string, string | number>;
   actionSha256: string;
   proposalSha256: string;
   argumentsSha256: string;
@@ -279,6 +283,7 @@ export function getAllowlistedSyntheticApprovalAction(
   });
   return {
     actionRef: action.actionRef,
+    arguments: action.arguments,
     actionSha256,
     proposalSha256,
     argumentsSha256,
@@ -328,6 +333,55 @@ export function createSyntheticApprovalSimulationReceipt(
   if (resultSha256 !== action.simulationResultSha256) return null;
   return {
     resultCode: allowlisted.resultCode,
+    resultSha256,
+    beforeStateSha256,
+    afterStateSha256,
+  };
+}
+
+export function createSyntheticGenericBankChangeSimulationReceipt(input: {
+  actionType: string;
+  args: unknown;
+  actionSha256: string;
+}): {
+  resultCode: string;
+  resultSha256: string;
+  beforeStateSha256: string;
+  afterStateSha256: string;
+} | null {
+  if (!/^[a-f0-9]{64}$/.test(input.actionSha256)) return null;
+  const validated = evaluateApprovalAction(input.actionType, input.args);
+  if (
+    !validated.ok ||
+    validated.definition.actionType !==
+      "guardian.synthetic.finance.bank-change.v1"
+  ) {
+    return null;
+  }
+  const args = validated.args;
+  const beforeStateSha256 = sha256({
+    state: "synthetic-bank-before-v1",
+    accountId: args.account_id,
+    bankReference: "LAB-BANK-OLD",
+  });
+  const afterStateSha256 = sha256({
+    state: "synthetic-bank-after-v1",
+    accountId: args.account_id,
+    bankReference: args.new_iban,
+  });
+  const resultCode = "synthetic_bank_change_approved_in_clone";
+  const resultSha256 = sha256({
+    actionType: validated.definition.actionType,
+    actionSha256: input.actionSha256,
+    argumentsSha256: sha256(args),
+    resultCode,
+    beforeStateSha256,
+    afterStateSha256,
+    simulatedOnly: true,
+    externalSideEffect: false,
+  });
+  return {
+    resultCode,
     resultSha256,
     beforeStateSha256,
     afterStateSha256,

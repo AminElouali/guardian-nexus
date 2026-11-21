@@ -1216,6 +1216,20 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
       });
       if (decision === 'approve') {
         const receipt = result.receipt;
+        const progress = result.approval.approvalProgress;
+        if (
+          !receipt &&
+          progress &&
+          progress.approvedCount < progress.requiredCount
+        ) {
+          setApprovalMessage(
+            `Tu aprobación quedó registrada (${progress.approvedCount} de ${progress.requiredCount}). Hace falta otra persona autorizada; todavía no se emitió el recibo.`,
+          );
+          await cache.invalidateQueries({
+            queryKey: getListWorkspaceAiAssessmentApprovalsQueryKey(workspace.id),
+          });
+          return true;
+        }
         if (
           !receipt ||
           receipt.payload.workspaceId !== workspace.id ||
@@ -1351,11 +1365,19 @@ export default function AiEvaluationPage({ workspace }: { workspace: Workspace }
     return result;
   }
 
-  async function saveGatewayRuleDraft(actionType: string, rules: WorkspaceActionRule[]) {
+  async function saveGatewayRuleDraft(
+    actionType: string,
+    rules: WorkspaceActionRule[],
+    approvalPolicy?: { amountThresholdCents: number },
+  ) {
     const result = await saveActionRuleDraft.mutateAsync({
       workspaceId: workspace.id,
       actionType,
-      data: { version: 1, rules },
+      data: {
+        version: 1,
+        rules,
+        ...(approvalPolicy ? { approvalPolicy } : {}),
+      },
     });
     await cache.invalidateQueries({
       queryKey: getListWorkspaceActionRulesQueryKey(workspace.id),

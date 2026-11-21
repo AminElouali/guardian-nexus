@@ -8,6 +8,7 @@
 import type { GenericActionArgumentField } from './genericActionArgumentField';
 import type { GenericActionRuleRow } from './genericActionRuleRow';
 import type { GenericActionTemplateAllowedApproverRolesItem } from './genericActionTemplateAllowedApproverRolesItem';
+import type { GenericActionTemplateMinimumApproverCount } from './genericActionTemplateMinimumApproverCount';
 import type { GenericActionTemplateRiskClass } from './genericActionTemplateRiskClass';
 import type { GenericActionTemplateRiskTypesItem } from './genericActionTemplateRiskTypesItem';
 
@@ -24,6 +25,12 @@ export interface GenericActionTemplate {
   /** @minimum 1 */
   expiryMinutes: number;
   requiresIndependentApprover: boolean;
+  minimumApproverCount: GenericActionTemplateMinimumApproverCount;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  approvalAmountField: string | null;
   /** @nullable */
   syntheticTemplateText: string | null;
   argumentFields: GenericActionArgumentField[];

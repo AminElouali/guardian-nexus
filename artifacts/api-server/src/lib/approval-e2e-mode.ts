@@ -23,3 +23,9 @@ export function inspectApprovalE2eMode(
 
 export const FOCUSED_APPROVAL_E2E_FORBIDDEN_MESSAGE =
   "focused_approval_e2e_mode_forbidden";
+
+export function formatFocusedApprovalE2eAnnouncement(
+  omittedSubtestCount: number,
+): string {
+  return `MODO FOCALIZADO: se omiten ${omittedSubtestCount} subpruebas`;
+}

@@ -6,9 +6,13 @@ Guardian Nexus se sitúa entre tu agente de IA y las acciones delicadas. El agen
 - **DENY**: la acción se bloquea.
 - **REQUIRE_APPROVAL**: la acción queda en espera hasta que una persona de tu equipo la apruebe.
 
+**IMPLEMENTADO:** el proxy HTTP MCP publica herramientas de una lista permitida de Guardian para ocho servicios de demostración. El agente se autentica con una credencial del workspace; las reglas versionadas deciden si la propuesta se simula como permitida, se bloquea o necesita aprobación. Una aprobación produce un recibo firmado y ligado a la acción exacta.
+
 Cada aprobación genera un **recibo firmado** (Ed25519) y queda en un registro de auditoría en el que solo se puede añadir.
 
 > **Estado actual (MVP).** Las acciones disponibles por MCP son **sintéticas**: cubren los 8 servicios, pero no envían, pagan ni cambian nada real. Sirven para probar la integración y las reglas de punta a punta. Los conectores con proveedores reales todavía no están disponibles.
+
+**PROYECTADO:** conexión a servidores MCP reales, registro de destinos de clientes, conectores productivos, grupos configurables de aprobadores y notificación automática al agente cuando se aprueba una solicitud.
 
 ---
 
@@ -71,6 +75,9 @@ Arranca tu agente y pulsa **Probar conexión** en el asistente: verás ✅ cuand
 
 **2. Requiere aprobación.** La acción **no** se ejecuta. La respuesta incluye:
 
+**IMPLEMENTADO en esta versión:** cada versión de reglas puede fijar un umbral monetario (máximo 10.000 €). Para acciones que tienen un importe catalogado, hasta el umbral aprueba una persona administradora y por encima la persona propietaria. El cambio de cuenta bancaria sintético requiere dos aprobaciones de personas diferentes. Repetir el voto de una misma persona no suma; la solicitud sigue pendiente y no se emite el recibo hasta completar el número requerido. Los votos quedan en la auditoría append-only. El recibo v1 y el evento v1 del ledger no cambian.
+
+Si una acción protegida ya se completó y el agente reintenta la misma llamada por un problema de red, Guardian devuelve el resultado anterior con `replayed: true`; no la ejecuta otra vez. Se rechazan los usos desde otro agente o workspace, con argumentos cambiados o con una solicitud caducada.
 ```json
 { "approvalId": "…", "status": "pending", "retryWithSameArguments": true }
 ```
@@ -85,6 +92,7 @@ Tu agente debe:
 
 Si tu agente repite una llamada que ya se ejecutó (por ejemplo, porque se cortó la red), Guardian Nexus **no la ejecuta otra vez**: devuelve el mismo resultado con `replayed: true`. Puedes reintentar sin miedo a duplicar acciones.
 
+**PROYECTADO:** registrar acciones nuevas, conectar sistemas reales, medir datos personales dinámicos con un conector fiable, configurar grupos de aprobación y aplicar tramos de importe a grupos personalizados.
 En cambio, se **rechazan**:
 - un recibo usado por **otro agente** o desde **otro workspace**;
 - un recibo usado con **argumentos distintos** de los aprobados (por ejemplo, otro importe);
