@@ -45,7 +45,7 @@ const REGISTERED_MCP_TOOLS: Readonly<
     send_external_email: Object.freeze({
       actionType: "guardian.email.send.external.v1",
       dataSensitivity: "sensible",
-      guardianDescription: "Propón un correo externo de prueba. La regla vigente puede exigir aprobación humana.",
+      guardianDescription: "Propón un correo de prueba. Gmail solo lo envía tras la aprobación y a un destinatario permitido.",
       volume: Object.freeze({ kind: "fixed", unit: "messages" }),
     }),
     issue_synthetic_refund: Object.freeze({

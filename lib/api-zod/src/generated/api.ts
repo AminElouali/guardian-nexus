@@ -14710,3 +14710,98 @@ export const ExportWorkspaceApprovalLedgerBundleResponse = zod.object({
 })
 
 
+/**
+ * @summary Complete the one-time Google OAuth callback for Gmail
+ */
+export const completeGoogleGmailAuthorizationQueryCodeMax = 4096;
+
+export const completeGoogleGmailAuthorizationQueryStateMax = 4096;
+
+export const completeGoogleGmailAuthorizationQueryErrorMax = 128;
+
+
+
+export const CompleteGoogleGmailAuthorizationQueryParams = zod.object({
+  "code": zod.coerce.string().max(completeGoogleGmailAuthorizationQueryCodeMax).optional(),
+  "state": zod.coerce.string().max(completeGoogleGmailAuthorizationQueryStateMax),
+  "error": zod.coerce.string().max(completeGoogleGmailAuthorizationQueryErrorMax).optional()
+})
+
+export const CompleteGoogleGmailAuthorizationResponse = zod.void()
+
+
+/**
+ * @summary Get safe Gmail connection status and the test recipient allowlist
+ */
+export const GetWorkspaceGmailConnectionParams = zod.object({
+  "workspaceId": zod.uuid()
+})
+
+export const getWorkspaceGmailConnectionResponseAllowedRecipientsItemMin = 3;
+export const getWorkspaceGmailConnectionResponseAllowedRecipientsItemMax = 254;
+
+
+
+export const GetWorkspaceGmailConnectionResponse = zod.object({
+  "configured": zod.boolean(),
+  "connected": zod.boolean(),
+  "accountEmail": zod.email().nullable(),
+  "allowedRecipients": zod.array(zod.string().min(getWorkspaceGmailConnectionResponseAllowedRecipientsItemMin).max(getWorkspaceGmailConnectionResponseAllowedRecipientsItemMax)),
+  "scopes": zod.array(zod.string())
+})
+
+
+/**
+ * @summary Remove the encrypted Gmail credential and attempt provider revocation
+ */
+export const DisconnectWorkspaceGmailParams = zod.object({
+  "workspaceId": zod.uuid()
+})
+
+export const DisconnectWorkspaceGmailResponse = zod.object({
+  "disconnected": zod.literal(true),
+  "providerRevoked": zod.boolean()
+})
+
+
+/**
+ * @summary Start Google OAuth with the minimum Gmail send and identity scopes
+ */
+export const BeginGoogleGmailAuthorizationParams = zod.object({
+  "workspaceId": zod.uuid()
+})
+
+export const BeginGoogleGmailAuthorizationResponse = zod.object({
+  "authorizationUrl": zod.url(),
+  "scopes": zod.array(zod.string())
+})
+
+
+/**
+ * @summary Replace the exact emails or domains allowed for test sends
+ */
+export const UpdateWorkspaceGmailRecipientsParams = zod.object({
+  "workspaceId": zod.uuid()
+})
+
+export const updateWorkspaceGmailRecipientsBodyAllowedRecipientsItemMin = 3;
+export const updateWorkspaceGmailRecipientsBodyAllowedRecipientsItemMax = 254;
+
+export const updateWorkspaceGmailRecipientsBodyAllowedRecipientsMax = 50;
+
+
+
+export const UpdateWorkspaceGmailRecipientsBody = zod.object({
+  "allowedRecipients": zod.array(zod.string().min(updateWorkspaceGmailRecipientsBodyAllowedRecipientsItemMin).max(updateWorkspaceGmailRecipientsBodyAllowedRecipientsItemMax)).max(updateWorkspaceGmailRecipientsBodyAllowedRecipientsMax)
+})
+
+export const updateWorkspaceGmailRecipientsResponseAllowedRecipientsItemMin = 3;
+export const updateWorkspaceGmailRecipientsResponseAllowedRecipientsItemMax = 254;
+
+
+
+export const UpdateWorkspaceGmailRecipientsResponse = zod.object({
+  "allowedRecipients": zod.array(zod.string().min(updateWorkspaceGmailRecipientsResponseAllowedRecipientsItemMin).max(updateWorkspaceGmailRecipientsResponseAllowedRecipientsItemMax))
+})
+
+

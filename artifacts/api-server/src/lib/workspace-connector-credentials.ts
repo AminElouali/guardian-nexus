@@ -96,6 +96,7 @@ export async function replaceWorkspaceConnectorCredential(
     serviceId: string;
     secret: string;
     membershipRole: string;
+    safeLastFour?: string;
     onStage?: (stage: ReplaceWorkspaceConnectorCredentialStage) => void;
     onInsertContext?: (context: ConnectorCredentialInsertContext) => void;
     onInsertResultMetadata?: (
@@ -134,6 +135,10 @@ export async function replaceWorkspaceConnectorCredential(
       { workspaceId: input.workspaceId, serviceId: input.serviceId },
       keyring,
     );
+    const lastFour = input.safeLastFour ?? encrypted.lastFour;
+    if (!/^[A-Za-z0-9._-]{4}$/.test(lastFour)) {
+      throw new ConnectorVaultError("credential_input_invalid");
+    }
     if (input.onInsertContext) {
       const contextResult = await tx.execute(sql`
         SELECT current_setting('app.workspace_id', true) AS workspace_setting,
@@ -163,7 +168,7 @@ export async function replaceWorkspaceConnectorCredential(
       ) VALUES (
         ${input.workspaceId}, ${input.serviceId}, ${encrypted.encryptedSecret},
         ${encrypted.nonce}, ${encrypted.authTag}, ${encrypted.encryptionKeyId},
-        ${encrypted.lastFour}, ${input.actorUserId}
+        ${lastFour}, ${input.actorUserId}
       )
       ON CONFLICT (nonce) DO NOTHING
       RETURNING id, service_id, last_four, encryption_key_id, created_at

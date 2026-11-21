@@ -46,12 +46,14 @@ import type {
   AwsIntegrationSetup,
   AwsIntegrationSetupInput,
   AwsIntegrationVerification,
+  CompleteGoogleGmailAuthorizationParams,
   Dashboard,
   GenericActionCatalogResponse,
   GenericActionPreviewRequest,
   GenericActionPreviewResponse,
   GenericActionProposalRequest,
   GenericActionProposalResponse,
+  GoogleGmailAuthorization,
   GuardianPolicyLabPreviewRequest,
   GuardianPolicyLabPreviewResponse,
   HealthStatus,
@@ -86,6 +88,10 @@ import type {
   WorkspaceConnectorCredentialsResponse,
   WorkspaceConnectorExecutionInput,
   WorkspaceConnectorExecutionResponse,
+  WorkspaceGmailConnectionStatus,
+  WorkspaceGmailDisconnectResult,
+  WorkspaceGmailRecipients,
+  WorkspaceGmailRecipientsInput,
   WorkspaceInput,
   WorkspaceIntegration,
   WorkspaceIntegrationsResponse
@@ -5340,5 +5346,451 @@ export const useExportWorkspaceApprovalLedgerBundle = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getExportWorkspaceApprovalLedgerBundleMutationOptions(options), queryClient);
+    }
+
+export const getCompleteGoogleGmailAuthorizationUrl = (params: CompleteGoogleGmailAuthorizationParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/oauth/google/gmail/callback?${stringifiedParams}` : `/api/oauth/google/gmail/callback`
+}
+
+/**
+ * @summary Complete the one-time Google OAuth callback for Gmail
+ */
+export const completeGoogleGmailAuthorization = async (params: CompleteGoogleGmailAuthorizationParams, options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
+
+  return customFetch<unknown>(getCompleteGoogleGmailAuthorizationUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getCompleteGoogleGmailAuthorizationQueryKey = (params?: CompleteGoogleGmailAuthorizationParams,) => {
+    return [
+    `/api/oauth/google/gmail/callback`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getCompleteGoogleGmailAuthorizationQueryOptions = <TData = Awaited<ReturnType<typeof completeGoogleGmailAuthorization>>, TError = ErrorType<void>>(params: CompleteGoogleGmailAuthorizationParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof completeGoogleGmailAuthorization>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getCompleteGoogleGmailAuthorizationQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof completeGoogleGmailAuthorization>>> = ({ signal }) => completeGoogleGmailAuthorization(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof completeGoogleGmailAuthorization>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type CompleteGoogleGmailAuthorizationQueryResult = NonNullable<Awaited<ReturnType<typeof completeGoogleGmailAuthorization>>>
+export type CompleteGoogleGmailAuthorizationQueryError = ErrorType<void>
+
+
+export function useCompleteGoogleGmailAuthorization<TData = Awaited<ReturnType<typeof completeGoogleGmailAuthorization>>, TError = ErrorType<void>>(
+ params: CompleteGoogleGmailAuthorizationParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof completeGoogleGmailAuthorization>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof completeGoogleGmailAuthorization>>,
+          TError,
+          Awaited<ReturnType<typeof completeGoogleGmailAuthorization>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useCompleteGoogleGmailAuthorization<TData = Awaited<ReturnType<typeof completeGoogleGmailAuthorization>>, TError = ErrorType<void>>(
+ params: CompleteGoogleGmailAuthorizationParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof completeGoogleGmailAuthorization>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof completeGoogleGmailAuthorization>>,
+          TError,
+          Awaited<ReturnType<typeof completeGoogleGmailAuthorization>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useCompleteGoogleGmailAuthorization<TData = Awaited<ReturnType<typeof completeGoogleGmailAuthorization>>, TError = ErrorType<void>>(
+ params: CompleteGoogleGmailAuthorizationParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof completeGoogleGmailAuthorization>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Complete the one-time Google OAuth callback for Gmail
+ */
+
+export function useCompleteGoogleGmailAuthorization<TData = Awaited<ReturnType<typeof completeGoogleGmailAuthorization>>, TError = ErrorType<void>>(
+ params: CompleteGoogleGmailAuthorizationParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof completeGoogleGmailAuthorization>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getCompleteGoogleGmailAuthorizationQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetWorkspaceGmailConnectionUrl = (workspaceId: string,) => {
+
+
+
+
+  return `/api/workspaces/${workspaceId}/gmail-connection`
+}
+
+/**
+ * @summary Get safe Gmail connection status and the test recipient allowlist
+ */
+export const getWorkspaceGmailConnection = async (workspaceId: string, options?: Parameters<typeof customFetch>[1]): Promise<WorkspaceGmailConnectionStatus> => {
+
+  return customFetch<WorkspaceGmailConnectionStatus>(getGetWorkspaceGmailConnectionUrl(workspaceId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetWorkspaceGmailConnectionQueryKey = (workspaceId: string,) => {
+    return [
+    `/api/workspaces/${workspaceId}/gmail-connection`
+    ] as const;
+    }
+
+
+export const getGetWorkspaceGmailConnectionQueryOptions = <TData = Awaited<ReturnType<typeof getWorkspaceGmailConnection>>, TError = ErrorType<void>>(workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWorkspaceGmailConnection>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetWorkspaceGmailConnectionQueryKey(workspaceId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getWorkspaceGmailConnection>>> = ({ signal }) => getWorkspaceGmailConnection(workspaceId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: workspaceId !== null && workspaceId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getWorkspaceGmailConnection>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetWorkspaceGmailConnectionQueryResult = NonNullable<Awaited<ReturnType<typeof getWorkspaceGmailConnection>>>
+export type GetWorkspaceGmailConnectionQueryError = ErrorType<void>
+
+
+export function useGetWorkspaceGmailConnection<TData = Awaited<ReturnType<typeof getWorkspaceGmailConnection>>, TError = ErrorType<void>>(
+ workspaceId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWorkspaceGmailConnection>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getWorkspaceGmailConnection>>,
+          TError,
+          Awaited<ReturnType<typeof getWorkspaceGmailConnection>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetWorkspaceGmailConnection<TData = Awaited<ReturnType<typeof getWorkspaceGmailConnection>>, TError = ErrorType<void>>(
+ workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWorkspaceGmailConnection>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getWorkspaceGmailConnection>>,
+          TError,
+          Awaited<ReturnType<typeof getWorkspaceGmailConnection>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetWorkspaceGmailConnection<TData = Awaited<ReturnType<typeof getWorkspaceGmailConnection>>, TError = ErrorType<void>>(
+ workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWorkspaceGmailConnection>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get safe Gmail connection status and the test recipient allowlist
+ */
+
+export function useGetWorkspaceGmailConnection<TData = Awaited<ReturnType<typeof getWorkspaceGmailConnection>>, TError = ErrorType<void>>(
+ workspaceId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getWorkspaceGmailConnection>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetWorkspaceGmailConnectionQueryOptions(workspaceId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getDisconnectWorkspaceGmailUrl = (workspaceId: string,) => {
+
+
+
+
+  return `/api/workspaces/${workspaceId}/gmail-connection`
+}
+
+/**
+ * @summary Remove the encrypted Gmail credential and attempt provider revocation
+ */
+export const disconnectWorkspaceGmail = async (workspaceId: string, options?: Parameters<typeof customFetch>[1]): Promise<WorkspaceGmailDisconnectResult> => {
+
+  return customFetch<WorkspaceGmailDisconnectResult>(getDisconnectWorkspaceGmailUrl(workspaceId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDisconnectWorkspaceGmailMutationKey = () => ['disconnectWorkspaceGmail'] as const;
+
+export const getDisconnectWorkspaceGmailMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof disconnectWorkspaceGmail>>, TError,DisconnectWorkspaceGmailMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof disconnectWorkspaceGmail>>, TError,DisconnectWorkspaceGmailMutationVariables, TContext> => {
+
+const mutationKey = getDisconnectWorkspaceGmailMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof disconnectWorkspaceGmail>>, DisconnectWorkspaceGmailMutationVariables> = (props) => {
+          const {workspaceId} = props ?? {};
+
+          return  disconnectWorkspaceGmail(workspaceId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DisconnectWorkspaceGmailMutationResult = NonNullable<Awaited<ReturnType<typeof disconnectWorkspaceGmail>>>
+
+    export type DisconnectWorkspaceGmailMutationError = ErrorType<void>
+    export type DisconnectWorkspaceGmailMutationVariables = {workspaceId: string}
+
+    /**
+ * @summary Remove the encrypted Gmail credential and attempt provider revocation
+ */
+export const useDisconnectWorkspaceGmail = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof disconnectWorkspaceGmail>>, TError,DisconnectWorkspaceGmailMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof disconnectWorkspaceGmail>>,
+        TError,
+        DisconnectWorkspaceGmailMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDisconnectWorkspaceGmailMutationOptions(options), queryClient);
+    }
+
+export const getBeginGoogleGmailAuthorizationUrl = (workspaceId: string,) => {
+
+
+
+
+  return `/api/workspaces/${workspaceId}/gmail-connection/authorize`
+}
+
+/**
+ * @summary Start Google OAuth with the minimum Gmail send and identity scopes
+ */
+export const beginGoogleGmailAuthorization = async (workspaceId: string, options?: Parameters<typeof customFetch>[1]): Promise<GoogleGmailAuthorization> => {
+
+  return customFetch<GoogleGmailAuthorization>(getBeginGoogleGmailAuthorizationUrl(workspaceId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getBeginGoogleGmailAuthorizationMutationKey = () => ['beginGoogleGmailAuthorization'] as const;
+
+export const getBeginGoogleGmailAuthorizationMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof beginGoogleGmailAuthorization>>, TError,BeginGoogleGmailAuthorizationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof beginGoogleGmailAuthorization>>, TError,BeginGoogleGmailAuthorizationMutationVariables, TContext> => {
+
+const mutationKey = getBeginGoogleGmailAuthorizationMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof beginGoogleGmailAuthorization>>, BeginGoogleGmailAuthorizationMutationVariables> = (props) => {
+          const {workspaceId} = props ?? {};
+
+          return  beginGoogleGmailAuthorization(workspaceId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type BeginGoogleGmailAuthorizationMutationResult = NonNullable<Awaited<ReturnType<typeof beginGoogleGmailAuthorization>>>
+
+    export type BeginGoogleGmailAuthorizationMutationError = ErrorType<void>
+    export type BeginGoogleGmailAuthorizationMutationVariables = {workspaceId: string}
+
+    /**
+ * @summary Start Google OAuth with the minimum Gmail send and identity scopes
+ */
+export const useBeginGoogleGmailAuthorization = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof beginGoogleGmailAuthorization>>, TError,BeginGoogleGmailAuthorizationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof beginGoogleGmailAuthorization>>,
+        TError,
+        BeginGoogleGmailAuthorizationMutationVariables,
+        TContext
+      > => {
+      return useMutation(getBeginGoogleGmailAuthorizationMutationOptions(options), queryClient);
+    }
+
+export const getUpdateWorkspaceGmailRecipientsUrl = (workspaceId: string,) => {
+
+
+
+
+  return `/api/workspaces/${workspaceId}/gmail-connection/recipients`
+}
+
+/**
+ * @summary Replace the exact emails or domains allowed for test sends
+ */
+export const updateWorkspaceGmailRecipients = async (workspaceId: string,
+    workspaceGmailRecipientsInput: WorkspaceGmailRecipientsInput, options?: Parameters<typeof customFetch>[1]): Promise<WorkspaceGmailRecipients> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<WorkspaceGmailRecipients>(getUpdateWorkspaceGmailRecipientsUrl(workspaceId),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(workspaceGmailRecipientsInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateWorkspaceGmailRecipientsMutationKey = () => ['updateWorkspaceGmailRecipients'] as const;
+
+export const getUpdateWorkspaceGmailRecipientsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateWorkspaceGmailRecipients>>, TError,UpdateWorkspaceGmailRecipientsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateWorkspaceGmailRecipients>>, TError,UpdateWorkspaceGmailRecipientsMutationVariables, TContext> => {
+
+const mutationKey = getUpdateWorkspaceGmailRecipientsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateWorkspaceGmailRecipients>>, UpdateWorkspaceGmailRecipientsMutationVariables> = (props) => {
+          const {workspaceId,data} = props ?? {};
+
+          return  updateWorkspaceGmailRecipients(workspaceId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateWorkspaceGmailRecipientsMutationResult = NonNullable<Awaited<ReturnType<typeof updateWorkspaceGmailRecipients>>>
+    export type UpdateWorkspaceGmailRecipientsMutationBody = BodyType<WorkspaceGmailRecipientsInput>
+    export type UpdateWorkspaceGmailRecipientsMutationError = ErrorType<void>
+    export type UpdateWorkspaceGmailRecipientsMutationVariables = {workspaceId: string;data: BodyType<WorkspaceGmailRecipientsInput>}
+
+    /**
+ * @summary Replace the exact emails or domains allowed for test sends
+ */
+export const useUpdateWorkspaceGmailRecipients = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateWorkspaceGmailRecipients>>, TError,UpdateWorkspaceGmailRecipientsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updateWorkspaceGmailRecipients>>,
+        TError,
+        UpdateWorkspaceGmailRecipientsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateWorkspaceGmailRecipientsMutationOptions(options), queryClient);
     }
 

@@ -38,6 +38,13 @@ import {
   type ConnectorExecutionAdapter,
 } from "../lib/workspace-connector-executions";
 import { verifyGenericActionEvidence } from "../lib/generic-action-evidence";
+import {
+  GMAIL_CONNECTOR_SERVICE_ID,
+  createGmailConnectorAdapter,
+  getGoogleGmailOAuthSettings,
+  isAllowedGmailRecipient,
+} from "../lib/gmail-connector";
+import { getWorkspaceGmailConnection } from "../lib/workspace-gmail";
 
 const MCP_SERVER_ID = "guardian-demo-mcp";
 const TOOL_STATUS = "guardian_approval_status";
@@ -61,6 +68,11 @@ export type McpProxyRouterOptions = {
   authRateLimiter?: typeof workspaceAgentAttemptLimiter;
   executeConnector?: typeof executeWorkspaceConnectorAction;
   destinationTimeoutMs?: number;
+  gmail?: {
+    configured: () => boolean;
+    getConnection: typeof getWorkspaceGmailConnection;
+    createAdapter: () => ConnectorExecutionAdapter;
+  };
 };
 
 type JsonRpcId = string | number;
@@ -119,11 +131,19 @@ function guardianApprovalStatusDefinition(): GuardianMcpToolDefinition {
 
 function allToolDefinitions(
   demoDestinationRegistered: boolean,
+  gmailConnected: boolean,
 ): GuardianMcpToolDefinition[] {
+  const tools = demoDestinationRegistered
+    ? listGuardianMcpToolDefinitions(MCP_SERVER_ID)
+    : [];
+  if (gmailConnected && !demoDestinationRegistered) {
+    const emailTool = listGuardianMcpToolDefinitions(MCP_SERVER_ID).find(
+      (tool) => tool.actionType === "guardian.email.send.external.v1",
+    );
+    if (emailTool) tools.push(emailTool);
+  }
   return [
-    ...(demoDestinationRegistered
-      ? listGuardianMcpToolDefinitions(MCP_SERVER_ID)
-      : []),
+    ...tools,
     guardianApprovalStatusDefinition(),
   ];
 }
@@ -210,6 +230,15 @@ export function createMcpProxyRouter(
   const limiter = options.authRateLimiter ?? workspaceAgentAttemptLimiter;
   const executeConnector = options.executeConnector ??
     executeWorkspaceConnectorAction;
+  const gmail = options.gmail ?? {
+    configured: () => getGoogleGmailOAuthSettings() !== null,
+    getConnection: getWorkspaceGmailConnection,
+    createAdapter: () => {
+      const settings = getGoogleGmailOAuthSettings();
+      if (!settings) throw new Error("gmail_not_configured");
+      return createGmailConnectorAdapter(MCP_SERVER_ID, settings);
+    },
+  };
   const destinationTimeoutMs =
     Number.isInteger(options.destinationTimeoutMs) &&
       options.destinationTimeoutMs! > 0
@@ -291,12 +320,26 @@ export function createMcpProxyRouter(
         return;
       }
       if (rpc.method === "tools/list") {
+        let gmailConnected = false;
+        if (!destinations.has(MCP_SERVER_ID) && gmail.configured()) {
+          try {
+            const connection = await gmail.getConnection(
+              auth.value.principalUserId,
+              workspaceId,
+            );
+            gmailConnected =
+              connection.authorized && connection.value !== null;
+          } catch {
+            gmailConnected = false;
+          }
+        }
         res.status(200).json({
           jsonrpc: "2.0",
           id,
           result: {
             tools: allToolDefinitions(
               destinations.has(MCP_SERVER_ID),
+              gmailConnected,
             ).map(mcpToolDescriptor),
           },
         });
@@ -424,7 +467,28 @@ export function createMcpProxyRouter(
         args.name,
       );
       const destination = destinations.get(MCP_SERVER_ID);
-      if (!toolDefinition || !destination) {
+      const useGmail =
+        classification.actionType === "guardian.email.send.external.v1" &&
+        !destination &&
+        gmail.configured();
+      let gmailConnection: Awaited<
+        ReturnType<typeof getWorkspaceGmailConnection>
+      >["value"] = null;
+      if (useGmail) {
+        try {
+          const connection = await gmail.getConnection(
+            auth.value.principalUserId,
+            workspaceId,
+          );
+          if (connection.authorized) gmailConnection = connection.value;
+        } catch {
+          gmailConnection = null;
+        }
+      }
+      if (
+        !toolDefinition ||
+        (!destination && (!useGmail || !gmailConnection))
+      ) {
         await recordMcpDecisionAudit(workspaceId, credentialSha256, {
           decision: "rejected",
           reasonCode: "destination_unavailable",
@@ -434,6 +498,30 @@ export function createMcpProxyRouter(
         rpcToolResult(res, id, "Destino no disponible en este entorno.", true, {
           reasonCode: "destination_unavailable",
         });
+        return;
+      }
+      if (
+        useGmail &&
+        gmailConnection &&
+        typeof classification.validatedArguments.to === "string" &&
+        !isAllowedGmailRecipient(
+          classification.validatedArguments.to,
+          gmailConnection.allowedRecipients,
+        )
+      ) {
+        await recordMcpDecisionAudit(workspaceId, credentialSha256, {
+          decision: "deny",
+          reasonCode: "gmail_recipient_not_allowed",
+          toolName: args.name,
+          requestText: rawArgumentsJson ?? "",
+        });
+        rpcToolResult(
+          res,
+          id,
+          "Destinatario bloqueado: no está en la lista permitida de Gmail.",
+          true,
+          { reasonCode: "gmail_recipient_not_allowed" },
+        );
         return;
       }
 
@@ -573,41 +661,46 @@ export function createMcpProxyRouter(
         return;
       }
 
-      const adapter: ConnectorExecutionAdapter = {
-        serviceId: MCP_SERVER_ID,
-        async execute(execution) {
-          const controller = new AbortController();
-          let timer: ReturnType<typeof setTimeout> | undefined;
-          try {
-            const timeout = new Promise<never>((_resolve, reject) => {
-              timer = setTimeout(() => {
-                controller.abort();
-                reject(new Error("mcp_destination_timeout"));
-              }, destinationTimeoutMs);
-            });
-            const response = await Promise.race([
-              destination.call({
-                toolName: args.name,
-                arguments: execution.arguments,
-                signal: controller.signal,
-              }),
-              timeout,
-            ]);
-            return {
-              resultCode: "mcp_destination_completed",
-              summary: "MCP destination returned a response.",
-              responseText: response.text,
-            };
-          } finally {
-            if (timer) clearTimeout(timer);
-          }
-        },
-      };
+      const adapter: ConnectorExecutionAdapter = useGmail
+        ? gmail.createAdapter()
+        : {
+            serviceId: MCP_SERVER_ID,
+            async execute(execution) {
+              const controller = new AbortController();
+              let timer: ReturnType<typeof setTimeout> | undefined;
+              try {
+                const timeout = new Promise<never>((_resolve, reject) => {
+                  timer = setTimeout(() => {
+                    controller.abort();
+                    reject(new Error("mcp_destination_timeout"));
+                  }, destinationTimeoutMs);
+                });
+                const response = await Promise.race([
+                  destination!.call({
+                    toolName: args.name,
+                    arguments: execution.arguments,
+                    signal: controller.signal,
+                  }),
+                  timeout,
+                ]);
+                return {
+                  resultCode: "mcp_destination_completed",
+                  summary: "MCP destination returned a response.",
+                  responseText: response.text,
+                };
+              } finally {
+                if (timer) clearTimeout(timer);
+              }
+            },
+          };
       try {
         const execution = await executeConnector({
           workspaceId,
           userId: proposal.value.principalUserId,
           serviceId: MCP_SERVER_ID,
+          ...(useGmail
+            ? { credentialServiceId: GMAIL_CONNECTOR_SERVICE_ID }
+            : {}),
           actionType: classification.actionType,
           arguments: classification.validatedArguments,
           receipt: storedReceipt.value,
@@ -618,9 +711,12 @@ export function createMcpProxyRouter(
           rpcToolResult(
             res,
             id,
-            "La ejecución fue rechazada.",
+            execution.responseSummary ?? "La ejecución fue rechazada.",
             true,
-            { reasonCode: execution.failureCode ?? "execution_failed" },
+            {
+              reasonCode: execution.failureCode ?? "execution_failed",
+              replayed: execution.replayed,
+            },
           );
           return;
         }

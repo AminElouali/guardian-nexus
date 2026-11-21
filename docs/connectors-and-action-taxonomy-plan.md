@@ -1,6 +1,6 @@
 # Plan proyectado de conectores y clasificación de acciones
 
-> **Estado mixto:** la taxonomía completa y los conectores de proveedores siguen **PROYECTADOS**. La base común de la etapa 1 está **IMPLEMENTADA en código y en el laboratorio local** con un adaptador falso sin red; no hay servicios reales conectados.
+> **Estado mixto:** la taxonomía completa y la mayoría de conectores de proveedores siguen **PROYECTADOS**. La base común de la etapa 1 está **IMPLEMENTADA** con un adaptador falso; el conector Gmail está **IMPLEMENTADO en modo prueba en la rama de trabajo** y requiere configurar OAuth antes de conectarlo.
 
 ## 1. Principio de clasificación
 
@@ -81,7 +81,7 @@ Estado por etapa:
 1. **Base común de conectores — IMPLEMENTADA parcialmente en código:** bóveda AES-256-GCM por workspace, identificador de clave, permisos por workspace, verificación y consumo atómico del recibo v1, registro idempotente, estados pendiente/ejecutado/fallido y desconexión. El catálogo contiene 30 acciones sintéticas distribuidas en ocho servicios; solo se registra un adaptador falso en el E2E desechable. La aplicación no registra adaptadores de proveedores y falla cerrada si no hay uno.
 2. **Proxy MCP — Fases 1 y 2 IMPLEMENTADAS en el laboratorio:** hay un endpoint JSON-RPC con herramientas y esquemas escritos por Guardian, credencial de agente, decisión de reglas, aprobación humana, recibo v1 guardado para reintentos y un destino falso en proceso. No se ha conectado ningún servicio MCP real.
 3. **Conector genérico configurable por el cliente — PROYECTADO:** aún no se permite que clientes definan nuevos adaptadores o acciones.
-4. **Conectores nativos para la demo — PROYECTADOS:** correo en un sandbox como Mailtrap y Stripe en modo de prueba. Ambos están pendientes de confirmar; no se presupone que estén configurados ni conectados.
+4. **Conectores nativos para la demo — IMPLEMENTADO en esta rama para Gmail (modo prueba); el resto PROYECTADO:** Gmail envía una plantilla fija a destinatarios permitidos solo después de aprobación humana, con OAuth de envío e identidad mínima. No lee el buzón ni acepta contenido libre. Stripe y otros proveedores siguen pendientes; no se presupone que estén configurados ni conectados.
 5. **Verificador “sin recibo no se abre” — PROYECTADO para producción:** `lib/guardian-guard` demuestra el patrón con SMTP local, pero todavía no es un límite de seguridad desplegado que el agente no pueda evitar.
 6. **Aprobaciones por tramo y varias personas — IMPLEMENTADO en código, pendiente de validación de esta rama:** cada versión de reglas puede guardar un umbral monetario; por debajo solo puede aprobar una persona administradora y por encima la propietaria. El cambio bancario sintético requiere dos aprobaciones de personas distintas. El recibo v1 se emite solo al completar las aprobaciones requeridas; los votos quedan en la auditoría append-only.
 7. **Aislamiento de producción y objetivos de servicio — PROYECTADO:** medir p50 y p95 por separado para decisiones automáticas y aprobaciones humanas. Usar esos resultados para fijar un tiempo de respuesta verificable antes de prometerlo a clientes. Si las mediciones lo requieren, evaluar servidores en la UE y caché de reglas en memoria.
@@ -136,9 +136,15 @@ se añaden eventos ni se cambia el formato del ledger v1.
 
 **Limitación conocida — PROYECTADA:** el clasificador actual solo acepta identificadores en minúsculas ASCII; algunos servidores MCP reales usan nombres `camelCase`. En la fase 3 de registro de servidores, Guardian guardará el nombre exacto declarado para cada herramienta y lo comparará literalmente. Cualquier variante, incluidas diferencias de mayúsculas, homoglifos o caracteres invisibles, se rechazará.
 
+### Gmail — IMPLEMENTADO en esta rama (modo prueba)
+
+La tarjeta de Conexiones permite a owner/admin conectar una cuenta Google mediante OAuth con `gmail.send`, `openid` y `email`. El token de actualización se cifra con la bóveda existente por workspace y nunca se devuelve al navegador. La lista permitida comienza con la propia cuenta; solo admite direcciones exactas o dominios exactos. El agente puede enviar únicamente una plantilla fija, y el envío requiere aprobación humana incluso si la regla del workspace indica permitir. El resultado idempotente guarda el ID del mensaje en auditoría, no el cuerpo.
+
+La integración queda como no configurada hasta que existan las variables OAuth y la bóveda del proceso. Las pruebas usan HTTP simulado y no contactan Google. No se añadió esquema ni migración: se reutilizan las tablas de credenciales, OAuth y ejecuciones ya existentes.
+
 ## 7. Estado actual
 
-**IMPLEMENTADO hoy:** catálogo sintético de 30 acciones y lista MCP de 29 herramientas para ocho servicios; acceso al proxy por credencial propia del agente; reglas versionadas y plantillas; aprobaciones con recibo v1 y verificación/consumo de un solo uso. Los ALLOW del catálogo en el proxy son decisiones de simulación, salvo el reembolso automático ya existente, que también solo autoriza y audita: no mueve dinero. En la base común, las credenciales de conectores se cifran y solo se informa su estado y últimos cuatro caracteres; la ejecución de conectores requiere un recibo aprobado y un adaptador registrado, consume el recibo una sola vez y usa una clave de idempotencia. El único adaptador implementado es falso y exclusivo de pruebas, sin acceso de red.
+**IMPLEMENTADO hoy:** catálogo sintético de 30 acciones y lista MCP de 29 herramientas para ocho servicios; acceso al proxy por credencial propia del agente; reglas versionadas y plantillas; aprobaciones con recibo v1 y verificación/consumo de un solo uso. Los ALLOW del catálogo en el proxy son decisiones de simulación, salvo el reembolso automático ya existente, que también solo autoriza y audita: no mueve dinero. En la base común, las credenciales de conectores se cifran y solo se informa su estado; la ejecución requiere recibo, consumo único e idempotencia. El adaptador falso sigue reservado al laboratorio; Gmail es el primer conector externo limitado a una plantilla y una lista permitida en modo prueba.
 
 Esto no equivale a conectores productivos para los servicios enumerados, ni demuestra que una herramienta externa esté obligada a pasar por Guardian. La clave maestra de cifrado se proporciona mediante configuración del proceso; el laboratorio crea una clave efímera y no persistente. El despliegue, la custodia y la rotación operativa de claves maestras, la aplicación de condiciones configurables por workspace y las aprobaciones por tramo o dobles son **PROYECTADOS**.
 
@@ -146,7 +152,7 @@ Esto no equivale a conectores productivos para los servicios enumerados, ni demu
 
 1. **“Qué habría pasado”, opción 3:** decidir si se guardan datos mínimos de las acciones para futuras comparaciones, qué campos se conservan y durante cuánto tiempo. Hasta entonces, no reconstruir argumentos a partir de hashes ni de fixtures.
 2. **Orden de conectores — decidido:** Amin priorizó el proxy MCP antes que el conector genérico configurable por cliente; las fases posteriores siguen proyectadas.
-3. **Correo de demostración:** confirmar Mailtrap y el alcance del sandbox.
+3. **Correo de demostración — decidido:** Gmail en modo prueba, limitado a destinatarios permitidos y a una plantilla fija. No se usa Mailtrap.
 4. **Pagos de demostración:** confirmar Stripe exclusivamente en modo de prueba y sus límites.
 5. **Flexibilidad por empresa:** definir los límites configurables por workspace (dominios, volúmenes, datos y entorno) y las reglas de aprobación por importe o doble aprobación. La plantilla Solo lectura ya permite solo las acciones tipadas como lectura; el alcance por sensibilidad y volumen sigue pendiente.
 

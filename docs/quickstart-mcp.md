@@ -10,9 +10,9 @@ Guardian Nexus se sitúa entre tu agente de IA y las acciones delicadas. El agen
 
 Cada aprobación genera un **recibo firmado** (Ed25519) y queda en un registro de auditoría en el que solo se puede añadir.
 
-> **Estado actual (MVP).** Las acciones disponibles por MCP son **sintéticas**: cubren los 8 servicios, pero no envían, pagan ni cambian nada real. Sirven para probar la integración y las reglas de punta a punta. Los conectores con proveedores reales todavía no están disponibles.
+> **Estado actual (MVP).** Las acciones disponibles por MCP son **sintéticas**: cubren los 8 servicios, pero no pagan ni cambian nada real. Gmail cuenta con un conector aparte, limitado a un mensaje fijo de prueba, destinatarios permitidos por el workspace y aprobación humana. No es un conector de correo de uso general.
 
-**PROYECTADO:** conexión a servidores MCP reales, registro de destinos de clientes, conectores productivos, grupos configurables de aprobadores y notificación automática al agente cuando se aprueba una solicitud.
+**PROYECTADO:** conexión a servidores MCP reales, registro de destinos de clientes, otros conectores de proveedores, grupos configurables de aprobadores y notificación automática al agente cuando se aprueba una solicitud.
 
 ---
 
@@ -111,6 +111,24 @@ Al aprobar se emite el recibo firmado y queda en el registro. Puedes exportar el
 ## Paso 5 — Ajusta las reglas
 
 En **Reglas** elige una plantilla (*Prudente*, *Equilibrada* o *Solo lectura*) y define tus límites, por ejemplo el importe máximo de compensación. Guardian Nexus versiona cada cambio de reglas, y cada decisión queda vinculada a la versión de la regla que la tomó.
+
+---
+
+## Conectar Gmail (modo prueba)
+
+**IMPLEMENTADO:** si la aplicación OAuth de Google y la caja fuerte del servidor están configuradas, un *owner* o *admin* puede abrir **Conexiones → Gmail (modo prueba) → Conectar Gmail**. El permiso de Google se limita a `https://www.googleapis.com/auth/gmail.send`, más `openid email` para identificar la cuenta. Guardian Nexus no lee el buzón.
+
+En Google Cloud, registra esta URL de redirección autorizada:
+
+`https://guardian-nexus.replit.app/api/oauth/google/gmail/callback`
+
+Un administrador debe configurar `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` y `GOOGLE_OAUTH_REDIRECT_URI` en el entorno de la aplicación. No se muestran en el panel. Si la integración no está configurada, la tarjeta indica **No configurado** y no intenta conectarse.
+
+Al conectar, el único destinatario permitido por defecto es el correo de la cuenta conectada. En la tarjeta se pueden añadir direcciones exactas o dominios permitidos, por ejemplo `@empresa.test`. Un dominio no incluye sus subdominios. Los destinatarios fuera de esa lista se bloquean antes de contactar a Google.
+
+El agente solo puede solicitar la plantilla fija de prueba. El envío real ocurre después de la aprobación humana y una sola vez; un reintento devuelve el resultado anterior. Guardian Nexus conserva el identificador del mensaje para auditoría, no el cuerpo del correo. Para retirar el acceso, pulsa **Desconectar Gmail**; si Google no confirma la revocación, quita también el acceso desde la cuenta de Google.
+
+**PROYECTADO:** correo de contenido libre, adjuntos, lectura o búsqueda del buzón, y conectores de correo para otros proveedores. Las pruebas automáticas usan respuestas simuladas y nunca contactan a Gmail.
 
 ---
 

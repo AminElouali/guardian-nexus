@@ -1519,6 +1519,121 @@ paths:
           description: Caller-held receipts do not cover the complete ledger history
         "413":
           description: Workspace ledger exceeds the bounded export size
+  /oauth/google/gmail/callback:
+    get:
+      operationId: completeGoogleGmailAuthorization
+      tags: [integrations]
+      summary: Complete the one-time Google OAuth callback for Gmail
+      parameters:
+        - in: query
+          name: code
+          required: false
+          schema: { type: string, maxLength: 4096 }
+        - in: query
+          name: state
+          required: true
+          schema: { type: string, maxLength: 4096 }
+        - in: query
+          name: error
+          required: false
+          schema: { type: string, maxLength: 128 }
+      responses:
+        "303":
+          description: Redirect to the workspace connections page after consent
+        "400":
+          description: Invalid or declined authorization
+        "403":
+          description: Workspace administrator required
+        "503":
+          description: Google OAuth or the encrypted credential vault is unavailable
+  /workspaces/{workspaceId}/gmail-connection:
+    get:
+      operationId: getWorkspaceGmailConnection
+      tags: [integrations]
+      summary: Get safe Gmail connection status and the test recipient allowlist
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Safe connection status without OAuth tokens
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkspaceGmailConnectionStatus" }
+        "403":
+          description: Workspace owner or administrator required
+    delete:
+      operationId: disconnectWorkspaceGmail
+      tags: [integrations]
+      summary: Remove the encrypted Gmail credential and attempt provider revocation
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Gmail disconnected locally; provider revocation result included
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkspaceGmailDisconnectResult" }
+        "403":
+          description: Workspace owner or administrator required
+        "404":
+          description: No Gmail connection exists
+  /workspaces/{workspaceId}/gmail-connection/authorize:
+    post:
+      operationId: beginGoogleGmailAuthorization
+      tags: [integrations]
+      summary: Start Google OAuth with the minimum Gmail send and identity scopes
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Google consent URL and requested scopes
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GoogleGmailAuthorization" }
+        "403":
+          description: Workspace owner or administrator required
+        "503":
+          description: Google OAuth or the encrypted credential vault is not configured
+  /workspaces/{workspaceId}/gmail-connection/recipients:
+    put:
+      operationId: updateWorkspaceGmailRecipients
+      tags: [integrations]
+      summary: Replace the exact emails or domains allowed for test sends
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WorkspaceGmailRecipientsInput" }
+      responses:
+        "200":
+          description: Updated recipient allowlist
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkspaceGmailRecipients" }
+        "400":
+          description: Invalid recipient or domain
+        "403":
+          description: Workspace owner or administrator required
+        "404":
+          description: No Gmail connection exists
 components:
   schemas:
     HealthStatus:
@@ -2559,6 +2674,53 @@ components:
           type: array
           items: { $ref: "#/components/schemas/WorkspaceConnectorCredentialStatus" }
       required: [credentials]
+    WorkspaceGmailConnectionStatus:
+      type: object
+      additionalProperties: false
+      properties:
+        configured: { type: boolean }
+        connected: { type: boolean }
+        accountEmail: { type: ["string", "null"], format: email }
+        allowedRecipients:
+          type: array
+          items: { type: string, minLength: 3, maxLength: 254 }
+        scopes:
+          type: array
+          items: { type: string }
+      required: [configured, connected, accountEmail, allowedRecipients, scopes]
+    GoogleGmailAuthorization:
+      type: object
+      additionalProperties: false
+      properties:
+        authorizationUrl: { type: string, format: uri }
+        scopes:
+          type: array
+          items: { type: string }
+      required: [authorizationUrl, scopes]
+    WorkspaceGmailRecipientsInput:
+      type: object
+      additionalProperties: false
+      properties:
+        allowedRecipients:
+          type: array
+          maxItems: 50
+          items: { type: string, minLength: 3, maxLength: 254 }
+      required: [allowedRecipients]
+    WorkspaceGmailRecipients:
+      type: object
+      additionalProperties: false
+      properties:
+        allowedRecipients:
+          type: array
+          items: { type: string, minLength: 3, maxLength: 254 }
+      required: [allowedRecipients]
+    WorkspaceGmailDisconnectResult:
+      type: object
+      additionalProperties: false
+      properties:
+        disconnected: { type: boolean, const: true }
+        providerRevoked: { type: boolean }
+      required: [disconnected, providerRevoked]
     WorkspaceConnectorExecutionInput:
       type: object
       additionalProperties: false

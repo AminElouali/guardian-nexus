@@ -3312,6 +3312,36 @@ async function main(): Promise<void> {
       console.log(
         `Promptfoo MCP red team: attacks=${summary.attacks} blocked=${summary.blocked} approval_required=${summary.approvalRequired} idempotent_replays=${summary.idempotentReplays} failed=${summary.failed}`,
       );
+      const failedCaseLine = combinedRedteamOutput.match(
+        /^Promptfoo MCP assertion failures: ([A-Za-z0-9._:-]{1,80}(?:,[A-Za-z0-9._:-]{1,80})*)$/m,
+      )?.[1];
+      if (failedCaseLine) {
+        console.error(`Promptfoo MCP failed case IDs: ${failedCaseLine}`);
+      }
+      for (const match of combinedRedteamOutput.matchAll(
+        /^\s*#?\s*Promptfoo MCP case (case_\d+): result_success=(true|false) output_marker=(true|false) provider_error_marker=(true|false)$/gm,
+      )) {
+        console.error(
+          `Promptfoo MCP case diagnostic: ${match[1]} result_success=${match[2]} output_marker=${match[3]} provider_error_marker=${match[4]}`,
+        );
+      }
+      if (redteamOutput.exitCode !== 0 || redteamOutput.signal !== null) {
+        const e2eTestPath = path.join(
+          repoRoot,
+          "artifacts/api-server/src/ai-assessment-synthetic-approval-e2e.test.ts",
+        );
+        const e2eTestSource = await readFile(e2eTestPath, "utf8");
+        const redteamFailures = parseSafeNodeTestFailures(
+          combinedRedteamOutput,
+          path.basename(e2eTestPath),
+          e2eTestSource,
+        );
+        if (redteamFailures.length > 0) {
+          console.error(
+            `Promptfoo MCP TAP diagnostics: ${JSON.stringify(redteamFailures)}`,
+          );
+        }
+      }
     }
     if (
       redteamOutput.exitCode !== 0 ||

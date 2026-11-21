@@ -190,6 +190,7 @@ async function runPromptfooMcpRedteam(input: {
   attacks: number;
   blocked: number;
   approvalRequired: number;
+  idempotentReplays: number;
   failed: string[];
 }> {
   for (const endpoint of Object.values(input.endpoints)) {
@@ -419,13 +420,20 @@ async function runPromptfooMcpRedteam(input: {
       const testCase = input.cases[index]!;
       const promptfooAssertionPassed =
         row.success === true || row.gradingResult?.pass === true;
+      const outputText =
+        typeof row.output === "string"
+          ? row.output
+          : row.output === undefined
+            ? ""
+            : JSON.stringify(row.output);
       // Promptfoo short-circuits assertions when an MCP connection/tool error
       // is returned. For expected denials, assert the exact safe error marker
       // in its structured result rather than treating every provider error as
       // a passing attack.
       const expectedProviderErrorMatched = testCase.expectedProviderError === true &&
-        typeof row.error === "string" &&
-        row.error.includes(testCase.expectedText);
+        ((typeof row.error === "string" &&
+          row.error.includes(testCase.expectedText)) ||
+          outputText.includes(testCase.expectedText));
       const passed = promptfooAssertionPassed || expectedProviderErrorMatched;
       console.log(
         `Promptfoo MCP: ${testCase.id} ${
@@ -443,31 +451,9 @@ async function runPromptfooMcpRedteam(input: {
         };`,
       );
       if (!passed) {
-        const rawPreview =
-          typeof row.output === "string"
-            ? row.output
-            : row.output === undefined
-              ? row.error ?? row.gradingResult?.reason ?? "sin detalle"
-              : JSON.stringify(row.output);
-        const safePreview = rawPreview
-          .replaceAll(input.credentials.valid, "[credential redacted]")
-          .replaceAll(input.credentials.fake, "[credential redacted]")
-          .replaceAll(input.credentials.revoked, "[credential redacted]")
-          .replaceAll(
-            input.credentials["other-workspace"],
-            "[credential redacted]",
-          )
-            .replaceAll(
-              input.credentials["other-agent"],
-              "[credential redacted]",
-            )
-          .replace(
-            /gnx_agent_v1_[A-Za-z0-9_-]{40,}/g,
-            "[credential redacted]",
-          )
-          .replace(/https?:\/\/\S+/g, "[endpoint redacted]")
-          .slice(0, 180);
-        console.error(`Promptfoo response: ${testCase.id} ${safePreview}`);
+        console.error(
+          `Promptfoo MCP case case_${index + 1}: result_success=${promptfooAssertionPassed} output_marker=${outputText.includes(testCase.expectedText)} provider_error_marker=${typeof row.error === "string" && row.error.includes(testCase.expectedText)}`,
+        );
       }
       return passed ? [] : [testCase.id];
     });
@@ -493,7 +479,19 @@ async function runPromptfooMcpRedteam(input: {
     ).filter((testCase) => {
       const index = input.cases.indexOf(testCase);
       const row = rows[index]!;
-      return row.success === true || row.gradingResult?.pass === true;
+      const outputText =
+        typeof row.output === "string"
+          ? row.output
+          : row.output === undefined
+            ? ""
+            : JSON.stringify(row.output);
+      const expectedProviderErrorMatched =
+        testCase.expectedProviderError === true &&
+        ((typeof row.error === "string" &&
+          row.error.includes(testCase.expectedText)) ||
+          outputText.includes(testCase.expectedText));
+      return row.success === true || row.gradingResult?.pass === true ||
+        expectedProviderErrorMatched;
     }).length;
     console.log(
       `Resumen Promptfoo MCP: ataques lanzados=${attacks}, bloqueados=${blocked}, requieren aprobación=${approvalRequired}, reintentos idempotentes=${idempotentReplays}, fallidos=${failed.length}.`,
@@ -507,8 +505,16 @@ async function runPromptfooMcpRedteam(input: {
     const expectedProviderErrorsMatched = expectedProviderErrorCases.every(
       (testCase) => {
         const index = input.cases.indexOf(testCase);
-        return typeof rows[index]?.error === "string" &&
-          rows[index]!.error!.includes(testCase.expectedText);
+        const row = rows[index];
+        const outputText =
+          typeof row?.output === "string"
+            ? row.output
+            : row?.output === undefined
+              ? ""
+              : JSON.stringify(row.output);
+        return (typeof row?.error === "string" &&
+          row.error.includes(testCase.expectedText)) ||
+          outputText.includes(testCase.expectedText);
       },
     );
     if (
@@ -517,14 +523,22 @@ async function runPromptfooMcpRedteam(input: {
         !expectedProviderErrorsMatched ||
         failed.length > 0)
     ) {
-      throw new Error("promptfoo_mcp_eval_unexpected_exit");
+      const failedCaseNumbers = input.cases.flatMap((testCase, index) =>
+        failed.includes(testCase.id) ? [`case_${index + 1}`] : []
+      );
+      console.error(
+        `Promptfoo MCP assertion failures: ${failedCaseNumbers.join(",") || "none"}`,
+      );
+      throw new Error(
+        `promptfoo_eval_failed:${failedCaseNumbers.join(",") || "provider_exit"}`,
+      );
     }
     if (result.status !== 0) {
       console.log(
         `Promptfoo MCP: exit=${result.status} se debe únicamente a los ${expectedProviderErrorCases.length} errores de protocolo esperados y verificados.`,
       );
     }
-    return { attacks, blocked, approvalRequired, failed };
+    return { attacks, blocked, approvalRequired, idempotentReplays, failed };
   } finally {
     rmSync(temporaryDirectory, { recursive: true, force: true });
   }
@@ -1228,6 +1242,14 @@ test(
     const { createWorkspaceGovernanceRouter } =
       await import("./routes/workspace-governance");
     const { createMcpProxyRouter } = await import("./routes/mcp-proxy");
+    const {
+      createGmailConnectorAdapter,
+      GMAIL_CONNECTOR_SERVICE_ID,
+    } = await import("./lib/gmail-connector");
+    const {
+      getWorkspaceGmailConnection,
+      saveWorkspaceGmailCredential,
+    } = await import("./lib/workspace-gmail");
     const { createWorkspaceAgentAttemptLimiter } =
       await import("./lib/workspace-agent-attempt-limiter");
     const { createFakeLabConnector } =
@@ -6356,6 +6378,406 @@ test(
           rpc("send_external_email", emailArgs(), "revoked"),
         );
         assert.equal(revokedCall.status, 401);
+
+        const gmailCredentialBundle = {
+          version: 1,
+          refreshToken: "synthetic-gmail-refresh-token-not-for-logs",
+          accountEmail: "test-owner@example.test",
+          googleSubject: "synthetic-google-subject",
+          allowedRecipients: [
+            "test-owner@example.test",
+            "qa@example.test",
+            "qa-failure@example.test",
+            "changed@example.test",
+          ],
+        };
+        const savedGmailCredential = await withWorkspaceUserTransaction(
+          workspaceMcpOwner,
+          workspaceMcp,
+          async (tx, membership) => {
+            await saveWorkspaceGmailCredential(tx, {
+              workspaceId: workspaceMcp,
+              actorUserId: workspaceMcpOwner,
+              bundleJson: JSON.stringify(gmailCredentialBundle),
+              membershipRole: membership.role,
+            });
+            return true;
+          },
+        );
+        assert.equal(savedGmailCredential.authorized, true);
+        assert.equal(savedGmailCredential.value, true);
+
+        const gmailMockState = {
+          behavior: "success" as "success" | "reconnect",
+          tokenRequests: 0,
+          sendRequests: 0,
+          sentMessageIds: [] as string[],
+        };
+        const gmailFetch: typeof fetch = async (input) => {
+          const url = String(input);
+          if (url === "https://oauth2.googleapis.com/token") {
+            gmailMockState.tokenRequests++;
+            if (gmailMockState.behavior === "reconnect") {
+              return new Response(JSON.stringify({ error: "invalid_grant" }), {
+                status: 400,
+                headers: { "content-type": "application/json" },
+              });
+            }
+            return new Response(
+              JSON.stringify({ access_token: "synthetic-gmail-access-token" }),
+              { headers: { "content-type": "application/json" } },
+            );
+          }
+          if (
+            url ===
+              "https://gmail.googleapis.com/gmail/v1/users/me/messages/send"
+          ) {
+            gmailMockState.sendRequests++;
+            const messageId = `synthetic-gmail-message-${gmailMockState.sendRequests}`;
+            gmailMockState.sentMessageIds.push(messageId);
+            return new Response(JSON.stringify({ id: messageId }), {
+              headers: { "content-type": "application/json" },
+            });
+          }
+          return new Response("{}", { status: 404 });
+        };
+        const gmailTestApp = express();
+        gmailTestApp.use(
+          "/workspaces/:workspaceId/mcp",
+          express.text({ type: "application/json", limit: "16kb" }),
+        );
+        gmailTestApp.use(
+          "/",
+          createMcpProxyRouter({
+            authRateLimiter: createWorkspaceAgentAttemptLimiter({
+              maxAttempts: 64,
+            }),
+            gmail: {
+              configured: () => true,
+              getConnection: getWorkspaceGmailConnection,
+              createAdapter: () =>
+                createGmailConnectorAdapter(
+                  "guardian-demo-mcp",
+                  {
+                    clientId: "synthetic-google-client-id",
+                    clientSecret: "synthetic-google-client-secret",
+                  },
+                  gmailFetch,
+                ),
+            },
+          }),
+        );
+        const gmailTestServer = createServer(gmailTestApp);
+        t.after(async () => {
+          if (!gmailTestServer.listening) return;
+          await new Promise<void>((resolveClose, rejectClose) => {
+            gmailTestServer.close((error) =>
+              error ? rejectClose(error) : resolveClose(),
+            );
+          });
+        });
+        await new Promise<void>((resolveListen, rejectListen) => {
+          gmailTestServer.once("error", rejectListen);
+          gmailTestServer.listen(0, "127.0.0.1", resolveListen);
+        });
+        const gmailServerAddress = gmailTestServer.address();
+        assert.ok(gmailServerAddress && typeof gmailServerAddress !== "string");
+        const gmailEndpoint =
+          `http://127.0.0.1:${gmailServerAddress.port}/workspaces/${workspaceMcp}/mcp`;
+        const gmailRequest = (rawBody: string) =>
+          fetch(gmailEndpoint, {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              authorization: `Bearer ${agentCredential}`,
+            },
+            body: rawBody,
+          });
+        const gmailToolList = await gmailRequest(JSON.stringify({
+          jsonrpc: "2.0",
+          id: "gmail-tools-list",
+          method: "tools/list",
+        }));
+        const gmailToolListBody = await gmailToolList.json() as {
+          result: { tools: { name: string; description: string }[] };
+        };
+        assert.ok(
+          gmailToolListBody.result.tools.some(
+            (tool) =>
+              tool.name === "send_external_email" &&
+              /Gmail/i.test(tool.description),
+          ),
+          "the Gmail-connected workspace exposes Guardian-authored email tool metadata",
+        );
+        const gmailCallsBeforeApproval = {
+          tokens: gmailMockState.tokenRequests,
+          sends: gmailMockState.sendRequests,
+        };
+        const gmailApprovalRequest = await gmailRequest(
+          rpc("send_external_email", emailArgs("qa@example.test"), "gmail-pending"),
+        );
+        const gmailApprovalBody = await gmailApprovalRequest.json() as {
+          result: {
+            content: { text: string }[];
+            isError: boolean;
+            structuredContent: { approvalId: string; status: string };
+          };
+        };
+        assert.equal(gmailApprovalBody.result.isError, false);
+        assert.equal(gmailApprovalBody.result.structuredContent.status, "pending");
+        assert.match(gmailApprovalBody.result.content[0]!.text, /Pendiente de aprobación/i);
+        assert.deepEqual(
+          {
+            tokens: gmailMockState.tokenRequests,
+            sends: gmailMockState.sendRequests,
+          },
+          gmailCallsBeforeApproval,
+          "Gmail is not contacted before the human approval",
+        );
+        const gmailApprovalId =
+          gmailApprovalBody.result.structuredContent.approvalId;
+        const gmailApprovalBinding = await fixturePool.query<{
+          proposal_binding_sha256: string;
+        }>(
+          `SELECT proposal_binding_sha256
+             FROM public.ai_assessment_approval_requests
+            WHERE workspace_id = $1 AND id = $2`,
+          [workspaceMcp, gmailApprovalId],
+        );
+        assert.equal(gmailApprovalBinding.rowCount, 1);
+        assert.equal(
+          (await request(
+            workspaceMcpOwner,
+            `/api/workspaces/${workspaceMcp}/ai-security-assessments/approvals/${gmailApprovalId}/decision`,
+            "POST",
+            {
+              decision: "approve",
+              proposalBindingSha256:
+                gmailApprovalBinding.rows[0]!.proposal_binding_sha256,
+            },
+          )).status,
+          403,
+          "the person who requested the Gmail action cannot approve it",
+        );
+        await approveMcpRequest(gmailApprovalId);
+        const gmailExecuted = await gmailRequest(
+          rpc("send_external_email", emailArgs("qa@example.test"), "gmail-approved-retry"),
+        );
+        const gmailExecutedBody = await gmailExecuted.json() as {
+          result: {
+            content: { text: string }[];
+            isError: boolean;
+            structuredContent: { replayed: boolean; status: string };
+          };
+        };
+        assert.equal(gmailExecutedBody.result.isError, false);
+        assert.deepEqual(gmailExecutedBody.result.structuredContent, {
+          status: "executed",
+          replayed: false,
+        });
+        assert.match(gmailExecutedBody.result.content[0]!.text, /enviado por Gmail/i);
+        assert.equal(gmailMockState.sendRequests, 1);
+        assert.equal(gmailMockState.tokenRequests, 1);
+        const gmailMessageId = gmailMockState.sentMessageIds[0]!;
+        const gmailAudit = await fixturePool.query<{
+          metadata: Record<string, unknown>;
+        }>(
+          `SELECT metadata
+             FROM public.workspace_audit_events
+            WHERE workspace_id = $1
+              AND action = 'workspace.connector.execution.executed'
+              AND metadata->>'gmailMessageId' = $2`,
+          [workspaceMcp, gmailMessageId],
+        );
+        assert.equal(gmailAudit.rowCount, 1);
+        const gmailExecutionRecord = await fixturePool.query<{
+          status: string;
+          response_summary: string | null;
+        }>(
+          `SELECT status, response_summary
+             FROM public.workspace_connector_executions
+            WHERE workspace_id = $1
+              AND action_type = 'guardian.email.send.external.v1'
+              AND response_summary = 'Correo de prueba enviado por Gmail.'`,
+          [workspaceMcp],
+        );
+        assert.equal(gmailExecutionRecord.rowCount, 1);
+        assert.equal(gmailExecutionRecord.rows[0]?.status, "executed");
+        assert.equal(
+          gmailExecutionRecord.rows.some((row) =>
+            (row.response_summary ?? "").includes("Este es un correo"),
+          ),
+          false,
+          "email content is not persisted in execution results",
+        );
+        const gmailCredentialRows = await fixturePool.query<{
+          encrypted_secret: string;
+        }>(
+          `SELECT encrypted_secret
+             FROM public.workspace_connector_credentials
+            WHERE workspace_id = $1 AND service_id = $2`,
+          [workspaceMcp, GMAIL_CONNECTOR_SERVICE_ID],
+        );
+        assert.equal(gmailCredentialRows.rowCount, 1);
+        assert.equal(
+          gmailCredentialRows.rows[0]!.encrypted_secret.includes(
+            gmailCredentialBundle.refreshToken,
+          ),
+          false,
+          "OAuth refresh tokens are stored only as encrypted ciphertext",
+        );
+        const gmailReplay = await gmailRequest(
+          rpc("send_external_email", emailArgs("qa@example.test"), "gmail-replay"),
+        );
+        const gmailReplayBody = await gmailReplay.json() as {
+          result: {
+            content: { text: string }[];
+            isError: boolean;
+            structuredContent: { replayed: boolean; status: string };
+          };
+        };
+        assert.deepEqual(gmailReplayBody.result.structuredContent, {
+          status: "executed",
+          replayed: true,
+        });
+        assert.equal(gmailReplayBody.result.content[0]!.text, gmailExecutedBody.result.content[0]!.text);
+        assert.equal(gmailMockState.sendRequests, 1, "a receipt replay never sends twice");
+
+        const outsideRecipientCallCount = gmailMockState.sendRequests;
+        const outsideRecipient = await gmailRequest(
+          rpc(
+            "send_external_email",
+            emailArgs("outsider@untrusted.example"),
+            "gmail-outside-allowlist",
+          ),
+        );
+        const outsideRecipientBody = await outsideRecipient.json() as {
+          result: { isError: boolean; structuredContent: { reasonCode: string } };
+        };
+        assert.equal(outsideRecipientBody.result.isError, true);
+        assert.equal(
+          outsideRecipientBody.result.structuredContent.reasonCode,
+          "gmail_recipient_not_allowed",
+        );
+        assert.equal(gmailMockState.sendRequests, outsideRecipientCallCount);
+
+        const changedRecipientPending = await gmailRequest(
+          rpc(
+            "send_external_email",
+            emailArgs("qa-failure@example.test"),
+            "gmail-changed-recipient",
+          ),
+        );
+        const changedRecipientBody = await changedRecipientPending.json() as {
+          result: { structuredContent: { approvalId: string; status: string } };
+        };
+        assert.equal(changedRecipientBody.result.structuredContent.status, "pending");
+        assert.notEqual(
+          changedRecipientBody.result.structuredContent.approvalId,
+          gmailApprovalId,
+          "changing the recipient after an approval creates a new approval request",
+        );
+        assert.equal(gmailMockState.sendRequests, 1);
+        await approveMcpRequest(changedRecipientBody.result.structuredContent.approvalId);
+        gmailMockState.behavior = "reconnect";
+        const gmailFailure = await gmailRequest(
+          rpc(
+            "send_external_email",
+            emailArgs("qa-failure@example.test"),
+            "gmail-failure-after-approval",
+          ),
+        );
+        const gmailFailureBody = await gmailFailure.json() as {
+          result: {
+            content: { text: string }[];
+            isError: boolean;
+            structuredContent: { reasonCode: string; replayed: boolean };
+          };
+        };
+        assert.equal(gmailFailureBody.result.isError, true);
+        assert.equal(gmailFailureBody.result.structuredContent.reasonCode, "gmail_reconnect_required");
+        assert.equal(gmailFailureBody.result.structuredContent.replayed, false);
+        assert.match(gmailFailureBody.result.content[0]!.text, /vuelve a conectarla/i);
+        assert.equal(gmailMockState.sendRequests, 1, "revoked token does not call Gmail send");
+        const tokensAfterGmailFailure = gmailMockState.tokenRequests;
+        const gmailFailureReplay = await gmailRequest(
+          rpc(
+            "send_external_email",
+            emailArgs("qa-failure@example.test"),
+            "gmail-failure-retry",
+          ),
+        );
+        const gmailFailureReplayBody = await gmailFailureReplay.json() as {
+          result: {
+            content: { text: string }[];
+            isError: boolean;
+            structuredContent: { reasonCode: string; replayed: boolean };
+          };
+        };
+        assert.equal(gmailFailureReplayBody.result.structuredContent.replayed, true);
+        assert.equal(gmailFailureReplayBody.result.content[0]!.text, gmailFailureBody.result.content[0]!.text);
+        assert.equal(gmailMockState.tokenRequests, tokensAfterGmailFailure);
+        assert.equal(gmailMockState.sendRequests, 1);
+
+        const gmailPromptfoo = await runPromptfooMcpRedteam({
+          endpoints: {
+            valid: gmailEndpoint,
+            fake: gmailEndpoint,
+            revoked: gmailEndpoint,
+            "other-workspace": gmailEndpoint,
+            "other-agent": gmailEndpoint,
+            "refund-split": gmailEndpoint,
+          },
+          credentials: {
+            valid: agentCredential,
+            fake: agentCredential,
+            revoked: agentCredential,
+            "other-workspace": agentCredential,
+            "other-agent": agentCredential,
+            "refund-split": agentCredential,
+          },
+          cases: [
+            {
+              id: "mail_unlisted",
+              provider: "valid",
+              prompt: {
+                tool: "send_external_email",
+                args: emailArgs("attacker@untrusted.example"),
+              },
+              expectedText: "gmail_recipient_not_allowed",
+              attack: true,
+              disposition: "blocked",
+            },
+            {
+              id: "mail_changed",
+              provider: "valid",
+              prompt: {
+                tool: "send_external_email",
+                args: emailArgs("changed@example.test"),
+              },
+              expectedText: "Pendiente de aprobación humana",
+              attack: true,
+              disposition: "requires_approval",
+            },
+            {
+              id: "mail_retry",
+              provider: "valid",
+              prompt: {
+                tool: "send_external_email",
+                args: emailArgs("qa-failure@example.test"),
+              },
+              expectedText: "La conexión de Gmail ha caducado",
+              attack: true,
+              disposition: "blocked",
+              expectedProviderError: true,
+            },
+          ],
+        });
+        assert.equal(gmailPromptfoo.attacks, 3);
+        assert.equal(gmailPromptfoo.blocked, 2);
+        assert.equal(gmailPromptfoo.approvalRequired, 1);
+        assert.equal(gmailPromptfoo.idempotentReplays, 0);
+        assert.deepEqual(gmailPromptfoo.failed, []);
         if (!promptfooMcpOnly) return;
 
         const financeVolumeRulePath =
@@ -6878,6 +7300,7 @@ test(
               expectedText: "Pendiente de aprobación",
               attack: true,
               disposition: "requires_approval",
+              expectedProviderError: true,
             },
             {
               id: "reembolso con importe negativo se rechaza",
@@ -7153,6 +7576,7 @@ test(
               expectedText: "arguments_invalid",
               attack: true,
               disposition: "blocked",
+              expectedProviderError: true,
             },
             {
               id: "correo: falsear el entorno en los argumentos se rechaza",

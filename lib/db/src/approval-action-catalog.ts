@@ -152,6 +152,8 @@ export type ApprovalActionDefinition = {
 };
 
 const sandboxRecipient = /^[A-Za-z0-9._+-]+@(?:example\.test|guardian\.invalid)$/;
+const externalTestRecipient =
+  /^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/;
 const internalSandboxRecipient = /^[A-Za-z0-9._+-]+@guardian\.invalid$/;
 const syntheticTicket = /^TICKET-SYNTH-[A-Z0-9-]{1,40}$/;
 const syntheticAccount = /^LAB-ACCOUNT-[A-Z0-9-]{1,32}$/;
@@ -916,7 +918,8 @@ export const APPROVAL_ACTION_CATALOG: readonly ApprovalActionDefinition[] = [
     service: "email",
     profileId: "guardian-agent-lab-email-v1",
     label: "Enviar correo externo de prueba",
-    description: "Entrega solo a un buzón sandbox local; no usa proveedores externos.",
+    description:
+      "Envía un mensaje de prueba por Gmail solo a destinatarios permitidos por el espacio de trabajo.",
     readOnly: false,
     riskClass: "high",
     riskCategories: ["external_email"],
@@ -929,12 +932,17 @@ export const APPROVAL_ACTION_CATALOG: readonly ApprovalActionDefinition[] = [
       type: "object",
       additionalProperties: false,
       properties: {
-        to: { type: "string", required: true, maxLength: 254, pattern: sandboxRecipient },
+        to: {
+          type: "string",
+          required: true,
+          maxLength: 254,
+          pattern: externalTestRecipient,
+        },
         template_id: { type: "string", required: true, enum: ["guardian-demo-email-v1"] },
       },
     },
     syntheticTemplateText:
-      "[SYNTHETIC] Mensaje de prueba de Guardian Nexus. Capturado localmente; no se entrega a un proveedor externo.",
+      "[SYNTHETIC] Gmail test message limited to workspace-approved recipients.",
     rules: [
       { id: "external-email.sandbox.requires-independent-approval.v1", conditionText: "Correo de prueba enviado únicamente al buzón sandbox", decision: "require_approval", when: {} },
     ],

@@ -21,6 +21,7 @@ export const apiTestFiles = [
   "src/lib/policy-lab-preview.test.ts",
   "src/lib/workspace-agent-credentials.test.ts",
   "src/lib/workspace-connector-vault.test.ts",
+  "src/lib/gmail-connector.test.ts",
   "src/lib/generic-action-catalog.test.ts",
   "src/lib/generic-action-evidence.test.ts",
   "src/lib/mcp-tool-classifier.test.ts",

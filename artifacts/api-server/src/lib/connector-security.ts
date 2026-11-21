@@ -13,6 +13,8 @@ export type OAuthState = {
   userId: string;
   nonce: string;
   expiresAt: number;
+  provider?: "google_gmail";
+  redirectUri?: string;
 };
 
 function stateSecret(): string {
@@ -62,6 +64,26 @@ export function verifyOAuthState(value: string): OAuthState | undefined {
       claims.expiresAt <= Date.now()
     ) {
       return undefined;
+    }
+    if (
+      claims.provider !== undefined &&
+      (claims.provider !== "google_gmail" ||
+        typeof claims.redirectUri !== "string")
+    ) {
+      return undefined;
+    }
+    if (claims.redirectUri !== undefined) {
+      const redirectUri = new URL(claims.redirectUri);
+      if (
+        redirectUri.protocol !== "https:" ||
+        redirectUri.pathname !== "/api/oauth/google/gmail/callback" ||
+        redirectUri.search ||
+        redirectUri.hash ||
+        redirectUri.username ||
+        redirectUri.password
+      ) {
+        return undefined;
+      }
     }
     return claims;
   } catch {

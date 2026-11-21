@@ -129,6 +129,7 @@ import {
   verifyGenericActionEvidence,
 } from "../lib/generic-action-evidence";
 import { createGenericActionProposalInTransaction } from "../lib/generic-action-proposal-service";
+import { isGmailSandboxRecipient } from "../lib/gmail-connector";
 import {
   getActiveWorkspaceActionRule,
   getWorkspaceActionRuleEvaluationContext,
@@ -2148,6 +2149,17 @@ routes.post(
     const body = CreateWorkspaceGenericActionProposalBody.safeParse(req.body);
     if (!params.success || !body.success || !UUID_PATTERN.test(params.data.workspaceId)) {
       res.status(400).json({ error: "Invalid generic action proposal request" });
+      return;
+    }
+    if (
+      body.data.actionType === "guardian.email.send.external.v1" &&
+      (typeof body.data.arguments.to !== "string" ||
+        !isGmailSandboxRecipient(body.data.arguments.to))
+    ) {
+      res.status(400).json({
+        code: "arguments_invalid",
+        error: "The generic proposal route accepts only reserved synthetic email domains.",
+      });
       return;
     }
     const savedRuleResult = await withWorkspaceUserTransaction(
