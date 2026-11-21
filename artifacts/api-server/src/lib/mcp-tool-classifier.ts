@@ -88,6 +88,12 @@ const REGISTERED_MCP_TOOLS: Readonly<
       guardianDescription: "Consulta un saldo o factura ficticios.",
       volume: Object.freeze({ kind: "fixed", unit: "operations" }),
     }),
+    change_synthetic_bank_account: Object.freeze({
+      actionType: "guardian.synthetic.finance.bank-change.v1",
+      dataSensitivity: "sensible",
+      guardianDescription: "Propón un cambio bancario ficticio; hacen falta dos aprobaciones humanas distintas.",
+      volume: Object.freeze({ kind: "fixed", unit: "operations" }),
+    }),
     pay_known_vendor: Object.freeze({
       actionType: "guardian.finance.vendor_payment.known.v1",
       dataSensitivity: "sensible",

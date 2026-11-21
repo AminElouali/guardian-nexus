@@ -75,7 +75,7 @@ Arranca tu agente y pulsa **Probar conexión** en el asistente: verás ✅ cuand
 
 **2. Requiere aprobación.** La acción **no** se ejecuta. La respuesta incluye:
 
-**Aprobaciones por importe y varias personas — implementado en esta rama, pendiente de validación:** cada versión de reglas puede fijar un umbral monetario (máximo 10.000 €). Para acciones que tienen un importe catalogado, hasta el umbral aprueba una persona administradora y por encima la persona propietaria. El cambio de cuenta bancaria sintético requiere dos aprobaciones de personas diferentes. Repetir el voto de una misma persona no suma; la solicitud sigue pendiente y no se emite el recibo hasta completar el número requerido. Los votos quedan en la auditoría append-only. El recibo v1 y el evento v1 del ledger no cambian.
+**IMPLEMENTADO en esta versión:** cada versión de reglas puede fijar un umbral monetario (máximo 10.000 €). Para acciones que tienen un importe catalogado, hasta el umbral aprueba una persona administradora y por encima la persona propietaria. El cambio de cuenta bancaria sintético requiere dos aprobaciones de personas diferentes. Repetir el voto de una misma persona no suma; la solicitud sigue pendiente y no se emite el recibo hasta completar el número requerido. Los votos quedan en la auditoría append-only. El recibo v1 y el evento v1 del ledger no cambian.
 
 Si una acción protegida ya se completó y el agente reintenta la misma llamada por un problema de red, Guardian devuelve el resultado anterior con `replayed: true`; no la ejecuta otra vez. Se rechazan los usos desde otro agente o workspace, con argumentos cambiados o con una solicitud caducada.
 ```json

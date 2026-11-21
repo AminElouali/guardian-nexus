@@ -2266,7 +2266,7 @@ routes.post(
             savedDetails,
             {
               approvedCount: 0,
-              requiredCount: savedApprovalRequirements.requiredCount,
+              requiredCount: savedApprovalRequirements.requiredApprovers,
               currentUserVoted: false,
               eligibleRoles: savedApprovalRequirements.allowedApproverRoles,
             },
