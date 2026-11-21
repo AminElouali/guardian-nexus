@@ -19,7 +19,7 @@ type VersionedMigrationReport = {
   migration0006Postcondition?: {
     oidChanged: boolean;
     isLegacy: boolean;
-    isCurrent: boolean;
+    isMigration0006Current: boolean;
     referencesInPgGetExprOrder: string[];
   };
   migration0006Idempotent?: boolean;
@@ -27,6 +27,8 @@ type VersionedMigrationReport = {
   migration0007Idempotent?: boolean;
   migration0008LegacyStateReplaced?: boolean;
   migration0008Idempotent?: boolean;
+  migration0009Idempotent?: boolean;
+  migration0009UnexpectedConstraintRejected?: boolean;
   inventoryMatchesDrizzle?: Record<string, boolean>;
   violationCodes: string[];
 };
@@ -86,6 +88,7 @@ const artifact = {
     migration0006: report.migration0006Idempotent ?? null,
     migration0007: report.migration0007Idempotent ?? null,
     migration0008: report.migration0008Idempotent ?? null,
+    migration0009: report.migration0009Idempotent ?? null,
   },
   migration0006LegacyConstraintReplaced:
     report.migration0006LegacyConstraintReplaced ?? null,
@@ -94,6 +97,8 @@ const artifact = {
     report.migration0006UnexpectedConstraintRejected ?? null,
   migration0008LegacyStateReplaced:
     report.migration0008LegacyStateReplaced ?? null,
+  migration0009UnexpectedConstraintRejected:
+    report.migration0009UnexpectedConstraintRejected ?? null,
   baselineMatchesDrizzleProjection:
     report.baselineMatchesDrizzleProjection ?? null,
   baselineMatchesExpectedLegacyProjection:

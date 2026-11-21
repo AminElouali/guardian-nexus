@@ -249,6 +249,103 @@ test("workspace evidence permits an allow decision only when escalated to human 
   );
 });
 
+test("workspace evidence v2 binds approval-required actions across all eight service profiles", () => {
+  const fixtures = [
+    {
+      actionType: "guardian.email.send.external_sensitive.v1",
+      profileId: "guardian-agent-lab-email-v1",
+      args: {
+        to: "qa@example.test",
+        template_id: "guardian-sensitive-email-v1",
+        has_attachments: true,
+        contains_customer_data: true,
+      },
+    },
+    {
+      actionType: "guardian.support.customer_account.close.v1",
+      profileId: "guardian-agent-lab-customer-service-v1",
+      args: {
+        account_id: "LAB-ACCOUNT-42",
+        operation: "close",
+        case_id: "TICKET-SYNTH-42",
+      },
+    },
+    {
+      actionType: "guardian.finance.vendor_payment.known.v1",
+      profileId: "guardian-agent-lab-finance-v1",
+      args: {
+        vendor_id: "VENDOR-SYNTH-42",
+        amount_cents: 2500,
+        invoice_id: "INVOICE-SYNTH-42",
+      },
+    },
+    {
+      actionType: "guardian.data.customer.export.v1",
+      profileId: "guardian-agent-lab-database-v1",
+      args: { dataset_id: "DATASET-SYNTH-42", record_limit: 25 },
+    },
+    {
+      actionType: "guardian.code.pull_request.merge_main.v1",
+      profileId: "guardian-agent-lab-programming-v1",
+      args: {
+        repository_id: "REPO-SYNTH-42",
+        pull_request_id: "PR-SYNTH-42",
+        target_branch: "main",
+      },
+    },
+    {
+      actionType: "guardian.web.personal_data.submit.v1",
+      profileId: "guardian-agent-lab-browser-v1",
+      args: { form_id: "FORM-SYNTH-42", host: "example.test", data_class: "personal" },
+    },
+    {
+      actionType: "guardian.cloud.resource.create.v1",
+      profileId: "guardian-agent-lab-infrastructure-v1",
+      args: {
+        resource_type: "compute",
+        resource_id: "CLOUD-SYNTH-42",
+        estimated_cost_cents: 2500,
+      },
+    },
+    {
+      actionType: "guardian.multiagent.delegate_higher_scope.v1",
+      profileId: "guardian-agent-lab-multiagent-v1",
+      args: { target_agent_id: "AGENT-SYNTH-42", requested_scope: "admin" },
+    },
+  ] as const;
+  for (const fixture of fixtures) {
+    const ruleDocument = {
+      version: 1 as const,
+      rules: [{ id: "service-approval", decision: "require_approval" as const, when: {} }],
+    };
+    const display = genericActionDisplay(fixture.actionType, fixture.args);
+    assert.ok(display, `${fixture.actionType} has a synthetic display`);
+    const value = createWorkspaceRuleActionEvidence({
+      workspaceId,
+      requestedByUserId,
+      actionType: fixture.actionType,
+      args: fixture.args,
+      ruleId: "service-approval",
+      ruleVersionId: "11111111-1111-4111-8111-111111111111",
+      ruleDocument,
+      agentId: display.agentId,
+      summary: display.summary,
+      messagePreview: display.messagePreview,
+    });
+    assert.ok(value, `${fixture.actionType} produces v2 approval evidence`);
+    assert.equal(value.evidenceVersion, 2);
+    assert.equal(value.profileId, fixture.profileId);
+    assert.ok(verifyGenericActionEvidence(value, {
+      workspaceId,
+      requestedByUserId,
+      actionType: fixture.actionType,
+      actionSha256: value.actionSha256,
+      proposalSha256: value.proposalSha256,
+      profileId: fixture.profileId,
+    }), `${fixture.actionType} evidence verifies`);
+  }
+});
+
 test("generic action and argument hashes use stable canonical input", () => {
   const first = hashGenericActionArguments(actionType, args);
   const reordered = hashGenericActionArguments(actionType, {

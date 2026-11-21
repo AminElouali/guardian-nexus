@@ -1,10 +1,7 @@
 import { createHash } from "node:crypto";
+import type { CatalogActionRef } from "@workspace/db/approval-action-catalog";
 
-export type SyntheticApprovalActionRef =
-  | "guardian.synthetic.finance.bank-change.v1"
-  | "guardian.synthetic.support.refund.v1"
-  | "guardian.support.reply.send.v1"
-  | "guardian.email.send.external.v1";
+export type SyntheticApprovalActionRef = CatalogActionRef;
 
 export type ApprovalEvidenceProvenance = {
   modelInference: boolean;

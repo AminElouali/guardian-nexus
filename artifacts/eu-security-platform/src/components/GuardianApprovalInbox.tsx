@@ -50,6 +50,13 @@ function describeAction(approval: AiAssessmentApproval) {
       risk: "Riesgo considerado: aprobar un reembolso sin la revisión correspondiente.",
     };
   }
+  if (approval.proposalDetails?.synthetic) {
+    return {
+      action: `Revisar acción sintética: ${approval.proposalDetails.summary}`,
+      scope: `${approval.proposalDetails.messagePreview} Regla aplicada: ${approval.proposalDetails.appliedRule}.`,
+      risk: "Comprueba que la acción, los argumentos y la regla correspondan a lo solicitado.",
+    };
+  }
   return {
     action: "Acción sintética; el detalle no está disponible en este registro.",
     scope: "El alcance concreto no consta en los datos de la solicitud.",

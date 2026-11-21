@@ -4292,10 +4292,36 @@ export type AiAssessmentApprovalSyntheticActionRef = typeof AiAssessmentApproval
 
 
 export const AiAssessmentApprovalSyntheticActionRef = {
-  'guardiansyntheticfinancebank-changev1': 'guardian.synthetic.finance.bank-change.v1',
   guardiansyntheticsupportrefundv1: 'guardian.synthetic.support.refund.v1',
+  'guardiansyntheticfinancebank-changev1': 'guardian.synthetic.finance.bank-change.v1',
   guardiansupportreplysendv1: 'guardian.support.reply.send.v1',
   guardianemailsendexternalv1: 'guardian.email.send.external.v1',
+  guardianemailreplyinternalv1: 'guardian.email.reply.internal.v1',
+  guardianemailsendexternal_sensitivev1: 'guardian.email.send.external_sensitive.v1',
+  guardianemailforwarding_rulecreatev1: 'guardian.email.forwarding_rule.create.v1',
+  guardiansupportcustomer_accountclosev1: 'guardian.support.customer_account.close.v1',
+  guardianfinancebalance_invoicereadv1: 'guardian.finance.balance_invoice.read.v1',
+  guardianfinancevendor_paymentknownv1: 'guardian.finance.vendor_payment.known.v1',
+  guardianfinancevendor_paymentnewv1: 'guardian.finance.vendor_payment.new.v1',
+  guardiandataqueryreadv1: 'guardian.data.query.read.v1',
+  guardiandatacustomerexportv1: 'guardian.data.customer.export.v1',
+  guardiandatabulkmodifyv1: 'guardian.data.bulk.modify.v1',
+  guardiandatabulkdeletev1: 'guardian.data.bulk.delete.v1',
+  guardiancodepull_requestopenv1: 'guardian.code.pull_request.open.v1',
+  guardiancodepull_requestmerge_mainv1: 'guardian.code.pull_request.merge_main.v1',
+  guardiancodedeployproductionv1: 'guardian.code.deploy.production.v1',
+  guardiancodesecretaccessv1: 'guardian.code.secret.access.v1',
+  guardianwebnavigatereadv1: 'guardian.web.navigate.read.v1',
+  guardianwebpersonal_datasubmitv1: 'guardian.web.personal_data.submit.v1',
+  guardianwebpurchasev1: 'guardian.web.purchase.v1',
+  guardianwebunapproved_credentialssubmitv1: 'guardian.web.unapproved_credentials.submit.v1',
+  guardiancloudresourcereadv1: 'guardian.cloud.resource.read.v1',
+  guardiancloudresourcecreatev1: 'guardian.cloud.resource.create.v1',
+  guardiancloudiampermissionchangev1: 'guardian.cloud.iam.permission.change.v1',
+  guardiancloudproduction_destructivev1: 'guardian.cloud.production_destructive.v1',
+  guardianmultiagentdelegate_equal_or_lowerv1: 'guardian.multiagent.delegate_equal_or_lower.v1',
+  guardianmultiagentdelegate_higher_scopev1: 'guardian.multiagent.delegate_higher_scope.v1',
+  guardianmultiagentprivilege_escalationv1: 'guardian.multiagent.privilege_escalation.v1',
 } as const;
 
 /**
@@ -4594,6 +4620,10 @@ export const WorkspaceActionRuleStateRiskCategoriesItem = {
   external_email: 'external_email',
   customer_data: 'customer_data',
   infrastructure: 'infrastructure',
+  data: 'data',
+  code: 'code',
+  web: 'web',
+  multiagent: 'multiagent',
 } as const;
 
 export interface WorkspaceActionRuleState {

@@ -4,6 +4,7 @@ import test from "node:test";
 import { evaluateApprovalAction } from "@workspace/db/approval-action-catalog";
 import {
   classifyMcpToolCall,
+  listGuardianMcpToolDefinitions,
   type McpToolClassification,
   type McpToolClassificationInput,
 } from "./mcp-tool-classifier";
@@ -13,6 +14,32 @@ const REGISTERED_TOOL_NAMES = [
   "reply_to_support",
   "send_external_email",
   "issue_synthetic_refund",
+  "reply_internal_email",
+  "send_sensitive_external_email",
+  "create_forwarding_rule",
+  "close_customer_account",
+  "read_finance_record",
+  "pay_known_vendor",
+  "pay_new_vendor",
+  "query_synthetic_data",
+  "export_customer_data",
+  "modify_data_batch",
+  "delete_data_batch",
+  "open_pull_request",
+  "merge_pull_request_main",
+  "deploy_to_production",
+  "access_repository_secret",
+  "read_synthetic_web_page",
+  "submit_personal_data_form",
+  "purchase_synthetic_item",
+  "submit_credentials_unapproved_site",
+  "read_cloud_resource",
+  "create_cloud_resource",
+  "change_cloud_iam_permissions",
+  "delete_or_public_cloud_resource",
+  "delegate_equal_or_lower",
+  "delegate_higher_permissions",
+  "self_assign_or_bypass_approval",
 ];
 const PROPERTY_SEED = 0x5eed2026;
 const RUNS_PER_PROPERTY = 500;
@@ -29,6 +56,13 @@ const validEmailArgs = {
   to: "qa@example.test",
   template_id: "guardian-demo-email-v1",
 };
+
+test("the property-test name inventory matches Guardian's complete demo allow-list", () => {
+  assert.deepEqual(
+    listGuardianMcpToolDefinitions(SERVER_ID).map((tool) => tool.name).sort(),
+    [...REGISTERED_TOOL_NAMES].sort(),
+  );
+});
 
 function classifyArbitrary(input: unknown): McpToolClassification {
   return classifyMcpToolCall(input as McpToolClassificationInput);
