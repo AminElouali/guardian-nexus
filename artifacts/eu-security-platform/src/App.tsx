@@ -4,7 +4,7 @@ import { ClerkProvider, SignIn, SignUp, useAuth, useClerk, useUser } from '@cler
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import { esES } from '@clerk/localizations';
 import {
-  Activity, ArrowRight, ArrowUpRight, Box, Check, CircleHelp, Cloud, Copy,
+  Activity, ArrowRight, ArrowUpRight, Bot, Box, Check, CircleHelp, Cloud, Copy,
   Command, Database, ExternalLink, Fingerprint, FlaskConical, Gauge, Globe2, HardDrive, Layers3, LockKeyhole,
   LogOut, Menu, Plus, Radio, RefreshCw, Shield, ShieldCheck, ShieldEllipsis, SlidersHorizontal,
   Sparkles, Trash2, Users, X,
@@ -30,6 +30,7 @@ import { getDashboardLabStatusPresentation } from '@/lib/dashboard-lab-status';
 
 const IntegrationReadinessPage = lazy(() => import('@/components/IntegrationsPage'));
 const AiEvaluationPage = lazy(() => import('@/components/AiEvaluationPage'));
+const AgentsPage = lazy(() => import('@/components/AgentsPage'));
 const RiskIntelligencePage = lazy(() => import('@/components/RiskIntelligencePage'));
 
 const queryClient = new QueryClient({
@@ -204,6 +205,7 @@ const navGroups = [
   {
     label: 'SEGURIDAD Y GOBERNANZA',
     items: [
+      { href: '/agents', label: 'Agentes', icon: Bot },
       { href: '/ai-evaluations', label: 'Seguridad IA', icon: FlaskConical },
       { href: '/risk-intelligence', label: 'Risk Intelligence', icon: ShieldEllipsis },
       { href: '/integration-readiness', label: 'Preparación', icon: Cloud },
@@ -539,6 +541,10 @@ function DashboardPage({ workspace }: { workspace: Workspace }) {
       <div className="banner-capacity"><span>Capacidad de activos</span><strong>{remaining}<small> disponibles</small></strong><span className="banner-capacity-note">de {assetLimit} en {planLabel(d.plan)}</span></div>
       <span className="banner-corner">01 / BASE</span>
     </section>
+    {(workspace.role === 'owner' || workspace.role === 'admin') && <section className="panel connect-agent-cta reveal reveal-delay-1" data-testid="panel-connect-agent">
+      <div><span className="panel-kicker">EMPIEZA AQUÍ</span><h2>Conecta tu primer agente</h2><p>Tres pasos: ponle nombre, copia la configuración y prueba la conexión.</p></div>
+      <Link href="/agents?connect=1" className="button button-primary" data-testid="link-connect-agent"><Bot size={16} /> Conectar agente</Link>
+    </section>}
     <section className="operations-overview" aria-labelledby="operations-overview-title" data-testid="operations-overview">
       <div className="operations-overview-heading">
         <div><span className="panel-kicker">ESTADO DEL ESPACIO</span><h2 id="operations-overview-title">Riesgos y revisiones</h2></div>
@@ -791,6 +797,7 @@ function PlansRoute() { return <AuthGuard><WorkspaceFrame page={PlansPage} /></A
 function RoadmapRoute() { return <AuthGuard><WorkspaceFrame page={() => <RoadmapPage />} /></AuthGuard>; }
 function IntegrationsRoute() { return <AuthGuard><WorkspaceFrame page={IntegrationsPage} /></AuthGuard>; }
 function IntegrationReadinessRoute() { return <AuthGuard><WorkspaceFrame page={({ workspace }) => <IntegrationReadinessPage workspace={workspace} />} /></AuthGuard>; }
+function AgentsRoute() { return <AuthGuard><WorkspaceFrame page={({ workspace }) => <AgentsPage workspace={workspace} />} /></AuthGuard>; }
 function AiEvaluationRoute() { return <AuthGuard><WorkspaceFrame page={({ workspace }) => <AiEvaluationPage workspace={workspace} />} /></AuthGuard>; }
 function RiskIntelligenceRoute() { return <AuthGuard><WorkspaceFrame page={({ workspace }) => <RiskIntelligencePage workspaceRole={workspace.role} />} /></AuthGuard>; }
 
@@ -804,6 +811,7 @@ function Router() {
     <Route path="/team" component={TeamRoute} />
     <Route path="/integrations" component={IntegrationsRoute} />
     <Route path="/integration-readiness" component={IntegrationReadinessRoute} />
+    <Route path="/agents" component={AgentsRoute} />
     <Route path="/ai-evaluations" component={AiEvaluationRoute} />
     <Route path="/risk-intelligence" component={RiskIntelligenceRoute} />
     <Route path="/plans" component={PlansRoute} />

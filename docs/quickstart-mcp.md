@@ -1,88 +1,134 @@
-# Conecta un agente de prueba a Guardian Nexus por MCP
+# Conecta tu agente a Guardian Nexus en 5 minutos (MCP)
 
-Guardian Nexus recibe propuestas de herramientas por MCP, autentica al agente y aplica la regla activa del workspace. Las herramientas de esta demo y sus destinos son **sintéticos**: no envían correo, no mueven dinero y no modifican servicios externos.
+Guardian Nexus se sitúa entre tu agente de IA y las acciones delicadas. El agente propone una acción y Guardian Nexus decide qué hacer con ella:
 
-## Estado
+- **ALLOW**: la acción se ejecuta.
+- **DENY**: la acción se bloquea.
+- **REQUIRE_APPROVAL**: la acción queda en espera hasta que una persona de tu equipo la apruebe.
 
 **IMPLEMENTADO:** el proxy HTTP MCP publica herramientas de una lista permitida de Guardian para ocho servicios de demostración. El agente se autentica con una credencial del workspace; las reglas versionadas deciden si la propuesta se simula como permitida, se bloquea o necesita aprobación. Una aprobación produce un recibo firmado y ligado a la acción exacta.
 
+Cada aprobación genera un **recibo firmado** (Ed25519) y queda en un registro de auditoría en el que solo se puede añadir.
+
+> **Estado actual (MVP).** Las acciones disponibles por MCP son **sintéticas**: cubren los 8 servicios, pero no envían, pagan ni cambian nada real. Sirven para probar la integración y las reglas de punta a punta. Los conectores con proveedores reales todavía no están disponibles.
+
 **PROYECTADO:** conexión a servidores MCP reales, registro de destinos de clientes, conectores productivos, grupos configurables de aprobadores y notificación automática al agente cuando se aprueba una solicitud.
 
-## 1. Crea un agente
+---
 
-Un propietario o administrador del workspace registra el agente desde la pantalla **Agentes**. La credencial se muestra una sola vez. Guárdala en el gestor seguro del agente; Guardian conserva solo su huella. Si se pierde, revócala y crea otra.
+## Lo que necesitas
 
-No copies credenciales reales en ejemplos, capturas, tickets o registros.
+1. Una cuenta en Guardian Nexus y un **workspace** en el que seas *owner* o *admin*.
+2. Un cliente compatible con **MCP por HTTP** (*Streamable HTTP*, protocolo `2025-03-26`), por ejemplo un agente propio o un framework de agentes con soporte MCP.
 
-## 2. Configura el endpoint MCP
+---
 
-Configura un cliente MCP HTTP con la URL de tu entorno:
+## Paso 1 — Registra tu agente
 
-```text
-https://<dominio-de-Guardian>/api/workspaces/<ID-DEL-WORKSPACE>/mcp
+En el panel de Guardian Nexus pulsa **Conectar agente**. Está en la pantalla **Resumen** y en el menú **Agentes**. Después:
+
+1. Escribe un nombre para el agente, por ejemplo `Bot de soporte`, y elige qué hace (Correo, Soporte, Finanzas, Datos, Código, Web, Cloud o Multiagente).
+2. Pulsa **Crear agente**.
+
+Guardian Nexus te mostrará **una sola vez** la configuración, con la clave del agente:
+
+```
+gnx_agent_v1_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 ```
 
-Envía la credencial en `Authorization: Bearer …`. El identificador del workspace sirve para localizar la credencial; los permisos se determinan por la credencial autenticada y las reglas de RLS.
+Cópiala con el botón **Copiar** y guárdala en el gestor de secretos de tu agente. Guardian Nexus solo conserva su huella SHA-256, así que si la pierdes no se puede recuperar: en **Agentes**, pulsa **Cambiar clave** y se generará una nueva.
 
-Envía `initialize` y luego `tools/list`. El proxy devuelve únicamente herramientas definidas por Guardian, con sus descripciones y esquemas estrictos. El servidor de destino no puede cambiar su clasificación con metadatos, descripciones ni respuestas.
+Cada agente actúa en nombre de la persona que lo registró, y siempre dentro de un único workspace. Solo los *owner* y *admin* pueden conectar agentes.
 
-## 3. Herramientas sintéticas disponibles
+---
 
-Las herramientas pertenecen al servidor de demostración ficticio y no representan conexiones a servicios reales:
+## Paso 2 — Configura el servidor MCP
 
-| Servicio | Herramientas de demostración |
-|---|---|
-| Correo | `reply_internal_email`, `send_external_email`, `send_sensitive_external_email`, `create_forwarding_rule` |
-| Soporte | `reply_to_support`, `issue_synthetic_refund`, `close_customer_account` |
-| Finanzas | `read_finance_record`, `pay_known_vendor`, `pay_new_vendor` |
-| Datos | `query_synthetic_data`, `export_customer_data`, `modify_data_batch`, `delete_data_batch` |
-| Código | `open_pull_request`, `merge_pull_request_main`, `deploy_to_production`, `access_repository_secret` |
-| Web | `read_synthetic_web_page`, `submit_personal_data_form`, `purchase_synthetic_item`, `submit_credentials_unapproved_site` |
-| Cloud | `read_cloud_resource`, `create_cloud_resource`, `change_cloud_iam_permissions`, `delete_or_public_cloud_resource` |
-| Multiagente | `delegate_equal_or_lower`, `delegate_higher_permissions`, `self_assign_or_bypass_approval` |
-| Guardian | `guardian_approval_status` |
+El asistente ya te da la configuración rellenada para **Claude**, **ChatGPT / OpenAI Agents**, **n8n / Make** u **Otro (MCP)**. Si prefieres hacerlo a mano:
 
-El catálogo de 30 acciones clasifica cada acción con uno o más de estos riesgos:
-leer, escribir dentro, enviar fuera, mover dinero, dar permisos, borrar o
-exportar, ejecutar o desplegar, y comprometer a la empresa. Las herramientas
-también tienen etiquetas de sensibilidad (`normal` o `sensible`) y volumen. Son
-ejemplos iniciales, no un catálogo completo para todas las empresas. El
-catálogo es fijo; crear nuevas acciones sigue **PROYECTADO**.
+- **URL:** `https://<tu-dominio-guardian>/api/workspaces/<WORKSPACE_ID>/mcp`
+- **Cabecera:** `Authorization: Bearer gnx_agent_v1_...`
 
-Los argumentos deben cumplir exactamente el esquema recibido en `tools/list`. Campos adicionales, tipos incorrectos, nombres desconocidos o JSON ambiguo se rechazan.
+Ejemplo de configuración genérica de un cliente MCP:
 
-## 4. Interpreta la decisión
+```json
+{
+  "mcpServers": {
+    "guardian-nexus": {
+      "type": "http",
+      "url": "https://<tu-dominio-guardian>/api/workspaces/<WORKSPACE_ID>/mcp",
+      "headers": {
+        "Authorization": "Bearer ${GUARDIAN_AGENT_TOKEN}"
+      }
+    }
+  }
+}
+```
 
-- **ALLOW** significa que la regla activa autoriza la simulación. La respuesta indica que no se ha llamado a ningún servicio ni se ha producido un efecto externo.
-- **DENY** bloquea la propuesta.
-- **REQUIRE_APPROVAL** crea o devuelve una solicitud pendiente. La respuesta incluye el identificador y señala que se debe reintentar con los mismos argumentos después de la aprobación.
+Arranca tu agente y pulsa **Probar conexión** en el asistente: verás ✅ cuando tu agente se conecte. Por ahora cada agente ve todas las herramientas protegidas del espacio. También puedes comprobarlo con `tools/list`. Verás las herramientas protegidas de los 8 servicios (por ejemplo `reply_to_support` o `send_external_email`) y `guardian_approval_status`, que sirve para consultar si una solicitud ya está aprobada.
 
-Las acciones que requieren aprobación independiente no se ejecutan aunque una regla diga Permitir: se elevan a aprobación. Si no existe una regla activa, el resultado es denegación.
+---
 
-Cuando una solicitud pendiente se aprueba, el siguiente reintento con la misma herramienta y argumentos recupera el recibo v1 firmado y continúa por el flujo protegido. La aprobación no se puede usar para otros argumentos, agentes o workspaces.
+## Paso 3 — Entiende las tres respuestas
 
-## 5. Aprobación y reintentos
+**1. Permitida.** La acción se ejecuta y la respuesta incluye `status: "executed"`.
 
-Una persona distinta del solicitante debe aprobar la solicitud desde la bandeja. El solicitante no puede aprobar su propia acción. `guardian_approval_status` permite al mismo agente consultar el estado.
+**2. Requiere aprobación.** La acción **no** se ejecuta. La respuesta incluye:
 
 **Aprobaciones por importe y varias personas — implementado en esta rama, pendiente de validación:** cada versión de reglas puede fijar un umbral monetario (máximo 10.000 €). Para acciones que tienen un importe catalogado, hasta el umbral aprueba una persona administradora y por encima la persona propietaria. El cambio de cuenta bancaria sintético requiere dos aprobaciones de personas diferentes. Repetir el voto de una misma persona no suma; la solicitud sigue pendiente y no se emite el recibo hasta completar el número requerido. Los votos quedan en la auditoría append-only. El recibo v1 y el evento v1 del ledger no cambian.
 
 Si una acción protegida ya se completó y el agente reintenta la misma llamada por un problema de red, Guardian devuelve el resultado anterior con `replayed: true`; no la ejecuta otra vez. Se rechazan los usos desde otro agente o workspace, con argumentos cambiados o con una solicitud caducada.
+```json
+{ "approvalId": "…", "status": "pending", "retryWithSameArguments": true }
+```
 
-## 6. Reglas y plantillas
+Tu agente debe:
+1. Esperar, consultando de vez en cuando `guardian_approval_status` con ese `approval_id`.
+2. Cuando el estado sea `approved`, **repetir la misma llamada con exactamente los mismos argumentos**. Guardian Nexus comprueba el recibo firmado y ejecuta la acción **una sola vez**.
 
-Las plantillas **Prudente**, **Equilibrada** y **Solo lectura** crean borradores; una persona autorizada debe activarlos. El catálogo clasifica acciones por su efecto y riesgo, no por el nombre del servicio. Lo no clasificado queda bloqueado. Solo lectura permite únicamente acciones definidas como lectura.
+**3. Bloqueada.** La respuesta trae `isError: true` y un `reasonCode` que explica el motivo, por ejemplo `approval_rejected`, `approval_expired` o un argumento no válido.
 
-**IMPLEMENTADO en el laboratorio:** owner/admin puede configurar condiciones versionadas por workspace desde **Reglas → Ajusta una acción**: importe, dominios exactos de confianza, sensibilidad del dato, volumen por minuto/5 minutos/15 minutos/hora/día y entorno. Cada regla tiene una decisión cuando se cumple y una decisión de fallback; Guardar crea un borrador y la activación sigue siendo independiente. El motor del servidor recibe la sensibilidad del catálogo, el entorno de pruebas del destino sintético y el volumen calculado desde auditoría; nunca confía en esos valores si los aporta el agente. Un contexto que no se puede comprobar no concede permiso.
+### Reintentos seguros
 
-**Límites:** el único entorno disponible es `test`; elegir `production` en una condición no crea ni habilita un conector productivo. Las propuestas nuevas sujetas a volumen guardan en su evidencia v2 el contexto agregado usado, ligado a su hash, para verificarlo y comparar decisiones históricas. Propuestas antiguas que no conservan ese contexto se cuentan como no reevaluables; no se reconstruye desde hashes ni ejemplos.
+Si tu agente repite una llamada que ya se ejecutó (por ejemplo, porque se cortó la red), Guardian Nexus **no la ejecuta otra vez**: devuelve el mismo resultado con `replayed: true`. Puedes reintentar sin miedo a duplicar acciones.
 
 **PROYECTADO:** registrar acciones nuevas, conectar sistemas reales, medir datos personales dinámicos con un conector fiable, configurar grupos de aprobación y aplicar tramos de importe a grupos personalizados.
+En cambio, se **rechazan**:
+- un recibo usado por **otro agente** o desde **otro workspace**;
+- un recibo usado con **argumentos distintos** de los aprobados (por ejemplo, otro importe);
+- una solicitud **caducada**.
 
-## Seguridad y límites
+---
 
-- Las credenciales de agente se guardan como hashes y se pueden revocar.
-- Las reglas y los datos se aíslan por workspace mediante RLS.
-- Los recibos aprobados se firman y ligan al hash de la acción y sus argumentos.
-- El proxy no interpreta como instrucciones el texto que devuelve un destino.
-- El catálogo y el destino MCP de pruebas son sintéticos. No introduzcas datos reales ni lo uses como conector productivo.
+## Paso 4 — Aprueba desde el panel
+
+Las solicitudes pendientes aparecen en la **bandeja de aprobaciones** del workspace. Tiene que aprobarlas una persona **distinta** de la que pidió la acción: nadie puede aprobar sus propias peticiones.
+
+Al aprobar se emite el recibo firmado y queda en el registro. Puedes exportar el registro y verificar las firmas y la cadena de hashes con los verificadores incluidos (TypeScript y Python, ver `docs/approval-ledger-v1.md`).
+
+---
+
+## Paso 5 — Ajusta las reglas
+
+En **Reglas** elige una plantilla (*Prudente*, *Equilibrada* o *Solo lectura*) y define tus límites, por ejemplo el importe máximo de compensación. Guardian Nexus versiona cada cambio de reglas, y cada decisión queda vinculada a la versión de la regla que la tomó.
+
+---
+
+## Errores frecuentes
+
+| Respuesta | Causa probable | Qué hacer |
+|---|---|---|
+| HTTP 401 `Agent authentication failed` | Credencial incorrecta, revocada o de otro workspace. | Revisa la cabecera `Authorization` y el `WORKSPACE_ID`, o rota la credencial. |
+| HTTP 429 | Demasiados intentos de autenticación seguidos. | Espera los segundos que indica `Retry-After`. |
+| `-32602 Argumentos no válidos` | Los argumentos no cumplen el esquema de la herramienta. | Compara con el `inputSchema` que devuelve `tools/list`. |
+| `-32004 Solicitud no disponible` | El `approval_id` no existe o no pertenece a este agente. | Usa el `approvalId` que recibiste en la respuesta original. |
+
+---
+
+## Seguridad, en resumen
+
+- Cada workspace está aislado a nivel de base de datos (PostgreSQL RLS forzado).
+- Las credenciales de los agentes se guardan solo como huella SHA-256 y se pueden rotar o revocar al instante.
+- Los recibos van firmados con Ed25519 y son de un solo uso.
+- El registro de auditoría solo admite añadir entradas: la aplicación no puede editarlas ni borrarlas.
+- Cada versión pasa una batería automática de ataques (autorización, credenciales, reutilización y manipulación de recibos, inyección) antes de publicarse.
