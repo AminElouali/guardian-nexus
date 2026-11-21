@@ -126,7 +126,7 @@ export async function saveWorkspaceGmailCredential(
     serviceId: GMAIL_CONNECTOR_SERVICE_ID,
     secret: input.bundleJson,
     membershipRole: input.membershipRole,
-    safeLastFour: "GMAIL",
+    safeLastFour: "MAIL",
   });
 }
 
@@ -149,7 +149,7 @@ export async function updateWorkspaceGmailAllowlist(
         serviceId: GMAIL_CONNECTOR_SERVICE_ID,
         secret: JSON.stringify(nextBundle),
         membershipRole: membership.role,
-        safeLastFour: "GMAIL",
+        safeLastFour: "MAIL",
       });
       const allowlistHash = createHash("sha256")
         .update([...allowedRecipients].sort().join("\n"), "utf8")
@@ -186,7 +186,12 @@ export async function disconnectWorkspaceGmail(
       if (!canManageIntegrations(membership.role)) {
         return { kind: "forbidden" as const, disconnected: false, refreshToken: null };
       }
-      const bundle = await readGmailBundle(tx, workspaceId);
+      let refreshToken: string | null = null;
+      try {
+        refreshToken = (await readGmailBundle(tx, workspaceId))?.refreshToken ?? null;
+      } catch {
+        // Local disconnect remains available even when the vault key is unavailable.
+      }
       const disconnected = await disconnectWorkspaceConnectorCredential(tx, {
         workspaceId,
         actorUserId: userId,
@@ -195,7 +200,7 @@ export async function disconnectWorkspaceGmail(
       return {
         kind: "ok" as const,
         disconnected,
-        refreshToken: bundle?.refreshToken ?? null,
+        refreshToken,
       };
     },
   );

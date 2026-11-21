@@ -4977,6 +4977,46 @@ export interface WorkspaceConnectorCredentialsResponse {
   credentials: WorkspaceConnectorCredentialStatus[];
 }
 
+export interface WorkspaceGmailConnectionStatus {
+  configured: boolean;
+  connected: boolean;
+  /** @nullable */
+  accountEmail: string | null;
+  /**
+     * @items.minLength 3
+     * @items.maxLength 254
+     */
+  allowedRecipients: string[];
+  scopes: string[];
+}
+
+export interface GoogleGmailAuthorization {
+  authorizationUrl: string;
+  scopes: string[];
+}
+
+export interface WorkspaceGmailRecipientsInput {
+  /**
+     * @maxItems 50
+     * @items.minLength 3
+     * @items.maxLength 254
+     */
+  allowedRecipients: string[];
+}
+
+export interface WorkspaceGmailRecipients {
+  /**
+     * @items.minLength 3
+     * @items.maxLength 254
+     */
+  allowedRecipients: string[];
+}
+
+export interface WorkspaceGmailDisconnectResult {
+  disconnected: true;
+  providerRevoked: boolean;
+}
+
 export type WorkspaceConnectorExecutionInputArguments = {[key: string]: string | number | boolean};
 
 export type ApprovalReceiptPayloadV1ApprovedByRole = typeof ApprovalReceiptPayloadV1ApprovedByRole[keyof typeof ApprovalReceiptPayloadV1ApprovedByRole];
@@ -5364,6 +5404,21 @@ export interface SyntheticRefundProposalResponse {
 export type MicrosoftOAuthCallbackParams = {
 code?: string;
 state: string;
+error?: string;
+};
+
+export type CompleteGoogleGmailAuthorizationParams = {
+/**
+ * @maxLength 4096
+ */
+code?: string;
+/**
+ * @maxLength 4096
+ */
+state: string;
+/**
+ * @maxLength 128
+ */
 error?: string;
 };
 

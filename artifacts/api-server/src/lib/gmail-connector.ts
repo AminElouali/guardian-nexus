@@ -13,7 +13,7 @@ export const GOOGLE_GMAIL_SCOPES = Object.freeze([
 const MAX_TOKEN_LENGTH = 4_096;
 const MAX_ALLOWLIST_ENTRIES = 50;
 const EMAIL_ADDRESS =
-  /^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/;
+  /^[A-Za-z0-9.!#$%&'+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/;
 const ALLOWLIST_DOMAIN = /^@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/;
 const GMAIL_MESSAGE_ID = /^[A-Za-z0-9_-]{1,256}$/;
 
@@ -113,6 +113,12 @@ export function isAllowedGmailRecipient(
   return allowlist.some(
     (allowed) => allowed.toLowerCase() === normalized || allowed.toLowerCase() === domain,
   );
+}
+
+export function isGmailSandboxRecipient(recipient: string): boolean {
+  if (!EMAIL_ADDRESS.test(recipient)) return false;
+  const domain = recipient.slice(recipient.lastIndexOf("@") + 1).toLowerCase();
+  return /\.(?:test|example|invalid|localhost)$/.test(domain);
 }
 
 export function parseGmailCredentialBundle(
@@ -317,16 +323,12 @@ export function createGmailConnectorAdapter(
 ): ConnectorExecutionAdapter {
   return {
     serviceId,
-    async execute(input: {
-      workspaceId: string;
-      actionType: string;
-      arguments: Record<string, string | number | boolean>;
-      credential: string;
-    }) {
+    async execute(input) {
       if (input.actionType !== "guardian.email.send.external.v1") {
         return {
           resultCode: "gmail_send_rejected",
           failureCode: "gmail_send_rejected",
+          summary: "Gmail rechazó el correo.",
         };
       }
       const bundle = parseGmailCredentialBundle(input.credential);
@@ -340,6 +342,7 @@ export function createGmailConnectorAdapter(
         return {
           resultCode: "gmail_send_rejected",
           failureCode: "gmail_send_rejected",
+          summary: "Gmail rechazó el correo.",
         };
       }
       const result = await sendGmailTestMessage({
@@ -352,6 +355,7 @@ export function createGmailConnectorAdapter(
         return {
           resultCode: result.failureCode,
           failureCode: result.failureCode,
+          summary: "No se pudo enviar el correo de prueba por Gmail.",
         };
       }
       return {

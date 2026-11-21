@@ -12,6 +12,7 @@ import {
 } from '@workspace/api-client-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import GmailConnectionCard from '@/components/GmailConnectionCard';
 
 const statusCopy: Record<WorkspaceIntegration['status'], string> = {
   awaiting_app_registration: 'Pendiente de registrar la aplicación',
@@ -111,14 +112,14 @@ export default function IntegrationsPage({ workspace }: { workspace: Workspace }
       <div>
         <div className="eyebrow">CONECTORES · PREPARACIÓN CONTROLADA</div>
         <h1>Integraciones</h1>
-        <p>Prepara conexiones autorizadas de solo lectura. En este entorno no se ha conectado ningún proveedor ni se han solicitado consentimientos.</p>
+        <p>Administra conexiones del espacio. Gmail está disponible únicamente en modo prueba, con una lista de destinatarios y aprobación antes del envío.</p>
       </div>
-      <span className="roadmap-status"><i /> SIN CONEXIONES ACTIVAS</span>
+      <span className="roadmap-status"><i /> CONEXIONES DEL ESPACIO</span>
     </div>
 
     <div className="connector-disclaimer" role="note">
       <ShieldCheck size={18} />
-      <div><b>Acceso bajo control de tu organización</b><p>No introduzcas contraseñas, tokens ni claves permanentes. El alta solo guarda identificadores y estado de preparación; cualquier consentimiento o confianza externa requiere una acción explícita del administrador.</p></div>
+       <div><b>Acceso bajo control de tu organización</b><p>No introduzcas contraseñas, tokens ni claves permanentes. Los conectores se administran por espacio; Gmail usa OAuth y una lista permitida de destinatarios en modo prueba.</p></div>
     </div>
 
     {(feedback || error) && <div className={`connector-feedback ${error ? 'connector-feedback-error' : ''}`} role={error ? 'alert' : 'status'}>
@@ -155,6 +156,8 @@ export default function IntegrationsPage({ workspace }: { workspace: Workspace }
         </form>
         {!isOwner && <p className="connector-role-note">Solo el propietario del espacio puede preparar conexiones.</p>}
       </section>
+
+      <GmailConnectionCard workspace={workspace} />
     </div>
 
     <section className="connector-records">
@@ -173,7 +176,7 @@ export default function IntegrationsPage({ workspace }: { workspace: Workspace }
 
     <div className="connector-footnote">
       <b>Limitaciones de esta fase</b>
-      <p>El consentimiento OAuth de Microsoft, la validación de la aplicación, la trust policy y la llamada AWS STS permanecen pendientes. “Configurada” solo indica que hay valores de configuración presentes; no verifica credenciales, región, residencia de datos ni acceso real. La cancelación aquí es local y no revoca permisos en el proveedor.</p>
+      <p>Microsoft y AWS siguen en fase de preparación. Gmail solicita solo envío e identidad básica, y queda limitado a los destinatarios permitidos. Si la revocación externa de Gmail no se confirma, también debe revocarse el acceso desde la cuenta de Google.</p>
     </div>
   </div>;
 }

@@ -35,6 +35,8 @@ export type ConnectorExecutionAdapterResult = {
   resultCode: string;
   summary: string;
   responseText?: string;
+  failureCode?: string;
+  auditMetadata?: { gmailMessageId?: string };
 };
 
 export type ConnectorExecutionAdapter = {
@@ -51,6 +53,7 @@ export type ConnectorExecutionRequest = {
   workspaceId: string;
   userId: string;
   serviceId: string;
+  credentialServiceId?: string;
   idempotencyKey: string;
   actionType: string;
   arguments: Record<string, ApprovalActionValue>;
@@ -243,23 +246,62 @@ function boundedResponseText(value: unknown): string | null {
 
 function sanitizeAdapterSummary(
   result: ConnectorExecutionAdapterResult,
-): { resultCode: string; summary: string; responseText: string | null } {
+): {
+  resultCode: string;
+  summary: string;
+  responseText: string | null;
+  failureCode: string | null;
+  auditMetadata: { gmailMessageId?: string };
+} {
+  const allowedFailureCodes = new Set([
+    "gmail_reconnect_required",
+    "gmail_quota_exceeded",
+    "gmail_unavailable",
+    "gmail_send_rejected",
+    "gmail_recipient_not_allowed",
+  ]);
+  const gmailMessageId =
+    typeof result.auditMetadata?.gmailMessageId === "string" &&
+    /^[A-Za-z0-9_-]{1,256}$/.test(result.auditMetadata.gmailMessageId)
+      ? result.auditMetadata.gmailMessageId
+      : undefined;
   const resultCode =
     result.resultCode === "captured_locally" ||
     result.resultCode === "completed" ||
-    result.resultCode === "rejected"
+    result.resultCode === "rejected" ||
+    result.resultCode === "gmail_sent" ||
+    allowedFailureCodes.has(result.resultCode)
       ? result.resultCode
       : "completed";
+  const failureCode =
+    typeof result.failureCode === "string" &&
+    allowedFailureCodes.has(result.failureCode)
+      ? result.failureCode
+      : null;
   const summary =
     resultCode === "captured_locally"
       ? "Acción capturada por el conector de prueba; no se contactó ningún servicio."
       : resultCode === "rejected"
         ? "El conector rechazó la acción."
-        : "El conector confirmó la acción.";
+        : resultCode === "gmail_sent"
+          ? "Correo de prueba enviado por Gmail."
+          : resultCode === "gmail_reconnect_required"
+            ? "La conexión de Gmail ha caducado o se ha revocado. Vuelve a conectarla."
+            : resultCode === "gmail_quota_exceeded"
+              ? "Gmail ha alcanzado su límite de envío. Inténtalo más tarde."
+              : resultCode === "gmail_unavailable"
+                ? "Gmail no está disponible ahora. El correo no se ha marcado como enviado."
+                : resultCode === "gmail_recipient_not_allowed"
+                  ? "El destinatario ya no está en la lista permitida."
+                  : resultCode === "gmail_send_rejected"
+                    ? "Gmail rechazó el correo. No se ha marcado como enviado."
+                    : "El conector confirmó la acción.";
   return {
     resultCode,
     summary,
-    responseText: boundedResponseText(result.responseText),
+    responseText: failureCode ? null : boundedResponseText(result.responseText),
+    failureCode,
+    auditMetadata: gmailMessageId ? { gmailMessageId } : {},
   };
 }
 
@@ -274,6 +316,7 @@ function auditExecution(
     actionSha256: string;
     status: "pending" | "executed" | "failed";
     resultCode?: string;
+    auditMetadata?: { gmailMessageId?: string };
   },
 ) {
   return tx.insert(workspaceAuditEventsTable).values({
@@ -287,6 +330,9 @@ function auditExecution(
       actionType: input.actionType,
       actionSha256: input.actionSha256,
       ...(input.resultCode ? { resultCode: input.resultCode } : {}),
+      ...(input.auditMetadata?.gmailMessageId
+        ? { gmailMessageId: input.auditMetadata.gmailMessageId }
+        : {}),
     },
   });
 }
@@ -298,6 +344,7 @@ function auditExecutionReplay(
     actorUserId: string;
     executionId: string;
     serviceId: string;
+  credentialServiceId?: string;
     actionType: string;
     actionSha256: string;
   },
@@ -360,6 +407,7 @@ export async function executeWorkspaceConnectorAction(
   }
 
   const keyHash = sha256(input.idempotencyKey);
+  const credentialServiceId = input.credentialServiceId ?? input.serviceId;
   input.onStage?.("claim_transaction");
   const claim = await withWorkspaceUserTransaction(
     input.userId,
@@ -409,7 +457,7 @@ export async function executeWorkspaceConnectorAction(
         .where(
           and(
             eq(workspaceConnectorCredentialsTable.workspaceId, input.workspaceId),
-            eq(workspaceConnectorCredentialsTable.serviceId, input.serviceId),
+            eq(workspaceConnectorCredentialsTable.serviceId, credentialServiceId),
           ),
         )
         .limit(1);
@@ -556,7 +604,7 @@ export async function executeWorkspaceConnectorAction(
       input.onStage?.("credential_lock");
       // Coordinate with replacement/disconnect without granting UPDATE on credentials.
       await tx.execute(
-        sql`SELECT pg_advisory_xact_lock(hashtext(${input.workspaceId}), hashtext(${input.serviceId}))`,
+        sql`SELECT pg_advisory_xact_lock(hashtext(${input.workspaceId}), hashtext(${credentialServiceId}))`,
       );
       const [credential] = await tx
         .select()
@@ -565,7 +613,7 @@ export async function executeWorkspaceConnectorAction(
           and(
             eq(workspaceConnectorCredentialsTable.id, claimedCredentialId),
             eq(workspaceConnectorCredentialsTable.workspaceId, input.workspaceId),
-            eq(workspaceConnectorCredentialsTable.serviceId, input.serviceId),
+            eq(workspaceConnectorCredentialsTable.serviceId, credentialServiceId),
           ),
         )
         .limit(1);
@@ -574,12 +622,13 @@ export async function executeWorkspaceConnectorAction(
       let failureCode: string | null = "credential_unavailable";
       let resultCode = "credential_unavailable";
       let responseText: string | null = null;
+      let auditMetadata: { gmailMessageId?: string } = {};
       if (credential) {
         try {
           const keyring = loadConnectorVaultKeyring();
           const clearCredential = decryptConnectorCredential(
             credential,
-            { workspaceId: input.workspaceId, serviceId: input.serviceId },
+            { workspaceId: input.workspaceId, serviceId: credentialServiceId },
             keyring,
           );
           try {
@@ -591,11 +640,12 @@ export async function executeWorkspaceConnectorAction(
               credential: clearCredential,
             });
             const safeResult = sanitizeAdapterSummary(adapterResult);
-            status = "executed";
+            status = safeResult.failureCode ? "failed" : "executed";
             responseSummary = safeResult.summary;
             responseText = safeResult.responseText;
-            failureCode = null;
+            failureCode = safeResult.failureCode;
             resultCode = safeResult.resultCode;
+            auditMetadata = safeResult.auditMetadata;
           } catch {
             status = "failed";
             responseSummary = null;
@@ -650,6 +700,7 @@ export async function executeWorkspaceConnectorAction(
         actionSha256: actionHash,
         status,
         resultCode,
+        auditMetadata,
       });
       return {
         executionId: updated.id,

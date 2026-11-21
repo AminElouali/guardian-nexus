@@ -266,7 +266,7 @@ test("balanced decisions cover routine actions and preserve approval or deny bou
   );
 });
 
-test("email proposals are approval-gated and reject recipients outside the sandbox", () => {
+test("external email accepts a syntactically valid address but remains approval-gated", () => {
   const accepted = evaluateApprovalAction("guardian.email.send.external.v1", {
     to: "qa@example.test",
     template_id: "guardian-demo-email-v1",
@@ -281,8 +281,15 @@ test("email proposals are approval-gated and reject recipients outside the sandb
     to: "customer@example.com",
     template_id: "guardian-demo-email-v1",
   });
-  assert.equal(disallowed.ok, false);
-  if (!disallowed.ok) assert.equal(disallowed.reasonCode, "arguments_invalid");
+  assert.equal(disallowed.ok, true);
+  if (disallowed.ok) assert.equal(disallowed.decision, "require_approval");
+
+  const malformed = evaluateApprovalAction("guardian.email.send.external.v1", {
+    to: "customer@not-a-domain",
+    template_id: "guardian-demo-email-v1",
+  });
+  assert.equal(malformed.ok, false);
+  if (!malformed.ok) assert.equal(malformed.reasonCode, "arguments_invalid");
 });
 
 test("support rules allow routine internal replies and require approval for high compensation", () => {

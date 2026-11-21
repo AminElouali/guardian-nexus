@@ -942,7 +942,7 @@ export const APPROVAL_ACTION_CATALOG: readonly ApprovalActionDefinition[] = [
       },
     },
     syntheticTemplateText:
-      "[PRUEBA] Mensaje de Guardian Nexus limitado a destinatarios autorizados.",
+      "[SYNTHETIC] Gmail test message limited to workspace-approved recipients.",
     rules: [
       { id: "external-email.sandbox.requires-independent-approval.v1", conditionText: "Correo de prueba enviado únicamente al buzón sandbox", decision: "require_approval", when: {} },
     ],
