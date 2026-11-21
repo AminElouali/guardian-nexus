@@ -6,9 +6,11 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { WorkspaceActionRule } from './workspaceActionRule';
+import type { WorkspaceApprovalPolicy } from './workspaceApprovalPolicy';
 
 export interface WorkspaceActionRuleDocumentInput {
   version: 1;
+  approvalPolicy?: WorkspaceApprovalPolicy;
   /** @maxItems 50 */
   rules: WorkspaceActionRule[];
 }

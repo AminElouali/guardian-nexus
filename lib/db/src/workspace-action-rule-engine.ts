@@ -37,9 +37,19 @@ export type WorkspaceActionRule = {
 export type WorkspaceActionRuleDocument = {
   version: 1;
   rules: WorkspaceActionRule[];
+  approvalPolicy?: {
+    amountThresholdCents: number;
+  };
 };
 
 export const MAX_REFUND_LIMIT_CENTS = 1_000_000;
+export const DEFAULT_APPROVAL_TIER_THRESHOLD_CENTS = 5_000;
+export const MAX_APPROVAL_TIER_THRESHOLD_CENTS = 1_000_000;
+
+export type WorkspaceActionApprovalRequirements = {
+  requiredApprovers: 1 | 2;
+  allowedApproverRoles: Array<"owner" | "admin">;
+};
 
 export type WorkspaceActionRuleProfileId =
   | "prudent-v1"
@@ -115,6 +125,7 @@ export function buildWorkspaceActionRuleProfileDocuments(
         actionType: definition.actionType,
         document: {
           version: 1 as const,
+          approvalPolicy: { amountThresholdCents: refundLimitCents },
           rules: [
             {
               id: "refund-within-threshold",
@@ -147,6 +158,7 @@ export function buildWorkspaceActionRuleProfileDocuments(
         actionType: definition.actionType,
         document: {
           version: 1 as const,
+          approvalPolicy: { amountThresholdCents: refundLimitCents },
           rules: [
             {
               id: "support-sensitive-external-or-high-compensation",
@@ -204,7 +216,13 @@ export function buildWorkspaceActionRuleProfileDocuments(
     }));
     return {
       actionType: definition.actionType,
-      document: { version: 1 as const, rules },
+      document: {
+        version: 1 as const,
+        ...(definition.approvalAmountField
+          ? { approvalPolicy: { amountThresholdCents: refundLimitCents } }
+          : {}),
+        rules,
+      },
     };
   });
 
@@ -314,8 +332,37 @@ export function validateWorkspaceActionRuleDocument(
 ): { ok: true; document: WorkspaceActionRuleDocument } | { ok: false; issues: string[] } {
   const definition = getApprovalActionDefinition(actionType);
   if (!definition) return { ok: false, issues: ["unknown_action"] };
-  if (!allowedKeys(input, ["version", "rules"]) || input.version !== 1 || !Array.isArray(input.rules)) {
+  if (
+    !allowedKeys(input, ["version", "rules", "approvalPolicy"]) ||
+    input.version !== 1 ||
+    !Array.isArray(input.rules)
+  ) {
     return { ok: false, issues: ["invalid_rule_document"] };
+  }
+  let approvalPolicy: WorkspaceActionRuleDocument["approvalPolicy"];
+  if (input.approvalPolicy !== undefined) {
+    const policy = input.approvalPolicy;
+    const threshold = policy && typeof policy === "object" &&
+        !Array.isArray(policy) && "amountThresholdCents" in policy
+      ? policy.amountThresholdCents
+      : undefined;
+    const amountField = definition.approvalAmountField;
+    const amountProperty = amountField
+      ? definition.argumentSchema.properties[amountField]
+      : undefined;
+    if (
+      !amountField ||
+      !amountProperty ||
+      !allowedKeys(policy, ["amountThresholdCents"]) ||
+      typeof threshold !== "number" ||
+      !Number.isSafeInteger(threshold) ||
+      threshold <= 0 ||
+      threshold > MAX_APPROVAL_TIER_THRESHOLD_CENTS ||
+      (amountProperty.max !== undefined && threshold > amountProperty.max)
+    ) {
+      return { ok: false, issues: ["invalid_approval_tier_policy"] };
+    }
+    approvalPolicy = { amountThresholdCents: threshold };
   }
   if (input.rules.length > 50) return { ok: false, issues: ["too_many_rules"] };
   const issues: string[] = [];
@@ -362,7 +409,60 @@ export function validateWorkspaceActionRuleDocument(
   });
   return issues.length
     ? { ok: false, issues }
-    : { ok: true, document: { version: 1, rules } };
+    : {
+        ok: true,
+        document: {
+          version: 1,
+          rules,
+          ...(approvalPolicy ? { approvalPolicy } : {}),
+        },
+      };
+}
+
+export function getWorkspaceActionApprovalRequirements(
+  actionType: string,
+  args: Record<string, ApprovalActionValue>,
+  document: WorkspaceActionRuleDocument | null,
+): WorkspaceActionApprovalRequirements | null {
+  const definition = getApprovalActionDefinition(actionType);
+  if (!definition) return null;
+
+  let allowedApproverRoles: Array<"owner" | "admin"> = [
+    ...definition.allowedApproverRoles,
+  ];
+  if (definition.approvalAmountField) {
+    const amountField = definition.approvalAmountField;
+    const amountProperty = definition.argumentSchema.properties[amountField];
+    const threshold =
+      document?.approvalPolicy?.amountThresholdCents ?? DEFAULT_APPROVAL_TIER_THRESHOLD_CENTS;
+    if (
+      !amountProperty ||
+      !Number.isSafeInteger(threshold) ||
+      threshold <= 0 ||
+      threshold > MAX_APPROVAL_TIER_THRESHOLD_CENTS ||
+      (amountProperty.max !== undefined && threshold > amountProperty.max)
+    ) return null;
+    const amount = args[amountField];
+    if (
+      typeof amount !== "number" ||
+      !Number.isSafeInteger(amount) ||
+      amount < 0
+    ) return null;
+    allowedApproverRoles = amount > threshold
+      ? ["owner"]
+      : ["admin"];
+  } else if (document?.approvalPolicy) {
+    return null;
+  }
+  allowedApproverRoles = allowedApproverRoles.filter((role) =>
+    definition.allowedApproverRoles.includes(role)
+  );
+  const requiredApprovers = definition.minimumApproverCount ?? 1;
+  if (
+    (requiredApprovers !== 1 && requiredApprovers !== 2) ||
+    allowedApproverRoles.length === 0
+  ) return null;
+  return { requiredApprovers, allowedApproverRoles };
 }
 
 export function getWorkspaceRuleWarnings(

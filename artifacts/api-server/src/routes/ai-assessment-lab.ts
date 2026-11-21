@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gt, isNull, lte, sql } from "drizzle-orm";
+import { and, count, desc, eq, gt, inArray, isNull, lte, sql } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import { Router, type IRouter, type RequestHandler } from "express";
 import {
@@ -51,6 +51,8 @@ import {
   aiAssessmentJobsTable,
   workspaceAuditEventsTable,
   evaluateWorkspaceActionRule,
+  getWorkspaceActionApprovalRequirements,
+  type WorkspaceActionRuleDocument,
   type AiAssessmentJobEvidence,
   type AiAssessmentJob,
   type ExternalQwenProviderApprovalEvidence,
@@ -58,6 +60,7 @@ import {
 import {
   canonicalApprovalJson,
   createSyntheticApprovalSimulationReceipt,
+  createSyntheticGenericBankChangeSimulationReceipt,
   computeApprovalProposalBindingV2,
   computeApprovalProposalBindingV3,
   computeApprovalReplayBinding,
@@ -467,6 +470,12 @@ export function formatApproval(
     ruleVersionId: string | null;
     synthetic: true;
   } | null = null,
+  approvalProgress: {
+    approvedCount: number;
+    requiredCount: number;
+    currentUserVoted: boolean;
+    eligibleRoles: Array<"owner" | "admin">;
+  } | null = null,
 ) {
   const now = new Date();
   return {
@@ -496,6 +505,7 @@ export function formatApproval(
         now,
       ),
     proposalDetails,
+    approvalProgress,
   };
 }
 
@@ -884,6 +894,38 @@ function verifyPersistedApprovalEvidence(
     return null;
   }
   return proof;
+}
+
+function getApprovalRequirements(
+  approval: Parameters<typeof verifyPersistedApprovalEvidence>[0],
+  job: AiAssessmentJob | undefined,
+) {
+  if (!approval.syntheticActionRef) return null;
+  const proof = verifyPersistedApprovalEvidence(approval, job);
+  if (
+    proof &&
+    "actionType" in proof &&
+    "arguments" in proof &&
+    "ruleDocument" in proof
+  ) {
+    return getWorkspaceActionApprovalRequirements(
+      approval.syntheticActionRef,
+      proof.arguments,
+      proof.ruleDocument as WorkspaceActionRuleDocument,
+    );
+  }
+  if (proof && "arguments" in proof) {
+    return getWorkspaceActionApprovalRequirements(
+      approval.syntheticActionRef,
+      proof.arguments,
+      null,
+    );
+  }
+  return getWorkspaceActionApprovalRequirements(
+    approval.syntheticActionRef,
+    {},
+    null,
+  );
 }
 
 function isExternalQwenRefundEvidence(value: unknown): boolean {
@@ -1298,6 +1340,8 @@ routes.get(
       allowedApproverRoles: [...definition.allowedApproverRoles],
       expiryMinutes: Math.max(1, Math.ceil(definition.receiptExpirySeconds / 60)),
       requiresIndependentApprover: definition.requiresIndependentApprover,
+      minimumApproverCount: definition.minimumApproverCount ?? 1,
+      approvalAmountField: definition.approvalAmountField ?? null,
       syntheticTemplateText: definition.syntheticTemplateText ?? null,
       argumentFields: Object.entries(definition.argumentSchema.properties).map(
         ([name, rule]) => ({
@@ -1422,15 +1466,74 @@ routes.get(
           .where(eq(aiAssessmentApprovalRequestsTable.workspaceId, workspaceId))
           .orderBy(desc(aiAssessmentApprovalRequestsTable.createdAt))
           .limit(MAX_APPROVAL_HISTORY);
+        const approvalIds = rows.map(({ approval }) => approval.id);
+        const voteRows = approvalIds.length
+          ? await tx
+              .select({
+                approvalId: workspaceAuditEventsTable.resourceId,
+                actorUserId: workspaceAuditEventsTable.actorUserId,
+                metadata: workspaceAuditEventsTable.metadata,
+              })
+              .from(workspaceAuditEventsTable)
+              .where(
+                and(
+                  eq(workspaceAuditEventsTable.workspaceId, workspaceId),
+                  eq(workspaceAuditEventsTable.action, "ai_assessment.approval_vote_recorded"),
+                  eq(workspaceAuditEventsTable.resourceType, "ai_assessment_approval"),
+                  inArray(workspaceAuditEventsTable.resourceId, approvalIds),
+                ),
+              )
+          : [];
+        const approvedUsersByApproval = new Map<string, Set<string>>();
+        const votersByApproval = new Map<string, Set<string>>();
+        for (const vote of voteRows) {
+          if (typeof vote.approvalId === "string" && vote.actorUserId) {
+            const voters =
+              votersByApproval.get(vote.approvalId) ?? new Set<string>();
+            voters.add(vote.actorUserId);
+            votersByApproval.set(vote.approvalId, voters);
+          }
+          if (
+            vote.metadata.decision !== "approve" ||
+            typeof vote.approvalId !== "string" ||
+            !vote.actorUserId
+          ) continue;
+          const approvedUsers =
+            approvedUsersByApproval.get(vote.approvalId) ?? new Set<string>();
+          approvedUsers.add(vote.actorUserId);
+          approvedUsersByApproval.set(vote.approvalId, approvedUsers);
+        }
         return {
-          approvals: rows.map(({ approval, job }) =>
-            formatApproval(
+          approvals: rows.map(({ approval, job }) => {
+            const requirements = getApprovalRequirements(
+              approval,
+              job ?? undefined,
+            );
+            const approvalProgress = requirements
+              ? {
+                  approvedCount:
+                    approvedUsersByApproval.get(approval.id)?.size ?? 0,
+                  requiredCount: requirements.requiredApprovers,
+                  currentUserVoted:
+                    votersByApproval.get(approval.id)?.has(req.authUserId!) ??
+                      false,
+                  eligibleRoles: requirements.allowedApproverRoles,
+                }
+              : null;
+            const roleEligible = requirements &&
+              (membership.role === "owner" || membership.role === "admin") &&
+              requirements.allowedApproverRoles.includes(membership.role);
+            return formatApproval(
               approval,
               approval.simulatedAt ? "simulated_once" : "not_performed",
-              canDecide && approval.requestedByUserId !== req.authUserId,
+              canDecide &&
+                roleEligible === true &&
+                approvalProgress?.currentUserVoted !== true &&
+                approval.requestedByUserId !== req.authUserId,
               genericProposalDetails(approval, job ?? undefined),
-            ),
-          ),
+              approvalProgress,
+            );
+          }),
           canDecide,
         };
       },
@@ -2135,6 +2238,17 @@ routes.post(
       ruleVersionId: savedOutcome.evidence.ruleVersionId ?? null,
       synthetic: true as const,
     };
+    const savedApprovalRequirements = getWorkspaceActionApprovalRequirements(
+      savedOutcome.evidence.actionType,
+      savedOutcome.evidence.arguments,
+      "ruleDocument" in savedOutcome.evidence
+        ? savedOutcome.evidence.ruleDocument as WorkspaceActionRuleDocument
+        : null,
+    );
+    if (!savedApprovalRequirements) {
+      res.status(503).json({ error: "Approval requirements are unavailable" });
+      return;
+    }
     res
       .status(savedOutcome.kind === "created" ? 201 : 200)
       .json(
@@ -2150,6 +2264,12 @@ routes.post(
             "not_performed",
             false,
             savedDetails,
+            {
+              approvedCount: 0,
+              requiredCount: savedApprovalRequirements.requiredCount,
+              currentUserVoted: false,
+              eligibleRoles: savedApprovalRequirements.allowedApproverRoles,
+            },
           ),
           execution: "not_performed",
           externalSideEffect: false,
@@ -2448,7 +2568,7 @@ routes.post(
         if (!canRunAiEvaluation(membership.role)) {
           return { kind: "forbidden" as const };
         }
-        const [approval] = await tx
+        const [visibleApproval] = await tx
           .select()
           .from(aiAssessmentApprovalRequestsTable)
           .where(
@@ -2458,12 +2578,75 @@ routes.post(
             ),
           )
           .limit(1);
-        if (!approval) return { kind: "missing" as const };
-        if (approval.status !== "pending") {
+        if (!visibleApproval) return { kind: "missing" as const };
+        if (visibleApproval.status !== "pending") {
           return { kind: "already_decided" as const };
         }
-        if (approval.requestedByUserId === req.authUserId) {
+        if (visibleApproval.requestedByUserId === req.authUserId) {
           return { kind: "self_approval" as const };
+        }
+        const [approval] = await tx
+          .select()
+          .from(aiAssessmentApprovalRequestsTable)
+          .where(
+            and(
+              eq(aiAssessmentApprovalRequestsTable.id, approvalId),
+              eq(aiAssessmentApprovalRequestsTable.workspaceId, workspaceId),
+            ),
+          )
+          .limit(1)
+          .for("update");
+        // Serialize votes per request so simultaneous approvals cannot both
+        // observe the same count and issue duplicate or premature receipts.
+        if (!approval) {
+          const currentRole = membership.role === "owner" ||
+              membership.role === "admin"
+            ? membership.role
+            : null;
+          if (body.data.decision === "approve" && currentRole) {
+            const [job] = await tx
+              .select()
+              .from(aiAssessmentJobsTable)
+              .where(
+                and(
+                  eq(aiAssessmentJobsTable.id, visibleApproval.jobId),
+                  eq(aiAssessmentJobsTable.workspaceId, workspaceId),
+                ),
+              )
+              .limit(1);
+            const requirements = getApprovalRequirements(visibleApproval, job);
+            if (
+              requirements &&
+              !requirements.allowedApproverRoles.includes(currentRole)
+            ) {
+              return { kind: "approver_role_restricted" as const };
+            }
+          }
+          const [latestVisibleApproval] = await tx
+            .select({
+              status: aiAssessmentApprovalRequestsTable.status,
+              requestedByUserId:
+                aiAssessmentApprovalRequestsTable.requestedByUserId,
+            })
+            .from(aiAssessmentApprovalRequestsTable)
+            .where(
+              and(
+                eq(aiAssessmentApprovalRequestsTable.id, approvalId),
+                eq(aiAssessmentApprovalRequestsTable.workspaceId, workspaceId),
+              ),
+            )
+            .limit(1);
+          if (!latestVisibleApproval) return { kind: "missing" as const };
+          if (latestVisibleApproval.requestedByUserId === req.authUserId) {
+            return { kind: "self_approval" as const };
+          }
+          if (latestVisibleApproval.status !== "pending") {
+            return { kind: "already_decided" as const };
+          }
+          return { kind: "missing" as const };
+        }
+        if (approval.status !== "pending") {
+          return { kind: "already_decided" as const };
         }
         if (!isApprovalDecisionWindowOpen(approval.status, approval.expiresAt, now)) {
           const [expired] = await tx
@@ -2498,6 +2681,7 @@ routes.post(
           return { kind: "binding_mismatch" as const };
         }
         const status = body.data.decision === "approve" ? "approved" : "denied";
+        let approvalJob: AiAssessmentJob | undefined;
         let simulationReceipt:
           | ReturnType<typeof createSyntheticApprovalSimulationReceipt>
           | null = null;
@@ -2518,16 +2702,32 @@ routes.post(
               ),
             )
             .limit(1);
+          approvalJob = job;
           const proof = verifyPersistedApprovalEvidence(approval, job);
           if (!proof) return { kind: "evidence_invalid" as const };
           if (
             approval.syntheticActionRef ===
             "guardian.synthetic.finance.bank-change.v1"
           ) {
-            if (!("actionRef" in proof)) {
+            if ("actionRef" in proof) {
+              simulationReceipt = createSyntheticApprovalSimulationReceipt(proof);
+            } else if (
+              "actionType" in proof &&
+              proof.actionType ===
+                "guardian.synthetic.finance.bank-change.v1" &&
+              "arguments" in proof &&
+              "actionSha256" in proof &&
+              typeof proof.actionSha256 === "string"
+            ) {
+              simulationReceipt =
+                createSyntheticGenericBankChangeSimulationReceipt({
+                  actionType: proof.actionType,
+                  args: proof.arguments,
+                  actionSha256: proof.actionSha256,
+                });
+            } else {
               return { kind: "evidence_invalid" as const };
             }
-            simulationReceipt = createSyntheticApprovalSimulationReceipt(proof);
             if (!simulationReceipt) return { kind: "evidence_invalid" as const };
             replayBindingSha256 = computeApprovalReplayBinding({
               proposalBindingSha256: expectedBinding,
@@ -2550,6 +2750,139 @@ routes.post(
           [2, 3].includes(approval.bindingVersion)
         ) {
           return { kind: "evidence_invalid" as const };
+        }
+        const approvalRequirements = status === "approved"
+          ? approval.bindingVersion === 1
+            ? getWorkspaceActionApprovalRequirements(
+                approval.syntheticActionRef ?? "",
+                {},
+                null,
+              ) ?? {
+                requiredApprovers: 1 as const,
+                allowedApproverRoles: ["owner", "admin"] as Array<"owner" | "admin">,
+              }
+            : getApprovalRequirements(approval, approvalJob)
+          : getWorkspaceActionApprovalRequirements(
+              approval.syntheticActionRef ?? "",
+              {},
+              null,
+            ) ?? {
+              requiredApprovers: 1 as const,
+              allowedApproverRoles: ["owner", "admin"] as Array<"owner" | "admin">,
+            };
+        if (!approvalRequirements) return { kind: "evidence_invalid" as const };
+        const currentApproverRole = membership.role === "owner" ||
+            membership.role === "admin"
+          ? membership.role
+          : null;
+        if (
+          status === "approved" &&
+          (!currentApproverRole ||
+            !approvalRequirements.allowedApproverRoles.includes(currentApproverRole))
+        ) {
+          return { kind: "approver_role_restricted" as const };
+        }
+
+        const priorVotes = await tx
+          .select({
+            actorUserId: workspaceAuditEventsTable.actorUserId,
+            metadata: workspaceAuditEventsTable.metadata,
+          })
+          .from(workspaceAuditEventsTable)
+          .where(
+            and(
+              eq(workspaceAuditEventsTable.workspaceId, workspaceId),
+              eq(
+                workspaceAuditEventsTable.action,
+                "ai_assessment.approval_vote_recorded",
+              ),
+              eq(
+                workspaceAuditEventsTable.resourceType,
+                "ai_assessment_approval",
+              ),
+              eq(workspaceAuditEventsTable.resourceId, approvalId),
+            ),
+          );
+        const priorVoteFromCurrentUser = priorVotes.find(
+          (vote) =>
+            vote.actorUserId === req.authUserId &&
+            vote.metadata.approvalBindingSha256 === expectedBinding,
+        );
+        const requiredApprovers = approvalRequirements.requiredApprovers;
+        const approvedVoters = new Map<string, "owner" | "admin">();
+        for (const vote of priorVotes) {
+          if (
+            vote.metadata.decision === "approve" &&
+            vote.metadata.approvalBindingSha256 === expectedBinding &&
+            vote.metadata.approvalCountRequired === requiredApprovers &&
+            (vote.metadata.approverRole === "owner" ||
+              vote.metadata.approverRole === "admin") &&
+            approvalRequirements.allowedApproverRoles.includes(
+              vote.metadata.approverRole,
+            ) &&
+            vote.actorUserId
+          ) {
+            approvedVoters.set(vote.actorUserId, vote.metadata.approverRole);
+          }
+        }
+        if (priorVoteFromCurrentUser) {
+          return {
+            kind: "approval_progress" as const,
+            approval,
+            alreadyVoted: true,
+            approvalProgress: {
+              approvedCount: approvedVoters.size,
+              requiredCount: requiredApprovers,
+              currentUserVoted: true,
+              eligibleRoles: approvalRequirements.allowedApproverRoles,
+            },
+          };
+        }
+        if (status === "approved") {
+          if (!currentApproverRole) {
+            return { kind: "approver_role_restricted" as const };
+          }
+          approvedVoters.set(req.authUserId!, currentApproverRole);
+        }
+        const approvedCount = approvedVoters.size;
+        const approvalEvidence =
+          approvalJob?.result as Record<string, unknown> | undefined;
+        const ruleVersionId = typeof approvalEvidence?.ruleVersionId === "string"
+          ? approvalEvidence.ruleVersionId
+          : null;
+        const ruleId = typeof approvalEvidence?.ruleId === "string"
+          ? approvalEvidence.ruleId
+          : null;
+        await tx.insert(workspaceAuditEventsTable).values({
+          workspaceId,
+          actorUserId: req.authUserId!,
+          action: "ai_assessment.approval_vote_recorded",
+          resourceType: "ai_assessment_approval",
+          resourceId: approvalId,
+          metadata: {
+            decision: body.data.decision,
+            approvalBindingSha256: expectedBinding,
+            approverRole: membership.role,
+            approvalCountRequired: requiredApprovers,
+            approvedCount,
+            actionType: approval.syntheticActionRef,
+            actionSha256: approval.actionSha256,
+            ruleId,
+            ruleVersionId,
+          },
+        });
+        if (status === "approved" && approvedCount < requiredApprovers) {
+          return {
+            kind: "approval_progress" as const,
+            approval,
+            alreadyVoted: false,
+            approvalProgress: {
+              approvedCount,
+              requiredCount: requiredApprovers,
+              currentUserVoted: true,
+              eligibleRoles: approvalRequirements.allowedApproverRoles,
+            },
+          };
         }
         const update = {
             status,
@@ -2588,7 +2921,9 @@ routes.post(
               },
             },
           );
-          if (!ledgerDecision) return { kind: "already_decided" as const };
+          if (!ledgerDecision) {
+            throw new Error("approval_update_conflict_after_row_lock");
+          }
           updated = ledgerDecision.approval;
           signedReceipt = ledgerDecision.receipt;
         } else {
@@ -2611,7 +2946,7 @@ routes.post(
             .returning();
           updated = denied;
         }
-        if (!updated) return { kind: "already_decided" as const };
+        if (!updated) throw new Error("approval_update_conflict_after_row_lock");
         await tx.insert(workspaceAuditEventsTable).values({
           workspaceId,
           actorUserId: req.authUserId!,
@@ -2637,6 +2972,12 @@ routes.post(
           kind: "decided" as const,
           approval: updated,
           receipt: signedReceipt,
+          approvalProgress: {
+            approvedCount,
+            requiredCount: requiredApprovers,
+            currentUserVoted: true,
+            eligibleRoles: approvalRequirements.allowedApproverRoles,
+          },
           execution: simulationReceipt
             ? "synthetic_action_simulated_once"
             : status === "denied"
@@ -2669,6 +3010,28 @@ routes.post(
       res.status(404).json({ error: "Approval not found in this workspace" });
       return;
     }
+    if (access.value.kind === "approver_role_restricted") {
+      res.status(403).json({
+        error: "This approval requires a different workspace role",
+      });
+      return;
+    }
+    if (access.value.kind === "approval_progress") {
+      res.json(
+        DecideWorkspaceAiAssessmentApprovalResponse.parse({
+          approval: formatApproval(
+            access.value.approval,
+            "not_performed",
+            false,
+            genericProposalDetails(access.value.approval, undefined),
+            access.value.approvalProgress,
+          ),
+          execution: "decision_only",
+          receipt: null,
+        }),
+      );
+      return;
+    }
     if (
       access.value.kind === "already_decided" ||
       access.value.kind === "expired" ||
@@ -2689,6 +3052,9 @@ routes.post(
           access.value.execution === "synthetic_action_simulated_once"
             ? "simulated_once"
             : "not_performed",
+          undefined,
+          null,
+          access.value.approvalProgress,
         ),
         execution: access.value.execution,
         receipt: access.value.receipt,

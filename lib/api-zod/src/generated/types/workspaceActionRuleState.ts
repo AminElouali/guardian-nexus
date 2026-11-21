@@ -7,9 +7,11 @@
  */
 import type { WorkspaceActionRule } from './workspaceActionRule';
 import type { WorkspaceActionRuleStateArgumentFieldsItem } from './workspaceActionRuleStateArgumentFieldsItem';
+import type { WorkspaceActionRuleStateMinimumApproverCount } from './workspaceActionRuleStateMinimumApproverCount';
 import type { WorkspaceActionRuleStateRiskCategoriesItem } from './workspaceActionRuleStateRiskCategoriesItem';
 import type { WorkspaceActionRuleStateRiskClass } from './workspaceActionRuleStateRiskClass';
 import type { WorkspaceActionRuleVersion } from './workspaceActionRuleVersion';
+import type { WorkspaceApprovalPolicy } from './workspaceApprovalPolicy';
 
 export interface WorkspaceActionRuleState {
   actionType: string;
@@ -19,6 +21,14 @@ export interface WorkspaceActionRuleState {
   riskClass: WorkspaceActionRuleStateRiskClass;
   riskCategories: WorkspaceActionRuleStateRiskCategoriesItem[];
   requiresIndependentApprover: boolean;
+  minimumApproverCount: WorkspaceActionRuleStateMinimumApproverCount;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  approvalAmountField: string | null;
+  activeApprovalPolicy: WorkspaceApprovalPolicy | null;
+  draftApprovalPolicy: WorkspaceApprovalPolicy | null;
   argumentFields: WorkspaceActionRuleStateArgumentFieldsItem[];
   /** @nullable */
   activeVersionId: string | null;

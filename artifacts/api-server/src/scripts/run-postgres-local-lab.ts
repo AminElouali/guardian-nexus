@@ -230,7 +230,10 @@ export type SafeChildOutput = {
 };
 
 const allowedChildEnvironmentKeys = ["PATH", "HOME", "LANG", "LC_ALL"] as const;
-const MAX_CAPTURED_TEST_OUTPUT_BYTES = 256 * 1024;
+// API TAP output can exceed 256 KiB once the registered E2E coverage grows.
+// Keep a hard cap, but leave enough room to retain the failure assertion and
+// stack for diagnosis instead of terminating the disposable suite mid-report.
+const MAX_CAPTURED_TEST_OUTPUT_BYTES = 2 * 1024 * 1024;
 const MAX_SAFE_CHILD_OUTPUT_CHARACTERS = 12_000;
 
 let latestFailureOutput: SafeChildOutput | undefined;

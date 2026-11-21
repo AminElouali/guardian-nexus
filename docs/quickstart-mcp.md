@@ -4,9 +4,9 @@ Guardian Nexus recibe propuestas de herramientas por MCP, autentica al agente y 
 
 ## Estado
 
-**IMPLEMENTADO:** el proxy HTTP MCP publica herramientas de una lista permitida de Guardian para ocho servicios de demostración. El agente se autentica con una credencial del workspace; las reglas versionadas deciden si la propuesta se simula como permitida, se bloquea o necesita una aprobación humana. Una aprobación produce un recibo firmado y ligado a la acción exacta.
+**IMPLEMENTADO:** el proxy HTTP MCP publica herramientas de una lista permitida de Guardian para ocho servicios de demostración. El agente se autentica con una credencial del workspace; las reglas versionadas deciden si la propuesta se simula como permitida, se bloquea o necesita aprobación. Una aprobación produce un recibo firmado y ligado a la acción exacta.
 
-**PROYECTADO:** conexión a servidores MCP reales, registro de destinos de clientes, conectores productivos, configuración general por workspace de dominios/volúmenes/entornos y notificación automática al agente cuando se aprueba una solicitud.
+**PROYECTADO:** conexión a servidores MCP reales, registro de destinos de clientes, conectores productivos, grupos configurables de aprobadores y notificación automática al agente cuando se aprueba una solicitud.
 
 ## 1. Crea un agente
 
@@ -65,6 +65,8 @@ Cuando una solicitud pendiente se aprueba, el siguiente reintento con la misma h
 
 Una persona distinta del solicitante debe aprobar la solicitud desde la bandeja. El solicitante no puede aprobar su propia acción. `guardian_approval_status` permite al mismo agente consultar el estado.
 
+**Aprobaciones por importe y varias personas — implementado en esta rama, pendiente de validación:** cada versión de reglas puede fijar un umbral monetario (máximo 10.000 €). Para acciones que tienen un importe catalogado, hasta el umbral aprueba una persona administradora y por encima la persona propietaria. El cambio de cuenta bancaria sintético requiere dos aprobaciones de personas diferentes. Repetir el voto de una misma persona no suma; la solicitud sigue pendiente y no se emite el recibo hasta completar el número requerido. Los votos quedan en la auditoría append-only. El recibo v1 y el evento v1 del ledger no cambian.
+
 Si una acción protegida ya se completó y el agente reintenta la misma llamada por un problema de red, Guardian devuelve el resultado anterior con `replayed: true`; no la ejecuta otra vez. Se rechazan los usos desde otro agente o workspace, con argumentos cambiados o con una solicitud caducada.
 
 ## 6. Reglas y plantillas
@@ -75,7 +77,7 @@ Las plantillas **Prudente**, **Equilibrada** y **Solo lectura** crean borradores
 
 **Límites:** el único entorno disponible es `test`; elegir `production` en una condición no crea ni habilita un conector productivo. Las propuestas nuevas sujetas a volumen guardan en su evidencia v2 el contexto agregado usado, ligado a su hash, para verificarlo y comparar decisiones históricas. Propuestas antiguas que no conservan ese contexto se cuentan como no reevaluables; no se reconstruye desde hashes ni ejemplos.
 
-**PROYECTADO:** registrar acciones nuevas, conectar sistemas reales, medir datos personales dinámicos con un conector fiable, configurar ramas de reglas más complejas y exigir aprobaciones dobles o por importe.
+**PROYECTADO:** registrar acciones nuevas, conectar sistemas reales, medir datos personales dinámicos con un conector fiable, configurar grupos de aprobación y aplicar tramos de importe a grupos personalizados.
 
 ## Seguridad y límites
 

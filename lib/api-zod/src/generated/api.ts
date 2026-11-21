@@ -2272,6 +2272,8 @@ export const listWorkspaceAiAssessmentLabJobsResponseResultEightRuleIdMax = 120;
 export const listWorkspaceAiAssessmentLabJobsResponseResultEightAgentIdMax = 120;
 
 export const listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneApprovalPolicyAmountThresholdCentsMax = 1000000;
+
 export const listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemIdMax = 120;
 
 export const listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAllItemFieldMax = 80;
@@ -3949,6 +3951,9 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "ruleDocumentSha256": zod.string().regex(listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentSha256RegExp).nullish(),
   "ruleDocument": zod.union([zod.object({
   "version": zod.literal(1),
+  "approvalPolicy": zod.object({
+  "amountThresholdCents": zod.int().min(1).max(listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneApprovalPolicyAmountThresholdCentsMax)
+}).optional(),
   "rules": zod.array(zod.object({
   "id": zod.string().min(1).max(listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemIdMax),
   "decision": zod.enum(['allow', 'deny', 'require_approval']),
@@ -5238,6 +5243,8 @@ export const createWorkspaceAiAssessmentLabJobResponseResultEightRuleIdMax = 120
 export const createWorkspaceAiAssessmentLabJobResponseResultEightAgentIdMax = 120;
 
 export const createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneApprovalPolicyAmountThresholdCentsMax = 1000000;
+
 export const createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemIdMax = 120;
 
 export const createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemFieldMax = 80;
@@ -6915,6 +6922,9 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "ruleDocumentSha256": zod.string().regex(createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentSha256RegExp).nullish(),
   "ruleDocument": zod.union([zod.object({
   "version": zod.literal(1),
+  "approvalPolicy": zod.object({
+  "amountThresholdCents": zod.int().min(1).max(createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneApprovalPolicyAmountThresholdCentsMax)
+}).optional(),
   "rules": zod.array(zod.object({
   "id": zod.string().min(1).max(createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemIdMax),
   "decision": zod.enum(['allow', 'deny', 'require_approval']),
@@ -8193,6 +8203,8 @@ export const getWorkspaceAiAssessmentLabJobResponseResultEightRuleIdMax = 120;
 export const getWorkspaceAiAssessmentLabJobResponseResultEightAgentIdMax = 120;
 
 export const getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneApprovalPolicyAmountThresholdCentsMax = 1000000;
+
 export const getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemIdMax = 120;
 
 export const getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemFieldMax = 80;
@@ -9870,6 +9882,9 @@ export const GetWorkspaceAiAssessmentLabJobResponse = zod.object({
   "ruleDocumentSha256": zod.string().regex(getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentSha256RegExp).nullish(),
   "ruleDocument": zod.union([zod.object({
   "version": zod.literal(1),
+  "approvalPolicy": zod.object({
+  "amountThresholdCents": zod.int().min(1).max(getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneApprovalPolicyAmountThresholdCentsMax)
+}).optional(),
   "rules": zod.array(zod.object({
   "id": zod.string().min(1).max(getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemIdMax),
   "decision": zod.enum(['allow', 'deny', 'require_approval']),
@@ -11214,6 +11229,8 @@ export const retryWorkspaceAiAssessmentLabJobResponseResultEightRuleIdMax = 120;
 export const retryWorkspaceAiAssessmentLabJobResponseResultEightAgentIdMax = 120;
 
 export const retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneApprovalPolicyAmountThresholdCentsMax = 1000000;
+
 export const retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemIdMax = 120;
 
 export const retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemFieldMax = 80;
@@ -12891,6 +12908,9 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "ruleDocumentSha256": zod.string().regex(retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentSha256RegExp).nullish(),
   "ruleDocument": zod.union([zod.object({
   "version": zod.literal(1),
+  "approvalPolicy": zod.object({
+  "amountThresholdCents": zod.int().min(1).max(retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneApprovalPolicyAmountThresholdCentsMax)
+}).optional(),
   "rules": zod.array(zod.object({
   "id": zod.string().min(1).max(retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemIdMax),
   "decision": zod.enum(['allow', 'deny', 'require_approval']),
@@ -12937,6 +12957,9 @@ export const listWorkspaceAiAssessmentApprovalsResponseApprovalsItemActionSha256
 export const listWorkspaceAiAssessmentApprovalsResponseApprovalsItemProposalBindingSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const listWorkspaceAiAssessmentApprovalsResponseApprovalsItemSimulationResultSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const listWorkspaceAiAssessmentApprovalsResponseApprovalsItemReplayBindingSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const listWorkspaceAiAssessmentApprovalsResponseApprovalsItemApprovalProgressOneApprovedCountMin = 0;
+export const listWorkspaceAiAssessmentApprovalsResponseApprovalsItemApprovalProgressOneApprovedCountMax = 2;
+
 
 
 export const ListWorkspaceAiAssessmentApprovalsResponse = zod.object({
@@ -12974,6 +12997,12 @@ export const ListWorkspaceAiAssessmentApprovalsResponse = zod.object({
   "ruleVersionId": zod.uuid().nullable(),
   "synthetic": zod.literal(true)
 }),zod.null()]),
+  "approvalProgress": zod.union([zod.object({
+  "approvedCount": zod.int().min(listWorkspaceAiAssessmentApprovalsResponseApprovalsItemApprovalProgressOneApprovedCountMin).max(listWorkspaceAiAssessmentApprovalsResponseApprovalsItemApprovalProgressOneApprovedCountMax),
+  "requiredCount": zod.union([zod.literal(1),zod.literal(2)]),
+  "currentUserVoted": zod.boolean(),
+  "eligibleRoles": zod.array(zod.enum(['owner', 'admin']))
+}),zod.null()]),
   "createdAt": zod.coerce.date()
 })),
   "canDecide": zod.boolean(),
@@ -13007,6 +13036,9 @@ export const createWorkspaceSyntheticRefundProposalResponseApprovalOneActionSha2
 export const createWorkspaceSyntheticRefundProposalResponseApprovalOneProposalBindingSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const createWorkspaceSyntheticRefundProposalResponseApprovalOneSimulationResultSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const createWorkspaceSyntheticRefundProposalResponseApprovalOneReplayBindingSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceSyntheticRefundProposalResponseApprovalOneApprovalProgressOneApprovedCountMin = 0;
+export const createWorkspaceSyntheticRefundProposalResponseApprovalOneApprovalProgressOneApprovedCountMax = 2;
+
 export const createWorkspaceSyntheticRefundProposalResponseSimulationResultSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const createWorkspaceSyntheticRefundProposalResponseProviderInferenceModelIdMax = 128;
 
@@ -13050,6 +13082,12 @@ export const CreateWorkspaceSyntheticRefundProposalResponse = zod.object({
   "appliedRule": zod.string(),
   "ruleVersionId": zod.uuid().nullable(),
   "synthetic": zod.literal(true)
+}),zod.null()]),
+  "approvalProgress": zod.union([zod.object({
+  "approvedCount": zod.int().min(createWorkspaceSyntheticRefundProposalResponseApprovalOneApprovalProgressOneApprovedCountMin).max(createWorkspaceSyntheticRefundProposalResponseApprovalOneApprovalProgressOneApprovedCountMax),
+  "requiredCount": zod.union([zod.literal(1),zod.literal(2)]),
+  "currentUserVoted": zod.boolean(),
+  "eligibleRoles": zod.array(zod.enum(['owner', 'admin']))
 }),zod.null()]),
   "createdAt": zod.coerce.date()
 }),zod.null()]),
@@ -13101,6 +13139,9 @@ export const createWorkspaceGenericActionProposalResponseApprovalOneActionSha256
 export const createWorkspaceGenericActionProposalResponseApprovalOneProposalBindingSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const createWorkspaceGenericActionProposalResponseApprovalOneSimulationResultSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const createWorkspaceGenericActionProposalResponseApprovalOneReplayBindingSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceGenericActionProposalResponseApprovalOneApprovalProgressOneApprovedCountMin = 0;
+export const createWorkspaceGenericActionProposalResponseApprovalOneApprovalProgressOneApprovedCountMax = 2;
+
 
 
 export const CreateWorkspaceGenericActionProposalResponse = zod.object({
@@ -13144,6 +13185,12 @@ export const CreateWorkspaceGenericActionProposalResponse = zod.object({
   "ruleVersionId": zod.uuid().nullable(),
   "synthetic": zod.literal(true)
 }),zod.null()]),
+  "approvalProgress": zod.union([zod.object({
+  "approvedCount": zod.int().min(createWorkspaceGenericActionProposalResponseApprovalOneApprovalProgressOneApprovedCountMin).max(createWorkspaceGenericActionProposalResponseApprovalOneApprovalProgressOneApprovedCountMax),
+  "requiredCount": zod.union([zod.literal(1),zod.literal(2)]),
+  "currentUserVoted": zod.boolean(),
+  "eligibleRoles": zod.array(zod.enum(['owner', 'admin']))
+}),zod.null()]),
   "createdAt": zod.coerce.date()
 }),zod.null()]),
   "execution": zod.literal("not_performed"),
@@ -13161,6 +13208,8 @@ export const GetWorkspaceGenericActionCatalogParams = zod.object({
 })
 
 
+export const getWorkspaceGenericActionCatalogResponseActionsItemApprovalAmountFieldMax = 80;
+
 
 
 export const GetWorkspaceGenericActionCatalogResponse = zod.object({
@@ -13177,6 +13226,8 @@ export const GetWorkspaceGenericActionCatalogResponse = zod.object({
   "allowedApproverRoles": zod.array(zod.enum(['owner', 'admin'])),
   "expiryMinutes": zod.int().min(1),
   "requiresIndependentApprover": zod.boolean(),
+  "minimumApproverCount": zod.union([zod.literal(1),zod.literal(2)]),
+  "approvalAmountField": zod.string().max(getWorkspaceGenericActionCatalogResponseActionsItemApprovalAmountFieldMax).nullable(),
   "syntheticTemplateText": zod.string().nullable(),
   "argumentFields": zod.array(zod.object({
   "name": zod.string(),
@@ -13237,6 +13288,12 @@ export const PreviewWorkspaceGenericActionResponse = zod.object({
 export const ListWorkspaceActionRulesParams = zod.object({
   "workspaceId": zod.uuid()
 })
+
+export const listWorkspaceActionRulesResponseActionsItemApprovalAmountFieldMax = 80;
+
+export const listWorkspaceActionRulesResponseActionsItemActiveApprovalPolicyOneAmountThresholdCentsMax = 1000000;
+
+export const listWorkspaceActionRulesResponseActionsItemDraftApprovalPolicyOneAmountThresholdCentsMax = 1000000;
 
 export const listWorkspaceActionRulesResponseActionsItemActiveRulesItemIdMax = 120;
 
@@ -13323,6 +13380,10 @@ export const listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhen
 
 export const listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAnyMax = 8;
 
+export const listWorkspaceActionRulesResponseActionsItemHistoryItemApprovalPolicyOneAmountThresholdCentsMax = 1000000;
+
+export const listWorkspaceActionRulesResponseStarterTemplatesItemDocumentApprovalPolicyAmountThresholdCentsMax = 1000000;
+
 export const listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemIdMax = 120;
 
 export const listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAllItemFieldMax = 80;
@@ -13366,6 +13427,14 @@ export const ListWorkspaceActionRulesResponse = zod.object({
   "riskClass": zod.enum(['low', 'medium', 'high']),
   "riskCategories": zod.array(zod.enum(['money', 'internal_email', 'external_email', 'customer_data', 'infrastructure', 'data', 'code', 'web', 'multiagent'])),
   "requiresIndependentApprover": zod.boolean(),
+  "minimumApproverCount": zod.union([zod.literal(1),zod.literal(2)]),
+  "approvalAmountField": zod.string().max(listWorkspaceActionRulesResponseActionsItemApprovalAmountFieldMax).nullable(),
+  "activeApprovalPolicy": zod.union([zod.object({
+  "amountThresholdCents": zod.int().min(1).max(listWorkspaceActionRulesResponseActionsItemActiveApprovalPolicyOneAmountThresholdCentsMax)
+}),zod.null()]),
+  "draftApprovalPolicy": zod.union([zod.object({
+  "amountThresholdCents": zod.int().min(1).max(listWorkspaceActionRulesResponseActionsItemDraftApprovalPolicyOneAmountThresholdCentsMax)
+}),zod.null()]),
   "argumentFields": zod.array(zod.object({
   "name": zod.string(),
   "type": zod.enum(['text', 'number', 'boolean']),
@@ -13430,6 +13499,9 @@ export const ListWorkspaceActionRulesResponse = zod.object({
 })).max(listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAnyMax).optional()
 })
 })),
+  "approvalPolicy": zod.union([zod.object({
+  "amountThresholdCents": zod.int().min(1).max(listWorkspaceActionRulesResponseActionsItemHistoryItemApprovalPolicyOneAmountThresholdCentsMax)
+}),zod.null()]),
   "createdByUserId": zod.string(),
   "createdAt": zod.coerce.date(),
   "isActive": zod.boolean(),
@@ -13444,6 +13516,9 @@ export const ListWorkspaceActionRulesResponse = zod.object({
   "actionType": zod.string(),
   "document": zod.object({
   "version": zod.literal(1),
+  "approvalPolicy": zod.object({
+  "amountThresholdCents": zod.int().min(1).max(listWorkspaceActionRulesResponseStarterTemplatesItemDocumentApprovalPolicyAmountThresholdCentsMax)
+}).optional(),
   "rules": zod.array(zod.object({
   "id": zod.string().min(1).max(listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemIdMax),
   "decision": zod.enum(['allow', 'deny', 'require_approval']),
@@ -13520,6 +13595,8 @@ export const SaveWorkspaceActionRuleDraftParams = zod.object({
   "actionType": zod.coerce.string().max(saveWorkspaceActionRuleDraftPathActionTypeMax)
 })
 
+export const saveWorkspaceActionRuleDraftBodyApprovalPolicyAmountThresholdCentsMax = 1000000;
+
 export const saveWorkspaceActionRuleDraftBodyRulesItemIdMax = 120;
 
 export const saveWorkspaceActionRuleDraftBodyRulesItemWhenAllItemFieldMax = 80;
@@ -13554,6 +13631,9 @@ export const saveWorkspaceActionRuleDraftBodyRulesMax = 50;
 
 export const SaveWorkspaceActionRuleDraftBody = zod.object({
   "version": zod.literal(1),
+  "approvalPolicy": zod.object({
+  "amountThresholdCents": zod.int().min(1).max(saveWorkspaceActionRuleDraftBodyApprovalPolicyAmountThresholdCentsMax)
+}).optional(),
   "rules": zod.array(zod.object({
   "id": zod.string().min(1).max(saveWorkspaceActionRuleDraftBodyRulesItemIdMax),
   "decision": zod.enum(['allow', 'deny', 'require_approval']),
@@ -14189,6 +14269,9 @@ export const createWorkspaceAgentActionProposalResponseApprovalOneActionSha256Re
 export const createWorkspaceAgentActionProposalResponseApprovalOneProposalBindingSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const createWorkspaceAgentActionProposalResponseApprovalOneSimulationResultSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const createWorkspaceAgentActionProposalResponseApprovalOneReplayBindingSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const createWorkspaceAgentActionProposalResponseApprovalOneApprovalProgressOneApprovedCountMin = 0;
+export const createWorkspaceAgentActionProposalResponseApprovalOneApprovalProgressOneApprovedCountMax = 2;
+
 
 
 export const CreateWorkspaceAgentActionProposalResponse = zod.object({
@@ -14231,6 +14314,12 @@ export const CreateWorkspaceAgentActionProposalResponse = zod.object({
   "appliedRule": zod.string(),
   "ruleVersionId": zod.uuid().nullable(),
   "synthetic": zod.literal(true)
+}),zod.null()]),
+  "approvalProgress": zod.union([zod.object({
+  "approvedCount": zod.int().min(createWorkspaceAgentActionProposalResponseApprovalOneApprovalProgressOneApprovedCountMin).max(createWorkspaceAgentActionProposalResponseApprovalOneApprovalProgressOneApprovedCountMax),
+  "requiredCount": zod.union([zod.literal(1),zod.literal(2)]),
+  "currentUserVoted": zod.boolean(),
+  "eligibleRoles": zod.array(zod.enum(['owner', 'admin']))
 }),zod.null()]),
   "createdAt": zod.coerce.date()
 }),zod.null()]),
@@ -14282,6 +14371,9 @@ export const decideWorkspaceAiAssessmentApprovalResponseApprovalActionSha256RegE
 export const decideWorkspaceAiAssessmentApprovalResponseApprovalProposalBindingSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const decideWorkspaceAiAssessmentApprovalResponseApprovalSimulationResultSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 export const decideWorkspaceAiAssessmentApprovalResponseApprovalReplayBindingSha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const decideWorkspaceAiAssessmentApprovalResponseApprovalApprovalProgressOneApprovedCountMin = 0;
+export const decideWorkspaceAiAssessmentApprovalResponseApprovalApprovalProgressOneApprovedCountMax = 2;
+
 export const decideWorkspaceAiAssessmentApprovalResponseReceiptOnePayloadKeyIdMax = 64;
 
 
@@ -14335,6 +14427,12 @@ export const DecideWorkspaceAiAssessmentApprovalResponse = zod.object({
   "appliedRule": zod.string(),
   "ruleVersionId": zod.uuid().nullable(),
   "synthetic": zod.literal(true)
+}),zod.null()]),
+  "approvalProgress": zod.union([zod.object({
+  "approvedCount": zod.int().min(decideWorkspaceAiAssessmentApprovalResponseApprovalApprovalProgressOneApprovedCountMin).max(decideWorkspaceAiAssessmentApprovalResponseApprovalApprovalProgressOneApprovedCountMax),
+  "requiredCount": zod.union([zod.literal(1),zod.literal(2)]),
+  "currentUserVoted": zod.boolean(),
+  "eligibleRoles": zod.array(zod.enum(['owner', 'admin']))
 }),zod.null()]),
   "createdAt": zod.coerce.date()
 }),

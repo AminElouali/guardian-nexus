@@ -19,7 +19,11 @@ export type WorkspaceRulesEditorProps = {
     profileId: WorkspaceActionRuleProfile["id"],
     refundLimitCents: number,
   ) => Promise<unknown>;
-  onSaveRuleDraft: (actionType: string, rules: WorkspaceActionRule[]) => Promise<unknown>;
+  onSaveRuleDraft: (
+    actionType: string,
+    rules: WorkspaceActionRule[],
+    approvalPolicy?: { amountThresholdCents: number },
+  ) => Promise<unknown>;
   onActivateRuleDraft: (actionType: string) => Promise<unknown>;
   onRollbackRule: (actionType: string, version: number) => Promise<unknown>;
   onSimulateRule: (
@@ -418,7 +422,15 @@ export function WorkspaceRulesEditor({
     setBusy(action.actionType);
     setMessage("");
     try {
-      await onSaveRuleDraft(action.actionType, allRules.filter((rule) => chosen.has(rule.id)));
+      await onSaveRuleDraft(
+        action.actionType,
+        allRules.filter((rule) => chosen.has(rule.id)),
+        action.draftApprovalPolicy ??
+          action.activeApprovalPolicy ??
+          (action.approvalAmountField
+            ? { amountThresholdCents: DEFAULT_REFUND_LIMIT_CENTS }
+            : undefined),
+      );
       setMessage(`Borrador guardado para ${action.label}. La versión activa no cambia.`);
     } catch {
       setMessage(`No se pudo guardar el borrador de ${action.label}. La versión activa no ha cambiado.`);
@@ -650,11 +662,11 @@ export function WorkspaceRulesEditor({
         actions={actions}
         canManage={canManage}
         busy={!!busy}
-        onSave={async (actionType, rules) => {
+        onSave={async (actionType, rules, approvalPolicy) => {
           setBusy(actionType);
           setMessage("");
           try {
-            await onSaveRuleDraft(actionType, rules);
+            await onSaveRuleDraft(actionType, rules, approvalPolicy);
           } finally {
             setBusy("");
           }

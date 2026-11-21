@@ -183,6 +183,7 @@ async function main(): Promise<void> {
     const runId = randomUUID();
     const requesterId = `demo-mcp-requester-${runId}`;
     const approverId = `demo-mcp-approver-${runId}`;
+    const secondApproverId = `demo-mcp-second-approver-${runId}`;
     const workspaceName = `DEMO MCP sintética ${runId.slice(0, 8)}`;
     const workspaceSeed = await fixturePool.connect();
     let workspaceId = "";
@@ -198,8 +199,8 @@ async function main(): Promise<void> {
       if (!workspaceId) fail("seed_demo_workspace", "workspace_insert_failed");
       await workspaceSeed.query(
         `INSERT INTO public.workspace_memberships (workspace_id, user_id, role)
-         VALUES ($1, $2, 'owner'), ($1, $3, 'admin')`,
-        [workspaceId, requesterId, approverId],
+         VALUES ($1, $2, 'owner'), ($1, $3, 'admin'), ($1, $4, 'admin')`,
+        [workspaceId, requesterId, approverId, secondApproverId],
       );
       await workspaceSeed.query("COMMIT");
     } catch (error) {
@@ -217,7 +218,11 @@ async function main(): Promise<void> {
     }
     step(`2/12 — espacio de demostración creado con solicitante sintético y aprobador admin distinto (${workspaceId.slice(0, 8)}…).`);
 
-    const allowedIdentities = new Set([requesterId, approverId]);
+    const allowedIdentities = new Set([
+      requesterId,
+      approverId,
+      secondApproverId,
+    ]);
     const demoAuth: RequestHandler = (request, response, next) => {
       const identity = request.get("x-guardian-demo-identity");
       if (!identity || !allowedIdentities.has(identity)) {
@@ -707,6 +712,122 @@ async function main(): Promise<void> {
     }
     step("10/12 — el reintento ejecutó una vez; el texto trampa volvió como dato; la repetición fue idempotente y un segundo consumo del recibo se rechazó.");
 
+    const bankRulePath =
+      `/api/workspaces/${workspaceId}/action-rules/guardian.synthetic.finance.bank-change.v1`;
+    await requireStatus(
+      await humanRequest(
+        requesterId,
+        `${bankRulePath}/draft`,
+        "PUT",
+        {
+          version: 1,
+          rules: [{
+            id: "demo-bank-change-two-person",
+            decision: "require_approval",
+            when: {},
+          }],
+        },
+      ),
+      201,
+      "bank_rule_draft",
+    );
+    await requireStatus(
+      await humanRequest(
+        requesterId,
+        `${bankRulePath}/activate`,
+        "POST",
+      ),
+      200,
+      "bank_rule_activate",
+    );
+    const bankProposal = apiZod.CreateWorkspaceGenericActionProposalResponse.parse(
+      await requireStatus(
+        await humanRequest(
+          approverId,
+          `/api/workspaces/${workspaceId}/ai-security-assessments/action-proposals`,
+          "POST",
+          {
+            actionType: "guardian.synthetic.finance.bank-change.v1",
+            arguments: {
+              account_id: "LAB-ACCOUNT-SYNTH-42",
+              new_iban: "DE00LAB1234567890ABCDEF",
+            },
+            idempotencyKey: `demo-bank-change-${runId}`,
+          },
+        ),
+        201,
+        "bank_change_proposal",
+      ),
+    );
+    const bankApproval = bankProposal.approval;
+    if (!bankApproval) fail("bank_change_proposal", "approval_missing");
+    const bankDecisionPath =
+      `/api/workspaces/${workspaceId}/ai-security-assessments/approvals/${bankApproval.id}/decision`;
+    const firstBankVote = apiZod.DecideWorkspaceAiAssessmentApprovalResponse.parse(
+      await requireStatus(
+        await humanRequest(
+          requesterId,
+          bankDecisionPath,
+          "POST",
+          {
+            decision: "approve",
+            proposalBindingSha256: bankApproval.proposalBindingSha256,
+          },
+        ),
+        200,
+        "first_bank_approval",
+      ),
+    );
+    if (
+      firstBankVote.receipt !== null ||
+      firstBankVote.approval.approvalProgress?.approvedCount !== 1 ||
+      firstBankVote.approval.approvalProgress?.requiredCount !== 2
+    ) {
+      fail("first_bank_approval", "receipt_issued_before_two_people");
+    }
+    const sameBankApproverRetry =
+      apiZod.DecideWorkspaceAiAssessmentApprovalResponse.parse(
+        await requireStatus(
+          await humanRequest(
+            requesterId,
+            bankDecisionPath,
+            "POST",
+            {
+              decision: "approve",
+              proposalBindingSha256: bankApproval.proposalBindingSha256,
+            },
+          ),
+          200,
+          "same_bank_approver_retry",
+        ),
+      );
+    if (
+      sameBankApproverRetry.receipt !== null ||
+      sameBankApproverRetry.approval.approvalProgress?.approvedCount !== 1
+    ) {
+      fail("same_bank_approver_retry", "same_person_counted_twice");
+    }
+    const finalBankVote =
+      apiZod.DecideWorkspaceAiAssessmentApprovalResponse.parse(
+        await requireStatus(
+          await humanRequest(
+            secondApproverId,
+            bankDecisionPath,
+            "POST",
+            {
+              decision: "approve",
+              proposalBindingSha256: bankApproval.proposalBindingSha256,
+            },
+          ),
+          200,
+          "second_bank_approval",
+        ),
+      );
+    if (!finalBankVote.receipt) {
+      fail("second_bank_approval", "signed_receipt_missing");
+    }
+    step("11/13 — cambio bancario sintético: el primer voto no emitió recibo; repetirlo no contó otra vez; una segunda persona distinta completó la aprobación.");
+
     const exportBody = apiZod.ExportWorkspaceApprovalLedgerBundleResponse.parse(
       await requireStatus(
         await humanRequest(
@@ -739,13 +860,13 @@ async function main(): Promise<void> {
       [workspaceId],
     );
     if (
-      stored.rows[0]?.receipts !== "1" ||
-      stored.rows[0]?.events !== "2" ||
+      stored.rows[0]?.receipts !== "2" ||
+      stored.rows[0]?.events !== "4" ||
       Number(stored.rows[0]?.audit_events) < 5
     ) {
       fail("persisted_evidence", "expected_receipt_ledger_or_audit_rows_missing");
     }
-    step(`11/12 — recibo y cadena verificados (${exportBody.events.length} eventos); tabla de recibos: ${stored.rows[0]!.receipts}, ledger: ${stored.rows[0]!.events}, auditoría: ${stored.rows[0]!.audit_events}.`);
+    step(`12/13 — recibos y cadena verificados (${exportBody.events.length} eventos); tabla de recibos: ${stored.rows[0]!.receipts}, ledger: ${stored.rows[0]!.events}, auditoría: ${stored.rows[0]!.audit_events}.`);
 
     const revokedAgentBody = apiZod.CreateWorkspaceAgentResponse.parse(
       await requireStatus(
@@ -773,7 +894,7 @@ async function main(): Promise<void> {
       fail("revoked_agent", `http_${revokedCall.status}`);
     }
 
-    step("12/12 — credencial falsa y credencial revocada rechazadas; no hubo conexiones externas ni acciones financieras reales.");
+    step("13/13 — credencial falsa y credencial revocada rechazadas; no hubo conexiones externas ni acciones financieras reales.");
     step(`Workspace DEMO: ${workspaceId}. Las identidades son registros sintéticos del harness loopback, no cuentas Clerk ni inicios de sesión del preview; no se modificó el flujo normal de autenticación.`);
   } finally {
     if (server?.listening) {

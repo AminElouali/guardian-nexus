@@ -189,6 +189,9 @@ export async function listWorkspaceActionRuleStates(
           id: item.id,
           version: item.version,
           rules: valid.ok ? valid.document.rules : [],
+          approvalPolicy: valid.ok
+            ? valid.document.approvalPolicy ?? null
+            : null,
           createdByUserId: item.createdByUserId,
           createdAt: item.createdAt.toISOString(),
           isActive: item.version === head?.activeVersion,
@@ -198,10 +201,22 @@ export async function listWorkspaceActionRuleStates(
     const activeVersion = actionVersions.find((item) => item.isActive);
     const draftVersion = actionVersions.find((item) => item.isDraft);
     const activeDoc = activeVersion
-      ? { version: 1 as const, rules: activeVersion.rules }
+      ? {
+          version: 1 as const,
+          rules: activeVersion.rules,
+          ...(activeVersion.approvalPolicy
+            ? { approvalPolicy: activeVersion.approvalPolicy }
+            : {}),
+        }
       : null;
     const draftDoc = draftVersion
-      ? { version: 1 as const, rules: draftVersion.rules }
+      ? {
+          version: 1 as const,
+          rules: draftVersion.rules,
+          ...(draftVersion.approvalPolicy
+            ? { approvalPolicy: draftVersion.approvalPolicy }
+            : {}),
+        }
       : null;
     const warningDetails = [
       ...(activeDoc
@@ -219,6 +234,10 @@ export async function listWorkspaceActionRuleStates(
       riskClass: definition.riskClass,
       riskCategories: [...definition.riskCategories],
       requiresIndependentApprover: definition.requiresIndependentApprover,
+      minimumApproverCount: definition.minimumApproverCount ?? 1,
+      approvalAmountField: definition.approvalAmountField ?? null,
+      activeApprovalPolicy: activeVersion?.approvalPolicy ?? null,
+      draftApprovalPolicy: draftVersion?.approvalPolicy ?? null,
       argumentFields: Object.entries(definition.argumentSchema.properties).map(
         ([name, property]) => ({
           name,

@@ -3994,6 +3994,14 @@ export const GenericActionGatewayEvidenceEvidenceVersion = {
   NUMBER_2: 2,
 } as const;
 
+export interface WorkspaceApprovalPolicy {
+  /**
+     * @minimum 1
+     * @maximum 1000000
+     */
+  amountThresholdCents: number;
+}
+
 export type WorkspaceActionRuleDecision = typeof WorkspaceActionRuleDecision[keyof typeof WorkspaceActionRuleDecision];
 
 
@@ -4051,6 +4059,7 @@ export interface WorkspaceActionRule {
 
 export interface WorkspaceActionRuleDocumentInput {
   version: 1;
+  approvalPolicy?: WorkspaceApprovalPolicy;
   /** @maxItems 50 */
   rules: WorkspaceActionRule[];
 }
@@ -4404,6 +4413,33 @@ export const AiAssessmentApprovalSimulationResultCode = {
   synthetic_refund_approved_in_clone: 'synthetic_refund_approved_in_clone',
 } as const;
 
+export type AiAssessmentApprovalApprovalProgressRequiredCount = typeof AiAssessmentApprovalApprovalProgressRequiredCount[keyof typeof AiAssessmentApprovalApprovalProgressRequiredCount];
+
+
+export const AiAssessmentApprovalApprovalProgressRequiredCount = {
+  NUMBER_1: 1,
+  NUMBER_2: 2,
+} as const;
+
+export type AiAssessmentApprovalApprovalProgressEligibleRolesItem = typeof AiAssessmentApprovalApprovalProgressEligibleRolesItem[keyof typeof AiAssessmentApprovalApprovalProgressEligibleRolesItem];
+
+
+export const AiAssessmentApprovalApprovalProgressEligibleRolesItem = {
+  owner: 'owner',
+  admin: 'admin',
+} as const;
+
+export type AiAssessmentApprovalApprovalProgress = {
+  /**
+     * @minimum 0
+     * @maximum 2
+     */
+  approvedCount: number;
+  requiredCount: AiAssessmentApprovalApprovalProgressRequiredCount;
+  currentUserVoted: boolean;
+  eligibleRoles: AiAssessmentApprovalApprovalProgressEligibleRolesItem[];
+} | null;
+
 export interface GenericActionProposalDetails {
   agentId: string;
   actionType: string;
@@ -4465,6 +4501,7 @@ export interface AiAssessmentApproval {
      */
   replayBindingSha256: string | null;
   proposalDetails: GenericActionProposalDetails | null;
+  approvalProgress: AiAssessmentApprovalApprovalProgress;
   createdAt: string;
 }
 
@@ -4545,6 +4582,14 @@ export const GenericActionTemplateAllowedApproverRolesItem = {
   admin: 'admin',
 } as const;
 
+export type GenericActionTemplateMinimumApproverCount = typeof GenericActionTemplateMinimumApproverCount[keyof typeof GenericActionTemplateMinimumApproverCount];
+
+
+export const GenericActionTemplateMinimumApproverCount = {
+  NUMBER_1: 1,
+  NUMBER_2: 2,
+} as const;
+
 export type GenericActionArgumentFieldType = typeof GenericActionArgumentFieldType[keyof typeof GenericActionArgumentFieldType];
 
 
@@ -4593,6 +4638,12 @@ export interface GenericActionTemplate {
   /** @minimum 1 */
   expiryMinutes: number;
   requiresIndependentApprover: boolean;
+  minimumApproverCount: GenericActionTemplateMinimumApproverCount;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  approvalAmountField: string | null;
   /** @nullable */
   syntheticTemplateText: string | null;
   argumentFields: GenericActionArgumentField[];
@@ -4609,6 +4660,7 @@ export interface WorkspaceActionRuleVersion {
   /** @minimum 1 */
   version: number;
   rules: WorkspaceActionRule[];
+  approvalPolicy: WorkspaceApprovalPolicy | null;
   createdByUserId: string;
   createdAt: string;
   isActive: boolean;
@@ -4639,6 +4691,14 @@ export const WorkspaceActionRuleStateRiskCategoriesItem = {
   multiagent: 'multiagent',
 } as const;
 
+export type WorkspaceActionRuleStateMinimumApproverCount = typeof WorkspaceActionRuleStateMinimumApproverCount[keyof typeof WorkspaceActionRuleStateMinimumApproverCount];
+
+
+export const WorkspaceActionRuleStateMinimumApproverCount = {
+  NUMBER_1: 1,
+  NUMBER_2: 2,
+} as const;
+
 export type WorkspaceActionRuleStateArgumentFieldsItemType = typeof WorkspaceActionRuleStateArgumentFieldsItemType[keyof typeof WorkspaceActionRuleStateArgumentFieldsItemType];
 
 
@@ -4662,6 +4722,14 @@ export interface WorkspaceActionRuleState {
   riskClass: WorkspaceActionRuleStateRiskClass;
   riskCategories: WorkspaceActionRuleStateRiskCategoriesItem[];
   requiresIndependentApprover: boolean;
+  minimumApproverCount: WorkspaceActionRuleStateMinimumApproverCount;
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  approvalAmountField: string | null;
+  activeApprovalPolicy: WorkspaceApprovalPolicy | null;
+  draftApprovalPolicy: WorkspaceApprovalPolicy | null;
   argumentFields: WorkspaceActionRuleStateArgumentFieldsItem[];
   /** @nullable */
   activeVersionId: string | null;

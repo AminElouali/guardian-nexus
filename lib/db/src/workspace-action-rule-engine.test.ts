@@ -8,6 +8,8 @@ import {
   getWorkspaceRuleWarnings,
   getStarterWorkspaceRuleTemplates,
   MAX_REFUND_LIMIT_CENTS,
+  MAX_APPROVAL_TIER_THRESHOLD_CENTS,
+  getWorkspaceActionApprovalRequirements,
   validateWorkspaceActionRuleDocument,
 } from "./workspace-action-rule-engine";
 
@@ -387,4 +389,87 @@ test("a rule condition with unavailable trusted context never allows", () => {
   });
   assert.equal(result.decision, "require_approval");
   assert.equal(result.reasonCode, "workspace_rule_condition_unavailable");
+});
+
+test("approval tiers use the versioned threshold and stricter catalog requirements", () => {
+  const parsed = validateWorkspaceActionRuleDocument(
+    "guardian.synthetic.support.refund.v1",
+    {
+      version: 1,
+      approvalPolicy: { amountThresholdCents: 5000 },
+      rules: [],
+    },
+  );
+  assert.equal(parsed.ok, true);
+  if (!parsed.ok) return;
+
+  assert.deepEqual(
+    getWorkspaceActionApprovalRequirements(
+      "guardian.synthetic.support.refund.v1",
+      { amount_cents: 5000 },
+      parsed.document,
+    ),
+    { requiredApprovers: 1, allowedApproverRoles: ["admin"] },
+  );
+  assert.deepEqual(
+    getWorkspaceActionApprovalRequirements(
+      "guardian.synthetic.support.refund.v1",
+      { amount_cents: 5001 },
+      parsed.document,
+    ),
+    { requiredApprovers: 1, allowedApproverRoles: ["owner"] },
+  );
+  assert.deepEqual(
+    getWorkspaceActionApprovalRequirements(
+      "guardian.synthetic.finance.bank-change.v1",
+      {},
+      null,
+    ),
+    { requiredApprovers: 2, allowedApproverRoles: ["owner", "admin"] },
+  );
+  assert.deepEqual(
+    getWorkspaceActionApprovalRequirements(
+      "guardian.synthetic.support.refund.v1",
+      { amount_cents: 5001 },
+      null,
+    ),
+    { requiredApprovers: 1, allowedApproverRoles: ["owner"] },
+    "an older or unconfigured rule document still defaults the high tier to owner",
+  );
+});
+
+test("approval tier documents reject missing, malformed, and excessive thresholds", () => {
+  const action = "guardian.synthetic.support.refund.v1";
+  assert.equal(
+    validateWorkspaceActionRuleDocument(action, {
+      version: 1,
+      approvalPolicy: { amountThresholdCents: 0 },
+      rules: [],
+    }).ok,
+    false,
+  );
+  assert.equal(
+    validateWorkspaceActionRuleDocument(action, {
+      version: 1,
+      approvalPolicy: { amountThresholdCents: MAX_APPROVAL_TIER_THRESHOLD_CENTS + 1 },
+      rules: [],
+    }).ok,
+    false,
+  );
+  assert.equal(
+    validateWorkspaceActionRuleDocument("guardian.email.send.external.v1", {
+      version: 1,
+      approvalPolicy: { amountThresholdCents: 5000 },
+      rules: [],
+    }).ok,
+    false,
+  );
+  assert.equal(
+    getWorkspaceActionApprovalRequirements(action, {}, {
+      version: 1,
+      approvalPolicy: { amountThresholdCents: 5000 },
+      rules: [],
+    }),
+    null,
+  );
 });
