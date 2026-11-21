@@ -13291,7 +13291,7 @@ export const ListWorkspaceActionRulesResponse = zod.object({
   "label": zod.string(),
   "description": zod.string(),
   "riskClass": zod.enum(['low', 'medium', 'high']),
-  "riskCategories": zod.array(zod.enum(['money', 'internal_email', 'external_email', 'customer_data', 'infrastructure'])),
+  "riskCategories": zod.array(zod.enum(['money', 'internal_email', 'external_email', 'customer_data', 'infrastructure', 'data', 'code', 'web', 'multiagent'])),
   "activeVersionId": zod.uuid().nullable(),
   "draftVersionId": zod.uuid().nullable(),
   "activeRules": zod.array(zod.object({

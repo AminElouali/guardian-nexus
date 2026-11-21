@@ -1665,7 +1665,10 @@ test(
         finalSupportState?.history.map((version) => version.version).sort(),
         [1, 2, 3],
       );
-      assert.equal(finalRulesData.starterTemplates.length, 4);
+      assert.deepEqual(
+        finalRulesData.starterTemplates.map((template) => template.actionType),
+        APPROVAL_ACTION_CATALOG.map((action) => action.actionType),
+      );
       assert.equal(
         finalRulesData.starterTemplates.find(
           (template) => template.actionType === supportAction,
@@ -1890,7 +1893,10 @@ test(
       };
       assert.equal(createdProfile.profileId, "balanced-v1");
       assert.equal(createdProfile.refundLimitCents, 6500);
-      assert.equal(createdProfile.versions.length, 4);
+      assert.deepEqual(
+        createdProfile.versions.map((version) => version.actionType),
+        APPROVAL_ACTION_CATALOG.map((action) => action.actionType),
+      );
       assert.ok(createdProfile.versions.every((version) => version.active === false));
 
       const refundAction = "guardian.synthetic.support.refund.v1";
@@ -5338,6 +5344,28 @@ test(
         );
         assert.equal(noRulesHeads.rows[0]?.total, "0");
         await saveRefundRule(refundSplitRulePath, 5_000);
+        const supportAccountRulePath =
+          `/api/workspaces/${workspaceMcpRefundSplit}/action-rules/guardian.support.customer_account.close.v1`;
+        const supportAccountRule = await request(
+          workspaceMcpRefundSplitOwner,
+          `${supportAccountRulePath}/draft`,
+          "PUT",
+          {
+            version: 1,
+            rules: [{
+              id: "support.account-close.approval.v1",
+              decision: "require_approval",
+              when: {},
+            }],
+          },
+        );
+        assert.equal(supportAccountRule.status, 201);
+        const supportAccountActivation = await request(
+          workspaceMcpRefundSplitOwner,
+          `${supportAccountRulePath}/activate`,
+          "POST",
+        );
+        assert.equal(supportAccountActivation.status, 200);
         const initializedNotification = await mcpRequest(
           agentCredential,
           workspaceMcp,
@@ -6298,7 +6326,7 @@ test(
             },
             {
               id: "soporte: cerrar cuenta requiere aprobación",
-              provider: "valid",
+              provider: "refund-split",
               prompt: {
                 tool: "close_customer_account",
                 args: {
@@ -6438,7 +6466,7 @@ test(
         });
         assert.equal(
           promptfooRedteam.attacks,
-          26,
+          27,
           "the Promptfoo corpus launches every configured deterministic attack",
         );
         assert.equal(promptfooRedteam.blocked, 24);

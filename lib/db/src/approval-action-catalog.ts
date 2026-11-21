@@ -872,7 +872,7 @@ export const APPROVAL_ACTION_CATALOG: readonly ApprovalActionDefinition[] = [
     defaultDecision: "deny",
     allowedApproverRoles: ["owner", "admin"],
     receiptExpirySeconds: 300,
-    requiresIndependentApprover: false,
+    requiresIndependentApprover: true,
     argumentSchema: {
       type: "object",
       additionalProperties: false,

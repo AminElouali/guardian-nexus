@@ -2263,7 +2263,18 @@ components:
           type: array
           items:
             type: string
-            enum: [money, internal_email, external_email, customer_data, infrastructure]
+            enum:
+              [
+                money,
+                internal_email,
+                external_email,
+                customer_data,
+                infrastructure,
+                data,
+                code,
+                web,
+                multiagent,
+              ]
         activeVersionId: { type: ["string", "null"], format: uuid }
         draftVersionId: { type: ["string", "null"], format: uuid }
         activeRules:

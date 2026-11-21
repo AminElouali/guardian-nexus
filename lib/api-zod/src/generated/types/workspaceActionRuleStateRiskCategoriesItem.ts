@@ -15,4 +15,8 @@ export const WorkspaceActionRuleStateRiskCategoriesItem = {
   external_email: 'external_email',
   customer_data: 'customer_data',
   infrastructure: 'infrastructure',
+  data: 'data',
+  code: 'code',
+  web: 'web',
+  multiagent: 'multiagent',
 } as const;

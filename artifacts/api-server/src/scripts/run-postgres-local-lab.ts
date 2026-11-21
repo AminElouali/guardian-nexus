@@ -162,6 +162,21 @@ type VersionedMigrationAuditReport = {
   migration0007Idempotent?: boolean;
   migration0008LegacyStateReplaced?: boolean;
   migration0008Idempotent?: boolean;
+  migration0008PreconditionMatches?: {
+    tables: boolean;
+    columns: boolean;
+    indexes: boolean;
+    constraints: boolean;
+    policies: boolean;
+    roles: boolean;
+    privilegeMatrix: boolean;
+  };
+  migration0008PreconditionConstraintDifferences?: Array<{
+    constraintName: string;
+    tableName: string;
+    expected: RlsCatalogPhaseSnapshot["constraints"][number] | null;
+    actual: RlsCatalogPhaseSnapshot["constraints"][number] | null;
+  }>;
   migration0009Idempotent?: boolean;
   migration0009UnexpectedConstraintRejected?: boolean;
   inventoryMatchesDrizzle?: {
@@ -1379,27 +1394,33 @@ async function workspaceMembershipHelperContractValid(
   );
 }
 
-async function restoreCurrentApprovalActionRefConstraint(
+async function restoreApprovalActionRefConstraint(
   client: InstanceType<typeof Client>,
+  version: "migration0006" | "current",
 ): Promise<void> {
-  const { current } = approvalActionRefMigrationValues();
-  const currentExpression = approvalActionRefConstraintExpression(current);
+  const values = approvalActionRefMigrationValues();
+  const refs = version === "migration0006" ? values.previous : values.current;
+  const expression = approvalActionRefConstraintExpression(refs);
   await client.query("BEGIN");
   try {
     await client.query(
       `ALTER TABLE public.ai_assessment_approval_requests
        DROP CONSTRAINT ai_assessment_approval_action_ref_check,
        ADD CONSTRAINT ai_assessment_approval_action_ref_check
-       CHECK (${currentExpression})`,
+       CHECK (${expression})`,
     );
     await client.query("COMMIT");
   } catch {
     await client.query("ROLLBACK").catch(() => undefined);
-    throw new Error("versioned_migration_current_constraint_restore_failed");
+    throw new Error(`versioned_migration_${version}_constraint_restore_failed`);
   }
   const restored = await readApprovalActionRefConstraintState(client);
-  if (!restored?.isCurrent) {
-    throw new Error("versioned_migration_current_constraint_restore_failed");
+  const matchesExpected =
+    version === "migration0006"
+      ? restored?.isMigration0006Current
+      : restored?.isCurrent;
+  if (!matchesExpected) {
+    throw new Error(`versioned_migration_${version}_constraint_restore_failed`);
   }
 }
 
@@ -1431,7 +1452,7 @@ async function verifyMigration0006RejectsUnexpectedConstraint(
     rejected = error instanceof Error &&
       error.message === "versioned_migration_sql_failed:23514";
   }
-  await restoreCurrentApprovalActionRefConstraint(client);
+  await restoreApprovalActionRefConstraint(client, "migration0006");
   return rejected;
 }
 
@@ -1463,7 +1484,7 @@ async function verifyMigration0009RejectsUnexpectedConstraint(
     rejected = error instanceof Error &&
       error.message === "versioned_migration_sql_failed:23514";
   }
-  await restoreCurrentApprovalActionRefConstraint(client);
+  await restoreApprovalActionRefConstraint(client, "current");
   return rejected;
 }
 
@@ -1803,13 +1824,51 @@ async function runVersionedMigrationAudit(input: {
           tableNames,
           roleNames,
         );
+        report.migration0008PreconditionMatches = compareCatalogInventories(
+          drizzlePre0008Projection,
+          drizzlePre0008GrantProjection,
+          beforePhase,
+          beforeGrants.snapshot,
+        );
+        const expectedConstraints = canonicalConstraints(
+          drizzlePre0008Projection.constraints,
+        );
+        const actualConstraints = canonicalConstraints(
+          beforePhase.constraints,
+        );
+        const expectedByConstraint = new Map(
+          expectedConstraints.map((constraint) => [
+            `${constraint.tableName}.${constraint.constraintName}`,
+            constraint,
+          ]),
+        );
+        const actualByConstraint = new Map(
+          actualConstraints.map((constraint) => [
+            `${constraint.tableName}.${constraint.constraintName}`,
+            constraint,
+          ]),
+        );
+        report.migration0008PreconditionConstraintDifferences = [
+          ...new Set([
+            ...expectedByConstraint.keys(),
+            ...actualByConstraint.keys(),
+          ]),
+        ]
+          .filter(
+            (key) =>
+              !sameValue(
+                expectedByConstraint.get(key) ?? null,
+                actualByConstraint.get(key) ?? null,
+              ),
+          )
+          .map((key) => ({
+            constraintName: key.slice(key.indexOf(".") + 1),
+            tableName: key.slice(0, key.indexOf(".")),
+            expected: expectedByConstraint.get(key) ?? null,
+            actual: actualByConstraint.get(key) ?? null,
+          }));
         legacyAuditStateMatches = Object.values(
-          compareCatalogInventories(
-            drizzlePre0008Projection,
-            drizzlePre0008GrantProjection,
-            beforePhase,
-            beforeGrants.snapshot,
-          ),
+          report.migration0008PreconditionMatches,
         ).every(Boolean);
         if (!legacyAuditStateMatches) {
           throw new Error("versioned_migration_0008_legacy_state_not_reproduced");
