@@ -27,10 +27,16 @@ import {
 const actions: WorkspaceActionRuleState[] = [
   {
     actionType: "guardian.synthetic.support.refund.v1",
+    service: "support",
     label: "Reembolso sintético",
     description: "Reembolso de laboratorio.",
     riskClass: "high",
     riskCategories: ["money"],
+    requiresIndependentApprover: true,
+    argumentFields: [
+      { name: "ticket_id", type: "text", required: true },
+      { name: "amount_cents", type: "number", required: true },
+    ],
     activeVersionId: "refund-v1",
     draftVersionId: null,
     activeRules: [],
@@ -49,10 +55,16 @@ const actions: WorkspaceActionRuleState[] = [
   },
   {
     actionType: "guardian.synthetic.finance.bank-change.v1",
+    service: "finance",
     label: "Cambio bancario sintético",
     description: "Cambio bancario de prueba.",
     riskClass: "high",
     riskCategories: ["money"],
+    requiresIndependentApprover: true,
+    argumentFields: [
+      { name: "account_id", type: "text", required: true },
+      { name: "new_iban", type: "text", required: true },
+    ],
     activeVersionId: null,
     draftVersionId: null,
     activeRules: [],
@@ -63,10 +75,16 @@ const actions: WorkspaceActionRuleState[] = [
   },
   {
     actionType: "guardian.email.send.external.v1",
+    service: "email",
     label: "Correo externo",
     description: "Envío sintético.",
     riskClass: "high",
     riskCategories: ["external_email"],
+    requiresIndependentApprover: true,
+    argumentFields: [
+      { name: "to", type: "text", required: true },
+      { name: "template_id", type: "text", required: true },
+    ],
     activeVersionId: null,
     draftVersionId: null,
     activeRules: [],
@@ -77,10 +95,19 @@ const actions: WorkspaceActionRuleState[] = [
   },
   {
     actionType: "guardian.support.reply.send.v1",
+    service: "support",
     label: "Respuesta de soporte",
     description: "Respuesta sintética de soporte.",
     riskClass: "medium",
     riskCategories: ["customer_data"],
+    requiresIndependentApprover: true,
+    argumentFields: [
+      { name: "ticket_id", type: "text", required: true },
+      { name: "recipient_email", type: "text", required: true },
+      { name: "recipient_type", type: "text", required: true },
+      { name: "compensation_cents", type: "number", required: true },
+      { name: "template_id", type: "text", required: true },
+    ],
     activeVersionId: null,
     draftVersionId: null,
     activeRules: [],
@@ -284,7 +311,7 @@ test("history comparison coverage explains excluded and limit-skipped proposals"
   };
   assert.equal(
     formatHistoryImpactCoverage(mixed),
-    "Calculado con 40 de 52 acciones; 12 no se pueden re-evaluar porque no hay argumentos verificables guardados.",
+    "Calculado con 40 de 52 acciones; 12 no se pueden re-evaluar porque faltan argumentos o contexto histórico verificable.",
   );
   assert.equal(historyImpactEmptyMessage(mixed), null);
 
@@ -322,5 +349,5 @@ test("history comparison empty states distinguish no proposals from missing stor
     totalProposalCount: 3,
     notReevaluableCount: 3,
   };
-  assert.match(historyImpactEmptyMessage(noArguments) ?? "", /no se guardó contenido verificable/);
+  assert.match(historyImpactEmptyMessage(noArguments) ?? "", /falta contenido o contexto histórico verificable/);
 });

@@ -66,6 +66,17 @@
 .wre-status { margin: 12px 0 0; padding: 11px 13px; border-left: 3px solid #367552; background: #edf4ec; color: #284c37; font-size: 12px; line-height: 1.5; }
 .wre-readonly-note { margin: 0; padding: 12px 14px; border-left: 3px solid #789282; color: #435b4e; background: #eef2eb; font-size: 12px; line-height: 1.5; }
 .wre-rules { margin-top: 38px; }
+.wre-condition-editor { margin-top: 38px; }
+.wre-condition-card { display: grid; gap: 13px; padding: 16px; border: 1px solid var(--wre-line); border-radius: 7px; background: var(--wre-card); }
+.wre-condition-card > label, .wre-condition-row > label { display: flex; min-width: 0; flex-direction: column; gap: 5px; color: #35483f; font-size: 12px; font-weight: 700; }
+.wre-condition-card select, .wre-condition-card input { width: 100%; min-width: 0; min-height: 46px; padding: 0 11px; border: 1px solid #8f9f95; border-radius: 5px; color: #203b31; background: #fffdf8; }
+.wre-condition-list { display: grid; gap: 10px; }
+.wre-condition-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); align-items: end; gap: 10px; padding: 12px; border: 1px solid #e2e1d8; border-radius: 6px; background: #f8f7f1; }
+.wre-condition-remove, .wre-condition-add, .wre-condition-save { min-height: 44px; padding: 0 13px; border: 1px solid #82988b; border-radius: 4px; color: #315640; background: #f8faf5; font-size: 11px; font-weight: 700; }
+.wre-condition-add { justify-self: start; }
+.wre-condition-save { justify-self: end; border-color: #1e5c48; color: #fff; background: #28745b; }
+.wre-condition-card :focus-visible { outline: 3px solid #135f49; outline-offset: 3px; }
+.wre-condition-card input { font-variant-numeric: tabular-nums; }
 .wre-group { margin-top: 22px; }
 .wre-group-head { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; }
 .wre-group-head > span { color: #658273; font: 10px var(--font-mono, monospace); }

@@ -28,7 +28,11 @@ const draftDocument = {
   rules: [{ id: "block-support", decision: "deny" as const, when: {} }],
 };
 
-function validProposalRow(): WorkspaceRuleHistoryProposalRow {
+function validProposalRow(
+  ruleEvaluationContext?: Parameters<
+    typeof createWorkspaceRuleActionEvidence
+  >[0]["ruleEvaluationContext"],
+): WorkspaceRuleHistoryProposalRow {
   const display = genericActionDisplay(supportAction, supportArgs);
   assert.ok(display);
   const evidence = createWorkspaceRuleActionEvidence({
@@ -39,6 +43,7 @@ function validProposalRow(): WorkspaceRuleHistoryProposalRow {
     ruleId: "review-support",
     ruleVersionId: "22222222-2222-4222-8222-222222222222",
     ruleDocument: activeDocument,
+    ...(ruleEvaluationContext ? { ruleEvaluationContext } : {}),
     ...display,
   });
   assert.ok(evidence);
@@ -161,6 +166,80 @@ test("empty history returns no misleading decision buckets", () => {
   assert.equal(result.activeCounts, null);
   assert.equal(result.draftCounts, null);
   assert.deepEqual(result.changes, []);
+});
+
+test("history does not reconstruct action-volume context for earlier time windows", () => {
+  const result = summarizeWorkspaceRuleHistoryImpact({
+    workspaceId,
+    actionType: supportAction,
+    totalProposalCount: 1,
+    rows: [validProposalRow()],
+    activeVersionId: "33333333-3333-4333-8333-333333333333",
+    activeDocument: {
+      version: 1,
+      rules: [{
+        id: "volume-review",
+        decision: "require_approval",
+        when: {
+          all: [{
+            field: "context.action_count",
+            op: "gt",
+            value: 10,
+            windowSeconds: 3600,
+          }],
+        },
+      }],
+    },
+    draftVersionId: "44444444-4444-4444-8444-444444444444",
+    draftDocument: {
+      version: 1,
+      rules: [{ id: "fallback", decision: "deny", when: {} }],
+    },
+  });
+
+  assert.equal(result.evaluatedCount, 0);
+  assert.equal(result.notReevaluableCount, 1);
+  assert.equal(result.activeCounts, null);
+  assert.equal(result.draftCounts, null);
+});
+
+test("history reuses verified action-volume context stored with the proposal evidence", () => {
+  const result = summarizeWorkspaceRuleHistoryImpact({
+    workspaceId,
+    actionType: supportAction,
+    totalProposalCount: 1,
+    rows: [validProposalRow({
+      dataSensitivity: "normal",
+      environment: "test",
+      actionCountsByWindow: { 3600: 1 },
+    })],
+    activeVersionId: "33333333-3333-4333-8333-333333333333",
+    activeDocument: {
+      version: 1,
+      rules: [{
+        id: "volume-review",
+        decision: "require_approval",
+        when: {
+          all: [{
+            field: "context.action_count",
+            op: "gt",
+            value: 0,
+            windowSeconds: 3600,
+          }],
+        },
+      }],
+    },
+    draftVersionId: "44444444-4444-4444-8444-444444444444",
+    draftDocument: {
+      version: 1,
+      rules: [{ id: "fallback", decision: "deny", when: {} }],
+    },
+  });
+
+  assert.equal(result.evaluatedCount, 1);
+  assert.equal(result.notReevaluableCount, 0);
+  assert.deepEqual(result.activeCounts, { allow: 0, requireApproval: 1, deny: 0 });
+  assert.deepEqual(result.draftCounts, { allow: 0, requireApproval: 0, deny: 1 });
 });
 
 test("history impact reports proposals not processed past the fixed cap as partial", () => {

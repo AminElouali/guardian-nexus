@@ -46,8 +46,8 @@ El catálogo de 30 acciones clasifica cada acción con uno o más de estos riesg
 leer, escribir dentro, enviar fuera, mover dinero, dar permisos, borrar o
 exportar, ejecutar o desplegar, y comprometer a la empresa. Las herramientas
 también tienen etiquetas de sensibilidad (`normal` o `sensible`) y volumen. Son
-ejemplos iniciales, no un catálogo completo para todas las empresas; las
-acciones y condiciones configurables por cliente siguen **PROYECTADAS**.
+ejemplos iniciales, no un catálogo completo para todas las empresas. El
+catálogo es fijo; crear nuevas acciones sigue **PROYECTADO**.
 
 Los argumentos deben cumplir exactamente el esquema recibido en `tools/list`. Campos adicionales, tipos incorrectos, nombres desconocidos o JSON ambiguo se rechazan.
 
@@ -71,7 +71,11 @@ Si una acción protegida ya se completó y el agente reintenta la misma llamada 
 
 Las plantillas **Prudente**, **Equilibrada** y **Solo lectura** crean borradores; una persona autorizada debe activarlos. El catálogo clasifica acciones por su efecto y riesgo, no por el nombre del servicio. Lo no clasificado queda bloqueado. Solo lectura permite únicamente acciones definidas como lectura.
 
-La personalización de dominios permitidos, sensibilidad de datos, cuotas por ventana, entorno de ejecución y aprobaciones dobles o por importe está **PROYECTADA**; no se debe asumir que esos controles están disponibles hoy.
+**IMPLEMENTADO en el laboratorio:** owner/admin puede configurar condiciones versionadas por workspace desde **Reglas → Ajusta una acción**: importe, dominios exactos de confianza, sensibilidad del dato, volumen por minuto/5 minutos/15 minutos/hora/día y entorno. Cada regla tiene una decisión cuando se cumple y una decisión de fallback; Guardar crea un borrador y la activación sigue siendo independiente. El motor del servidor recibe la sensibilidad del catálogo, el entorno de pruebas del destino sintético y el volumen calculado desde auditoría; nunca confía en esos valores si los aporta el agente. Un contexto que no se puede comprobar no concede permiso.
+
+**Límites:** el único entorno disponible es `test`; elegir `production` en una condición no crea ni habilita un conector productivo. Las propuestas nuevas sujetas a volumen guardan en su evidencia v2 el contexto agregado usado, ligado a su hash, para verificarlo y comparar decisiones históricas. Propuestas antiguas que no conservan ese contexto se cuentan como no reevaluables; no se reconstruye desde hashes ni ejemplos.
+
+**PROYECTADO:** registrar acciones nuevas, conectar sistemas reales, medir datos personales dinámicos con un conector fiable, configurar ramas de reglas más complejas y exigir aprobaciones dobles o por importe.
 
 ## Seguridad y límites
 

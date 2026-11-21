@@ -126,7 +126,10 @@ import {
   verifyGenericActionEvidence,
 } from "../lib/generic-action-evidence";
 import { createGenericActionProposalInTransaction } from "../lib/generic-action-proposal-service";
-import { getActiveWorkspaceActionRule } from "../lib/workspace-action-rules";
+import {
+  getActiveWorkspaceActionRule,
+  getWorkspaceActionRuleEvaluationContext,
+} from "../lib/workspace-action-rules";
 import {
   createExternalQwenApprovalEvidence,
   getQwenProviderStatus,
@@ -1343,11 +1346,18 @@ routes.post(
           params.data.workspaceId,
           body.data.actionType,
         );
+        const context = await getWorkspaceActionRuleEvaluationContext(
+          tx,
+          params.data.workspaceId,
+          body.data.actionType,
+          active?.document ?? null,
+        );
         const evaluated = evaluateWorkspaceActionRule({
           actionType: body.data.actionType,
           arguments: body.data.arguments,
           document: active?.document ?? null,
           ruleVersionId: active?.activeVersionId ?? null,
+          context,
         });
         const action = evaluateApprovalAction(
           body.data.actionType,

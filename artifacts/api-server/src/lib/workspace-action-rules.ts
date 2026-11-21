@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { and, desc, eq, max, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, max, sql } from "drizzle-orm";
 import {
   APPROVAL_ACTION_CATALOG,
   evaluateWorkspaceActionRule,
@@ -7,6 +7,7 @@ import {
   getWorkspaceRuleWarnings,
   validateWorkspaceActionRuleDocument,
   type WorkspaceActionRuleDocument,
+  type WorkspaceRuleEvaluationContext,
 } from "@workspace/db";
 import {
   workspaceActionRuleHeadsTable,
@@ -15,6 +16,63 @@ import {
 } from "@workspace/db";
 import type { TenantTransaction } from "./tenant-db";
 import { canonicalApprovalJson } from "./ai-assessment-approval-actions";
+
+const VOLUME_AUDIT_ACTIONS = [
+  "ai_assessment.generic_action_decision",
+  "ai_assessment.generic_action_proposal_requested",
+] as const;
+
+export async function getWorkspaceActionRuleEvaluationContext(
+  tx: TenantTransaction,
+  workspaceId: string,
+  actionType: string,
+  document: WorkspaceActionRuleDocument | null,
+): Promise<WorkspaceRuleEvaluationContext> {
+  const definition = getApprovalActionDefinition(actionType);
+  const windows = new Set<number>();
+  for (const rule of document?.rules ?? []) {
+    for (const condition of [...(rule.when.all ?? []), ...(rule.when.any ?? [])]) {
+      if (
+        condition.field === "context.action_count" &&
+        typeof condition.windowSeconds === "number"
+      ) {
+        windows.add(condition.windowSeconds);
+      }
+    }
+  }
+
+  const actionCountsByWindow: Record<number, number | null> = {};
+  for (const windowSeconds of windows) {
+    const [row] = await tx
+      .select({ total: count() })
+      .from(workspaceAuditEventsTable)
+      .where(
+        and(
+          eq(workspaceAuditEventsTable.workspaceId, workspaceId),
+          inArray(workspaceAuditEventsTable.action, [...VOLUME_AUDIT_ACTIONS]),
+          gte(
+            workspaceAuditEventsTable.createdAt,
+            sql`now() - (${windowSeconds} * interval '1 second')`,
+          ),
+          sql`${workspaceAuditEventsTable.metadata}->>'actionType' = ${actionType}`,
+          sql`${workspaceAuditEventsTable.metadata}->>'actionSha256' ~ '^[a-f0-9]{64}$'`,
+        ),
+      );
+    actionCountsByWindow[windowSeconds] = row?.total ?? 0;
+  }
+
+  return {
+    dataSensitivity: definition
+      ? definition.riskCategories.includes("customer_data")
+        ? "sensitive"
+        : "normal"
+      : null,
+    // Only the registered synthetic adapters exist today. A real environment
+    // is unavailable until a real connector is deliberately registered.
+    environment: definition?.syntheticTemplateText ? "test" : null,
+    actionCountsByWindow,
+  };
+}
 
 function sha256(value: unknown): string {
   return createHash("sha256")
@@ -155,10 +213,23 @@ export async function listWorkspaceActionRuleStates(
     ];
     return {
       actionType: definition.actionType,
+      service: definition.service,
       label: definition.label,
       description: definition.description,
       riskClass: definition.riskClass,
       riskCategories: [...definition.riskCategories],
+      requiresIndependentApprover: definition.requiresIndependentApprover,
+      argumentFields: Object.entries(definition.argumentSchema.properties).map(
+        ([name, property]) => ({
+          name,
+          type: property.type === "integer"
+            ? "number" as const
+            : property.type === "boolean"
+              ? "boolean" as const
+              : "text" as const,
+          required: property.required === true,
+        }),
+      ),
       activeVersionId: activeVersion?.id ?? null,
       draftVersionId: draftVersion?.id ?? null,
       activeRules: activeVersion?.rules ?? [],
@@ -383,12 +454,14 @@ export function toWorkspaceActionRuleSimulation(input: {
   args: unknown;
   versionId: string | null;
   document: WorkspaceActionRuleDocument | null;
+  context?: WorkspaceRuleEvaluationContext;
 }) {
   const result = evaluateWorkspaceActionRule({
     actionType: input.actionType,
     arguments: input.args,
     document: input.document,
     ruleVersionId: input.versionId,
+    context: input.context,
   });
   return {
     actionType: input.actionType,

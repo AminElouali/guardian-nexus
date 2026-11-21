@@ -32,6 +32,7 @@ export const apiTestFiles = [
   "src/lib/development-rls-catalog-audit.test.ts",
   "../../lib/db/src/rls-catalog-audit.test.ts",
   "../../lib/db/src/rls-catalog-phase-audit.test.ts",
+  "../../lib/db/src/workspace-action-rule-engine.test.ts",
   "src/lib/safe-http-request-log.test.ts",
   "src/lib/api-test-target-guard.test.ts",
   "src/scripts/run-postgres-local-lab.test.ts",

@@ -7,6 +7,7 @@ import {
 import {
   evaluateWorkspaceActionRule,
   type WorkspaceActionRuleDocument,
+  type WorkspaceRuleEvaluationContext,
 } from "@workspace/db/workspace-action-rule-engine";
 import { canonicalApprovalJson } from "./ai-assessment-approval-actions";
 
@@ -25,6 +26,46 @@ function sha256(value: unknown): string {
   return createHash("sha256")
     .update(canonicalApprovalJson(value), "utf8")
     .digest("hex");
+}
+
+const evaluationWindows = new Set([60, 300, 900, 3600, 86400]);
+
+function isRuleEvaluationContext(
+  value: unknown,
+): value is WorkspaceRuleEvaluationContext {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    Object.getPrototypeOf(value) !== Object.prototype
+  ) return false;
+  const context = value as Record<string, unknown>;
+  if (
+    Reflect.ownKeys(context).length !== 3 ||
+    !Object.hasOwn(context, "dataSensitivity") ||
+    !Object.hasOwn(context, "environment") ||
+    !Object.hasOwn(context, "actionCountsByWindow") ||
+    ![null, "normal", "sensitive"].includes(context.dataSensitivity as null | string) ||
+    ![null, "test", "production"].includes(context.environment as null | string)
+  ) return false;
+  const counts = context.actionCountsByWindow;
+  if (
+    !counts ||
+    typeof counts !== "object" ||
+    Array.isArray(counts) ||
+    Object.getPrototypeOf(counts) !== Object.prototype
+  ) return false;
+  return Reflect.ownKeys(counts).every((key) => {
+    if (typeof key !== "string" || !/^(60|300|900|3600|86400)$/.test(key)) {
+      return false;
+    }
+    const count = (counts as Record<string, unknown>)[key];
+    return count === null ||
+      (typeof count === "number" &&
+        Number.isSafeInteger(count) &&
+        count >= 0 &&
+        count <= 100_000);
+  });
 }
 
 export function hashGenericActionArguments(
@@ -117,6 +158,7 @@ export function createWorkspaceRuleActionEvidence(input: {
   ruleId: string;
   ruleVersionId: string;
   ruleDocument: WorkspaceActionRuleDocument;
+  ruleEvaluationContext?: WorkspaceRuleEvaluationContext;
   allowEscalation?: boolean;
   summary: string;
   messagePreview: string;
@@ -129,6 +171,7 @@ export function createWorkspaceRuleActionEvidence(input: {
     arguments: action.args,
     document: input.ruleDocument,
     ruleVersionId: input.ruleVersionId,
+    context: input.ruleEvaluationContext,
   });
   const escalatedAllow =
     decision.decision === "allow" &&
@@ -179,6 +222,9 @@ export function createWorkspaceRuleActionEvidence(input: {
     ruleVersionId: input.ruleVersionId,
     ruleDocumentSha256,
     ruleDocument: input.ruleDocument,
+    ...(input.ruleEvaluationContext
+      ? { ruleEvaluationContext: input.ruleEvaluationContext }
+      : {}),
     ...(escalatedAllow
       ? { decisionEscalation: "rule_allow_escalated_to_approval" as const }
       : {}),
@@ -277,6 +323,8 @@ export function verifyGenericActionEvidence(
       : 0;
   const hasDecisionEscalation =
     evidenceVersion === 2 && Object.hasOwn(value, "decisionEscalation");
+  const hasRuleEvaluationContext =
+    evidenceVersion === 2 && Object.hasOwn(value, "ruleEvaluationContext");
   const expectedKeys = evidenceVersion === 2
     ? [
       ...v1Keys,
@@ -284,6 +332,7 @@ export function verifyGenericActionEvidence(
       "ruleDocumentSha256",
       "ruleDocument",
       ...(hasDecisionEscalation ? ["decisionEscalation"] : []),
+      ...(hasRuleEvaluationContext ? ["ruleEvaluationContext"] : []),
     ]
     : v1Keys;
   if (
@@ -345,7 +394,9 @@ export function verifyGenericActionEvidence(
       !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(evidence.ruleVersionId) ||
       !evidence.ruleDocument ||
       evidence.ruleDocument.version !== 1 ||
-      sha256(evidence.ruleDocument) !== evidence.ruleDocumentSha256)
+      sha256(evidence.ruleDocument) !== evidence.ruleDocumentSha256 ||
+      (hasRuleEvaluationContext &&
+        !isRuleEvaluationContext(evidence.ruleEvaluationContext)))
   ) {
     return null;
   }
@@ -355,6 +406,9 @@ export function verifyGenericActionEvidence(
         arguments: evaluated.args,
         document: evidence.ruleDocument!,
         ruleVersionId: evidence.ruleVersionId!,
+        context: hasRuleEvaluationContext
+          ? evidence.ruleEvaluationContext
+          : undefined,
       })
     : null;
   if (

@@ -4010,13 +4010,26 @@ export const WorkspaceRuleConditionOp = {
   eq: 'eq',
   gt: 'gt',
   lte: 'lte',
+  domain_in: 'domain_in',
+} as const;
+
+export type WorkspaceRuleConditionWindowSeconds = typeof WorkspaceRuleConditionWindowSeconds[keyof typeof WorkspaceRuleConditionWindowSeconds];
+
+
+export const WorkspaceRuleConditionWindowSeconds = {
+  NUMBER_60: 60,
+  NUMBER_300: 300,
+  NUMBER_900: 900,
+  NUMBER_3600: 3600,
+  NUMBER_86400: 86400,
 } as const;
 
 export interface WorkspaceRuleCondition {
   /** @maxLength 80 */
   field: string;
   op: WorkspaceRuleConditionOp;
-  value: string | number | boolean;
+  value: string | number | boolean | string[];
+  windowSeconds?: WorkspaceRuleConditionWindowSeconds;
 }
 
 export type WorkspaceActionRuleWhen = {
@@ -4626,12 +4639,30 @@ export const WorkspaceActionRuleStateRiskCategoriesItem = {
   multiagent: 'multiagent',
 } as const;
 
+export type WorkspaceActionRuleStateArgumentFieldsItemType = typeof WorkspaceActionRuleStateArgumentFieldsItemType[keyof typeof WorkspaceActionRuleStateArgumentFieldsItemType];
+
+
+export const WorkspaceActionRuleStateArgumentFieldsItemType = {
+  text: 'text',
+  number: 'number',
+  boolean: 'boolean',
+} as const;
+
+export type WorkspaceActionRuleStateArgumentFieldsItem = {
+  name: string;
+  type: WorkspaceActionRuleStateArgumentFieldsItemType;
+  required: boolean;
+};
+
 export interface WorkspaceActionRuleState {
   actionType: string;
+  service: string;
   label: string;
   description: string;
   riskClass: WorkspaceActionRuleStateRiskClass;
   riskCategories: WorkspaceActionRuleStateRiskCategoriesItem[];
+  requiresIndependentApprover: boolean;
+  argumentFields: WorkspaceActionRuleStateArgumentFieldsItem[];
   /** @nullable */
   activeVersionId: string | null;
   /** @nullable */

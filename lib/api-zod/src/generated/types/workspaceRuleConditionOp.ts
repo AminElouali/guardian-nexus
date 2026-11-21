@@ -13,4 +13,5 @@ export const WorkspaceRuleConditionOp = {
   eq: 'eq',
   gt: 'gt',
   lte: 'lte',
+  domain_in: 'domain_in',
 } as const;

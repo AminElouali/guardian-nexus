@@ -10,9 +10,20 @@ import {
 
 export type WorkspaceRuleCondition = {
   field: string;
-  op: "eq" | "gt" | "lte";
-  value: string | number | boolean;
+  op: "eq" | "gt" | "lte" | "domain_in";
+  value: string | number | boolean | string[];
+  windowSeconds?: number;
 };
+
+export type WorkspaceRuleEvaluationContext = {
+  dataSensitivity: "normal" | "sensitive" | null;
+  environment: "test" | "production" | null;
+  actionCountsByWindow: Readonly<Record<number, number | null>>;
+};
+
+const allowedVolumeWindowsSeconds = [60, 300, 900, 3600, 86400] as const;
+const trustedDomainPattern =
+  /^(?=.{3,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))+$/;
 
 export type WorkspaceActionRule = {
   id: string;
@@ -222,7 +233,7 @@ const allowedKeys = (value: unknown, allowed: readonly string[]): value is Recor
 function stableWhen(when: WorkspaceActionRule["when"]): string {
   const normalize = (conditions: WorkspaceRuleCondition[] | undefined) =>
     [...(conditions ?? [])]
-      .map((condition) => `${condition.field}:${condition.op}:${JSON.stringify(condition.value)}`)
+      .map((condition) => `${condition.field}:${condition.op}:${JSON.stringify(condition.value)}:${condition.windowSeconds ?? ""}`)
       .sort();
   return JSON.stringify({ all: normalize(when.all), any: normalize(when.any) });
 }
@@ -239,14 +250,50 @@ function validateCondition(
   definition: ApprovalActionDefinition,
   value: unknown,
 ): value is WorkspaceRuleCondition {
-  if (!allowedKeys(value, ["field", "op", "value"])) return false;
-  if (
-    typeof value.field !== "string" ||
-    !["eq", "gt", "lte"].includes(String(value.op)) ||
-    !isPrimitive(value.value)
-  ) return false;
+  if (!allowedKeys(value, ["field", "op", "value", "windowSeconds"])) return false;
+  if (typeof value.field !== "string" || typeof value.op !== "string") return false;
+  if (value.field === "context.data_sensitivity") {
+    return value.op === "eq" &&
+      (value.value === "normal" || value.value === "sensitive") &&
+      value.windowSeconds === undefined;
+  }
+  if (value.field === "context.environment") {
+    return value.op === "eq" &&
+      (value.value === "test" || value.value === "production") &&
+      value.windowSeconds === undefined;
+  }
+  if (value.field === "context.action_count") {
+    return (value.op === "gt" || value.op === "lte") &&
+      typeof value.value === "number" &&
+      Number.isSafeInteger(value.value) &&
+      value.value >= 0 &&
+      value.value <= 100_000 &&
+      typeof value.windowSeconds === "number" &&
+      allowedVolumeWindowsSeconds.includes(
+        value.windowSeconds as (typeof allowedVolumeWindowsSeconds)[number],
+      );
+  }
+  if (value.windowSeconds !== undefined) return false;
   const property = definition.argumentSchema.properties[value.field];
   if (!property) return false;
+  if (value.op === "domain_in") {
+    return (
+      property.type === "string" &&
+      ["to", "recipient_email", "forward_to"].includes(value.field) &&
+      Array.isArray(value.value) &&
+      value.value.length > 0 &&
+      value.value.length <= 20 &&
+      value.value.every(
+        (domain) =>
+          typeof domain === "string" &&
+          domain === domain.toLowerCase() &&
+          trustedDomainPattern.test(domain),
+      )
+    );
+  }
+  if (!["eq", "gt", "lte"].includes(value.op) || !isPrimitive(value.value)) {
+    return false;
+  }
   if (value.op !== "eq" && property.type !== "integer") return false;
   if (property.type === "integer") {
     if (typeof value.value !== "number" || !Number.isSafeInteger(value.value)) return false;
@@ -386,11 +433,59 @@ export function getWorkspaceRuleWarnings(
 function conditionMatches(
   args: Readonly<Record<string, ApprovalActionValue>>,
   condition: WorkspaceRuleCondition,
-): boolean {
+  context: WorkspaceRuleEvaluationContext,
+): { state: "match" | "no_match" | "unavailable"; matched: boolean } {
+  if (condition.field === "context.data_sensitivity") {
+    const actual = context.dataSensitivity;
+    return actual === null
+      ? { state: "unavailable", matched: false }
+      : { state: actual === condition.value ? "match" : "no_match", matched: actual === condition.value };
+  }
+  if (condition.field === "context.environment") {
+    const actual = context.environment;
+    return actual === null
+      ? { state: "unavailable", matched: false }
+      : { state: actual === condition.value ? "match" : "no_match", matched: actual === condition.value };
+  }
+  if (condition.field === "context.action_count") {
+    const actual = condition.windowSeconds === undefined
+      ? null
+      : context.actionCountsByWindow[condition.windowSeconds] ?? null;
+    if (actual === null || typeof condition.value !== "number") {
+      return { state: "unavailable", matched: false };
+    }
+    const matched = condition.op === "gt"
+      ? actual > condition.value
+      : condition.op === "lte"
+        ? actual <= condition.value
+        : false;
+    return { state: matched ? "match" : "no_match", matched };
+  }
   const actual = args[condition.field];
-  if (condition.op === "eq") return actual === condition.value;
-  if (typeof actual !== "number" || typeof condition.value !== "number") return false;
-  return condition.op === "gt" ? actual > condition.value : actual <= condition.value;
+  if (actual === undefined) return { state: "unavailable", matched: false };
+  if (condition.op === "domain_in") {
+    if (typeof actual !== "string" || !Array.isArray(condition.value)) {
+      return { state: "unavailable", matched: false };
+    }
+    const separator = actual.lastIndexOf("@");
+    const domain = separator < 0 ? "" : actual.slice(separator + 1).toLowerCase();
+    const matched = condition.value.includes(domain);
+    return { state: matched ? "match" : "no_match", matched };
+  }
+  if (typeof condition.value === "object") {
+    return { state: "unavailable", matched: false };
+  }
+  if (condition.op === "eq") {
+    const matched = actual === condition.value;
+    return { state: matched ? "match" : "no_match", matched };
+  }
+  if (typeof actual !== "number" || typeof condition.value !== "number") {
+    return { state: "unavailable", matched: false };
+  }
+  const matched = condition.op === "gt"
+    ? actual > condition.value
+    : actual <= condition.value;
+  return { state: matched ? "match" : "no_match", matched };
 }
 
 export function evaluateWorkspaceActionRule(input: {
@@ -398,6 +493,7 @@ export function evaluateWorkspaceActionRule(input: {
   arguments: unknown;
   document: WorkspaceActionRuleDocument | null;
   ruleVersionId: string | null;
+  context?: WorkspaceRuleEvaluationContext;
 }) {
   const validatedAction = evaluateApprovalAction(input.actionType, input.arguments);
   if (!validatedAction.ok) {
@@ -422,13 +518,34 @@ export function evaluateWorkspaceActionRule(input: {
       args: validatedAction.args,
     };
   }
+  const context = input.context ?? {
+    dataSensitivity: null,
+    environment: null,
+    actionCountsByWindow: {},
+  };
   for (const rule of input.document.rules) {
-    const allMatch = rule.when.all?.every((condition) =>
-      conditionMatches(validatedAction.args, condition),
-    ) ?? true;
-    const anyMatch = rule.when.any?.some((condition) =>
-      conditionMatches(validatedAction.args, condition),
-    ) ?? true;
+    const allResults = (rule.when.all ?? []).map((condition) =>
+      conditionMatches(validatedAction.args, condition, context),
+    );
+    const anyResults = (rule.when.any ?? []).map((condition) =>
+      conditionMatches(validatedAction.args, condition, context),
+    );
+    if (
+      [...allResults, ...anyResults].some((result) => result.state === "unavailable")
+    ) {
+      return {
+        decision: rule.decision === "deny" ? "deny" as const : "require_approval" as const,
+        reasonCode: "workspace_rule_condition_unavailable",
+        ruleId: rule.id,
+        ruleVersionId: input.ruleVersionId,
+        issues: [],
+        definition: validatedAction.definition,
+        args: validatedAction.args,
+      };
+    }
+    const allMatch = allResults.every((result) => result.matched);
+    const anyMatch = rule.when.any === undefined ||
+      anyResults.some((result) => result.matched);
     if (allMatch && anyMatch) {
       return {
         decision: rule.decision,
