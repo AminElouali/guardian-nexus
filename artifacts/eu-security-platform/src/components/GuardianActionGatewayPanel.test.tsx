@@ -189,10 +189,17 @@ test("agent connection offers safe setup guidance without generating credentials
 
 const persistedRuleState: WorkspaceActionRuleState = {
   actionType: "guardian.support.reply.send.v1",
+  service: "support",
   label: "Responder a soporte",
   description: "Acción sintética de soporte.",
   riskClass: "medium",
   riskCategories: ["money", "customer_data", "external_email"],
+  requiresIndependentApprover: true,
+  argumentFields: [
+    { name: "recipient_email", type: "text", required: true },
+    { name: "recipient_type", type: "text", required: true },
+    { name: "compensation_cents", type: "number", required: true },
+  ],
   activeVersionId: "version-active",
   draftVersionId: "version-draft",
   activeRules: [{

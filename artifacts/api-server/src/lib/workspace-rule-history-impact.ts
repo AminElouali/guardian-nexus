@@ -65,6 +65,36 @@ function hasStoredArguments(value: unknown): boolean {
   return isRecord(value) && Object.hasOwn(value, "arguments");
 }
 
+function hasRequiredHistoricalContext(
+  documents: Array<WorkspaceActionRuleDocument | null>,
+  context: NonNullable<
+    ReturnType<typeof verifyGenericActionEvidence>
+  >["ruleEvaluationContext"],
+): boolean {
+  const conditions = documents.flatMap((document) =>
+    (document?.rules ?? []).flatMap((rule) => [
+      ...(rule.when.all ?? []),
+      ...(rule.when.any ?? []),
+    ]),
+  );
+  for (const condition of conditions) {
+    if (condition.field === "context.data_sensitivity" &&
+      context?.dataSensitivity == null) return false;
+    if (condition.field === "context.environment" &&
+      context?.environment == null) return false;
+    if (condition.field === "context.action_count") {
+      const window = condition.windowSeconds;
+      if (
+        window === undefined ||
+        !context ||
+        !Object.hasOwn(context.actionCountsByWindow, window) ||
+        context.actionCountsByWindow[window] == null
+      ) return false;
+    }
+  }
+  return true;
+}
+
 export function summarizeWorkspaceRuleHistoryImpact(input: {
   workspaceId: string;
   actionType: string;
@@ -80,7 +110,6 @@ export function summarizeWorkspaceRuleHistoryImpact(input: {
   const changes = new Map<string, { from: HistoryImpactDecision; to: HistoryImpactDecision; count: number }>();
   let evaluatedCount = 0;
   let notReevaluableCount = 0;
-
   for (const row of input.rows) {
     const actionType = row.approval.caseId;
     if (
@@ -94,7 +123,6 @@ export function summarizeWorkspaceRuleHistoryImpact(input: {
       notReevaluableCount += 1;
       continue;
     }
-
     let evidence: ReturnType<typeof verifyGenericActionEvidence>;
     try {
       evidence = verifyGenericActionEvidence(row.job.result, {
@@ -112,6 +140,15 @@ export function summarizeWorkspaceRuleHistoryImpact(input: {
       notReevaluableCount += 1;
       continue;
     }
+    if (
+      !hasRequiredHistoricalContext(
+        [input.activeDocument, input.draftDocument],
+        evidence.ruleEvaluationContext,
+      )
+    ) {
+      notReevaluableCount += 1;
+      continue;
+    }
 
     const action = evaluateApprovalAction(actionType, evidence.arguments);
     if (!action.ok) {
@@ -124,6 +161,7 @@ export function summarizeWorkspaceRuleHistoryImpact(input: {
       arguments: action.args,
       document: input.activeDocument,
       ruleVersionId: input.activeVersionId,
+      context: evidence.ruleEvaluationContext,
     }).decision;
     incrementDecision(activeCounts, activeDecision);
 
@@ -133,6 +171,7 @@ export function summarizeWorkspaceRuleHistoryImpact(input: {
         arguments: action.args,
         document: input.draftDocument,
         ruleVersionId: input.draftVersionId,
+        context: evidence.ruleEvaluationContext,
       }).decision;
       incrementDecision(draftCounts, draftDecision);
       if (activeDecision !== draftDecision) {
@@ -251,7 +290,6 @@ export async function getWorkspaceRuleHistoryImpact(
     : null;
   const draftDocument = draftValidation?.ok ? draftValidation.document : null;
   const draftVersionId = draftValidation?.ok ? draft.id : null;
-
   return summarizeWorkspaceRuleHistoryImpact({
     workspaceId,
     actionType,

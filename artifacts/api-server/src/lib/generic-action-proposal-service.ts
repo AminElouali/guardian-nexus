@@ -22,6 +22,7 @@ import {
 } from "./generic-action-evidence";
 import {
   getActiveWorkspaceActionRule,
+  getWorkspaceActionRuleEvaluationContext,
   lockWorkspaceActionRule,
 } from "./workspace-action-rules";
 import type { TenantTransaction } from "./tenant-db";
@@ -81,9 +82,9 @@ export async function createGenericActionProposalInTransaction(
     return { kind: "forbidden" };
   }
   const hashes = hashGenericActionArguments(input.actionType, action.args);
-  if (input.actionType === AUTO_REFUND_ACTION) {
-    await lockWorkspaceActionRule(tx, input.workspaceId, input.actionType);
-  }
+  // Serialize policy evaluation for this workspace/action so two concurrent
+  // calls cannot both pass a configured volume limit using the same history.
+  await lockWorkspaceActionRule(tx, input.workspaceId, input.actionType);
   const rule = await getActiveWorkspaceActionRule(
     tx,
     input.workspaceId,
@@ -92,6 +93,12 @@ export async function createGenericActionProposalInTransaction(
   const catalogDefaultRefundApproval =
     input.actionType === AUTO_REFUND_ACTION && !rule &&
     action.decision === "require_approval" && action.ruleId !== null;
+  const evaluationContext = await getWorkspaceActionRuleEvaluationContext(
+    tx,
+    input.workspaceId,
+    input.actionType,
+    rule?.document ?? null,
+  );
   const ruleDecision = catalogDefaultRefundApproval
     ? {
         ...action,
@@ -103,6 +110,7 @@ export async function createGenericActionProposalInTransaction(
         arguments: action.args,
         document: rule?.document ?? null,
         ruleVersionId: rule?.activeVersionId ?? null,
+        context: evaluationContext,
       });
   let automaticRefundAllowed = false;
   let refundApprovalReason: string | null = null;
@@ -303,6 +311,7 @@ export async function createGenericActionProposalInTransaction(
           ruleId: decision.ruleId,
           ruleVersionId: rule.activeVersionId,
           ruleDocument: rule.document,
+          ruleEvaluationContext: evaluationContext,
           allowEscalation: escalatedAllow,
           summary: display.summary,
           messagePreview: display.messagePreview,

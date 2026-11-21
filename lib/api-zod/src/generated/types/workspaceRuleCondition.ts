@@ -6,10 +6,12 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { WorkspaceRuleConditionOp } from './workspaceRuleConditionOp';
+import type { WorkspaceRuleConditionWindowSeconds } from './workspaceRuleConditionWindowSeconds';
 
 export interface WorkspaceRuleCondition {
   /** @maxLength 80 */
   field: string;
   op: WorkspaceRuleConditionOp;
-  value: string | number | boolean;
+  value: string | number | boolean | string[];
+  windowSeconds?: WorkspaceRuleConditionWindowSeconds;
 }

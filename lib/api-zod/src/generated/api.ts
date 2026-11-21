@@ -2281,6 +2281,10 @@ export const listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneR
 export const listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueTwoMin = 0;
 export const listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueTwoMax = 1000000;
 
+export const listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueFourItemMax = 253;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueFourMax = 20;
+
 export const listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAllMax = 8;
 
 export const listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAnyItemFieldMax = 80;
@@ -2289,6 +2293,10 @@ export const listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneR
 
 export const listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueTwoMin = 0;
 export const listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueTwoMax = 1000000;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueFourItemMax = 253;
+
+export const listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueFourMax = 20;
 
 export const listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAnyMax = 8;
 
@@ -3947,13 +3955,15 @@ export const ListWorkspaceAiAssessmentLabJobsResponseItem = zod.object({
   "when": zod.object({
   "all": zod.array(zod.object({
   "field": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAllItemFieldMax),
-  "op": zod.enum(['eq', 'gt', 'lte']),
-  "value": zod.union([zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueOneMax),zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueTwoMin).max(listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueTwoMax),zod.boolean()])
+  "op": zod.enum(['eq', 'gt', 'lte', 'domain_in']),
+  "value": zod.union([zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueOneMax),zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueTwoMin).max(listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueTwoMax),zod.boolean(),zod.array(zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueFourItemMax)).min(1).max(listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueFourMax)]),
+  "windowSeconds": zod.union([zod.literal(60),zod.literal(300),zod.literal(900),zod.literal(3600),zod.literal(86400)]).optional()
 })).max(listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAllMax).optional(),
   "any": zod.array(zod.object({
   "field": zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAnyItemFieldMax),
-  "op": zod.enum(['eq', 'gt', 'lte']),
-  "value": zod.union([zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueOneMax),zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueTwoMin).max(listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueTwoMax),zod.boolean()])
+  "op": zod.enum(['eq', 'gt', 'lte', 'domain_in']),
+  "value": zod.union([zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueOneMax),zod.int().min(listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueTwoMin).max(listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueTwoMax),zod.boolean(),zod.array(zod.string().max(listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueFourItemMax)).min(1).max(listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueFourMax)]),
+  "windowSeconds": zod.union([zod.literal(60),zod.literal(300),zod.literal(900),zod.literal(3600),zod.literal(86400)]).optional()
 })).max(listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesItemWhenAnyMax).optional()
 })
 })).max(listWorkspaceAiAssessmentLabJobsResponseResultEightRuleDocumentOneRulesMax)
@@ -5237,6 +5247,10 @@ export const createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOne
 export const createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueTwoMin = 0;
 export const createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueTwoMax = 1000000;
 
+export const createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueFourItemMax = 253;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueFourMax = 20;
+
 export const createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllMax = 8;
 
 export const createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemFieldMax = 80;
@@ -5245,6 +5259,10 @@ export const createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOne
 
 export const createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueTwoMin = 0;
 export const createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueTwoMax = 1000000;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueFourItemMax = 253;
+
+export const createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueFourMax = 20;
 
 export const createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyMax = 8;
 
@@ -6903,13 +6921,15 @@ export const CreateWorkspaceAiAssessmentLabJobResponse = zod.object({
   "when": zod.object({
   "all": zod.array(zod.object({
   "field": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemFieldMax),
-  "op": zod.enum(['eq', 'gt', 'lte']),
-  "value": zod.union([zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueOneMax),zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueTwoMin).max(createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueTwoMax),zod.boolean()])
+  "op": zod.enum(['eq', 'gt', 'lte', 'domain_in']),
+  "value": zod.union([zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueOneMax),zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueTwoMin).max(createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueTwoMax),zod.boolean(),zod.array(zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueFourItemMax)).min(1).max(createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueFourMax)]),
+  "windowSeconds": zod.union([zod.literal(60),zod.literal(300),zod.literal(900),zod.literal(3600),zod.literal(86400)]).optional()
 })).max(createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllMax).optional(),
   "any": zod.array(zod.object({
   "field": zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemFieldMax),
-  "op": zod.enum(['eq', 'gt', 'lte']),
-  "value": zod.union([zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueOneMax),zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueTwoMin).max(createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueTwoMax),zod.boolean()])
+  "op": zod.enum(['eq', 'gt', 'lte', 'domain_in']),
+  "value": zod.union([zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueOneMax),zod.int().min(createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueTwoMin).max(createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueTwoMax),zod.boolean(),zod.array(zod.string().max(createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueFourItemMax)).min(1).max(createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueFourMax)]),
+  "windowSeconds": zod.union([zod.literal(60),zod.literal(300),zod.literal(900),zod.literal(3600),zod.literal(86400)]).optional()
 })).max(createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyMax).optional()
 })
 })).max(createWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesMax)
@@ -8182,6 +8202,10 @@ export const getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRul
 export const getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueTwoMin = 0;
 export const getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueTwoMax = 1000000;
 
+export const getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueFourItemMax = 253;
+
+export const getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueFourMax = 20;
+
 export const getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllMax = 8;
 
 export const getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemFieldMax = 80;
@@ -8190,6 +8214,10 @@ export const getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRul
 
 export const getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueTwoMin = 0;
 export const getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueTwoMax = 1000000;
+
+export const getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueFourItemMax = 253;
+
+export const getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueFourMax = 20;
 
 export const getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyMax = 8;
 
@@ -9848,13 +9876,15 @@ export const GetWorkspaceAiAssessmentLabJobResponse = zod.object({
   "when": zod.object({
   "all": zod.array(zod.object({
   "field": zod.string().max(getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemFieldMax),
-  "op": zod.enum(['eq', 'gt', 'lte']),
-  "value": zod.union([zod.string().max(getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueOneMax),zod.int().min(getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueTwoMin).max(getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueTwoMax),zod.boolean()])
+  "op": zod.enum(['eq', 'gt', 'lte', 'domain_in']),
+  "value": zod.union([zod.string().max(getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueOneMax),zod.int().min(getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueTwoMin).max(getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueTwoMax),zod.boolean(),zod.array(zod.string().max(getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueFourItemMax)).min(1).max(getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueFourMax)]),
+  "windowSeconds": zod.union([zod.literal(60),zod.literal(300),zod.literal(900),zod.literal(3600),zod.literal(86400)]).optional()
 })).max(getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllMax).optional(),
   "any": zod.array(zod.object({
   "field": zod.string().max(getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemFieldMax),
-  "op": zod.enum(['eq', 'gt', 'lte']),
-  "value": zod.union([zod.string().max(getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueOneMax),zod.int().min(getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueTwoMin).max(getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueTwoMax),zod.boolean()])
+  "op": zod.enum(['eq', 'gt', 'lte', 'domain_in']),
+  "value": zod.union([zod.string().max(getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueOneMax),zod.int().min(getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueTwoMin).max(getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueTwoMax),zod.boolean(),zod.array(zod.string().max(getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueFourItemMax)).min(1).max(getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueFourMax)]),
+  "windowSeconds": zod.union([zod.literal(60),zod.literal(300),zod.literal(900),zod.literal(3600),zod.literal(86400)]).optional()
 })).max(getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyMax).optional()
 })
 })).max(getWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesMax)
@@ -11193,6 +11223,10 @@ export const retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneR
 export const retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueTwoMin = 0;
 export const retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueTwoMax = 1000000;
 
+export const retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueFourItemMax = 253;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueFourMax = 20;
+
 export const retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllMax = 8;
 
 export const retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemFieldMax = 80;
@@ -11201,6 +11235,10 @@ export const retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneR
 
 export const retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueTwoMin = 0;
 export const retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueTwoMax = 1000000;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueFourItemMax = 253;
+
+export const retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueFourMax = 20;
 
 export const retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyMax = 8;
 
@@ -12859,13 +12897,15 @@ export const RetryWorkspaceAiAssessmentLabJobResponse = zod.object({
   "when": zod.object({
   "all": zod.array(zod.object({
   "field": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemFieldMax),
-  "op": zod.enum(['eq', 'gt', 'lte']),
-  "value": zod.union([zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueOneMax),zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueTwoMin).max(retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueTwoMax),zod.boolean()])
+  "op": zod.enum(['eq', 'gt', 'lte', 'domain_in']),
+  "value": zod.union([zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueOneMax),zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueTwoMin).max(retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueTwoMax),zod.boolean(),zod.array(zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueFourItemMax)).min(1).max(retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllItemValueFourMax)]),
+  "windowSeconds": zod.union([zod.literal(60),zod.literal(300),zod.literal(900),zod.literal(3600),zod.literal(86400)]).optional()
 })).max(retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAllMax).optional(),
   "any": zod.array(zod.object({
   "field": zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemFieldMax),
-  "op": zod.enum(['eq', 'gt', 'lte']),
-  "value": zod.union([zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueOneMax),zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueTwoMin).max(retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueTwoMax),zod.boolean()])
+  "op": zod.enum(['eq', 'gt', 'lte', 'domain_in']),
+  "value": zod.union([zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueOneMax),zod.int().min(retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueTwoMin).max(retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueTwoMax),zod.boolean(),zod.array(zod.string().max(retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueFourItemMax)).min(1).max(retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyItemValueFourMax)]),
+  "windowSeconds": zod.union([zod.literal(60),zod.literal(300),zod.literal(900),zod.literal(3600),zod.literal(86400)]).optional()
 })).max(retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesItemWhenAnyMax).optional()
 })
 })).max(retryWorkspaceAiAssessmentLabJobResponseResultEightRuleDocumentOneRulesMax)
@@ -13207,6 +13247,10 @@ export const listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAllIt
 export const listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAllItemValueTwoMin = 0;
 export const listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAllItemValueTwoMax = 1000000;
 
+export const listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAllItemValueFourItemMax = 253;
+
+export const listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAllItemValueFourMax = 20;
+
 export const listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAllMax = 8;
 
 export const listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAnyItemFieldMax = 80;
@@ -13215,6 +13259,10 @@ export const listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAnyIt
 
 export const listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAnyItemValueTwoMin = 0;
 export const listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAnyItemValueTwoMax = 1000000;
+
+export const listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAnyItemValueFourItemMax = 253;
+
+export const listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAnyItemValueFourMax = 20;
 
 export const listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAnyMax = 8;
 
@@ -13227,6 +13275,10 @@ export const listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAllIte
 export const listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAllItemValueTwoMin = 0;
 export const listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAllItemValueTwoMax = 1000000;
 
+export const listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAllItemValueFourItemMax = 253;
+
+export const listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAllItemValueFourMax = 20;
+
 export const listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAllMax = 8;
 
 export const listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAnyItemFieldMax = 80;
@@ -13235,6 +13287,10 @@ export const listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAnyIte
 
 export const listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAnyItemValueTwoMin = 0;
 export const listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAnyItemValueTwoMax = 1000000;
+
+export const listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAnyItemValueFourItemMax = 253;
+
+export const listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAnyItemValueFourMax = 20;
 
 export const listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAnyMax = 8;
 
@@ -13248,6 +13304,10 @@ export const listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhen
 export const listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAllItemValueTwoMin = 0;
 export const listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAllItemValueTwoMax = 1000000;
 
+export const listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAllItemValueFourItemMax = 253;
+
+export const listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAllItemValueFourMax = 20;
+
 export const listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAllMax = 8;
 
 export const listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAnyItemFieldMax = 80;
@@ -13256,6 +13316,10 @@ export const listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhen
 
 export const listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAnyItemValueTwoMin = 0;
 export const listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAnyItemValueTwoMax = 1000000;
+
+export const listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAnyItemValueFourItemMax = 253;
+
+export const listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAnyItemValueFourMax = 20;
 
 export const listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAnyMax = 8;
 
@@ -13268,6 +13332,10 @@ export const listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesIt
 export const listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAllItemValueTwoMin = 0;
 export const listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAllItemValueTwoMax = 1000000;
 
+export const listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAllItemValueFourItemMax = 253;
+
+export const listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAllItemValueFourMax = 20;
+
 export const listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAllMax = 8;
 
 export const listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAnyItemFieldMax = 80;
@@ -13276,6 +13344,10 @@ export const listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesIt
 
 export const listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAnyItemValueTwoMin = 0;
 export const listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAnyItemValueTwoMax = 1000000;
+
+export const listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAnyItemValueFourItemMax = 253;
+
+export const listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAnyItemValueFourMax = 20;
 
 export const listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAnyMax = 8;
 
@@ -13288,10 +13360,17 @@ export const listWorkspaceActionRulesResponseRuleProfilesItemDefaultRefundLimitC
 export const ListWorkspaceActionRulesResponse = zod.object({
   "actions": zod.array(zod.object({
   "actionType": zod.string(),
+  "service": zod.string(),
   "label": zod.string(),
   "description": zod.string(),
   "riskClass": zod.enum(['low', 'medium', 'high']),
   "riskCategories": zod.array(zod.enum(['money', 'internal_email', 'external_email', 'customer_data', 'infrastructure', 'data', 'code', 'web', 'multiagent'])),
+  "requiresIndependentApprover": zod.boolean(),
+  "argumentFields": zod.array(zod.object({
+  "name": zod.string(),
+  "type": zod.enum(['text', 'number', 'boolean']),
+  "required": zod.boolean()
+})),
   "activeVersionId": zod.uuid().nullable(),
   "draftVersionId": zod.uuid().nullable(),
   "activeRules": zod.array(zod.object({
@@ -13300,13 +13379,15 @@ export const ListWorkspaceActionRulesResponse = zod.object({
   "when": zod.object({
   "all": zod.array(zod.object({
   "field": zod.string().max(listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAllItemFieldMax),
-  "op": zod.enum(['eq', 'gt', 'lte']),
-  "value": zod.union([zod.string().max(listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAllItemValueOneMax),zod.int().min(listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAllItemValueTwoMin).max(listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAllItemValueTwoMax),zod.boolean()])
+  "op": zod.enum(['eq', 'gt', 'lte', 'domain_in']),
+  "value": zod.union([zod.string().max(listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAllItemValueOneMax),zod.int().min(listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAllItemValueTwoMin).max(listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAllItemValueTwoMax),zod.boolean(),zod.array(zod.string().max(listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAllItemValueFourItemMax)).min(1).max(listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAllItemValueFourMax)]),
+  "windowSeconds": zod.union([zod.literal(60),zod.literal(300),zod.literal(900),zod.literal(3600),zod.literal(86400)]).optional()
 })).max(listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAllMax).optional(),
   "any": zod.array(zod.object({
   "field": zod.string().max(listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAnyItemFieldMax),
-  "op": zod.enum(['eq', 'gt', 'lte']),
-  "value": zod.union([zod.string().max(listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAnyItemValueOneMax),zod.int().min(listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAnyItemValueTwoMin).max(listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAnyItemValueTwoMax),zod.boolean()])
+  "op": zod.enum(['eq', 'gt', 'lte', 'domain_in']),
+  "value": zod.union([zod.string().max(listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAnyItemValueOneMax),zod.int().min(listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAnyItemValueTwoMin).max(listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAnyItemValueTwoMax),zod.boolean(),zod.array(zod.string().max(listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAnyItemValueFourItemMax)).min(1).max(listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAnyItemValueFourMax)]),
+  "windowSeconds": zod.union([zod.literal(60),zod.literal(300),zod.literal(900),zod.literal(3600),zod.literal(86400)]).optional()
 })).max(listWorkspaceActionRulesResponseActionsItemActiveRulesItemWhenAnyMax).optional()
 })
 })),
@@ -13316,13 +13397,15 @@ export const ListWorkspaceActionRulesResponse = zod.object({
   "when": zod.object({
   "all": zod.array(zod.object({
   "field": zod.string().max(listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAllItemFieldMax),
-  "op": zod.enum(['eq', 'gt', 'lte']),
-  "value": zod.union([zod.string().max(listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAllItemValueOneMax),zod.int().min(listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAllItemValueTwoMin).max(listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAllItemValueTwoMax),zod.boolean()])
+  "op": zod.enum(['eq', 'gt', 'lte', 'domain_in']),
+  "value": zod.union([zod.string().max(listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAllItemValueOneMax),zod.int().min(listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAllItemValueTwoMin).max(listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAllItemValueTwoMax),zod.boolean(),zod.array(zod.string().max(listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAllItemValueFourItemMax)).min(1).max(listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAllItemValueFourMax)]),
+  "windowSeconds": zod.union([zod.literal(60),zod.literal(300),zod.literal(900),zod.literal(3600),zod.literal(86400)]).optional()
 })).max(listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAllMax).optional(),
   "any": zod.array(zod.object({
   "field": zod.string().max(listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAnyItemFieldMax),
-  "op": zod.enum(['eq', 'gt', 'lte']),
-  "value": zod.union([zod.string().max(listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAnyItemValueOneMax),zod.int().min(listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAnyItemValueTwoMin).max(listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAnyItemValueTwoMax),zod.boolean()])
+  "op": zod.enum(['eq', 'gt', 'lte', 'domain_in']),
+  "value": zod.union([zod.string().max(listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAnyItemValueOneMax),zod.int().min(listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAnyItemValueTwoMin).max(listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAnyItemValueTwoMax),zod.boolean(),zod.array(zod.string().max(listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAnyItemValueFourItemMax)).min(1).max(listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAnyItemValueFourMax)]),
+  "windowSeconds": zod.union([zod.literal(60),zod.literal(300),zod.literal(900),zod.literal(3600),zod.literal(86400)]).optional()
 })).max(listWorkspaceActionRulesResponseActionsItemDraftRulesItemWhenAnyMax).optional()
 })
 })),
@@ -13335,13 +13418,15 @@ export const ListWorkspaceActionRulesResponse = zod.object({
   "when": zod.object({
   "all": zod.array(zod.object({
   "field": zod.string().max(listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAllItemFieldMax),
-  "op": zod.enum(['eq', 'gt', 'lte']),
-  "value": zod.union([zod.string().max(listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAllItemValueOneMax),zod.int().min(listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAllItemValueTwoMin).max(listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAllItemValueTwoMax),zod.boolean()])
+  "op": zod.enum(['eq', 'gt', 'lte', 'domain_in']),
+  "value": zod.union([zod.string().max(listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAllItemValueOneMax),zod.int().min(listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAllItemValueTwoMin).max(listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAllItemValueTwoMax),zod.boolean(),zod.array(zod.string().max(listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAllItemValueFourItemMax)).min(1).max(listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAllItemValueFourMax)]),
+  "windowSeconds": zod.union([zod.literal(60),zod.literal(300),zod.literal(900),zod.literal(3600),zod.literal(86400)]).optional()
 })).max(listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAllMax).optional(),
   "any": zod.array(zod.object({
   "field": zod.string().max(listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAnyItemFieldMax),
-  "op": zod.enum(['eq', 'gt', 'lte']),
-  "value": zod.union([zod.string().max(listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAnyItemValueOneMax),zod.int().min(listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAnyItemValueTwoMin).max(listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAnyItemValueTwoMax),zod.boolean()])
+  "op": zod.enum(['eq', 'gt', 'lte', 'domain_in']),
+  "value": zod.union([zod.string().max(listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAnyItemValueOneMax),zod.int().min(listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAnyItemValueTwoMin).max(listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAnyItemValueTwoMax),zod.boolean(),zod.array(zod.string().max(listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAnyItemValueFourItemMax)).min(1).max(listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAnyItemValueFourMax)]),
+  "windowSeconds": zod.union([zod.literal(60),zod.literal(300),zod.literal(900),zod.literal(3600),zod.literal(86400)]).optional()
 })).max(listWorkspaceActionRulesResponseActionsItemHistoryItemRulesItemWhenAnyMax).optional()
 })
 })),
@@ -13365,13 +13450,15 @@ export const ListWorkspaceActionRulesResponse = zod.object({
   "when": zod.object({
   "all": zod.array(zod.object({
   "field": zod.string().max(listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAllItemFieldMax),
-  "op": zod.enum(['eq', 'gt', 'lte']),
-  "value": zod.union([zod.string().max(listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAllItemValueOneMax),zod.int().min(listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAllItemValueTwoMin).max(listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAllItemValueTwoMax),zod.boolean()])
+  "op": zod.enum(['eq', 'gt', 'lte', 'domain_in']),
+  "value": zod.union([zod.string().max(listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAllItemValueOneMax),zod.int().min(listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAllItemValueTwoMin).max(listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAllItemValueTwoMax),zod.boolean(),zod.array(zod.string().max(listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAllItemValueFourItemMax)).min(1).max(listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAllItemValueFourMax)]),
+  "windowSeconds": zod.union([zod.literal(60),zod.literal(300),zod.literal(900),zod.literal(3600),zod.literal(86400)]).optional()
 })).max(listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAllMax).optional(),
   "any": zod.array(zod.object({
   "field": zod.string().max(listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAnyItemFieldMax),
-  "op": zod.enum(['eq', 'gt', 'lte']),
-  "value": zod.union([zod.string().max(listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAnyItemValueOneMax),zod.int().min(listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAnyItemValueTwoMin).max(listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAnyItemValueTwoMax),zod.boolean()])
+  "op": zod.enum(['eq', 'gt', 'lte', 'domain_in']),
+  "value": zod.union([zod.string().max(listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAnyItemValueOneMax),zod.int().min(listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAnyItemValueTwoMin).max(listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAnyItemValueTwoMax),zod.boolean(),zod.array(zod.string().max(listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAnyItemValueFourItemMax)).min(1).max(listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAnyItemValueFourMax)]),
+  "windowSeconds": zod.union([zod.literal(60),zod.literal(300),zod.literal(900),zod.literal(3600),zod.literal(86400)]).optional()
 })).max(listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesItemWhenAnyMax).optional()
 })
 })).max(listWorkspaceActionRulesResponseStarterTemplatesItemDocumentRulesMax)
@@ -13442,6 +13529,10 @@ export const saveWorkspaceActionRuleDraftBodyRulesItemWhenAllItemValueOneMax = 2
 export const saveWorkspaceActionRuleDraftBodyRulesItemWhenAllItemValueTwoMin = 0;
 export const saveWorkspaceActionRuleDraftBodyRulesItemWhenAllItemValueTwoMax = 1000000;
 
+export const saveWorkspaceActionRuleDraftBodyRulesItemWhenAllItemValueFourItemMax = 253;
+
+export const saveWorkspaceActionRuleDraftBodyRulesItemWhenAllItemValueFourMax = 20;
+
 export const saveWorkspaceActionRuleDraftBodyRulesItemWhenAllMax = 8;
 
 export const saveWorkspaceActionRuleDraftBodyRulesItemWhenAnyItemFieldMax = 80;
@@ -13450,6 +13541,10 @@ export const saveWorkspaceActionRuleDraftBodyRulesItemWhenAnyItemValueOneMax = 2
 
 export const saveWorkspaceActionRuleDraftBodyRulesItemWhenAnyItemValueTwoMin = 0;
 export const saveWorkspaceActionRuleDraftBodyRulesItemWhenAnyItemValueTwoMax = 1000000;
+
+export const saveWorkspaceActionRuleDraftBodyRulesItemWhenAnyItemValueFourItemMax = 253;
+
+export const saveWorkspaceActionRuleDraftBodyRulesItemWhenAnyItemValueFourMax = 20;
 
 export const saveWorkspaceActionRuleDraftBodyRulesItemWhenAnyMax = 8;
 
@@ -13465,13 +13560,15 @@ export const SaveWorkspaceActionRuleDraftBody = zod.object({
   "when": zod.object({
   "all": zod.array(zod.object({
   "field": zod.string().max(saveWorkspaceActionRuleDraftBodyRulesItemWhenAllItemFieldMax),
-  "op": zod.enum(['eq', 'gt', 'lte']),
-  "value": zod.union([zod.string().max(saveWorkspaceActionRuleDraftBodyRulesItemWhenAllItemValueOneMax),zod.int().min(saveWorkspaceActionRuleDraftBodyRulesItemWhenAllItemValueTwoMin).max(saveWorkspaceActionRuleDraftBodyRulesItemWhenAllItemValueTwoMax),zod.boolean()])
+  "op": zod.enum(['eq', 'gt', 'lte', 'domain_in']),
+  "value": zod.union([zod.string().max(saveWorkspaceActionRuleDraftBodyRulesItemWhenAllItemValueOneMax),zod.int().min(saveWorkspaceActionRuleDraftBodyRulesItemWhenAllItemValueTwoMin).max(saveWorkspaceActionRuleDraftBodyRulesItemWhenAllItemValueTwoMax),zod.boolean(),zod.array(zod.string().max(saveWorkspaceActionRuleDraftBodyRulesItemWhenAllItemValueFourItemMax)).min(1).max(saveWorkspaceActionRuleDraftBodyRulesItemWhenAllItemValueFourMax)]),
+  "windowSeconds": zod.union([zod.literal(60),zod.literal(300),zod.literal(900),zod.literal(3600),zod.literal(86400)]).optional()
 })).max(saveWorkspaceActionRuleDraftBodyRulesItemWhenAllMax).optional(),
   "any": zod.array(zod.object({
   "field": zod.string().max(saveWorkspaceActionRuleDraftBodyRulesItemWhenAnyItemFieldMax),
-  "op": zod.enum(['eq', 'gt', 'lte']),
-  "value": zod.union([zod.string().max(saveWorkspaceActionRuleDraftBodyRulesItemWhenAnyItemValueOneMax),zod.int().min(saveWorkspaceActionRuleDraftBodyRulesItemWhenAnyItemValueTwoMin).max(saveWorkspaceActionRuleDraftBodyRulesItemWhenAnyItemValueTwoMax),zod.boolean()])
+  "op": zod.enum(['eq', 'gt', 'lte', 'domain_in']),
+  "value": zod.union([zod.string().max(saveWorkspaceActionRuleDraftBodyRulesItemWhenAnyItemValueOneMax),zod.int().min(saveWorkspaceActionRuleDraftBodyRulesItemWhenAnyItemValueTwoMin).max(saveWorkspaceActionRuleDraftBodyRulesItemWhenAnyItemValueTwoMax),zod.boolean(),zod.array(zod.string().max(saveWorkspaceActionRuleDraftBodyRulesItemWhenAnyItemValueFourItemMax)).min(1).max(saveWorkspaceActionRuleDraftBodyRulesItemWhenAnyItemValueFourMax)]),
+  "windowSeconds": zod.union([zod.literal(60),zod.literal(300),zod.literal(900),zod.literal(3600),zod.literal(86400)]).optional()
 })).max(saveWorkspaceActionRuleDraftBodyRulesItemWhenAnyMax).optional()
 })
 })).max(saveWorkspaceActionRuleDraftBodyRulesMax)
@@ -13487,6 +13584,10 @@ export const saveWorkspaceActionRuleDraftResponseRulesItemWhenAllItemValueOneMax
 export const saveWorkspaceActionRuleDraftResponseRulesItemWhenAllItemValueTwoMin = 0;
 export const saveWorkspaceActionRuleDraftResponseRulesItemWhenAllItemValueTwoMax = 1000000;
 
+export const saveWorkspaceActionRuleDraftResponseRulesItemWhenAllItemValueFourItemMax = 253;
+
+export const saveWorkspaceActionRuleDraftResponseRulesItemWhenAllItemValueFourMax = 20;
+
 export const saveWorkspaceActionRuleDraftResponseRulesItemWhenAllMax = 8;
 
 export const saveWorkspaceActionRuleDraftResponseRulesItemWhenAnyItemFieldMax = 80;
@@ -13495,6 +13596,10 @@ export const saveWorkspaceActionRuleDraftResponseRulesItemWhenAnyItemValueOneMax
 
 export const saveWorkspaceActionRuleDraftResponseRulesItemWhenAnyItemValueTwoMin = 0;
 export const saveWorkspaceActionRuleDraftResponseRulesItemWhenAnyItemValueTwoMax = 1000000;
+
+export const saveWorkspaceActionRuleDraftResponseRulesItemWhenAnyItemValueFourItemMax = 253;
+
+export const saveWorkspaceActionRuleDraftResponseRulesItemWhenAnyItemValueFourMax = 20;
 
 export const saveWorkspaceActionRuleDraftResponseRulesItemWhenAnyMax = 8;
 
@@ -13510,13 +13615,15 @@ export const SaveWorkspaceActionRuleDraftResponse = zod.object({
   "when": zod.object({
   "all": zod.array(zod.object({
   "field": zod.string().max(saveWorkspaceActionRuleDraftResponseRulesItemWhenAllItemFieldMax),
-  "op": zod.enum(['eq', 'gt', 'lte']),
-  "value": zod.union([zod.string().max(saveWorkspaceActionRuleDraftResponseRulesItemWhenAllItemValueOneMax),zod.int().min(saveWorkspaceActionRuleDraftResponseRulesItemWhenAllItemValueTwoMin).max(saveWorkspaceActionRuleDraftResponseRulesItemWhenAllItemValueTwoMax),zod.boolean()])
+  "op": zod.enum(['eq', 'gt', 'lte', 'domain_in']),
+  "value": zod.union([zod.string().max(saveWorkspaceActionRuleDraftResponseRulesItemWhenAllItemValueOneMax),zod.int().min(saveWorkspaceActionRuleDraftResponseRulesItemWhenAllItemValueTwoMin).max(saveWorkspaceActionRuleDraftResponseRulesItemWhenAllItemValueTwoMax),zod.boolean(),zod.array(zod.string().max(saveWorkspaceActionRuleDraftResponseRulesItemWhenAllItemValueFourItemMax)).min(1).max(saveWorkspaceActionRuleDraftResponseRulesItemWhenAllItemValueFourMax)]),
+  "windowSeconds": zod.union([zod.literal(60),zod.literal(300),zod.literal(900),zod.literal(3600),zod.literal(86400)]).optional()
 })).max(saveWorkspaceActionRuleDraftResponseRulesItemWhenAllMax).optional(),
   "any": zod.array(zod.object({
   "field": zod.string().max(saveWorkspaceActionRuleDraftResponseRulesItemWhenAnyItemFieldMax),
-  "op": zod.enum(['eq', 'gt', 'lte']),
-  "value": zod.union([zod.string().max(saveWorkspaceActionRuleDraftResponseRulesItemWhenAnyItemValueOneMax),zod.int().min(saveWorkspaceActionRuleDraftResponseRulesItemWhenAnyItemValueTwoMin).max(saveWorkspaceActionRuleDraftResponseRulesItemWhenAnyItemValueTwoMax),zod.boolean()])
+  "op": zod.enum(['eq', 'gt', 'lte', 'domain_in']),
+  "value": zod.union([zod.string().max(saveWorkspaceActionRuleDraftResponseRulesItemWhenAnyItemValueOneMax),zod.int().min(saveWorkspaceActionRuleDraftResponseRulesItemWhenAnyItemValueTwoMin).max(saveWorkspaceActionRuleDraftResponseRulesItemWhenAnyItemValueTwoMax),zod.boolean(),zod.array(zod.string().max(saveWorkspaceActionRuleDraftResponseRulesItemWhenAnyItemValueFourItemMax)).min(1).max(saveWorkspaceActionRuleDraftResponseRulesItemWhenAnyItemValueFourMax)]),
+  "windowSeconds": zod.union([zod.literal(60),zod.literal(300),zod.literal(900),zod.literal(3600),zod.literal(86400)]).optional()
 })).max(saveWorkspaceActionRuleDraftResponseRulesItemWhenAnyMax).optional()
 })
 })),
@@ -13547,6 +13654,10 @@ export const activateWorkspaceActionRuleDraftResponseRulesItemWhenAllItemValueOn
 export const activateWorkspaceActionRuleDraftResponseRulesItemWhenAllItemValueTwoMin = 0;
 export const activateWorkspaceActionRuleDraftResponseRulesItemWhenAllItemValueTwoMax = 1000000;
 
+export const activateWorkspaceActionRuleDraftResponseRulesItemWhenAllItemValueFourItemMax = 253;
+
+export const activateWorkspaceActionRuleDraftResponseRulesItemWhenAllItemValueFourMax = 20;
+
 export const activateWorkspaceActionRuleDraftResponseRulesItemWhenAllMax = 8;
 
 export const activateWorkspaceActionRuleDraftResponseRulesItemWhenAnyItemFieldMax = 80;
@@ -13555,6 +13666,10 @@ export const activateWorkspaceActionRuleDraftResponseRulesItemWhenAnyItemValueOn
 
 export const activateWorkspaceActionRuleDraftResponseRulesItemWhenAnyItemValueTwoMin = 0;
 export const activateWorkspaceActionRuleDraftResponseRulesItemWhenAnyItemValueTwoMax = 1000000;
+
+export const activateWorkspaceActionRuleDraftResponseRulesItemWhenAnyItemValueFourItemMax = 253;
+
+export const activateWorkspaceActionRuleDraftResponseRulesItemWhenAnyItemValueFourMax = 20;
 
 export const activateWorkspaceActionRuleDraftResponseRulesItemWhenAnyMax = 8;
 
@@ -13570,13 +13685,15 @@ export const ActivateWorkspaceActionRuleDraftResponse = zod.object({
   "when": zod.object({
   "all": zod.array(zod.object({
   "field": zod.string().max(activateWorkspaceActionRuleDraftResponseRulesItemWhenAllItemFieldMax),
-  "op": zod.enum(['eq', 'gt', 'lte']),
-  "value": zod.union([zod.string().max(activateWorkspaceActionRuleDraftResponseRulesItemWhenAllItemValueOneMax),zod.int().min(activateWorkspaceActionRuleDraftResponseRulesItemWhenAllItemValueTwoMin).max(activateWorkspaceActionRuleDraftResponseRulesItemWhenAllItemValueTwoMax),zod.boolean()])
+  "op": zod.enum(['eq', 'gt', 'lte', 'domain_in']),
+  "value": zod.union([zod.string().max(activateWorkspaceActionRuleDraftResponseRulesItemWhenAllItemValueOneMax),zod.int().min(activateWorkspaceActionRuleDraftResponseRulesItemWhenAllItemValueTwoMin).max(activateWorkspaceActionRuleDraftResponseRulesItemWhenAllItemValueTwoMax),zod.boolean(),zod.array(zod.string().max(activateWorkspaceActionRuleDraftResponseRulesItemWhenAllItemValueFourItemMax)).min(1).max(activateWorkspaceActionRuleDraftResponseRulesItemWhenAllItemValueFourMax)]),
+  "windowSeconds": zod.union([zod.literal(60),zod.literal(300),zod.literal(900),zod.literal(3600),zod.literal(86400)]).optional()
 })).max(activateWorkspaceActionRuleDraftResponseRulesItemWhenAllMax).optional(),
   "any": zod.array(zod.object({
   "field": zod.string().max(activateWorkspaceActionRuleDraftResponseRulesItemWhenAnyItemFieldMax),
-  "op": zod.enum(['eq', 'gt', 'lte']),
-  "value": zod.union([zod.string().max(activateWorkspaceActionRuleDraftResponseRulesItemWhenAnyItemValueOneMax),zod.int().min(activateWorkspaceActionRuleDraftResponseRulesItemWhenAnyItemValueTwoMin).max(activateWorkspaceActionRuleDraftResponseRulesItemWhenAnyItemValueTwoMax),zod.boolean()])
+  "op": zod.enum(['eq', 'gt', 'lte', 'domain_in']),
+  "value": zod.union([zod.string().max(activateWorkspaceActionRuleDraftResponseRulesItemWhenAnyItemValueOneMax),zod.int().min(activateWorkspaceActionRuleDraftResponseRulesItemWhenAnyItemValueTwoMin).max(activateWorkspaceActionRuleDraftResponseRulesItemWhenAnyItemValueTwoMax),zod.boolean(),zod.array(zod.string().max(activateWorkspaceActionRuleDraftResponseRulesItemWhenAnyItemValueFourItemMax)).min(1).max(activateWorkspaceActionRuleDraftResponseRulesItemWhenAnyItemValueFourMax)]),
+  "windowSeconds": zod.union([zod.literal(60),zod.literal(300),zod.literal(900),zod.literal(3600),zod.literal(86400)]).optional()
 })).max(activateWorkspaceActionRuleDraftResponseRulesItemWhenAnyMax).optional()
 })
 })),
@@ -13614,6 +13731,10 @@ export const rollbackWorkspaceActionRuleResponseRulesItemWhenAllItemValueOneMax 
 export const rollbackWorkspaceActionRuleResponseRulesItemWhenAllItemValueTwoMin = 0;
 export const rollbackWorkspaceActionRuleResponseRulesItemWhenAllItemValueTwoMax = 1000000;
 
+export const rollbackWorkspaceActionRuleResponseRulesItemWhenAllItemValueFourItemMax = 253;
+
+export const rollbackWorkspaceActionRuleResponseRulesItemWhenAllItemValueFourMax = 20;
+
 export const rollbackWorkspaceActionRuleResponseRulesItemWhenAllMax = 8;
 
 export const rollbackWorkspaceActionRuleResponseRulesItemWhenAnyItemFieldMax = 80;
@@ -13622,6 +13743,10 @@ export const rollbackWorkspaceActionRuleResponseRulesItemWhenAnyItemValueOneMax 
 
 export const rollbackWorkspaceActionRuleResponseRulesItemWhenAnyItemValueTwoMin = 0;
 export const rollbackWorkspaceActionRuleResponseRulesItemWhenAnyItemValueTwoMax = 1000000;
+
+export const rollbackWorkspaceActionRuleResponseRulesItemWhenAnyItemValueFourItemMax = 253;
+
+export const rollbackWorkspaceActionRuleResponseRulesItemWhenAnyItemValueFourMax = 20;
 
 export const rollbackWorkspaceActionRuleResponseRulesItemWhenAnyMax = 8;
 
@@ -13637,13 +13762,15 @@ export const RollbackWorkspaceActionRuleResponse = zod.object({
   "when": zod.object({
   "all": zod.array(zod.object({
   "field": zod.string().max(rollbackWorkspaceActionRuleResponseRulesItemWhenAllItemFieldMax),
-  "op": zod.enum(['eq', 'gt', 'lte']),
-  "value": zod.union([zod.string().max(rollbackWorkspaceActionRuleResponseRulesItemWhenAllItemValueOneMax),zod.int().min(rollbackWorkspaceActionRuleResponseRulesItemWhenAllItemValueTwoMin).max(rollbackWorkspaceActionRuleResponseRulesItemWhenAllItemValueTwoMax),zod.boolean()])
+  "op": zod.enum(['eq', 'gt', 'lte', 'domain_in']),
+  "value": zod.union([zod.string().max(rollbackWorkspaceActionRuleResponseRulesItemWhenAllItemValueOneMax),zod.int().min(rollbackWorkspaceActionRuleResponseRulesItemWhenAllItemValueTwoMin).max(rollbackWorkspaceActionRuleResponseRulesItemWhenAllItemValueTwoMax),zod.boolean(),zod.array(zod.string().max(rollbackWorkspaceActionRuleResponseRulesItemWhenAllItemValueFourItemMax)).min(1).max(rollbackWorkspaceActionRuleResponseRulesItemWhenAllItemValueFourMax)]),
+  "windowSeconds": zod.union([zod.literal(60),zod.literal(300),zod.literal(900),zod.literal(3600),zod.literal(86400)]).optional()
 })).max(rollbackWorkspaceActionRuleResponseRulesItemWhenAllMax).optional(),
   "any": zod.array(zod.object({
   "field": zod.string().max(rollbackWorkspaceActionRuleResponseRulesItemWhenAnyItemFieldMax),
-  "op": zod.enum(['eq', 'gt', 'lte']),
-  "value": zod.union([zod.string().max(rollbackWorkspaceActionRuleResponseRulesItemWhenAnyItemValueOneMax),zod.int().min(rollbackWorkspaceActionRuleResponseRulesItemWhenAnyItemValueTwoMin).max(rollbackWorkspaceActionRuleResponseRulesItemWhenAnyItemValueTwoMax),zod.boolean()])
+  "op": zod.enum(['eq', 'gt', 'lte', 'domain_in']),
+  "value": zod.union([zod.string().max(rollbackWorkspaceActionRuleResponseRulesItemWhenAnyItemValueOneMax),zod.int().min(rollbackWorkspaceActionRuleResponseRulesItemWhenAnyItemValueTwoMin).max(rollbackWorkspaceActionRuleResponseRulesItemWhenAnyItemValueTwoMax),zod.boolean(),zod.array(zod.string().max(rollbackWorkspaceActionRuleResponseRulesItemWhenAnyItemValueFourItemMax)).min(1).max(rollbackWorkspaceActionRuleResponseRulesItemWhenAnyItemValueFourMax)]),
+  "windowSeconds": zod.union([zod.literal(60),zod.literal(300),zod.literal(900),zod.literal(3600),zod.literal(86400)]).optional()
 })).max(rollbackWorkspaceActionRuleResponseRulesItemWhenAnyMax).optional()
 })
 })),

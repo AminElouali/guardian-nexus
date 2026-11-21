@@ -6,16 +6,20 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { WorkspaceActionRule } from './workspaceActionRule';
+import type { WorkspaceActionRuleStateArgumentFieldsItem } from './workspaceActionRuleStateArgumentFieldsItem';
 import type { WorkspaceActionRuleStateRiskCategoriesItem } from './workspaceActionRuleStateRiskCategoriesItem';
 import type { WorkspaceActionRuleStateRiskClass } from './workspaceActionRuleStateRiskClass';
 import type { WorkspaceActionRuleVersion } from './workspaceActionRuleVersion';
 
 export interface WorkspaceActionRuleState {
   actionType: string;
+  service: string;
   label: string;
   description: string;
   riskClass: WorkspaceActionRuleStateRiskClass;
   riskCategories: WorkspaceActionRuleStateRiskCategoriesItem[];
+  requiresIndependentApprover: boolean;
+  argumentFields: WorkspaceActionRuleStateArgumentFieldsItem[];
   /** @nullable */
   activeVersionId: string | null;
   /** @nullable */

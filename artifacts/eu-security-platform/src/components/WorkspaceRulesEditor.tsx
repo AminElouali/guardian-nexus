@@ -6,6 +6,7 @@ import type {
   WorkspaceActionRuleSimulationResponse,
   WorkspaceActionRuleState,
 } from "@workspace/api-client-react";
+import { WorkspaceActionConditionsEditor } from "./WorkspaceActionConditionsEditor";
 
 export type WorkspaceRulesEditorProps = {
   actions: WorkspaceActionRuleState[];
@@ -163,7 +164,7 @@ export function formatHistoryImpactCoverage(
   if (result.totalProposalCount === 0) {
     return "Cobertura: no se encontraron propuestas de esta acción en los últimos 30 días.";
   }
-  const text = `Calculado con ${result.evaluatedCount} de ${result.totalProposalCount} acciones; ${result.notReevaluableCount} no se pueden re-evaluar porque no hay argumentos verificables guardados.`;
+  const text = `Calculado con ${result.evaluatedCount} de ${result.totalProposalCount} acciones; ${result.notReevaluableCount} no se pueden re-evaluar porque faltan argumentos o contexto histórico verificable.`;
   return result.notProcessedByLimitCount > 0
     ? `${text} Otras ${result.notProcessedByLimitCount} quedaron sin revisar por el límite de ${result.maximumProposals}.`
     : text;
@@ -175,7 +176,7 @@ export function historyImpactEmptyMessage(
   if (result.evaluatedCount > 0) return null;
   return result.totalProposalCount === 0
     ? "Todavía no hay acciones de tus agentes. Cuando las haya, verás qué habría cambiado con estas reglas."
-    : "No hay propuestas re-evaluables: no se guardó contenido verificable para esta acción. No se reconstruyen argumentos desde hashes ni ejemplos.";
+    : "No hay propuestas re-evaluables: falta contenido o contexto histórico verificable para esta acción. No se reconstruyen argumentos desde hashes ni ejemplos.";
 }
 
 type ActionKind = "refund" | "bank" | "email" | "support";
@@ -644,6 +645,21 @@ export function WorkspaceRulesEditor({
           })}
         </section>)}
       </section>
+
+      <WorkspaceActionConditionsEditor
+        actions={actions}
+        canManage={canManage}
+        busy={!!busy}
+        onSave={async (actionType, rules) => {
+          setBusy(actionType);
+          setMessage("");
+          try {
+            await onSaveRuleDraft(actionType, rules);
+          } finally {
+            setBusy("");
+          }
+        }}
+      />
 
       <section className="wre-history-impact" aria-labelledby="history-impact-heading" data-testid="rule-history-impact">
         <div className="wre-history-impact-intro">

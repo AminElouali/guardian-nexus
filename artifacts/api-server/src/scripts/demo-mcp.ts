@@ -292,6 +292,8 @@ async function main(): Promise<void> {
     const rulePath = `/api/workspaces/${workspaceId}/action-rules/${ACTION_TYPE}`;
     const refundRulePath =
       `/api/workspaces/${workspaceId}/action-rules/${REFUND_ACTION_TYPE}`;
+    const financeReadRulePath =
+      `/api/workspaces/${workspaceId}/action-rules/guardian.finance.balance_invoice.read.v1`;
     const jsonRpc = (name: string, args: Record<string, unknown>, id: string) =>
       JSON.stringify({
         jsonrpc: "2.0",
@@ -387,7 +389,43 @@ async function main(): Promise<void> {
       200,
       "activate_refund_rule",
     );
-    step("4/12 — reglas sintéticas activadas: compensación superior a 50 € y reembolso superior a 50 € requieren aprobación; el reembolso dentro del límite puede recibir ALLOW.");
+    await requireStatus(
+      await humanRequest(
+        requesterId,
+        `${financeReadRulePath}/draft`,
+        "PUT",
+        {
+          version: 1,
+          rules: [
+            {
+              id: `demo-volume-over-zero-deny-${runId.slice(0, 8)}`,
+              decision: "deny",
+              when: {
+                all: [{
+                  field: "context.action_count",
+                  op: "gt",
+                  value: 0,
+                  windowSeconds: 3600,
+                }],
+              },
+            },
+            {
+              id: `demo-volume-first-read-allow-${runId.slice(0, 8)}`,
+              decision: "allow",
+              when: {},
+            },
+          ],
+        },
+      ),
+      201,
+      "save_volume_rule_draft",
+    );
+    await requireStatus(
+      await humanRequest(requesterId, `${financeReadRulePath}/activate`, "POST"),
+      200,
+      "activate_volume_rule",
+    );
+    step("4/12 — reglas versionadas activadas: reembolso hasta 50 €, compensación alta y volumen de consultas financieras.");
 
     const toolListResponse = await agentRequest(
       agentCredential,
@@ -424,6 +462,51 @@ async function main(): Promise<void> {
       fail("mcp_tools_list", "guardian_tools_missing");
     }
     step("5/12 — initialize/tools/list expone solo las herramientas de Guardian y el destino de laboratorio.");
+
+    const firstFinanceRead = record(await readResponse(
+      await agentRequest(
+        agentCredential,
+        jsonRpc(
+          "read_finance_record",
+          { resource_type: "balance", resource_id: "FIN-SYNTH-DEMO-VOLUME" },
+          "volume-demo-first",
+        ),
+      ),
+      "volume_rule_first_read",
+    ));
+    const firstFinanceReadResult = record(firstFinanceRead?.result);
+    const firstFinanceReadDecision = record(firstFinanceReadResult?.structuredContent);
+    if (
+      firstFinanceReadDecision?.decision !== "allow" ||
+      firstFinanceReadDecision?.status !== "simulated" ||
+      firstFinanceReadDecision?.ruleVersionId == null
+    ) {
+      fail("volume_rule_first_read", "trusted_volume_context_did_not_allow_first_read");
+    }
+    const secondFinanceRead = record(await readResponse(
+      await agentRequest(
+        agentCredential,
+        jsonRpc(
+          "read_finance_record",
+          { resource_type: "balance", resource_id: "FIN-SYNTH-DEMO-VOLUME" },
+          "volume-demo-second",
+        ),
+      ),
+      "volume_rule_second_read",
+    ));
+    const secondFinanceReadResult = record(secondFinanceRead?.result);
+    const secondFinanceReadContent = Array.isArray(secondFinanceReadResult?.content)
+      ? secondFinanceReadResult.content
+      : [];
+    const secondFinanceReadText = record(secondFinanceReadContent[0])?.text;
+    if (
+      !secondFinanceReadResult?.isError ||
+      typeof secondFinanceReadText !== "string" ||
+      !secondFinanceReadText.includes("Acción bloqueada")
+    ) {
+      fail("volume_rule_second_read", "volume_condition_did_not_block_second_read");
+    }
+    step("Condición por volumen — la primera consulta sintética recibió ALLOW; la segunda, dentro de una hora, quedó bloqueada por la regla activa.");
 
     const invalidCredential = `gnx_agent_v1_${randomBytes(32).toString("base64url")}`;
     const invalidCredentialResponse = await agentRequest(

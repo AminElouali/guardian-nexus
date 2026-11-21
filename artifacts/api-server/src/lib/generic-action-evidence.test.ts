@@ -249,6 +249,72 @@ test("workspace evidence permits an allow decision only when escalated to human 
   );
 });
 
+test("workspace evidence v2 binds trusted rule-evaluation context for volume decisions", () => {
+  const volumeDocument = {
+    version: 1 as const,
+    rules: [{
+      id: "volume-review",
+      decision: "require_approval" as const,
+      when: {
+        all: [{
+          field: "context.action_count",
+          op: "gt" as const,
+          value: 0,
+          windowSeconds: 60,
+        }],
+      },
+    }],
+  };
+  const display = genericActionDisplay(actionType, args);
+  assert.ok(display);
+  const evidence = createWorkspaceRuleActionEvidence({
+    workspaceId,
+    requestedByUserId,
+    actionType,
+    args,
+    ruleId: "volume-review",
+    ruleVersionId: "11111111-1111-4111-8111-111111111111",
+    ruleDocument: volumeDocument,
+    ruleEvaluationContext: {
+      dataSensitivity: "normal",
+      environment: "test",
+      actionCountsByWindow: { 60: 1 },
+    },
+    ...display,
+    agentId: "agent-synthetic-volume",
+  });
+  assert.ok(evidence);
+  assert.equal(evidence.ruleEvaluationContext?.actionCountsByWindow[60], 1);
+  assert.equal(
+    verifyGenericActionEvidence(evidence, {
+      workspaceId,
+      requestedByUserId,
+      actionType,
+      actionSha256: evidence.actionSha256,
+      proposalSha256: evidence.proposalSha256,
+      profileId: evidence.profileId,
+    })?.evidenceSha256,
+    evidence.evidenceSha256,
+  );
+  assert.equal(
+    verifyGenericActionEvidence({
+      ...evidence,
+      ruleEvaluationContext: {
+        ...evidence.ruleEvaluationContext!,
+        actionCountsByWindow: { 60: 0 },
+      },
+    }, {
+      workspaceId,
+      requestedByUserId,
+      actionType,
+      actionSha256: evidence.actionSha256,
+      proposalSha256: evidence.proposalSha256,
+      profileId: evidence.profileId,
+    }),
+    null,
+  );
+});
+
 test("workspace evidence v2 binds approval-required actions across all eight service profiles", () => {
   const fixtures = [
     {

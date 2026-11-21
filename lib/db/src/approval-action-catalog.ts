@@ -50,17 +50,24 @@ export type GenericActionGatewayEvidence = {
       when: {
         all?: Array<{
           field: string;
-          op: "eq" | "gt" | "lte";
-          value: string | number | boolean;
+          op: "eq" | "gt" | "lte" | "domain_in";
+          value: string | number | boolean | string[];
+          windowSeconds?: number;
         }>;
         any?: Array<{
           field: string;
-          op: "eq" | "gt" | "lte";
-          value: string | number | boolean;
+          op: "eq" | "gt" | "lte" | "domain_in";
+          value: string | number | boolean | string[];
+          windowSeconds?: number;
         }>;
       };
     }>;
   } | null;
+    ruleEvaluationContext?: {
+      dataSensitivity: "normal" | "sensitive" | null;
+      environment: "test" | "production" | null;
+      actionCountsByWindow: Readonly<Record<number, number | null>>;
+    };
   decisionEscalation?: "rule_allow_escalated_to_approval";
   evidenceSha256: string;
 };

@@ -57,6 +57,7 @@ import {
   activateWorkspaceActionRule,
   createWorkspaceActionRuleVersion,
   getActiveWorkspaceActionRule,
+  getWorkspaceActionRuleEvaluationContext,
   listWorkspaceActionRuleStates,
   rollbackWorkspaceActionRule,
   toWorkspaceActionRuleSimulation,
@@ -473,6 +474,12 @@ router.post(
           );
           selectedDocument = validation.ok ? validation.document : null;
         }
+        const context = await getWorkspaceActionRuleEvaluationContext(
+          tx,
+          params.data.workspaceId,
+          params.data.actionType,
+          selectedDocument,
+        );
         return {
           kind: "simulated" as const,
           result: toWorkspaceActionRuleSimulation({
@@ -480,6 +487,7 @@ router.post(
             args: body.data.arguments,
             versionId: selectedVersionId,
             document: selectedDocument,
+            context,
           }),
         };
       },

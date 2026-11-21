@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { APPROVAL_ACTION_CATALOG } from "./approval-action-catalog";
 import {
   evaluateWorkspaceActionRule,
   buildWorkspaceActionRuleProfileDocuments,
@@ -89,7 +90,7 @@ test("workspace rule validator rejects unknown actions, fields, operators, and e
 test("starter templates include a customer support policy and all catalog actions", () => {
   const templates = getStarterWorkspaceRuleTemplates();
   assert.ok(templates.some((template) => template.id === "customer-support-v1"));
-  assert.equal(templates.length, 4);
+  assert.equal(templates.length, 30);
 });
 
 test("workspace profiles are versioned templates and validate a positive bounded refund limit", () => {
@@ -159,7 +160,7 @@ test("balanced profile uses the server rule engine below and above its saved lim
   assert.equal(above.ruleVersionId, "saved-version");
 });
 
-test("read-only profile denies every catalog action while prudent requires review for money and outbound actions", () => {
+test("read-only profile allows catalog reads and denies writes while prudent requires review", () => {
   const readOnly = buildWorkspaceActionRuleProfileDocuments(
     "read-only-v1",
     5000,
@@ -168,37 +169,24 @@ test("read-only profile denies every catalog action while prudent requires revie
   assert.equal(readOnly.ok, true);
   assert.equal(prudent.ok, true);
   if (!readOnly.ok || !prudent.ok) return;
-  assert.equal(readOnly.documents.length, 4);
+  assert.equal(readOnly.documents.length, 30);
   for (const item of readOnly.documents) {
-    const args =
-      item.actionType === "guardian.synthetic.support.refund.v1"
-        ? { ticket_id: "TICKET-SYNTH-42", amount_cents: 2500 }
-        : item.actionType === "guardian.synthetic.finance.bank-change.v1"
-          ? { account_id: "LAB-ACCOUNT-42", new_iban: "DE00LAB0123456789ABCDEF" }
-          : item.actionType === "guardian.email.send.external.v1"
-            ? { to: "demo@example.test", template_id: "guardian-demo-email-v1" }
-            : {
-                ticket_id: "TICKET-SYNTH-42",
-                recipient_email: "demo@example.test",
-                recipient_type: "internal",
-                compensation_cents: 0,
-                template_id: "synthetic-support-reply-v1",
-              };
-    assert.equal(
-      evaluateWorkspaceActionRule({
-        actionType: item.actionType,
-        arguments: args,
-        document: item.document,
-        ruleVersionId: "read-only-version",
-      }).decision,
-      "deny",
-      `${item.actionType} must be blocked by the read-only profile`,
+    const definition = APPROVAL_ACTION_CATALOG.find(
+      (candidate) => candidate.actionType === item.actionType,
+    );
+    assert.ok(definition, `${item.actionType} must exist in the catalogue`);
+    assert.ok(item.document.rules.length > 0, `${item.actionType} must have a policy`);
+    assert.ok(
+      item.document.rules.every((rule) =>
+        rule.decision === (definition.readOnly ? "allow" : "deny"),
+      ),
+      `${item.actionType} must follow its read-only classification`,
     );
   }
   assert.ok(
     prudent.documents.every((item) =>
       item.document.rules.every(
-        (rule) => rule.decision === "require_approval",
+        (rule) => rule.decision !== "allow",
       ),
     ),
   );
@@ -242,4 +230,161 @@ test("rule conditions cannot exceed the action argument schema", () => {
     },
   );
   assert.equal(result.ok, false);
+});
+
+test("workspace rules evaluate trusted domains with an exact recipient match", () => {
+  const parsed = validateWorkspaceActionRuleDocument(
+    "guardian.email.send.external.v1",
+    {
+      version: 1,
+      rules: [{
+        id: "trusted-domain",
+        decision: "allow",
+        when: {
+          all: [{
+            field: "to",
+            op: "domain_in",
+            value: ["example.test"],
+          }],
+        },
+      }],
+    },
+  );
+  assert.equal(parsed.ok, true);
+  if (!parsed.ok) return;
+  const evaluate = (to: string) => evaluateWorkspaceActionRule({
+    actionType: "guardian.email.send.external.v1",
+    arguments: { to, template_id: "guardian-demo-email-v1" },
+    document: parsed.document,
+    ruleVersionId: "domain-version",
+    context: {
+      dataSensitivity: "normal",
+      environment: "test",
+      actionCountsByWindow: {},
+    },
+  });
+  assert.equal(evaluate("demo@example.test").decision, "allow");
+  assert.equal(evaluate("demo@sub.example.test").decision, "deny");
+});
+
+test("workspace rules reject malformed trusted domains and extra window fields", () => {
+  for (const value of [["Example.test"], ["*.example.test"], ["example.test."]]) {
+    assert.equal(
+      validateWorkspaceActionRuleDocument("guardian.email.send.external.v1", {
+        version: 1,
+        rules: [{
+          id: "invalid-domain",
+          decision: "allow",
+          when: { all: [{ field: "to", op: "domain_in", value }] },
+        }],
+      }).ok,
+      false,
+    );
+  }
+  assert.equal(
+    validateWorkspaceActionRuleDocument("guardian.email.send.external.v1", {
+      version: 1,
+      rules: [{
+        id: "unexpected-window",
+        decision: "allow",
+        when: {
+          all: [{
+            field: "to",
+            op: "eq",
+            value: "demo@example.test",
+            windowSeconds: 3600,
+          }],
+        },
+      }],
+    }).ok,
+    false,
+  );
+});
+
+test("trusted sensitivity, environment, and action-volume conditions use server context", () => {
+  const parsed = validateWorkspaceActionRuleDocument(
+    "guardian.email.send.external_sensitive.v1",
+    {
+      version: 1,
+      rules: [{
+        id: "bounded-sensitive-test",
+        decision: "require_approval",
+        when: {
+          all: [
+            { field: "context.data_sensitivity", op: "eq", value: "sensitive" },
+            { field: "context.environment", op: "eq", value: "test" },
+            {
+              field: "context.action_count",
+              op: "gt",
+              value: 4,
+              windowSeconds: 3600,
+            },
+          ],
+        },
+      }],
+    },
+  );
+  assert.equal(parsed.ok, true);
+  if (!parsed.ok) return;
+  const result = evaluateWorkspaceActionRule({
+    actionType: "guardian.email.send.external_sensitive.v1",
+    arguments: {
+      to: "demo@example.test",
+      template_id: "guardian-sensitive-email-v1",
+      has_attachments: true,
+      contains_customer_data: true,
+    },
+    document: parsed.document,
+    ruleVersionId: "context-version",
+    context: {
+      dataSensitivity: "sensitive",
+      environment: "test",
+      actionCountsByWindow: { 3600: 5 },
+    },
+  });
+  assert.equal(result.decision, "require_approval");
+  assert.equal(result.ruleId, "bounded-sensitive-test");
+  assert.equal(result.ruleVersionId, "context-version");
+  assert.equal(
+    validateWorkspaceActionRuleDocument("guardian.email.send.external.v1", {
+      version: 1,
+      rules: [{
+        id: "bad-window",
+        decision: "allow",
+        when: {
+          all: [{
+            field: "context.action_count",
+            op: "gt",
+            value: 2,
+            windowSeconds: 17,
+          }],
+        },
+      }],
+    }).ok,
+    false,
+  );
+});
+
+test("a rule condition with unavailable trusted context never allows", () => {
+  const parsed = validateWorkspaceActionRuleDocument(
+    "guardian.email.send.external.v1",
+    {
+      version: 1,
+      rules: [{
+        id: "only-in-test",
+        decision: "allow",
+        when: { all: [{ field: "context.environment", op: "eq", value: "test" }] },
+      }],
+    },
+  );
+  assert.equal(parsed.ok, true);
+  if (!parsed.ok) return;
+  const result = evaluateWorkspaceActionRule({
+    actionType: "guardian.email.send.external.v1",
+    arguments: { to: "demo@example.test", template_id: "guardian-demo-email-v1" },
+    document: parsed.document,
+    ruleVersionId: "missing-context-version",
+  });
+  assert.equal(result.decision, "require_approval");
+  assert.equal(result.reasonCode, "workspace_rule_condition_unavailable");
 });
